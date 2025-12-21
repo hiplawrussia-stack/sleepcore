@@ -1,0 +1,56 @@
+{
+  "name": "@sleepcore/app",
+  "version": "1.0.0-alpha.4",
+  "description": "AI-Powered CBT-I Digital Therapeutic for Insomnia - Built on CogniCore Engine",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src --ext .ts",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "digital-therapeutics",
+    "dtx",
+    "cbt-i",
+    "cognitive-behavioral-therapy",
+    "insomnia",
+    "sleep",
+    "sleep-tracking",
+    "circadian-rhythm",
+    "mental-health",
+    "pomdp",
+    "digital-twin",
+    "jitai",
+    "mbt-i",
+    "act-i",
+    "third-wave",
+    "mindfulness",
+    "acceptance-commitment-therapy"
+  ],
+  "author": {
+    "name": "CogniCore Platform",
+    "email": "tech@awfond.ru"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@cognicore/engine": "file:../cognicore-engine",
+    "better-sqlite3": "^11.6.0",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/pg": "^8.11.10",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
