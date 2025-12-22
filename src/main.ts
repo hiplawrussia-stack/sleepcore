@@ -41,6 +41,8 @@ import {
   progressCommand,
   sosCommand,
   helpCommand,
+  rehearsalCommand,
+  recallCommand,
   commandDescriptions,
   type ICommandResult,
 } from './bot/commands';
@@ -332,6 +334,24 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     await sendResult(ctx, result);
   });
 
+  // /rehearsal command - Evening mental rehearsal (Smart Memory Window)
+  bot.command(['rehearsal', 'репетиция', 'вечер', 'memory'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const args = ctx.message?.text?.split(' ').slice(1).join(' ');
+    const result = await rehearsalCommand.execute(sleepCoreCtx as any, args);
+    await sendResult(ctx, result);
+  });
+
+  // /recall command - Morning memory quiz (Testing Effect)
+  bot.command(['recall', 'тест', 'утро', 'quiz', 'память'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const args = ctx.message?.text?.split(' ').slice(1).join(' ');
+    const result = await recallCommand.execute(sleepCoreCtx as any, args);
+    await sendResult(ctx, result);
+  });
+
   // /settings command - User preferences
   bot.command(['settings', 'настройки'], async (ctx) => {
     ctx.session.lastActivityAt = new Date();
@@ -404,6 +424,18 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
         case 'today':
           await ctx.answerCallbackQuery({ text: action === 'done' ? '✅ Отлично!' : '👍' });
           return;
+
+        case 'rehearsal':
+          if ('handleCallback' in rehearsalCommand) {
+            result = await (rehearsalCommand as any).handleCallback(sleepCoreCtx, data, {});
+          }
+          break;
+
+        case 'recall':
+          if ('handleCallback' in recallCommand) {
+            result = await (recallCommand as any).handleCallback(sleepCoreCtx, data, {});
+          }
+          break;
 
         default:
           await ctx.answerCallbackQuery({ text: 'OK' });

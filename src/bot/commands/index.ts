@@ -12,6 +12,8 @@
  * - /progress - Weekly progress report
  * - /sos - Crisis intervention
  * - /help - Command reference
+ * - /rehearsal - Pre-sleep mental rehearsal (Smart Memory Window)
+ * - /recall - Morning memory quiz (Smart Memory Window)
  *
  * @packageDocumentation
  * @module @sleepcore/bot/commands
@@ -43,6 +45,8 @@ export { MindfulCommand, mindfulCommand } from './MindfulCommand';
 export { ProgressCommand, progressCommand } from './ProgressCommand';
 export { SosCommand, sosCommand } from './SosCommand';
 export { HelpCommand, helpCommand } from './HelpCommand';
+export { RehearsalCommand, rehearsalCommand } from './RehearsalCommand';
+export { RecallCommand, recallCommand } from './RecallCommand';
 
 // ==================== Handler ====================
 export { CommandHandler, createCommandHandler } from './CommandHandler';
@@ -56,6 +60,8 @@ import { mindfulCommand } from './MindfulCommand';
 import { progressCommand } from './ProgressCommand';
 import { sosCommand } from './SosCommand';
 import { helpCommand } from './HelpCommand';
+import { rehearsalCommand } from './RehearsalCommand';
+import { recallCommand } from './RecallCommand';
 
 /**
  * All registered commands
@@ -69,6 +75,8 @@ export const allCommands = [
   progressCommand,
   sosCommand,
   helpCommand,
+  rehearsalCommand,
+  recallCommand,
 ] as const;
 
 /**
