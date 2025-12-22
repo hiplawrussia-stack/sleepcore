@@ -39,8 +39,10 @@
   "dependencies": {
     "@cognicore/engine": "file:../cognicore-engine",
     "@grammyjs/auto-retry": "^2.0.2",
+    "@grammyjs/conversations": "^2.1.1",
     "@grammyjs/hydrate": "^1.6.0",
     "@grammyjs/runner": "^2.0.3",
+    "@types/node-cron": "^3.0.11",
     "better-sqlite3": "^11.6.0",
     "dotenv": "^17.2.3",
     "grammy": "^1.38.4",
