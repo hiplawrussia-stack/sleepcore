@@ -22,6 +22,7 @@ import type {
   IInlineButton,
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
+import { sonya } from '../persona';
 
 /**
  * Onboarding steps
@@ -78,7 +79,7 @@ export class StartCommand implements IConversationCommand {
   private readonly isiQuestions: ISIQuestion[] = [
     {
       id: 1,
-      text: 'Насколько серьёзны ваши проблемы с <b>засыпанием</b>?',
+      text: 'Насколько серьёзны ваши проблемы с *засыпанием*?',
       options: [
         { value: 0, label: 'Нет проблем' },
         { value: 1, label: 'Лёгкие' },
@@ -89,7 +90,7 @@ export class StartCommand implements IConversationCommand {
     },
     {
       id: 2,
-      text: 'Насколько серьёзны ваши проблемы с <b>поддержанием сна</b>?',
+      text: 'Насколько серьёзны ваши проблемы с *поддержанием сна*?',
       options: [
         { value: 0, label: 'Нет проблем' },
         { value: 1, label: 'Лёгкие' },
@@ -100,7 +101,7 @@ export class StartCommand implements IConversationCommand {
     },
     {
       id: 3,
-      text: 'Насколько серьёзны проблемы со <b>слишком ранним пробуждением</b>?',
+      text: 'Насколько серьёзны проблемы со *слишком ранним пробуждением*?',
       options: [
         { value: 0, label: 'Нет проблем' },
         { value: 1, label: 'Лёгкие' },
@@ -111,7 +112,7 @@ export class StartCommand implements IConversationCommand {
     },
     {
       id: 4,
-      text: 'Насколько вы <b>удовлетворены</b> вашим текущим сном?',
+      text: 'Насколько вы *удовлетворены* вашим текущим сном?',
       options: [
         { value: 0, label: 'Полностью удовлетворён' },
         { value: 1, label: 'Удовлетворён' },
@@ -122,7 +123,7 @@ export class StartCommand implements IConversationCommand {
     },
     {
       id: 5,
-      text: 'Насколько проблемы со сном <b>заметны другим</b> (усталость, настроение)?',
+      text: 'Насколько проблемы со сном *заметны другим* (усталость, настроение)?',
       options: [
         { value: 0, label: 'Совсем не заметны' },
         { value: 1, label: 'Немного' },
@@ -133,7 +134,7 @@ export class StartCommand implements IConversationCommand {
     },
     {
       id: 6,
-      text: 'Насколько вас <b>беспокоят</b> проблемы со сном?',
+      text: 'Насколько вас *беспокоят* проблемы со сном?',
       options: [
         { value: 0, label: 'Совсем не беспокоят' },
         { value: 1, label: 'Немного' },
@@ -144,7 +145,7 @@ export class StartCommand implements IConversationCommand {
     },
     {
       id: 7,
-      text: 'Насколько проблемы со сном <b>мешают</b> вашей дневной деятельности?',
+      text: 'Насколько проблемы со сном *мешают* вашей дневной деятельности?',
       options: [
         { value: 0, label: 'Совсем не мешают' },
         { value: 1, label: 'Немного' },
@@ -219,7 +220,8 @@ export class StartCommand implements IConversationCommand {
     }
 
     const action = parts[1];
-    const value = parts[2];
+    const questionNum = parts[2];
+    const answerValue = parts[3];
 
     switch (action) {
       case 'begin_assessment':
@@ -229,7 +231,12 @@ export class StartCommand implements IConversationCommand {
         return this.handleStep(ctx, 'complete', conversationData);
 
       case 'isi_answer':
-        return this.handleISIAnswer(ctx, parseInt(value), conversationData);
+        return this.handleISIAnswer(
+          ctx,
+          parseInt(questionNum),
+          answerValue ? parseInt(answerValue) : undefined,
+          conversationData
+        );
 
       case 'view_tips':
         return this.showQuickTips(ctx);
@@ -251,12 +258,16 @@ export class StartCommand implements IConversationCommand {
   private async showWelcome(ctx: ISleepCoreContext): Promise<ICommandResult> {
     const name = ctx.displayName || 'друг';
 
+    // Get time-aware greeting from Sonya persona
+    const greeting = sonya.greet({
+      userName: name,
+      week: 0,
+    });
+
     const message = `
-🌙 <b>Добро пожаловать в SleepCore!</b>
+${greeting.emoji} *${greeting.text}*
 
-Привет, ${formatter.escapeHtml(name)}!
-
-Я помогу тебе улучшить сон с помощью <b>научно обоснованных методов</b>:
+Я — ${sonya.name}, твоя персональная помощница по сну. Помогу улучшить сон с помощью *научно обоснованных методов*:
 
 ✓ КПТ-И (когнитивно-поведенческая терапия инсомнии)
 ✓ Осознанность и релаксация
@@ -264,7 +275,7 @@ export class StartCommand implements IConversationCommand {
 
 ${formatter.divider()}
 
-Для начала давай оценим твой сон. Это займёт <b>2-3 минуты</b>.
+Для начала давай оценим твой сон. Это займёт *2-3 минуты*.
 
 ${formatter.tip('ISI — золотой стандарт оценки инсомнии (European Guideline 2023)')}
     `.trim();
@@ -284,9 +295,9 @@ ${formatter.tip('ISI — золотой стандарт оценки инсом
 
   private async showISIIntro(ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
-📋 <b>Оценка качества сна (ISI)</b>
+📋 *Оценка качества сна (ISI)*
 
-Сейчас я задам 7 коротких вопросов о вашем сне за <b>последние 2 недели</b>.
+Сейчас я задам 7 коротких вопросов о вашем сне за *последние 2 недели*.
 
 Выбирайте ответ, который лучше всего описывает вашу ситуацию.
 
@@ -343,60 +354,80 @@ ${progress}
   private async handleISIAnswer(
     ctx: ISleepCoreContext,
     questionNumber: number,
+    answerValue: number | undefined,
     data: Record<string, unknown>
   ): Promise<ICommandResult> {
     // Initialize or get existing answers
-    const isiAnswers = (data.isiAnswers as number[]) || [];
+    const isiAnswers = [...((data.isiAnswers as number[]) || [])];
 
     // If this is the start (-1), show first question
     if (questionNumber === -1) {
-      return this.showISIQuestion(ctx, 1);
+      const result = await this.showISIQuestion(ctx, 1);
+      return {
+        ...result,
+        metadata: { ...result.metadata, isiAnswers: [], currentQuestion: 1 },
+      };
     }
 
-    // Store answer (extract value from callback data)
-    // Note: This is simplified; in real implementation, value comes from callback
-    // For now, we'll show next question
+    // Store answer if provided
+    if (answerValue !== undefined) {
+      // Store answer at the correct index (0-based)
+      isiAnswers[questionNumber - 1] = answerValue;
+    }
+
     const nextQuestion = questionNumber + 1;
 
     if (nextQuestion <= 7) {
-      return this.showISIQuestion(ctx, nextQuestion);
+      const result = await this.showISIQuestion(ctx, nextQuestion);
+      return {
+        ...result,
+        metadata: { ...result.metadata, isiAnswers, currentQuestion: nextQuestion },
+      };
     }
 
     // All questions answered, show results
-    return this.handleStep(ctx, 'isi_result', { isiAnswers });
+    return this.showISIResult(ctx, { isiAnswers });
   }
 
   private async showISIResult(
     ctx: ISleepCoreContext,
     data: { isiAnswers: number[] }
   ): Promise<ICommandResult> {
-    // Calculate ISI score (for demo, using mock score)
-    // In real implementation, this would sum the actual answers
-    const isiScore = 14; // Demo: subthreshold insomnia
+    // Calculate ISI score from answers (sum of 7 questions, 0-4 each, max 28)
+    const isiScore = data.isiAnswers.reduce((sum, val) => sum + (val || 0), 0);
 
     const severity = formatter.getISISeverity(isiScore);
 
     // Traffic light color indicator (KANOPEE pattern)
     let colorIndicator: string;
     let recommendation: string;
+    let sonyaResponse: ReturnType<typeof sonya.respondToEmotion>;
 
     switch (severity) {
       case 'none':
         colorIndicator = '🟢🟢🟢🟢🟢';
         recommendation = 'Ваш сон в норме! Программа поможет поддерживать его качество.';
+        sonyaResponse = sonya.respondToEmotion('positive');
         break;
       case 'subthreshold':
         colorIndicator = '🟢🟢🟢🟡🟡';
         recommendation = 'Есть признаки нарушения сна. КПТ-И поможет предотвратить развитие инсомнии.';
+        sonyaResponse = sonya.respondToEmotion('hopeful');
         break;
       case 'moderate':
         colorIndicator = '🟢🟡🟡🟠🟠';
         recommendation = 'Умеренная инсомния. Рекомендую начать с дневника сна и базовых техник.';
+        sonyaResponse = sonya.respondToEmotion('tired');
         break;
       case 'severe':
         colorIndicator = '🟡🟠🟠🔴🔴';
         recommendation = 'Выраженная инсомния. Программа КПТ-И особенно эффективна в вашем случае.';
+        sonyaResponse = sonya.respondToEmotion('discouraged');
         break;
+      default:
+        colorIndicator = '🟢🟢🟢🟡🟡';
+        recommendation = 'Программа поможет улучшить качество сна.';
+        sonyaResponse = sonya.respondToEmotion('neutral');
     }
 
     const message = `
@@ -408,7 +439,9 @@ ${colorIndicator}
 
 ${formatter.divider()}
 
-<b>Рекомендация:</b>
+${sonyaResponse.emoji} ${sonyaResponse.text}
+
+*Рекомендация:*
 ${recommendation}
 
 ${formatter.tip('КПТ-И — первая линия терапии инсомнии (Grade A, European Guideline 2023)')}
@@ -428,21 +461,26 @@ ${formatter.tip('КПТ-И — первая линия терапии инсом
   }
 
   private async showComplete(ctx: ISleepCoreContext): Promise<ICommandResult> {
+    // Sonya celebrates the completion
+    const encouragement = sonya.encourageByWeek(0);
+
     const message = `
 ${formatter.success('Регистрация завершена!')}
 
-Теперь у вас есть доступ к:
+${encouragement.emoji} ${encouragement.text}
+
+Теперь у тебя есть доступ к:
 
 📓 /diary — Дневник сна (3 клика)
 📅 /today — Задание на сегодня
 🧘 /relax — Техники релаксации
 🧠 /mindful — Осознанность
-📊 /progress — Ваш прогресс
+📊 /progress — Твой прогресс
 🆘 /sos — Экстренная помощь
 
 ${formatter.divider()}
 
-${formatter.tip('Начните с /diary — ведите дневник сна каждое утро')}
+${formatter.tip('Начни с /diary — веди дневник сна каждое утро')}
     `.trim();
 
     return {
@@ -454,15 +492,17 @@ ${formatter.tip('Начните с /diary — ведите дневник сна
 
   private async showQuickTips(ctx: ISleepCoreContext): Promise<ICommandResult> {
     const tips = [
-      'Ложитесь и вставайте в одно время (±30 мин)',
+      'Ложись и вставай в одно время (±30 мин)',
       'Кровать только для сна (не работа, не телефон)',
-      'Если не спится 20 мин — встаньте',
+      'Если не спится 20 мин — встань',
       'Яркий свет утром, приглушённый вечером',
       'Без кофеина за 6 часов до сна',
     ];
 
     const message = `
 ${formatter.header('5 базовых правил сна')}
+
+${sonya.emoji} Вот проверенные временем правила:
 
 ${formatter.numberedList(tips)}
 

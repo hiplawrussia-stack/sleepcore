@@ -45,8 +45,14 @@ import {
   recallCommand,
   commandDescriptions,
   type ICommandResult,
+  // Context-Aware Architecture
+  initializeCommandRegistry,
+  getCommandRegistry,
+  createContextAwareMenuService,
+  type ICommandContext,
 } from './bot/commands';
 import { createBotConfigFromEnv, type BotConfigOutput } from './bot/config/BotConfig';
+import { createProactiveNotificationService } from './bot/services';
 import { VERSION, BUILD_DATE } from './index';
 
 // Database imports
@@ -69,6 +75,9 @@ interface SessionData {
   /** SleepCore user ID */
   userId: string;
 
+  /** User's display name */
+  userName?: string;
+
   /** Current conversation step (for multi-step flows) */
   currentStep?: string;
 
@@ -85,6 +94,15 @@ interface SessionData {
     hasActiveSession: boolean;
     currentWeek: number;
     lastDiaryDate?: string;
+    lastAssessmentDate?: string;
+    hasCompletedOnboarding?: boolean;
+  };
+
+  /** ISI assessment data */
+  isiData?: {
+    answers: number[];
+    currentQuestion: number;
+    step: string;
   };
 
   /** Last activity timestamp */
@@ -237,6 +255,7 @@ function buildKeyboard(buttons: { text: string; callbackData?: string; url?: str
 
 /**
  * Send command result to user
+ * Uses legacy Markdown parse_mode for *bold* and _italic_ formatting
  */
 async function sendResult(ctx: MyContext, result: ICommandResult): Promise<void> {
   if (!result.success && result.error) {
@@ -247,10 +266,20 @@ async function sendResult(ctx: MyContext, result: ICommandResult): Promise<void>
   const text = result.message || '';
   const keyboard = result.keyboard ? buildKeyboard(result.keyboard) : undefined;
 
-  await ctx.reply(text, {
-    parse_mode: 'HTML',
-    reply_markup: keyboard,
-  });
+  try {
+    await ctx.reply(text, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
+  } catch (error) {
+    console.error('[SendResult] Markdown error:', error);
+    // Fallback: send without formatting
+    try {
+      await ctx.reply(text, { reply_markup: keyboard });
+    } catch (fallbackError) {
+      console.error('[SendResult] Fallback error:', fallbackError);
+    }
+  }
 }
 
 /**
@@ -262,6 +291,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
 
   // /start command - Welcome + ISI assessment
   bot.command('start', async (ctx) => {
+    console.log('[Command] /start received from', ctx.from?.id);
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.userId = sleepCoreCtx.userId;
     ctx.session.lastActivityAt = new Date();
@@ -356,12 +386,12 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
   bot.command(['settings', 'настройки'], async (ctx) => {
     ctx.session.lastActivityAt = new Date();
     await ctx.reply(
-      '⚙️ <b>Настройки</b>\n\n' +
+      '⚙️ *Настройки*\n\n' +
       `🔔 Уведомления: ${ctx.session.preferences.notifications ? 'Вкл' : 'Выкл'}\n` +
       `⏰ Время напоминания: ${ctx.session.preferences.notificationTime || 'Не задано'}\n` +
       `🌍 Язык: ${ctx.session.preferences.language === 'ru' ? 'Русский' : 'English'}`,
       {
-        parse_mode: 'HTML',
+        parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
             [{ text: ctx.session.preferences.notifications ? '🔕 Выкл' : '🔔 Вкл', callback_data: 'settings:toggle' }],
@@ -392,9 +422,74 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
       let result: ICommandResult | null = null;
 
       switch (command) {
+        // Context-Aware menu navigation
+        case 'menu':
+          switch (action) {
+            case 'start':
+              result = await startCommand.execute(sleepCoreCtx as any);
+              break;
+            case 'diary':
+              result = await diaryCommand.execute(sleepCoreCtx as any);
+              break;
+            case 'today':
+              result = await todayCommand.execute(sleepCoreCtx as any);
+              break;
+            case 'relax':
+              result = await relaxCommand.execute(sleepCoreCtx as any);
+              break;
+            case 'mindful':
+              result = await mindfulCommand.execute(sleepCoreCtx as any);
+              break;
+            case 'progress':
+              result = await progressCommand.execute(sleepCoreCtx as any);
+              break;
+            case 'sos':
+              result = await sosCommand.execute(sleepCoreCtx as any);
+              break;
+            case 'help':
+              result = await helpCommand.execute(sleepCoreCtx as any);
+              break;
+            case 'rehearsal':
+              result = await rehearsalCommand.execute(sleepCoreCtx as any);
+              break;
+            case 'recall':
+              result = await recallCommand.execute(sleepCoreCtx as any);
+              break;
+            default:
+              await ctx.answerCallbackQuery({ text: 'OK' });
+              return;
+          }
+          break;
+
         case 'start':
           if ('handleCallback' in startCommand) {
-            result = await (startCommand as any).handleCallback(sleepCoreCtx, data, {});
+            // Get ISI data from session or initialize
+            const isiData = ctx.session.isiData || { answers: [], currentQuestion: 0, step: 'welcome' };
+
+            result = await (startCommand as any).handleCallback(sleepCoreCtx, data, {
+              isiAnswers: isiData.answers,
+              step: isiData.step,
+            });
+
+            // Update session with result metadata
+            if (result?.metadata) {
+              const meta = result.metadata as Record<string, unknown>;
+              ctx.session.isiData = {
+                answers: (meta.isiAnswers as number[]) || isiData.answers,
+                currentQuestion: (meta.currentQuestion as number) || isiData.currentQuestion,
+                step: (meta.step as string) || isiData.step,
+              };
+
+              // Check for onboarding completion
+              if (result.metadata.onboardingCompleted) {
+                ctx.session.therapyState = {
+                  ...ctx.session.therapyState,
+                  hasActiveSession: true,
+                  currentWeek: 0,
+                  hasCompletedOnboarding: true,
+                };
+              }
+            }
           }
           break;
 
@@ -447,12 +542,12 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
 
         try {
           await ctx.editMessageText(result.message, {
-            parse_mode: 'HTML',
+            parse_mode: 'Markdown',
             reply_markup: keyboard,
           });
         } catch (error) {
           if (!(error instanceof GrammyError && error.description.includes('not modified'))) {
-            await ctx.reply(result.message, { parse_mode: 'HTML', reply_markup: keyboard });
+            await ctx.reply(result.message, { parse_mode: 'Markdown', reply_markup: keyboard });
           }
         }
       }
@@ -473,6 +568,43 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
  * Setup text message handlers
  */
 function setupMessages(bot: Bot<MyContext>): void {
+  // Initialize context-aware services
+  const registry = getCommandRegistry();
+  const menuService = createContextAwareMenuService(registry);
+
+  // /menu command - Context-Aware main menu
+  bot.command(['menu', 'меню'], async (ctx) => {
+    ctx.session.lastActivityAt = new Date();
+
+    // Build context from session
+    const context = menuService.buildContext({
+      therapyWeek: ctx.session.therapyState?.currentWeek,
+      lastDiaryDate: ctx.session.therapyState?.lastDiaryDate,
+      lastAssessmentDate: ctx.session.therapyState?.lastAssessmentDate,
+      lastActivityAt: ctx.session.lastActivityAt,
+      hasCompletedOnboarding: ctx.session.therapyState?.hasCompletedOnboarding,
+    });
+
+    // Generate context-aware menu
+    const layout = menuService.generateMainMenu(context, ctx.session.userName || ctx.from?.first_name);
+    const message = menuService.formatMenuMessage(layout);
+    const keyboard = menuService.buildMenuKeyboard(layout);
+
+    // Build inline keyboard
+    const inlineKeyboard = new InlineKeyboard();
+    for (const row of keyboard) {
+      for (const btn of row) {
+        inlineKeyboard.text(btn.text, btn.callbackData || 'noop');
+      }
+      inlineKeyboard.row();
+    }
+
+    await ctx.reply(message, {
+      parse_mode: 'Markdown',
+      reply_markup: inlineKeyboard,
+    });
+  });
+
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text;
     ctx.session.lastActivityAt = new Date();
@@ -484,38 +616,35 @@ function setupMessages(bot: Bot<MyContext>): void {
       return;
     }
 
-    // Default response
-    await ctx.reply(
-      'Используйте команды:\n' +
-      '/diary — дневник сна\n' +
-      '/today — рекомендация\n' +
-      '/relax — расслабление\n' +
-      '/help — справка',
-      { parse_mode: 'HTML' }
-    );
+    // Context-aware default response with dynamic menu
+    const context = menuService.buildContext({
+      therapyWeek: ctx.session.therapyState?.currentWeek,
+      lastDiaryDate: ctx.session.therapyState?.lastDiaryDate,
+      lastActivityAt: ctx.session.lastActivityAt,
+      hasCompletedOnboarding: ctx.session.therapyState?.hasCompletedOnboarding,
+    });
+
+    const layout = menuService.generateMainMenu(context, ctx.from?.first_name);
+    const message = menuService.formatMenuMessage(layout);
+    const keyboard = menuService.buildMenuKeyboard(layout);
+
+    const inlineKeyboard = new InlineKeyboard();
+    for (const row of keyboard) {
+      for (const btn of row) {
+        inlineKeyboard.text(btn.text, btn.callbackData || 'noop');
+      }
+      inlineKeyboard.row();
+    }
+
+    await ctx.reply(message, {
+      parse_mode: 'Markdown',
+      reply_markup: inlineKeyboard,
+    });
   });
 }
 
-// ============================================================================
-// PROACTIVE REMINDERS
-// ============================================================================
-
-/**
- * Setup cron-based reminders
- */
-function setupReminders(bot: Bot<MyContext>): void {
-  // Morning reminder - 08:00 MSK
-  cron.schedule('0 8 * * *', () => {
-    console.log('[Cron] Morning reminder');
-  }, { timezone: 'Europe/Moscow' });
-
-  // Evening reminder - 21:00 MSK
-  cron.schedule('0 21 * * *', () => {
-    console.log('[Cron] Evening reminder');
-  }, { timezone: 'Europe/Moscow' });
-
-  console.log('[Cron] Reminders configured');
-}
+// NOTE: Proactive reminders are now handled by ProactiveNotificationService
+// See src/bot/services/ProactiveNotificationService.ts
 
 // ============================================================================
 // ERROR HANDLING
@@ -618,33 +747,50 @@ async function main(): Promise<void> {
   });
   const api = sleepCore;
 
+  // --- Initialize Context-Aware Architecture ---
+  initializeCommandRegistry();
+  const registry = getCommandRegistry();
+  const menuService = createContextAwareMenuService(registry);
+
+  // --- Initialize Proactive Notification Service ---
+  const notificationService = createProactiveNotificationService(bot as any, menuService);
+
   // Setup handlers
   setupCommands(bot, api);
   setupCallbacks(bot, api);
   setupMessages(bot);
   setupErrors(bot);
 
-  // Production reminders
+  // Production: Start proactive notifications
   if (process.env.NODE_ENV === 'production') {
-    setupReminders(bot);
+    notificationService.start();
+    console.log('[Notifications] Proactive notification service started');
   }
 
   // Health check
   startHealth(parseInt(process.env.HEALTH_PORT || '3001', 10));
 
-  // Register commands with BotFather
+  // Register commands with BotFather (including /menu)
   try {
-    await bot.api.setMyCommands(commandDescriptions.map(cmd => ({
-      command: cmd.command,
-      description: cmd.description,
-    })));
-    console.log('[Bot] Commands registered');
+    const allBotCommands = [
+      { command: 'menu', description: 'Главное меню (Context-Aware)' },
+      ...commandDescriptions.map(cmd => ({
+        command: cmd.command,
+        description: cmd.description,
+      })),
+    ];
+    await bot.api.setMyCommands(allBotCommands);
+    console.log(`[Bot] ${allBotCommands.length} commands registered`);
   } catch (error) {
     console.warn('[Bot] Command registration failed:', error);
   }
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
+    // Stop proactive notifications
+    notificationService.stop();
+    console.log("[Notifications] Service stopped");
+
     // Stop session adapter cleanup timer
     if (sessionAdapter) {
       sessionAdapter.stop();

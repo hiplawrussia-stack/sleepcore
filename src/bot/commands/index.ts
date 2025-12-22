@@ -51,6 +51,28 @@ export { RecallCommand, recallCommand } from './RecallCommand';
 // ==================== Handler ====================
 export { CommandHandler, createCommandHandler } from './CommandHandler';
 
+// ==================== Registry (Context-Aware Architecture) ====================
+export {
+  CommandRegistry,
+  commandRegistry,
+  DEFAULT_COMMAND_CONFIGS,
+  getTimeOfDay,
+  getCurrentTimeOfDay,
+  getMoscowHour,
+  ContextAwareMenuService,
+  createContextAwareMenuService,
+} from './registry';
+
+export type {
+  TimeOfDay,
+  TherapyPhase,
+  ICommandContext,
+  ICommandConfig,
+  IRegisteredCommand,
+  IMenuLayout,
+  IContextualGreeting,
+} from './registry';
+
 // ==================== All Commands Array ====================
 import { startCommand } from './StartCommand';
 import { diaryCommand } from './DiaryCommand';
@@ -86,3 +108,24 @@ export const commandDescriptions = allCommands.map((cmd) => ({
   command: cmd.name,
   description: cmd.description,
 }));
+
+// ==================== Registry Initialization ====================
+import { commandRegistry } from './registry';
+
+/**
+ * Initialize command registry with all commands
+ * Call this once during bot startup
+ */
+export function initializeCommandRegistry(): void {
+  for (const command of allCommands) {
+    commandRegistry.register(command);
+  }
+  console.log(`[Registry] Registered ${allCommands.length} commands`);
+}
+
+/**
+ * Get initialized registry
+ */
+export function getCommandRegistry() {
+  return commandRegistry;
+}
