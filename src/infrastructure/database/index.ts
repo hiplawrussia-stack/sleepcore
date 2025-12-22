@@ -111,6 +111,17 @@ export { TherapySessionRepository } from './repositories/TherapySessionRepositor
 export { MIGRATIONS, getMigration, getLatestVersion } from './migrations';
 
 // ============================================================================
+// Adapters (Grammy Session Storage)
+// ============================================================================
+
+export {
+  GrammySessionAdapter,
+  createGrammySessionAdapter,
+  type StorageAdapter,
+  type IGrammySessionAdapterConfig,
+} from './adapters';
+
+// ============================================================================
 // Security (Encryption, Audit, Backup)
 // ============================================================================
 

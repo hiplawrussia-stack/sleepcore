@@ -27,6 +27,8 @@ import { autoRetry } from '@grammyjs/auto-retry';
 import { hydrate, HydrateFlavor } from '@grammyjs/hydrate';
 import * as cron from 'node-cron';
 import * as dotenv from 'dotenv';
+import * as path from 'path';
+import * as fs from 'fs';
 
 import { SleepCoreAPI, sleepCore } from './SleepCoreAPI';
 import {
@@ -44,6 +46,14 @@ import {
 } from './bot/commands';
 import { createBotConfigFromEnv, type BotConfigOutput } from './bot/config/BotConfig';
 import { VERSION, BUILD_DATE } from './index';
+
+// Database imports
+import {
+  initializeDatabase,
+  createGrammySessionAdapter,
+  type IDatabaseConnection,
+  type GrammySessionAdapter,
+} from './infrastructure/database';
 
 // ============================================================================
 // TYPES
@@ -171,8 +181,14 @@ function extendContext(ctx: MyContext, api: SleepCoreAPI): SleepCoreContext {
 // BOT SETUP
 // ============================================================================
 
+/** Bot creation options */
+interface CreateBotOptions {
+  /** Optional SQLite session storage adapter */
+  sessionStorage?: GrammySessionAdapter<SessionData>;
+}
+
 /** Create and configure bot instance */
-function createBot(config: BotConfigOutput): Bot<MyContext> {
+function createBot(config: BotConfigOutput, options?: CreateBotOptions): Bot<MyContext> {
   const bot = new Bot<MyContext>(config.token);
 
   // 1. Configure auto-retry for rate limits (429 errors)
@@ -184,10 +200,12 @@ function createBot(config: BotConfigOutput): Bot<MyContext> {
   // 2. Use hydration for message editing shortcuts
   bot.use(hydrate());
 
-  // 3. Configure session middleware
+  // 3. Configure session middleware with optional SQLite storage
   bot.use(session({
     initial: createInitialSession,
     getSessionKey: (ctx) => ctx.from?.id.toString(),
+    // Use SQLite storage if provided, otherwise fall back to memory
+    storage: options?.sessionStorage,
   }));
 
   return bot;
@@ -533,7 +551,39 @@ async function main(): Promise<void> {
 ╚═══════════════════════════════════════════════════════════╝
   `);
 
-  const bot = createBot(botConfig);
+  // --- SQLite Database Initialization ---
+  const dbPath = process.env.DATABASE_PATH || "./data/sleepcore.db";
+
+  // Ensure data directory exists
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+    console.log(`[DB] Created directory: ${dbDir}`);
+  }
+
+  let db: IDatabaseConnection | null = null;
+  let sessionAdapter: GrammySessionAdapter<SessionData> | null = null;
+
+  try {
+    db = await initializeDatabase(dbPath);
+    console.log(`[DB] SQLite initialized: ${dbPath}`);
+
+    // Create Grammy session adapter with SQLite storage
+    sessionAdapter = createGrammySessionAdapter<SessionData>(db, {
+      ttlSeconds: 60 * 60 * 24 * 30, // 30 days session TTL for GDPR
+      autoCleanup: true,
+      cleanupIntervalSeconds: 3600, // Cleanup every hour
+    });
+    console.log("[DB] Grammy session adapter ready");
+  } catch (error) {
+    console.warn("[DB] SQLite init failed, falling back to memory sessions:", error);
+    // Continue with in-memory sessions (sessionAdapter remains null)
+  }
+
+  // --- Create Bot ---
+  const bot = createBot(botConfig, {
+    sessionStorage: sessionAdapter || undefined,
+  });
   const api = sleepCore;
 
   // Setup handlers
@@ -563,6 +613,18 @@ async function main(): Promise<void> {
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
+    // Stop session adapter cleanup timer
+    if (sessionAdapter) {
+      sessionAdapter.stop();
+      console.log("[DB] Session adapter stopped");
+    }
+
+    // Close database connection
+    if (db) {
+      await db.close();
+      console.log("[DB] Database closed");
+    }
+
     console.log(`\n[Bot] ${signal} - shutting down...`);
     await bot.stop();
     process.exit(0);
@@ -577,6 +639,7 @@ async function main(): Promise<void> {
     drop_pending_updates: botConfig.polling?.dropPendingUpdates || false,
     onStart: (info) => {
       console.log(`[Bot] @${info.username} ready`);
+      console.log(`[Bot] Session storage: ${sessionAdapter ? "SQLite" : "Memory"}`);
     },
   });
 }
