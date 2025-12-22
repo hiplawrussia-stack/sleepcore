@@ -26,3 +26,15 @@ export {
 } from './SentimentAnalysisService';
 
 export type { ISentimentResult, IAnalysisContext } from './SentimentAnalysisService';
+
+// ==================== Reply Keyboard (Thumb-Zone UX) ====================
+export {
+  ReplyKeyboardService,
+  replyKeyboard,
+} from './ReplyKeyboardService';
+
+export type {
+  IReplyButton,
+  IKeyboardLayout,
+  IKeyboardContext,
+} from './ReplyKeyboardService';

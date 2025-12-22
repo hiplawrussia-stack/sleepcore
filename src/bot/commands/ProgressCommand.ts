@@ -68,7 +68,7 @@ ${formatter.tip('Используйте /start для начала')}
     const message = `
 ${formatter.info('Недостаточно данных')}
 
-Для формирования отчёта нужно минимум <b>7 дней</b> дневника сна.
+Для формирования отчёта нужно минимум *7 дней* дневника сна.
 
 Продолжайте вести дневник каждый день!
 
@@ -132,7 +132,7 @@ ${formatter.treatmentWeek(report.currentWeek)}
 
 ${formatter.divider()}
 
-<b>📊 Ключевые метрики:</b>
+*📊 Ключевые метрики:*
 
 ${formatter.isiScore(report.currentISI)} ${isiChangeText}
 
@@ -142,21 +142,21 @@ ${formatter.adherence(report.overallAdherence)}
 
 ${formatter.divider()}
 
-<b>📈 Эффективность сна (7 дней):</b>
+*📈 Эффективность сна (7 дней):*
 ${trendChart}
 
 ${formatter.divider()}
 
-<b>🏆 Достижения:</b>
+*🏆 Достижения:*
 ${achievementsList}
 
-<b>🎯 Фокус на следующую неделю:</b>
+*🎯 Фокус на следующую неделю:*
 ${improvementsList}
 
 ${formatter.divider()}
 
-${statusInfo.icon} <b>${statusInfo.label}</b>
-<i>${statusInfo.description}</i>
+${statusInfo.icon} *${statusInfo.label}*
+_${statusInfo.description}_
     `.trim();
 
     const keyboard: IInlineButton[][] = [

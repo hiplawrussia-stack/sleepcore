@@ -159,11 +159,11 @@ export class MindfulCommand implements ICommand {
     const message = `
 ${formatter.header('Практики осознанности')}
 
-<b>MBT-I</b> (Mindfulness-Based Therapy for Insomnia):
+*MBT-I* (Mindfulness-Based Therapy for Insomnia):
 🧘 Осознанное дыхание — базовая практика
 ⚓ Якорь в теле — заземление
 
-<b>ACT-I</b> (Acceptance & Commitment Therapy):
+*ACT-I* (Acceptance & Commitment Therapy):
 🍃 Листья на ручье — отпускание мыслей
 💭 Дефузия — дистанция от мыслей
 🌙 Принятие — парадоксальный подход
@@ -212,10 +212,10 @@ ${formatter.header('Практики осознанности')}
 
 ${formatter.success('У вас активный план терапии!')}
 
-<b>Рекомендовано сегодня:</b>
+*Рекомендовано сегодня:*
 ${recommended.icon} ${recommended.name} (${recommended.duration} мин)
 
-<i>${recommended.description}</i>
+_${recommended.description}_
 
 ${formatter.divider()}
 
@@ -252,10 +252,10 @@ ${formatter.divider()}
     const message = `
 ${formatter.header(practice.name)}
 
-${practice.icon} <b>${practice.name}</b>
+${practice.icon} *${practice.name}*
 ⏱ ${practice.duration} минут | ${typeLabel}
 
-<i>${practice.description}</i>
+_${practice.description}_
 
 ${formatter.divider()}
 

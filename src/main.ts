@@ -52,7 +52,7 @@ import {
   type ICommandContext,
 } from './bot/commands';
 import { createBotConfigFromEnv, type BotConfigOutput } from './bot/config/BotConfig';
-import { createProactiveNotificationService } from './bot/services';
+import { createProactiveNotificationService, replyKeyboard } from './bot/services';
 import { VERSION, BUILD_DATE } from './index';
 
 // Database imports
@@ -283,6 +283,78 @@ async function sendResult(ctx: MyContext, result: ICommandResult): Promise<void>
 }
 
 /**
+ * Get context-aware reply keyboard for user
+ * Research: Reply keyboard in thumb-zone improves engagement (Steven Hoober 75% study)
+ */
+function getReplyKeyboard(ctx: MyContext): ReturnType<typeof replyKeyboard.generate> {
+  return replyKeyboard.generate({
+    timeOfDay: replyKeyboard.getTimeOfDay(),
+    isVulnerable: false, // TODO: integrate with JITAI vulnerable state detection
+    hasCompletedOnboarding: ctx.session.therapyState?.hasCompletedOnboarding ?? false,
+  });
+}
+
+/**
+ * Send result with context-aware reply keyboard
+ *
+ * Strategy: Reply keyboard is persistent, so we set it once per session.
+ * If message has inline buttons, we send inline keyboard (reply keyboard persists).
+ * If no inline buttons, we send with reply keyboard to refresh it.
+ */
+async function sendResultWithKeyboard(ctx: MyContext, result: ICommandResult): Promise<void> {
+  if (!result.success && result.error) {
+    await ctx.reply(`❌ ${result.error}`, {
+      reply_markup: getReplyKeyboard(ctx),
+    });
+    return;
+  }
+
+  const text = result.message || '';
+  const inlineKb = result.keyboard ? buildKeyboard(result.keyboard) : undefined;
+  const replyKb = getReplyKeyboard(ctx);
+
+  try {
+    if (inlineKb) {
+      // Has inline keyboard - send message with inline buttons
+      // Reply keyboard persists from before, but if this is first message, set it first
+      await ctx.reply(text, {
+        parse_mode: 'Markdown',
+        reply_markup: inlineKb,
+      });
+    } else {
+      // No inline keyboard - send with reply keyboard
+      await ctx.reply(text, {
+        parse_mode: 'Markdown',
+        reply_markup: replyKb,
+      });
+    }
+  } catch (error) {
+    console.error('[SendResult] Markdown error:', error);
+    try {
+      await ctx.reply(text, { reply_markup: replyKb });
+    } catch (fallbackError) {
+      console.error('[SendResult] Fallback error:', fallbackError);
+    }
+  }
+}
+
+/**
+ * Initialize reply keyboard for user session
+ * Called once at the start to ensure persistent keyboard is set
+ */
+async function initReplyKeyboard(ctx: MyContext): Promise<void> {
+  const replyKb = getReplyKeyboard(ctx);
+  const timeOfDay = replyKeyboard.getTimeOfDay();
+  const greeting = timeOfDay === 'morning' ? '🌅' :
+                   timeOfDay === 'day' ? '☀️' :
+                   timeOfDay === 'evening' ? '🌆' : '🌙';
+
+  await ctx.reply(`${greeting} Быстрые действия доступны внизу`, {
+    reply_markup: replyKb,
+  });
+}
+
+/**
  * Setup command handlers
  */
 function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
@@ -299,9 +371,12 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     // Start SleepCore session
     api.startSession(sleepCoreCtx.userId);
 
+    // Initialize reply keyboard first (persistent bottom navigation)
+    await initReplyKeyboard(ctx);
+
     // Execute command
     const result = await startCommand.execute(sleepCoreCtx as any);
-    await sendResult(ctx, result);
+    await sendResultWithKeyboard(ctx, result);
 
     ctx.session.therapyState = { hasActiveSession: true, currentWeek: 0 };
   });
@@ -311,7 +386,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
     const result = await diaryCommand.execute(sleepCoreCtx as any);
-    await sendResult(ctx, result);
+    await sendResultWithKeyboard(ctx, result);
   });
 
   // /today command - Daily intervention
@@ -319,7 +394,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
     const result = await todayCommand.execute(sleepCoreCtx as any);
-    await sendResult(ctx, result);
+    await sendResultWithKeyboard(ctx, result);
   });
 
   // /relax command - Relaxation techniques
@@ -328,7 +403,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     ctx.session.lastActivityAt = new Date();
     const args = ctx.message?.text?.split(' ').slice(1).join(' ');
     const result = await relaxCommand.execute(sleepCoreCtx as any, args);
-    await sendResult(ctx, result);
+    await sendResultWithKeyboard(ctx, result);
   });
 
   // /mindful command - MBT-I/ACT-I practices
@@ -337,7 +412,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     ctx.session.lastActivityAt = new Date();
     const args = ctx.message?.text?.split(' ').slice(1).join(' ');
     const result = await mindfulCommand.execute(sleepCoreCtx as any, args);
-    await sendResult(ctx, result);
+    await sendResultWithKeyboard(ctx, result);
   });
 
   // /progress command - Weekly progress report
@@ -345,7 +420,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
     const result = await progressCommand.execute(sleepCoreCtx as any);
-    await sendResult(ctx, result);
+    await sendResultWithKeyboard(ctx, result);
   });
 
   // /sos command - Crisis intervention
@@ -353,7 +428,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
     const result = await sosCommand.execute(sleepCoreCtx as any);
-    await sendResult(ctx, result);
+    await sendResultWithKeyboard(ctx, result);
   });
 
   // /help command - Command reference
@@ -361,7 +436,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
     const result = await helpCommand.execute(sleepCoreCtx as any);
-    await sendResult(ctx, result);
+    await sendResultWithKeyboard(ctx, result);
   });
 
   // /rehearsal command - Evening mental rehearsal (Smart Memory Window)
@@ -370,7 +445,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     ctx.session.lastActivityAt = new Date();
     const args = ctx.message?.text?.split(' ').slice(1).join(' ');
     const result = await rehearsalCommand.execute(sleepCoreCtx as any, args);
-    await sendResult(ctx, result);
+    await sendResultWithKeyboard(ctx, result);
   });
 
   // /recall command - Morning memory quiz (Testing Effect)
@@ -379,7 +454,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     ctx.session.lastActivityAt = new Date();
     const args = ctx.message?.text?.split(' ').slice(1).join(' ');
     const result = await recallCommand.execute(sleepCoreCtx as any, args);
-    await sendResult(ctx, result);
+    await sendResultWithKeyboard(ctx, result);
   });
 
   // /settings command - User preferences
@@ -567,7 +642,7 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
 /**
  * Setup text message handlers
  */
-function setupMessages(bot: Bot<MyContext>): void {
+function setupMessages(bot: Bot<MyContext>, api: SleepCoreAPI): void {
   // Initialize context-aware services
   const registry = getCommandRegistry();
   const menuService = createContextAwareMenuService(registry);
@@ -612,8 +687,79 @@ function setupMessages(bot: Bot<MyContext>): void {
     // Time format for settings
     if (/^\d{1,2}:\d{2}$/.test(text)) {
       ctx.session.preferences.notificationTime = text;
-      await ctx.reply(`✅ Время установлено: ${text}`);
+      await ctx.reply(`✅ Время установлено: ${text}`, {
+        reply_markup: getReplyKeyboard(ctx),
+      });
       return;
+    }
+
+    // Check if this is a reply keyboard button press
+    const buttonCommand = replyKeyboard.parseButtonToCommand(text);
+    if (buttonCommand) {
+      console.log(`[ReplyKeyboard] Button pressed: ${text} -> /${buttonCommand}`);
+      const sleepCoreCtx = extendContext(ctx, api);
+
+      let result: ICommandResult | null = null;
+
+      // Execute corresponding command
+      switch (buttonCommand) {
+        case 'diary':
+          result = await diaryCommand.execute(sleepCoreCtx as any);
+          break;
+        case 'today':
+          result = await todayCommand.execute(sleepCoreCtx as any);
+          break;
+        case 'relax':
+          result = await relaxCommand.execute(sleepCoreCtx as any);
+          break;
+        case 'mindful':
+          result = await mindfulCommand.execute(sleepCoreCtx as any);
+          break;
+        case 'progress':
+          result = await progressCommand.execute(sleepCoreCtx as any);
+          break;
+        case 'sos':
+          result = await sosCommand.execute(sleepCoreCtx as any);
+          break;
+        case 'help':
+          result = await helpCommand.execute(sleepCoreCtx as any);
+          break;
+        case 'start':
+          result = await startCommand.execute(sleepCoreCtx as any);
+          break;
+        case 'menu':
+          // Show context-aware menu
+          const menuContext = menuService.buildContext({
+            therapyWeek: ctx.session.therapyState?.currentWeek,
+            lastDiaryDate: ctx.session.therapyState?.lastDiaryDate,
+            lastActivityAt: ctx.session.lastActivityAt,
+            hasCompletedOnboarding: ctx.session.therapyState?.hasCompletedOnboarding,
+          });
+          const menuLayout = menuService.generateMainMenu(menuContext, ctx.from?.first_name);
+          const menuMessage = menuService.formatMenuMessage(menuLayout);
+          const menuKeyboard = menuService.buildMenuKeyboard(menuLayout);
+
+          const inlineKb = new InlineKeyboard();
+          for (const row of menuKeyboard) {
+            for (const btn of row) {
+              inlineKb.text(btn.text, btn.callbackData || 'noop');
+            }
+            inlineKb.row();
+          }
+
+          await ctx.reply(menuMessage, {
+            parse_mode: 'Markdown',
+            reply_markup: inlineKb,
+          });
+          return;
+        default:
+          break;
+      }
+
+      if (result) {
+        await sendResultWithKeyboard(ctx, result);
+        return;
+      }
     }
 
     // Context-aware default response with dynamic menu
@@ -758,7 +904,7 @@ async function main(): Promise<void> {
   // Setup handlers
   setupCommands(bot, api);
   setupCallbacks(bot, api);
-  setupMessages(bot);
+  setupMessages(bot, api);
   setupErrors(bot);
 
   // Production: Start proactive notifications

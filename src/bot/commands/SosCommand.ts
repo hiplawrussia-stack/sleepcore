@@ -76,9 +76,9 @@ export class SosCommand implements ICommand {
     const resourcesList = this.resources
       .map(
         (r) => `
-<b>📞 ${r.name}</b>
+*📞 ${r.name}*
 ${r.phone}
-<i>${r.description}</i>
+_${r.description}_
 🕐 ${r.available}`
       )
       .join('\n\n');
@@ -93,7 +93,7 @@ ${resourcesList}
 
 ${formatter.divider()}
 
-<b>Пока ждёте ответа:</b>
+*Пока ждёте ответа:*
 
 ${formatter.numberedList([
   'Дышите медленно: вдох 4 сек, выдох 6 сек',

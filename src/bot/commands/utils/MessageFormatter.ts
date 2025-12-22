@@ -72,7 +72,7 @@ export class MessageFormatter implements IMessageFormatter {
     const icon = this.getSEIcon(status);
     const label = this.getSELabel(status);
 
-    return `${icon} <b>${Math.round(value)}%</b> ${label}`;
+    return `${icon} *${Math.round(value)}%* ${label}`;
   }
 
   /**
@@ -116,7 +116,7 @@ export class MessageFormatter implements IMessageFormatter {
     const icon = this.getISIIcon(severity);
     const label = this.getISILabel(severity);
 
-    return `${icon} ISI: <b>${value}</b>/28 — ${label}`;
+    return `${icon} ISI: *${value}*/28 — ${label}`;
   }
 
   /**
@@ -315,14 +315,14 @@ export class MessageFormatter implements IMessageFormatter {
    * Format tip/hint
    */
   tip(message: string): string {
-    return `💡 <i>${message}</i>`;
+    return `💡 _${message}_`;
   }
 
   /**
    * Create section header
    */
   header(title: string): string {
-    return `<b>━━━ ${title} ━━━</b>`;
+    return `*━━━ ${title} ━━━*`;
   }
 
   /**

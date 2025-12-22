@@ -92,19 +92,19 @@ export class HelpCommand implements ICommand {
 
   private async showHelp(ctx: ISleepCoreContext): Promise<ICommandResult> {
     const commandsList = this.commands
-      .map((cmd) => `${cmd.icon} <b>${cmd.name}</b> — ${cmd.description}`)
+      .map((cmd) => `${cmd.icon} *${cmd.name}* — ${cmd.description}`)
       .join('\n');
 
     const message = `
 ${formatter.header('SleepCore — Справка')}
 
-<b>Доступные команды:</b>
+*Доступные команды:*
 
 ${commandsList}
 
 ${formatter.divider()}
 
-<b>📚 О программе:</b>
+*📚 О программе:*
 
 SleepCore — цифровая терапия инсомнии на основе:
 • КПТ-И (Grade A, European Guideline 2023)
@@ -113,7 +113,7 @@ SleepCore — цифровая терапия инсомнии на основе
 
 ${formatter.divider()}
 
-<b>💡 Рекомендуемый порядок:</b>
+*💡 Рекомендуемый порядок:*
 
 1️⃣ /start — пройдите оценку сна
 2️⃣ /diary — ведите дневник 7+ дней

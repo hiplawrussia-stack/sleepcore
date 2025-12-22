@@ -44,7 +44,7 @@ export interface ICommandResult {
   /** Whether command executed successfully */
   success: boolean;
 
-  /** Response message to send */
+  /** Response message to send (supports Markdown: *bold*, _italic_) */
   message?: string;
 
   /** Inline keyboard buttons */
