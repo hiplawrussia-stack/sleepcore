@@ -1247,7 +1247,7 @@ async function main(): Promise<void> {
   try {
     const allBotCommands = [
       { command: 'menu', description: 'Главное меню (Context-Aware)' },
-      { command: 'mood', description: '💭 Проверка настроения (Wysa-style)' },
+      { command: 'mood', description: '💭 Проверка настроения' },
       { command: 'sleep', description: '😴 Оценка качества сна' },
       { command: 'mood_week', description: '📊 Настроение за неделю' },
       ...commandDescriptions.map(cmd => ({
