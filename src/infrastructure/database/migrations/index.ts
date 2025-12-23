@@ -14,6 +14,7 @@ import { migration001 } from './001_initial_schema';
 import { migration002 } from './002_therapy_sessions';
 import { migration003 } from './003_cultural_adaptations';
 import { migration004 } from './004_bot_sessions';
+import { migration005 } from './005_gamification';
 
 /**
  * All registered migrations in version order
@@ -23,6 +24,7 @@ export const MIGRATIONS: readonly IMigration[] = [
   migration002,
   migration003,
   migration004,
+  migration005,
 ] as const;
 
 /**
@@ -44,3 +46,4 @@ export { migration001 } from './001_initial_schema';
 export { migration002 } from './002_therapy_sessions';
 export { migration003 } from './003_cultural_adaptations';
 export { migration004 } from './004_bot_sessions';
+export { migration005 } from './005_gamification';
