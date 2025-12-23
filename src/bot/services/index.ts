@@ -122,3 +122,17 @@ export type {
   IDailyGreeting,
   MoodPromptStyle,
 } from './DailyGreetingService';
+
+// ==================== Year in Pixels (Daylio-Style Visualization) ====================
+export {
+  YearInPixelsService,
+  yearInPixels,
+} from './YearInPixelsService';
+
+export type {
+  PixelStyle,
+  ViewMode,
+  IPixelData,
+  IMonthStats,
+  IYearStats,
+} from './YearInPixelsService';

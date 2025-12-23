@@ -61,6 +61,7 @@ import {
   hubMenu,
   onboardingTracker,
   dailyGreeting,
+  yearInPixels,
   type IStreakData,
   type IMoodHistory,
   type MoodLevel,
@@ -672,6 +673,23 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
       reply_markup: getReplyKeyboard(ctx),
     });
   });
+
+  // /pixels command - Year in Pixels (Daylio-style visualization)
+  bot.command(['pixels', 'пиксели', 'year'], async (ctx) => {
+    ctx.session.lastActivityAt = new Date();
+
+    if (!ctx.session.moodHistory) {
+      ctx.session.moodHistory = emojiSlider.createInitialHistory();
+    }
+
+    // Show current month view by default
+    const { message, keyboard } = yearInPixels.generateCurrentMonthView(ctx.session.moodHistory);
+
+    await ctx.reply(message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
+  });
 }
 
 // ============================================================================
@@ -1169,6 +1187,89 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
               return;
             }
           }
+          await ctx.answerCallbackQuery();
+          return;
+        }
+
+        // Year in Pixels navigation callbacks
+        case 'pixels': {
+          // Initialize mood history if not present
+          if (!ctx.session.moodHistory) {
+            ctx.session.moodHistory = emojiSlider.createInitialHistory();
+          }
+
+          // Parse action: month:YYYY:MM, year:YYYY, quarter:YYYY:Q, stats
+          if (action === 'stats') {
+            const statsMessage = yearInPixels.generateStatsSummary(ctx.session.moodHistory);
+            const backKeyboard = new InlineKeyboard()
+              .text('📅 Месяц', `pixels:month:${new Date().getFullYear()}:${new Date().getMonth()}`)
+              .text('📊 Год', `pixels:year:${new Date().getFullYear()}`)
+              .row()
+              .text('📱 Меню', 'hub:back');
+
+            await ctx.editMessageText(statsMessage, {
+              parse_mode: 'Markdown',
+              reply_markup: backKeyboard,
+            });
+            await ctx.answerCallbackQuery();
+            return;
+          }
+
+          if (action.startsWith('month:')) {
+            const [, yearStr, monthStr] = action.split(':');
+            const year = parseInt(yearStr, 10);
+            const month = parseInt(monthStr, 10);
+
+            const { message, keyboard } = yearInPixels.generateMonthView(
+              ctx.session.moodHistory,
+              year,
+              month
+            );
+
+            await ctx.editMessageText(message, {
+              parse_mode: 'Markdown',
+              reply_markup: keyboard,
+            });
+            await ctx.answerCallbackQuery();
+            return;
+          }
+
+          if (action.startsWith('year:')) {
+            const yearStr = action.replace('year:', '');
+            const year = parseInt(yearStr, 10);
+
+            const { message, keyboard } = yearInPixels.generateYearGrid(
+              ctx.session.moodHistory,
+              year
+            );
+
+            await ctx.editMessageText(message, {
+              parse_mode: 'Markdown',
+              reply_markup: keyboard,
+            });
+            await ctx.answerCallbackQuery();
+            return;
+          }
+
+          if (action.startsWith('quarter:')) {
+            const [, yearStr, quarterStr] = action.split(':');
+            const year = parseInt(yearStr, 10);
+            const quarter = parseInt(quarterStr, 10);
+
+            const { message, keyboard } = yearInPixels.generateQuarterView(
+              ctx.session.moodHistory,
+              year,
+              quarter
+            );
+
+            await ctx.editMessageText(message, {
+              parse_mode: 'Markdown',
+              reply_markup: keyboard,
+            });
+            await ctx.answerCallbackQuery();
+            return;
+          }
+
           await ctx.answerCallbackQuery();
           return;
         }
