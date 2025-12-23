@@ -58,6 +58,7 @@ import {
   streakService,
   progressVisualization,
   emojiSlider,
+  hubMenu,
   type IStreakData,
   type IMoodHistory,
   type MoodLevel,
@@ -508,12 +509,18 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     await sendResultWithKeyboard(ctx, result);
   });
 
-  // /help command - Command reference
+  // /help command - Hub Model: shows all commands grouped by section
   bot.command(['help', 'справка'], async (ctx) => {
-    const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
-    const result = await helpCommand.execute(sleepCoreCtx as any);
-    await sendResultWithKeyboard(ctx, result);
+
+    // Use hub menu help message with all commands listed
+    const helpMessage = hubMenu.generateHelpMessage();
+    const menuButton = new InlineKeyboard().text('📱 Открыть меню', 'hub:back');
+
+    await ctx.reply(helpMessage, {
+      parse_mode: 'Markdown',
+      reply_markup: menuButton,
+    });
   });
 
   // /rehearsal command - Evening mental rehearsal (Smart Memory Window)
@@ -922,6 +929,112 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
           return;
         }
 
+        // Hub Model navigation callbacks
+        case 'hub': {
+          switch (action) {
+            case 'back': {
+              // Return to main hub menu
+              const message = hubMenu.generateCompactHubMessage(ctx.from?.first_name);
+              const keyboard = hubMenu.buildHubKeyboard();
+              await ctx.editMessageText(message, {
+                parse_mode: 'Markdown',
+                reply_markup: keyboard,
+              });
+              await ctx.answerCallbackQuery();
+              return;
+            }
+
+            case 'mood': {
+              // Show mood check from hub
+              const moodPrompt = emojiSlider.getMoodCheckPrompt('check-in');
+              const moodKeyboard = emojiSlider.createMoodKeyboard('mood');
+              await ctx.editMessageText(moodPrompt, {
+                parse_mode: 'Markdown',
+                reply_markup: moodKeyboard,
+              });
+              await ctx.answerCallbackQuery();
+              return;
+            }
+
+            case 'sleep': {
+              // Show sleep check from hub
+              const sleepPrompt = emojiSlider.getSleepCheckPrompt();
+              const sleepKeyboard = emojiSlider.createSleepKeyboard('sleep');
+              await ctx.editMessageText(sleepPrompt, {
+                parse_mode: 'Markdown',
+                reply_markup: sleepKeyboard,
+              });
+              await ctx.answerCallbackQuery();
+              return;
+            }
+
+            case 'mood_week': {
+              // Show mood week from hub
+              if (!ctx.session.moodHistory) {
+                ctx.session.moodHistory = emojiSlider.createInitialHistory();
+              }
+              const weekViz = emojiSlider.getMoodWeekVisualization(ctx.session.moodHistory);
+              const analysis = emojiSlider.analyzeMoodHistory(ctx.session.moodHistory, 7);
+
+              let weekMessage = `📊 *Неделя настроения*\n\n`;
+              weekMessage += `${weekViz}\n`;
+              weekMessage += `Пн  Вт  Ср  Чт  Пт  Сб  Вс\n\n`;
+              weekMessage += `📈 Среднее: ${analysis.averageMood.toFixed(1)}/5\n`;
+
+              if (analysis.insights.length > 0) {
+                weekMessage += `\n${analysis.insights[0]}`;
+              }
+
+              const backKeyboard = new InlineKeyboard().text('◀️ Назад в меню', 'hub:back');
+              await ctx.editMessageText(weekMessage, {
+                parse_mode: 'Markdown',
+                reply_markup: backKeyboard,
+              });
+              await ctx.answerCallbackQuery();
+              return;
+            }
+
+            case 'settings': {
+              // Show settings from hub
+              const settingsMessage =
+                '⚙️ *Настройки*\n\n' +
+                `🔔 Уведомления: ${ctx.session.preferences.notifications ? 'Вкл' : 'Выкл'}\n` +
+                `⏰ Время: ${ctx.session.preferences.notificationTime || '21:00'}\n` +
+                `🌍 Язык: Русский`;
+
+              const settingsKeyboard = new InlineKeyboard()
+                .text(ctx.session.preferences.notifications ? '🔕 Выкл уведомления' : '🔔 Вкл уведомления', 'settings:toggle')
+                .row()
+                .text('◀️ Назад в меню', 'hub:back');
+
+              await ctx.editMessageText(settingsMessage, {
+                parse_mode: 'Markdown',
+                reply_markup: settingsKeyboard,
+              });
+              await ctx.answerCallbackQuery();
+              return;
+            }
+
+            default: {
+              // Check if it's a section expand
+              if (action.startsWith('section:')) {
+                const sectionId = action.replace('section:', '');
+                const sectionMessage = hubMenu.generateSectionMessage(sectionId);
+                const sectionKeyboard = hubMenu.buildSectionExpandedKeyboard(sectionId);
+
+                await ctx.editMessageText(sectionMessage, {
+                  parse_mode: 'Markdown',
+                  reply_markup: sectionKeyboard,
+                });
+                await ctx.answerCallbackQuery();
+                return;
+              }
+            }
+          }
+          await ctx.answerCallbackQuery();
+          return;
+        }
+
         case 'rehearsal':
           if ('handleCallback' in rehearsalCommand) {
             result = await (rehearsalCommand as any).handleCallback(sleepCoreCtx, data, {});
@@ -974,36 +1087,18 @@ function setupMessages(bot: Bot<MyContext>, api: SleepCoreAPI): void {
   const registry = getCommandRegistry();
   const menuService = createContextAwareMenuService(registry);
 
-  // /menu command - Context-Aware main menu
+  // /menu command - Hub Model central navigation
+  // Research: Hub-and-spoke pattern reduces cognitive load (IxDF, NN Group)
   bot.command(['menu', 'меню'], async (ctx) => {
     ctx.session.lastActivityAt = new Date();
 
-    // Build context from session
-    const context = menuService.buildContext({
-      therapyWeek: ctx.session.therapyState?.currentWeek,
-      lastDiaryDate: ctx.session.therapyState?.lastDiaryDate,
-      lastAssessmentDate: ctx.session.therapyState?.lastAssessmentDate,
-      lastActivityAt: ctx.session.lastActivityAt,
-      hasCompletedOnboarding: ctx.session.therapyState?.hasCompletedOnboarding,
-    });
-
-    // Generate context-aware menu
-    const layout = menuService.generateMainMenu(context, ctx.session.userName || ctx.from?.first_name);
-    const message = menuService.formatMenuMessage(layout);
-    const keyboard = menuService.buildMenuKeyboard(layout);
-
-    // Build inline keyboard
-    const inlineKeyboard = new InlineKeyboard();
-    for (const row of keyboard) {
-      for (const btn of row) {
-        inlineKeyboard.text(btn.text, btn.callbackData || 'noop');
-      }
-      inlineKeyboard.row();
-    }
+    // Generate hub menu with sections
+    const message = hubMenu.generateCompactHubMessage(ctx.from?.first_name);
+    const keyboard = hubMenu.buildHubKeyboard();
 
     await ctx.reply(message, {
       parse_mode: 'Markdown',
-      reply_markup: inlineKeyboard,
+      reply_markup: keyboard,
     });
   });
 
@@ -1243,20 +1338,20 @@ async function main(): Promise<void> {
   // Health check
   startHealth(parseInt(process.env.HEALTH_PORT || '3001', 10));
 
-  // Register commands with BotFather (including /menu, /mood, /sleep)
+  // Register commands with BotFather (Hub Model: 5-6 core commands only)
+  // Research: 3-5 commands optimal (Miller's Law, Material Design, NN Group)
+  // All other commands accessible via /menu (Hub-and-Spoke pattern)
   try {
-    const allBotCommands = [
-      { command: 'menu', description: 'Главное меню (Context-Aware)' },
+    const hubModelCommands = [
+      { command: 'start', description: '🚀 Начать работу с ботом' },
+      { command: 'menu', description: '📱 Все функции (главное меню)' },
+      { command: 'diary', description: '📓 Дневник сна' },
       { command: 'mood', description: '💭 Проверка настроения' },
-      { command: 'sleep', description: '😴 Оценка качества сна' },
-      { command: 'mood_week', description: '📊 Настроение за неделю' },
-      ...commandDescriptions.map(cmd => ({
-        command: cmd.command,
-        description: cmd.description,
-      })),
+      { command: 'sos', description: '🆘 Экстренная помощь' },
+      { command: 'help', description: '❓ Справка и все команды' },
     ];
-    await bot.api.setMyCommands(allBotCommands);
-    console.log(`[Bot] ${allBotCommands.length} commands registered`);
+    await bot.api.setMyCommands(hubModelCommands);
+    console.log(`[Bot] Hub Model: ${hubModelCommands.length} core commands registered`);
   } catch (error) {
     console.warn('[Bot] Command registration failed:', error);
   }

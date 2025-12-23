@@ -83,3 +83,15 @@ export type {
   IMoodHistory,
   IMoodAnalysis,
 } from './EmojiSliderService';
+
+// ==================== Hub Menu (Hub-and-Spoke Navigation) ====================
+export {
+  HubMenuService,
+  hubMenu,
+} from './HubMenuService';
+
+export type {
+  IMenuSection,
+  IMenuCommand,
+  IHubMenuLayout,
+} from './HubMenuService';
