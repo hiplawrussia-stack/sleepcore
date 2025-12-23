@@ -43,6 +43,10 @@ import {
   helpCommand,
   rehearsalCommand,
   recallCommand,
+  // Sprint 3: Gamification & Evolution Commands
+  questCommand,
+  badgeCommand,
+  evolutionCommand,
   commandDescriptions,
   type ICommandResult,
   // Context-Aware Architecture
@@ -51,6 +55,17 @@ import {
   createContextAwareMenuService,
   type ICommandContext,
 } from './bot/commands';
+
+// Sprint 3: Voice & Gamification Modules
+import {
+  createWhisperService,
+  createVoiceDiaryHandler,
+  questService,
+  badgeService,
+  sonyaEvolutionService,
+  adaptiveKeyboardService,
+  type IKeyboardCommand,
+} from './modules';
 import { createBotConfigFromEnv, type BotConfigOutput } from './bot/config/BotConfig';
 import {
   createProactiveNotificationService,
@@ -575,6 +590,47 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     await sendResultWithKeyboard(ctx, result);
   });
 
+  // ==================== Sprint 3: Gamification Commands ====================
+
+  // /quest command - Quest management
+  bot.command(['quest', 'quests', 'задания', 'квесты'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+
+    // Record interaction for evolution
+    sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
+
+    const args = ctx.message?.text?.split(' ').slice(1).join(' ');
+    const result = await questCommand.execute(sleepCoreCtx as any, args);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /badges command - Badge collection
+  bot.command(['badges', 'badge', 'бейджи', 'достижения'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+
+    // Record interaction for evolution
+    sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
+
+    const args = ctx.message?.text?.split(' ').slice(1).join(' ');
+    const result = await badgeCommand.execute(sleepCoreCtx as any, args);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /sonya command - Sonya evolution
+  bot.command(['sonya', 'evolution', 'соня', 'эволюция'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+
+    // Record interaction for evolution
+    sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
+
+    const args = ctx.message?.text?.split(' ').slice(1).join(' ');
+    const result = await evolutionCommand.execute(sleepCoreCtx as any, args);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
   // /settings command - User preferences
   bot.command(['settings', 'настройки'], async (ctx) => {
     ctx.session.lastActivityAt = new Date();
@@ -707,6 +763,11 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const [command, action] = data.split(':');
     const sleepCoreCtx = extendContext(ctx, api);
 
+    // Sprint 3: Record command click for adaptive keyboard
+    if (['menu', 'quest', 'badge', 'sonya', 'diary', 'relax', 'mindful', 'progress'].includes(command)) {
+      adaptiveKeyboardService.recordCommandClick(sleepCoreCtx.userId, command).catch(() => {});
+    }
+
     try {
       let result: ICommandResult | null = null;
 
@@ -743,6 +804,19 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
               break;
             case 'recall':
               result = await recallCommand.execute(sleepCoreCtx as any);
+              break;
+            // Sprint 3: Gamification menu shortcuts
+            case 'quest':
+              sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
+              result = await questCommand.execute(sleepCoreCtx as any);
+              break;
+            case 'badges':
+              sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
+              result = await badgeCommand.execute(sleepCoreCtx as any);
+              break;
+            case 'sonya':
+              sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
+              result = await evolutionCommand.execute(sleepCoreCtx as any);
               break;
             default:
               await ctx.answerCallbackQuery({ text: 'OK' });
@@ -1286,6 +1360,62 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
           }
           break;
 
+        // ==================== Sprint 3: Gamification Callbacks ====================
+
+        case 'quest':
+          // Quest system callbacks
+          sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'callback');
+          if ('handleCallback' in questCommand) {
+            result = await (questCommand as any).handleCallback(sleepCoreCtx, data, {});
+          }
+          break;
+
+        case 'badge':
+          // Badge system callbacks
+          sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'callback');
+          if ('handleCallback' in badgeCommand) {
+            result = await (badgeCommand as any).handleCallback(sleepCoreCtx, data, {});
+          }
+          break;
+
+        case 'sonya':
+          // Sonya evolution callbacks
+          sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'callback');
+          if ('handleCallback' in evolutionCommand) {
+            result = await (evolutionCommand as any).handleCallback(sleepCoreCtx, data, {});
+          }
+          break;
+
+        case 'voice':
+          // Voice diary callbacks
+          if (action === 'stats') {
+            // Show voice diary statistics
+            const voiceStats = {
+              totalEntries: 0, // TODO: Get from database
+              totalMinutes: 0,
+              avgDuration: 0,
+              mostCommonEmotion: 'neutral',
+            };
+
+            const statsMessage =
+              `🎤 *Статистика голосового дневника*\n\n` +
+              `📝 Записей: ${voiceStats.totalEntries}\n` +
+              `⏱ Всего минут: ${voiceStats.totalMinutes}\n` +
+              `📊 Ср. длительность: ${voiceStats.avgDuration}с\n\n` +
+              `_Голосовой дневник помогает выразить эмоции,\n` +
+              `которые сложно описать словами._`;
+
+            await ctx.editMessageText(statsMessage, {
+              parse_mode: 'Markdown',
+              reply_markup: new InlineKeyboard()
+                .text('📓 Новая запись', 'diary:new')
+                .text('◀️ Назад', 'hub:back'),
+            });
+            await ctx.answerCallbackQuery();
+            return;
+          }
+          break;
+
         default:
           await ctx.answerCallbackQuery({ text: 'OK' });
           return;
@@ -1450,6 +1580,107 @@ function setupMessages(bot: Bot<MyContext>, api: SleepCoreAPI): void {
   });
 }
 
+// ============================================================================
+// VOICE MESSAGE HANDLERS (Sprint 3)
+// ============================================================================
+
+/**
+ * Setup voice message handlers
+ * Research: Fabla App shows "speech carries information we don't always consciously recognize"
+ */
+function setupVoiceHandlers(bot: Bot<MyContext>, api: SleepCoreAPI): void {
+  // Check if Whisper API is configured
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+
+  if (!openaiApiKey) {
+    console.log('[Voice] Whisper disabled: OPENAI_API_KEY not configured');
+
+    // Fallback handler: inform user that voice is not available
+    bot.on('message:voice', async (ctx) => {
+      await ctx.reply(
+        '🎤 Голосовой дневник временно недоступен.\n\n' +
+        'Ты можешь записать свои мысли текстом используя /diary',
+        { reply_markup: getReplyKeyboard(ctx) }
+      );
+    });
+    return;
+  }
+
+  // Initialize voice services
+  const whisperService = createWhisperService(openaiApiKey);
+  const voiceDiaryHandler = createVoiceDiaryHandler(whisperService);
+
+  console.log('[Voice] Whisper voice diary handler initialized');
+
+  // Voice message handler
+  bot.on('message:voice', async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+
+    // Record interaction for gamification
+    sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'voice');
+    badgeService.checkAndAward(sleepCoreCtx.userId, 'voice_diary');
+
+    const voice = ctx.message.voice;
+    console.log(`[Voice] Received from ${ctx.from?.id}, duration: ${voice.duration}s`);
+
+    // Show typing indicator
+    await ctx.replyWithChatAction('typing');
+
+    try {
+      // Get file URL from Telegram
+      const file = await ctx.api.getFile(voice.file_id);
+      const fileUrl = `https://api.telegram.org/file/bot${botConfig.token}/${file.file_path}`;
+
+      // Process voice message
+      const result = await voiceDiaryHandler.processVoiceMessage(
+        sleepCoreCtx.userId,
+        {
+          fileId: voice.file_id,
+          fileUniqueId: voice.file_unique_id,
+          duration: voice.duration,
+          mimeType: voice.mime_type,
+          fileSize: voice.file_size,
+        },
+        fileUrl
+      );
+
+      // Format and send response
+      const responseMessage = voiceDiaryHandler.formatResponseMessage(result);
+
+      // Build keyboard with follow-up actions
+      const keyboard = new InlineKeyboard()
+        .text('📓 Ещё запись', 'diary:new')
+        .text('📊 Прогресс', 'menu:progress')
+        .row()
+        .text('🎤 Статистика голоса', 'voice:stats');
+
+      await ctx.reply(responseMessage, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard,
+      });
+
+      // Check for quest completion
+      if (result.success) {
+        await questService.checkQuestProgress(sleepCoreCtx.userId, 'voice_diary', 1);
+
+        // Award XP for voice entry
+        sonyaEvolutionService.addXP(sleepCoreCtx.userId, 15); // Voice = 15 XP
+      }
+    } catch (error) {
+      console.error('[Voice] Processing error:', error);
+      await ctx.reply(
+        '😔 Не удалось обработать голосовое сообщение.\n' +
+        'Попробуй ещё раз или запиши мысли текстом /diary',
+        { reply_markup: getReplyKeyboard(ctx) }
+      );
+    }
+  });
+
+  // Voice note callback handler (for voice:stats, etc.)
+  // Note: Main callback handler in setupCallbacks will route voice: prefix here
+}
+
 // NOTE: Proactive reminders are now handled by ProactiveNotificationService
 // See src/bot/services/ProactiveNotificationService.ts
 
@@ -1559,6 +1790,18 @@ async function main(): Promise<void> {
   const registry = getCommandRegistry();
   const menuService = createContextAwareMenuService(registry);
 
+  // --- Initialize Adaptive Keyboard with Sprint 3 Commands ---
+  const sprint3Commands: IKeyboardCommand[] = [
+    { name: 'quest', label: 'Квесты', icon: '🎯', callbackData: 'menu:quest', category: 'secondary' },
+    { name: 'badges', label: 'Бейджи', icon: '🏆', callbackData: 'menu:badges', category: 'secondary' },
+    { name: 'sonya', label: 'Соня', icon: '🦉', callbackData: 'menu:sonya', category: 'secondary' },
+  ];
+
+  for (const cmd of sprint3Commands) {
+    adaptiveKeyboardService.addCommand(cmd);
+  }
+  console.log('[AdaptiveKeyboard] Sprint 3 commands registered');
+
   // --- Initialize Proactive Notification Service ---
   const notificationService = createProactiveNotificationService(bot as any, menuService);
 
@@ -1566,6 +1809,7 @@ async function main(): Promise<void> {
   setupCommands(bot, api);
   setupCallbacks(bot, api);
   setupMessages(bot, api);
+  setupVoiceHandlers(bot, api); // Sprint 3: Voice diary
   setupErrors(bot);
 
   // Production: Start proactive notifications

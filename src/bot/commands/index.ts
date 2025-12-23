@@ -48,6 +48,11 @@ export { HelpCommand, helpCommand } from './HelpCommand';
 export { RehearsalCommand, rehearsalCommand } from './RehearsalCommand';
 export { RecallCommand, recallCommand } from './RecallCommand';
 
+// Sprint 3: Gamification & Evolution Commands
+export { QuestCommand, questCommand } from './QuestCommand';
+export { BadgeCommand, badgeCommand } from './BadgeCommand';
+export { EvolutionCommand, evolutionCommand } from './EvolutionCommand';
+
 // ==================== Handler ====================
 export { CommandHandler, createCommandHandler } from './CommandHandler';
 
@@ -84,6 +89,9 @@ import { sosCommand } from './SosCommand';
 import { helpCommand } from './HelpCommand';
 import { rehearsalCommand } from './RehearsalCommand';
 import { recallCommand } from './RecallCommand';
+import { questCommand } from './QuestCommand';
+import { badgeCommand } from './BadgeCommand';
+import { evolutionCommand } from './EvolutionCommand';
 
 /**
  * All registered commands
@@ -99,6 +107,10 @@ export const allCommands = [
   helpCommand,
   rehearsalCommand,
   recallCommand,
+  // Sprint 3: Gamification & Evolution
+  questCommand,
+  badgeCommand,
+  evolutionCommand,
 ] as const;
 
 /**
