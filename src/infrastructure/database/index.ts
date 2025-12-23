@@ -57,6 +57,27 @@ export type {
   IUserRepository,
 } from './interfaces/IRepository';
 
+export type {
+  // Entity types
+  IGamificationStateEntity,
+  IXPTransactionEntity,
+  IAchievementEntity,
+  IStreakEntity,
+  IUserQuestEntity,
+  IInventoryEntity,
+  IEquippedItemsEntity,
+  IGamificationSettingsEntity,
+  ISessionTrackingEntity,
+  IDailySessionSummaryEntity,
+  // Enum types
+  EngagementLevel,
+  XPSource,
+  StreakType,
+  QuestStatus,
+  // Repository interface
+  IGamificationRepository,
+} from './interfaces/IGamificationRepository';
+
 // ============================================================================
 // SQLite Implementation
 // ============================================================================
@@ -103,6 +124,7 @@ export { SleepDiaryRepository } from './repositories/SleepDiaryRepository';
 export { UserRepository } from './repositories/UserRepository';
 export { AssessmentRepository } from './repositories/AssessmentRepository';
 export { TherapySessionRepository } from './repositories/TherapySessionRepository';
+export { GamificationRepository } from './repositories/GamificationRepository';
 
 // ============================================================================
 // Migrations
