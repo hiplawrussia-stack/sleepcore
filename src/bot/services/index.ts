@@ -95,3 +95,30 @@ export type {
   IMenuCommand,
   IHubMenuLayout,
 } from './HubMenuService';
+
+// ==================== Onboarding Tracking (Funnel Analytics) ====================
+export {
+  OnboardingTrackingService,
+  onboardingTracker,
+} from './OnboardingTrackingService';
+
+export type {
+  OnboardingStep,
+  IStepCompletion,
+  IOnboardingProgress,
+  IFunnelAnalytics,
+  IOnboardingEvent,
+} from './OnboardingTrackingService';
+
+// ==================== Daily Greeting (Mood-Integrated) ====================
+export {
+  DailyGreetingService,
+  dailyGreeting,
+} from './DailyGreetingService';
+
+export type {
+  TimeOfDay,
+  IGreetingContext,
+  IDailyGreeting,
+  MoodPromptStyle,
+} from './DailyGreetingService';

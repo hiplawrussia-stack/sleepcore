@@ -59,6 +59,8 @@ import {
   progressVisualization,
   emojiSlider,
   hubMenu,
+  onboardingTracker,
+  dailyGreeting,
   type IStreakData,
   type IMoodHistory,
   type MoodLevel,
@@ -130,8 +132,18 @@ interface SessionData {
     selectedFactors: string[];
   };
 
+  /** Onboarding progress tracking (funnel analytics) */
+  onboardingProgress?: {
+    startedAt: Date;
+    completedSteps: string[];
+    isCompleted: boolean;
+  };
+
   /** Last activity timestamp */
   lastActivityAt: Date;
+
+  /** First activity today (for daily greeting) */
+  lastGreetingDate?: string;
 }
 
 /**
@@ -392,6 +404,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.userId = sleepCoreCtx.userId;
     ctx.session.lastActivityAt = new Date();
+    ctx.session.userName = ctx.from?.first_name;
 
     // Initialize streak data if not present
     if (!ctx.session.streakData) {
@@ -400,6 +413,20 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
 
     // Record activity and update streak
     const streakResult = streakService.recordActivity(ctx.session.streakData, 'interaction');
+
+    // === Onboarding Tracking (Funnel Analytics) ===
+    // Track: welcome_viewed step
+    onboardingTracker.startOnboarding(sleepCoreCtx.userId);
+    onboardingTracker.completeStep(sleepCoreCtx.userId, 'welcome_viewed');
+
+    // Initialize session onboarding progress
+    if (!ctx.session.onboardingProgress) {
+      ctx.session.onboardingProgress = {
+        startedAt: new Date(),
+        completedSteps: ['welcome_viewed'],
+        isCompleted: false,
+      };
+    }
 
     // Start SleepCore session
     api.startSession(sleepCoreCtx.userId);
@@ -432,6 +459,12 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
 
     // Record diary activity (counts more than regular interaction)
     const streakResult = streakService.recordActivity(ctx.session.streakData, 'diary');
+
+    // === Onboarding Tracking: first diary entry ===
+    if (ctx.session.onboardingProgress && !ctx.session.onboardingProgress.completedSteps.includes('first_diary_entry')) {
+      onboardingTracker.completeStep(sleepCoreCtx.userId, 'first_diary_entry');
+      ctx.session.onboardingProgress.completedSteps.push('first_diary_entry');
+    }
 
     const result = await diaryCommand.execute(sleepCoreCtx as any);
     await sendResultWithKeyboard(ctx, result);
@@ -1029,6 +1062,111 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
                 await ctx.answerCallbackQuery();
                 return;
               }
+            }
+          }
+          await ctx.answerCallbackQuery();
+          return;
+        }
+
+        // Daily greeting mood check callbacks (mood-integrated notifications)
+        case 'greeting': {
+          if (action.startsWith('mood:')) {
+            const moodLevel = parseInt(action.replace('mood:', ''), 10);
+
+            // Initialize mood history if not present
+            if (!ctx.session.moodHistory) {
+              ctx.session.moodHistory = emojiSlider.createInitialHistory();
+            }
+
+            // Record quick mood from greeting (simplified - no factors)
+            emojiSlider.recordMood(
+              ctx.session.moodHistory!,
+              moodLevel as MoodLevel,
+              [] // No factors for quick greeting mood
+            );
+
+            // === Onboarding Tracking: first mood check ===
+            if (ctx.session.onboardingProgress && !ctx.session.onboardingProgress.completedSteps.includes('first_mood_check')) {
+              onboardingTracker.completeStep(sleepCoreCtx.userId, 'first_mood_check');
+              ctx.session.onboardingProgress.completedSteps.push('first_mood_check');
+            }
+
+            // Generate contextual response based on mood
+            const response = dailyGreeting.generateMoodResponse(moodLevel, ctx.from?.first_name);
+            const suggestions = dailyGreeting.getMoodSuggestions(moodLevel);
+
+            // Build follow-up keyboard based on mood
+            const followupKeyboard = new InlineKeyboard();
+
+            if (moodLevel <= 2) {
+              // Low mood - offer support
+              followupKeyboard
+                .text('🧘 Расслабление', 'cmd:relax')
+                .text('🆘 Помощь', 'cmd:sos')
+                .row();
+            } else {
+              // Normal/good mood - offer activities
+              followupKeyboard
+                .text('📓 Дневник', 'cmd:diary')
+                .text('🎯 Челленджи', 'cmd:challenges')
+                .row();
+            }
+            followupKeyboard.text('📱 Меню', 'hub:back');
+
+            await ctx.editMessageText(response, {
+              parse_mode: 'Markdown',
+              reply_markup: followupKeyboard,
+            });
+            await ctx.answerCallbackQuery({ text: 'Записано!' });
+            return;
+          }
+          await ctx.answerCallbackQuery();
+          return;
+        }
+
+        // cmd: callback - execute commands from inline buttons
+        case 'cmd': {
+          switch (action) {
+            case 'diary': {
+              const diaryResult = await diaryCommand.execute(sleepCoreCtx as any);
+              if (diaryResult.message) {
+                const kb = diaryResult.keyboard ? buildKeyboard(diaryResult.keyboard) : undefined;
+                await ctx.editMessageText(diaryResult.message, {
+                  parse_mode: 'Markdown',
+                  reply_markup: kb,
+                });
+              }
+              await ctx.answerCallbackQuery();
+              return;
+            }
+            case 'relax': {
+              const relaxResult = await relaxCommand.execute(sleepCoreCtx as any);
+              if (relaxResult.message) {
+                const kb = relaxResult.keyboard ? buildKeyboard(relaxResult.keyboard) : undefined;
+                await ctx.editMessageText(relaxResult.message, {
+                  parse_mode: 'Markdown',
+                  reply_markup: kb,
+                });
+              }
+              await ctx.answerCallbackQuery();
+              return;
+            }
+            case 'sos': {
+              const sosResult = await sosCommand.execute(sleepCoreCtx as any);
+              if (sosResult.message) {
+                const kb = sosResult.keyboard ? buildKeyboard(sosResult.keyboard) : undefined;
+                await ctx.editMessageText(sosResult.message, {
+                  parse_mode: 'Markdown',
+                  reply_markup: kb,
+                });
+              }
+              await ctx.answerCallbackQuery();
+              return;
+            }
+            case 'challenges': {
+              // TODO: implement challenges command callback
+              await ctx.answerCallbackQuery({ text: 'Челленджи скоро!' });
+              return;
             }
           }
           await ctx.answerCallbackQuery();

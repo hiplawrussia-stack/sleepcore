@@ -22,6 +22,7 @@ import {
   type ICommandContext,
   getMoscowHour,
 } from '../commands/registry';
+import { dailyGreeting } from './DailyGreetingService';
 
 // ==================== Constants (Research-Based) ====================
 
@@ -266,7 +267,8 @@ export class ProactiveNotificationService {
   }
 
   /**
-   * Send morning notifications
+   * Send morning notifications with integrated mood check
+   * Uses DailyGreetingService for personalized, mood-aware greetings
    */
   private async sendMorningNotifications(): Promise<void> {
     const hour = getMoscowHour();
@@ -282,16 +284,22 @@ export class ProactiveNotificationService {
 
         const context = this.buildFullContext(userData);
 
-        const notification = this.menuService.generateProactiveNotification(
-          context,
-          userData.userName
+        // Use DailyGreetingService for mood-integrated morning notification
+        const { message, keyboard } = dailyGreeting.generateMorningNotification(
+          userData.userName,
+          undefined, // streak - would need to be passed in userData
+          context.hasPendingDiary
         );
 
-        if (notification) {
-          await this.sendNotification(userData.chatId, notification);
-          userData.lastNotificationAt = new Date();
-          console.log(`[Notifications] Sent morning notification to ${userId}`);
-        }
+        // Convert InlineKeyboard to notification format
+        const notification = {
+          message,
+          keyboard: this.convertInlineKeyboard(keyboard),
+        };
+
+        await this.sendNotification(userData.chatId, notification);
+        userData.lastNotificationAt = new Date();
+        console.log(`[Notifications] Sent mood-integrated morning notification to ${userId}`);
       } catch (error) {
         console.error(`[Notifications] Failed to notify ${userId}:`, error);
       }
@@ -300,6 +308,7 @@ export class ProactiveNotificationService {
 
   /**
    * Send evening notifications (20:00 - research "golden hour")
+   * Uses DailyGreetingService for mood-aware evening greetings
    */
   private async sendEveningNotifications(): Promise<void> {
     const hour = getMoscowHour();
@@ -314,20 +323,39 @@ export class ProactiveNotificationService {
 
         const context = this.buildFullContext(userData);
 
-        const notification = this.menuService.generateProactiveNotification(
-          context,
-          userData.userName
+        // Use DailyGreetingService for mood-integrated evening notification
+        const { message, keyboard } = dailyGreeting.generateEveningNotification(
+          userData.userName,
+          context.hasPendingDiary
         );
 
-        if (notification) {
-          await this.sendNotification(userData.chatId, notification);
-          userData.lastNotificationAt = new Date();
-          console.log(`[Notifications] Sent evening notification to ${userId}`);
-        }
+        // Convert InlineKeyboard to notification format
+        const notification = {
+          message,
+          keyboard: this.convertInlineKeyboard(keyboard),
+        };
+
+        await this.sendNotification(userData.chatId, notification);
+        userData.lastNotificationAt = new Date();
+        console.log(`[Notifications] Sent mood-integrated evening notification to ${userId}`);
       } catch (error) {
         console.error(`[Notifications] Failed to notify ${userId}:`, error);
       }
     }
+  }
+
+  /**
+   * Convert Grammy InlineKeyboard to notification format
+   */
+  private convertInlineKeyboard(keyboard: any): { text: string; callbackData?: string }[][] {
+    // Grammy InlineKeyboard stores buttons in inline_keyboard property
+    const buttons = keyboard?.inline_keyboard || [];
+    return buttons.map((row: any[]) =>
+      row.map((btn: any) => ({
+        text: btn.text,
+        callbackData: btn.callback_data,
+      }))
+    );
   }
 
   /**
