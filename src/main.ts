@@ -57,7 +57,11 @@ import {
   replyKeyboard,
   streakService,
   progressVisualization,
+  emojiSlider,
   type IStreakData,
+  type IMoodHistory,
+  type MoodLevel,
+  type SleepQualityLevel,
 } from './bot/services';
 import { VERSION, BUILD_DATE } from './index';
 
@@ -113,6 +117,17 @@ interface SessionData {
 
   /** Streak and progress data (forgiveness-first design) */
   streakData?: IStreakData;
+
+  /** Mood history (Wysa-style emoji slider) */
+  moodHistory?: IMoodHistory;
+
+  /** Pending mood/sleep check for two-step flow */
+  pendingMoodCheck?: {
+    type: 'mood' | 'sleep';
+    level: MoodLevel | SleepQualityLevel;
+    context: 'morning' | 'evening' | 'check-in' | 'manual';
+    selectedFactors: string[];
+  };
 
   /** Last activity timestamp */
   lastActivityAt: Date;
@@ -538,6 +553,85 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
       }
     );
   });
+
+  // /mood command - Wysa-style emoji mood check
+  bot.command(['mood', 'настроение'], async (ctx) => {
+    ctx.session.lastActivityAt = new Date();
+
+    // Initialize mood history if not present
+    if (!ctx.session.moodHistory) {
+      ctx.session.moodHistory = emojiSlider.createInitialHistory();
+    }
+
+    // Determine context based on time
+    const hour = new Date().getHours();
+    const moodContext: 'morning' | 'evening' | 'check-in' =
+      hour >= 5 && hour < 12 ? 'morning' :
+      hour >= 18 && hour < 23 ? 'evening' : 'check-in';
+
+    const prompt = emojiSlider.getMoodCheckPrompt(moodContext);
+    const keyboard = emojiSlider.createMoodKeyboard('mood');
+
+    await ctx.reply(prompt, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
+  });
+
+  // /sleep command - Wysa-style sleep quality check
+  bot.command(['sleep', 'сон'], async (ctx) => {
+    ctx.session.lastActivityAt = new Date();
+
+    // Initialize mood history if not present
+    if (!ctx.session.moodHistory) {
+      ctx.session.moodHistory = emojiSlider.createInitialHistory();
+    }
+
+    const prompt = emojiSlider.getSleepCheckPrompt();
+    const keyboard = emojiSlider.createSleepKeyboard('sleep');
+
+    await ctx.reply(prompt, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
+  });
+
+  // /mood_week command - Week mood visualization
+  bot.command(['mood_week', 'неделя'], async (ctx) => {
+    ctx.session.lastActivityAt = new Date();
+
+    if (!ctx.session.moodHistory) {
+      ctx.session.moodHistory = emojiSlider.createInitialHistory();
+    }
+
+    const weekViz = emojiSlider.getMoodWeekVisualization(ctx.session.moodHistory);
+    const analysis = emojiSlider.analyzeMoodHistory(ctx.session.moodHistory, 7);
+
+    let message = `📊 *Неделя настроения*\n\n`;
+    message += `${weekViz}\n`;
+    message += `Пн  Вт  Ср  Чт  Пт  Сб  Вс\n\n`;
+
+    message += `📈 Среднее настроение: ${analysis.averageMood.toFixed(1)}/5\n`;
+    message += `😴 Среднее качество сна: ${analysis.averageSleep.toFixed(1)}/5\n`;
+
+    if (analysis.moodTrend !== 'unknown') {
+      const trendEmoji = analysis.moodTrend === 'improving' ? '📈' :
+                         analysis.moodTrend === 'declining' ? '📉' : '➡️';
+      const trendText = analysis.moodTrend === 'improving' ? 'улучшается' :
+                        analysis.moodTrend === 'declining' ? 'снижается' : 'стабильное';
+      message += `${trendEmoji} Тренд: ${trendText}\n`;
+    }
+
+    if (analysis.insights.length > 0) {
+      message += `\n───────────────\n\n`;
+      message += analysis.insights.join('\n');
+    }
+
+    await ctx.reply(message, {
+      parse_mode: 'Markdown',
+      reply_markup: getReplyKeyboard(ctx),
+    });
+  });
 }
 
 // ============================================================================
@@ -656,6 +750,177 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
         case 'today':
           await ctx.answerCallbackQuery({ text: action === 'done' ? '✅ Отлично!' : '👍' });
           return;
+
+        // Mood selection (Wysa-style emoji slider)
+        case 'mood': {
+          const moodLevel = parseInt(action) as MoodLevel;
+          if (moodLevel >= 1 && moodLevel <= 5) {
+            // Initialize mood history if not present
+            if (!ctx.session.moodHistory) {
+              ctx.session.moodHistory = emojiSlider.createInitialHistory();
+            }
+
+            // Determine context
+            const hour = new Date().getHours();
+            const moodContext: 'morning' | 'evening' | 'check-in' =
+              hour >= 5 && hour < 12 ? 'morning' :
+              hour >= 18 && hour < 23 ? 'evening' : 'check-in';
+
+            // Save pending mood check for factor selection
+            ctx.session.pendingMoodCheck = {
+              type: 'mood',
+              level: moodLevel,
+              context: moodContext,
+              selectedFactors: [],
+            };
+
+            // Show factor selection
+            const moodItem = emojiSlider.getMoodItem(moodLevel);
+            const factorPrompt = `${moodItem.emoji} *${moodItem.label}*\n\n${emojiSlider.getFactorPrompt('mood')}`;
+            const factorKeyboard = emojiSlider.createCompactFactorKeyboard('mood', [], 'mfactor');
+
+            await ctx.editMessageText(factorPrompt, {
+              parse_mode: 'Markdown',
+              reply_markup: factorKeyboard,
+            });
+          }
+          await ctx.answerCallbackQuery();
+          return;
+        }
+
+        // Sleep quality selection
+        case 'sleep': {
+          const sleepLevel = parseInt(action) as SleepQualityLevel;
+          if (sleepLevel >= 1 && sleepLevel <= 5) {
+            // Initialize mood history if not present
+            if (!ctx.session.moodHistory) {
+              ctx.session.moodHistory = emojiSlider.createInitialHistory();
+            }
+
+            // Save pending sleep check for factor selection
+            ctx.session.pendingMoodCheck = {
+              type: 'sleep',
+              level: sleepLevel,
+              context: 'morning',
+              selectedFactors: [],
+            };
+
+            // Show factor selection
+            const sleepItem = emojiSlider.getSleepItem(sleepLevel);
+            const factorPrompt = `${sleepItem.emoji} *${sleepItem.label}*\n\n${emojiSlider.getFactorPrompt('sleep')}`;
+            const factorKeyboard = emojiSlider.createCompactFactorKeyboard('sleep', [], 'sfactor');
+
+            await ctx.editMessageText(factorPrompt, {
+              parse_mode: 'Markdown',
+              reply_markup: factorKeyboard,
+            });
+          }
+          await ctx.answerCallbackQuery();
+          return;
+        }
+
+        // Mood factor selection (multi-select)
+        case 'mfactor': {
+          if (!ctx.session.pendingMoodCheck || ctx.session.pendingMoodCheck.type !== 'mood') {
+            await ctx.answerCallbackQuery({ text: 'Сессия устарела' });
+            return;
+          }
+
+          if (action === 'done') {
+            // Save mood entry
+            const pending = ctx.session.pendingMoodCheck;
+            emojiSlider.recordMood(
+              ctx.session.moodHistory!,
+              pending.level as MoodLevel,
+              pending.selectedFactors,
+              pending.context
+            );
+
+            // Generate response
+            const response = emojiSlider.formatMoodResponse(
+              pending.level as MoodLevel,
+              pending.selectedFactors
+            );
+
+            // Clear pending
+            ctx.session.pendingMoodCheck = undefined;
+
+            await ctx.editMessageText(response, { parse_mode: 'Markdown' });
+            await ctx.answerCallbackQuery({ text: '✅ Записано!' });
+          } else {
+            // Toggle factor selection
+            const factors = ctx.session.pendingMoodCheck.selectedFactors;
+            const idx = factors.indexOf(action);
+            if (idx >= 0) {
+              factors.splice(idx, 1);
+            } else {
+              factors.push(action);
+            }
+
+            // Update keyboard
+            const moodItem = emojiSlider.getMoodItem(ctx.session.pendingMoodCheck.level as MoodLevel);
+            const factorPrompt = `${moodItem.emoji} *${moodItem.label}*\n\n${emojiSlider.getFactorPrompt('mood')}`;
+            const factorKeyboard = emojiSlider.createCompactFactorKeyboard('mood', factors, 'mfactor');
+
+            await ctx.editMessageText(factorPrompt, {
+              parse_mode: 'Markdown',
+              reply_markup: factorKeyboard,
+            });
+            await ctx.answerCallbackQuery();
+          }
+          return;
+        }
+
+        // Sleep factor selection (multi-select)
+        case 'sfactor': {
+          if (!ctx.session.pendingMoodCheck || ctx.session.pendingMoodCheck.type !== 'sleep') {
+            await ctx.answerCallbackQuery({ text: 'Сессия устарела' });
+            return;
+          }
+
+          if (action === 'done') {
+            // Save sleep entry
+            const pending = ctx.session.pendingMoodCheck;
+            emojiSlider.recordSleep(
+              ctx.session.moodHistory!,
+              pending.level as SleepQualityLevel,
+              pending.selectedFactors
+            );
+
+            // Generate response
+            const response = emojiSlider.formatSleepResponse(
+              pending.level as SleepQualityLevel,
+              pending.selectedFactors
+            );
+
+            // Clear pending
+            ctx.session.pendingMoodCheck = undefined;
+
+            await ctx.editMessageText(response, { parse_mode: 'Markdown' });
+            await ctx.answerCallbackQuery({ text: '✅ Записано!' });
+          } else {
+            // Toggle factor selection
+            const factors = ctx.session.pendingMoodCheck.selectedFactors;
+            const idx = factors.indexOf(action);
+            if (idx >= 0) {
+              factors.splice(idx, 1);
+            } else {
+              factors.push(action);
+            }
+
+            // Update keyboard
+            const sleepItem = emojiSlider.getSleepItem(ctx.session.pendingMoodCheck.level as SleepQualityLevel);
+            const factorPrompt = `${sleepItem.emoji} *${sleepItem.label}*\n\n${emojiSlider.getFactorPrompt('sleep')}`;
+            const factorKeyboard = emojiSlider.createCompactFactorKeyboard('sleep', factors, 'sfactor');
+
+            await ctx.editMessageText(factorPrompt, {
+              parse_mode: 'Markdown',
+              reply_markup: factorKeyboard,
+            });
+            await ctx.answerCallbackQuery();
+          }
+          return;
+        }
 
         case 'rehearsal':
           if ('handleCallback' in rehearsalCommand) {
@@ -978,10 +1243,13 @@ async function main(): Promise<void> {
   // Health check
   startHealth(parseInt(process.env.HEALTH_PORT || '3001', 10));
 
-  // Register commands with BotFather (including /menu)
+  // Register commands with BotFather (including /menu, /mood, /sleep)
   try {
     const allBotCommands = [
       { command: 'menu', description: 'Главное меню (Context-Aware)' },
+      { command: 'mood', description: '💭 Проверка настроения (Wysa-style)' },
+      { command: 'sleep', description: '😴 Оценка качества сна' },
+      { command: 'mood_week', description: '📊 Настроение за неделю' },
       ...commandDescriptions.map(cmd => ({
         command: cmd.command,
         description: cmd.description,

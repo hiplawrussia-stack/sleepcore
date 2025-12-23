@@ -65,3 +65,21 @@ export type {
   IProgressSummary,
   ProgressBarStyle,
 } from './ProgressVisualizationService';
+
+// ==================== Emoji Slider (Wysa-Style Mood Tracking) ====================
+export {
+  EmojiSliderService,
+  emojiSlider,
+} from './EmojiSliderService';
+
+export type {
+  MoodLevel,
+  SleepQualityLevel,
+  IMoodScaleItem,
+  ISleepScaleItem,
+  IMoodFactor,
+  IMoodEntry,
+  ISleepEntry,
+  IMoodHistory,
+  IMoodAnalysis,
+} from './EmojiSliderService';
