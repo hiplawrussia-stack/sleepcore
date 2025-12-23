@@ -38,3 +38,30 @@ export type {
   IKeyboardLayout,
   IKeyboardContext,
 } from './ReplyKeyboardService';
+
+// ==================== Streak Counter (Forgiveness-First) ====================
+export {
+  StreakService,
+  streakService,
+} from './StreakService';
+
+export type {
+  IStreakData,
+  IStreakMilestone,
+  IStreakUpdateResult,
+  IStreakConfig,
+  IDailyActivity,
+} from './StreakService';
+
+// ==================== Progress Visualization ====================
+export {
+  ProgressVisualizationService,
+  progressVisualization,
+} from './ProgressVisualizationService';
+
+export type {
+  IProgressBarConfig,
+  ITherapyProgress,
+  IProgressSummary,
+  ProgressBarStyle,
+} from './ProgressVisualizationService';

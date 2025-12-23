@@ -52,7 +52,13 @@ import {
   type ICommandContext,
 } from './bot/commands';
 import { createBotConfigFromEnv, type BotConfigOutput } from './bot/config/BotConfig';
-import { createProactiveNotificationService, replyKeyboard } from './bot/services';
+import {
+  createProactiveNotificationService,
+  replyKeyboard,
+  streakService,
+  progressVisualization,
+  type IStreakData,
+} from './bot/services';
 import { VERSION, BUILD_DATE } from './index';
 
 // Database imports
@@ -104,6 +110,9 @@ interface SessionData {
     currentQuestion: number;
     step: string;
   };
+
+  /** Streak and progress data (forgiveness-first design) */
+  streakData?: IStreakData;
 
   /** Last activity timestamp */
   lastActivityAt: Date;
@@ -368,6 +377,14 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     ctx.session.userId = sleepCoreCtx.userId;
     ctx.session.lastActivityAt = new Date();
 
+    // Initialize streak data if not present
+    if (!ctx.session.streakData) {
+      ctx.session.streakData = streakService.createInitialData();
+    }
+
+    // Record activity and update streak
+    const streakResult = streakService.recordActivity(ctx.session.streakData, 'interaction');
+
     // Start SleepCore session
     api.startSession(sleepCoreCtx.userId);
 
@@ -378,6 +395,12 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const result = await startCommand.execute(sleepCoreCtx as any);
     await sendResultWithKeyboard(ctx, result);
 
+    // Show streak milestone if achieved
+    if (streakResult.newMilestone) {
+      const celebration = progressVisualization.createMilestoneCelebration(streakResult.newMilestone);
+      await ctx.reply(celebration, { parse_mode: 'Markdown' });
+    }
+
     ctx.session.therapyState = { hasActiveSession: true, currentWeek: 0 };
   });
 
@@ -385,8 +408,25 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
   bot.command(['diary', 'дневник'], async (ctx) => {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
+
+    // Initialize streak data if not present
+    if (!ctx.session.streakData) {
+      ctx.session.streakData = streakService.createInitialData();
+    }
+
+    // Record diary activity (counts more than regular interaction)
+    const streakResult = streakService.recordActivity(ctx.session.streakData, 'diary');
+
     const result = await diaryCommand.execute(sleepCoreCtx as any);
     await sendResultWithKeyboard(ctx, result);
+
+    // Show streak update
+    if (streakResult.newMilestone) {
+      const celebration = progressVisualization.createMilestoneCelebration(streakResult.newMilestone);
+      await ctx.reply(celebration, { parse_mode: 'Markdown' });
+    } else if (streakResult.currentStreak > 0) {
+      await ctx.reply(streakResult.message, { parse_mode: 'Markdown' });
+    }
   });
 
   // /today command - Daily intervention
@@ -415,12 +455,34 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     await sendResultWithKeyboard(ctx, result);
   });
 
-  // /progress command - Weekly progress report
+  // /progress command - Weekly progress report with streak visualization
   bot.command(['progress', 'прогресс'], async (ctx) => {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
-    const result = await progressCommand.execute(sleepCoreCtx as any);
-    await sendResultWithKeyboard(ctx, result);
+
+    // Initialize streak data if not present
+    if (!ctx.session.streakData) {
+      ctx.session.streakData = streakService.createInitialData();
+    }
+
+    // Build therapy progress data
+    const therapyProgress = ctx.session.therapyState ? {
+      currentWeek: ctx.session.therapyState.currentWeek || 1,
+      totalWeeks: 8, // CBT-I standard 8-week program
+      completedModules: [],
+    } : undefined;
+
+    // Generate full progress summary
+    const progressSummary = progressVisualization.createFullProgressSummary(
+      ctx.session.streakData,
+      therapyProgress,
+      ctx.from?.first_name
+    );
+
+    await ctx.reply(progressSummary, {
+      parse_mode: 'Markdown',
+      reply_markup: getReplyKeyboard(ctx),
+    });
   });
 
   // /sos command - Crisis intervention
