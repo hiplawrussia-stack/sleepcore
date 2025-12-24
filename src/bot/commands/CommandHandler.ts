@@ -27,6 +27,11 @@ import { mindfulCommand } from './MindfulCommand';
 import { progressCommand } from './ProgressCommand';
 import { sosCommand } from './SosCommand';
 import { helpCommand } from './HelpCommand';
+// Gamification commands (Sprint 7)
+import { profileCommand } from './ProfileCommand';
+import { questCommand } from './QuestCommand';
+import { badgeCommand } from './BadgeCommand';
+import { evolutionCommand } from './EvolutionCommand';
 
 /**
  * Command Handler implementation
@@ -376,6 +381,7 @@ export class CommandHandler implements ICommandRegistry {
    * Register all default commands
    */
   private registerDefaultCommands(): void {
+    // Core commands
     this.register(startCommand);
     this.register(diaryCommand);
     this.register(todayCommand);
@@ -384,6 +390,12 @@ export class CommandHandler implements ICommandRegistry {
     this.register(progressCommand);
     this.register(sosCommand);
     this.register(helpCommand);
+
+    // Gamification commands (Sprint 7)
+    this.register(profileCommand);
+    this.register(questCommand);
+    this.register(badgeCommand);
+    this.register(evolutionCommand);
   }
 }
 

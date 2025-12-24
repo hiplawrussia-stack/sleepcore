@@ -136,3 +136,19 @@ export type {
   IMonthStats,
   IYearStats,
 } from './YearInPixelsService';
+
+// ==================== Adaptive Keyboard (Personalized UI) ====================
+export {
+  buildAdaptiveHubKeyboard,
+  recordHubInteraction,
+  getAdaptiveLayout,
+} from './HubMenuService';
+
+// ==================== Gamification Context (Sprint 7) ====================
+export {
+  gamificationContext,
+  getGamificationEngine,
+} from './GamificationContext';
+
+// ==================== Modules Re-export ====================
+export * from '../../modules';

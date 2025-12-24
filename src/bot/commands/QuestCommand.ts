@@ -21,7 +21,9 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import { questService, badgeService } from '../../modules/quests';
+import { getGamificationEngine } from '../services/GamificationContext';
+import type { IGamificationEngine, IActiveQuestInfo } from '../../modules/gamification';
+import { questService } from '../../modules/quests'; // Keep for quest definitions
 
 /**
  * /quest Command Implementation
@@ -114,15 +116,20 @@ export class QuestCommand implements IConversationCommand {
    * Show quest hub (main menu)
    */
   private async showQuestHub(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const activeQuests = questService.getActiveQuests(ctx.userId);
-    const availableQuests = questService.getAvailableQuests(ctx.userId);
-    const completedCount = questService.getCompletedQuestIds(ctx.userId).length;
-    const totalQuests = questService.getAllQuests().length;
+    try {
+      const engine = await getGamificationEngine();
+      const userId = parseInt(ctx.userId, 10);
 
-    // Calculate total XP from completed quests
-    const totalXP = badgeService.getTotalBadgeXP(ctx.userId);
+      const activeQuests = await engine.getActiveQuests(userId);
+      const availableQuests = await engine.getAvailableQuests(userId);
+      const completedCount = await engine.getCompletedQuestCount(userId);
+      const totalQuests = questService.getAllQuests().length;
 
-    const message = `
+      // Get total XP from profile
+      const profile = await engine.getPlayerProfile(userId);
+      const totalXP = profile.totalXp;
+
+      const message = `
 ${sonya.emoji} *Квесты*
 
 ${formatter.info(`Выполняй задания и получай награды!`)}
@@ -136,83 +143,89 @@ ${formatter.divider()}
 
 ${formatter.divider()}
 
-${activeQuests.length > 0 ? this.formatActiveQuestsPreview(activeQuests) : ''}
+${activeQuests.length > 0 ? this.formatActiveQuestsPreviewNew(activeQuests) : ''}
 
 ${availableQuests.length > 0 ? `\n📋 *Доступно ${availableQuests.length} новых квестов*` : ''}
 
 ${formatter.tip('Выбери раздел для подробностей')}
-    `.trim();
+      `.trim();
 
-    const keyboard: IInlineButton[][] = [
-      [
-        { text: `🎯 Активные (${activeQuests.length})`, callbackData: 'quest:active' },
-        { text: `📋 Доступные (${availableQuests.length})`, callbackData: 'quest:available' },
-      ],
-      [
-        { text: `✅ Завершённые (${completedCount})`, callbackData: 'quest:completed' },
-      ],
-      [
-        { text: '🏅 Мои бейджи', callbackData: 'badge:list' },
-      ],
-    ];
+      const keyboard: IInlineButton[][] = [
+        [
+          { text: `🎯 Активные (${activeQuests.length})`, callbackData: 'quest:active' },
+          { text: `📋 Доступные (${availableQuests.length})`, callbackData: 'quest:available' },
+        ],
+        [
+          { text: `✅ Завершённые (${completedCount})`, callbackData: 'quest:completed' },
+        ],
+        [
+          { text: '🏅 Мои бейджи', callbackData: 'badge:list' },
+          { text: '👤 Профиль', callbackData: 'profile:overview' },
+        ],
+      ];
 
-    return { success: true, message, keyboard };
+      return { success: true, message, keyboard };
+    } catch (error) {
+      console.error('Quest hub error:', error);
+      return { success: false, error: 'Не удалось загрузить квесты' };
+    }
   }
 
   /**
    * Show active quests
    */
   private async showActiveQuests(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const activeQuests = questService.getActiveQuests(ctx.userId);
+    try {
+      const engine = await getGamificationEngine();
+      const userId = parseInt(ctx.userId, 10);
+      const activeQuests = await engine.getActiveQuests(userId);
 
-    if (activeQuests.length === 0) {
-      const message = `
+      if (activeQuests.length === 0) {
+        const message = `
 ${formatter.info('Нет активных квестов')}
 
 У тебя пока нет начатых квестов.
 Выбери новый квест из списка доступных!
 
 ${formatter.tip('Можно иметь до 3 активных квестов одновременно')}
-      `.trim();
+        `.trim();
 
-      const keyboard: IInlineButton[][] = [
-        [{ text: '📋 Выбрать квест', callbackData: 'quest:available' }],
-        [{ text: '◀️ Назад', callbackData: 'quest:list' }],
-      ];
+        const keyboard: IInlineButton[][] = [
+          [{ text: '📋 Выбрать квест', callbackData: 'quest:available' }],
+          [{ text: '◀️ Назад', callbackData: 'quest:list' }],
+        ];
 
-      return { success: true, message, keyboard };
-    }
+        return { success: true, message, keyboard };
+      }
 
-    let questsText = '';
-    for (const active of activeQuests) {
-      const quest = questService.getQuest(active.questId);
-      if (!quest) continue;
+      let questsText = '';
+      for (const active of activeQuests) {
+        const quest = active.quest;
+        const progressBar = formatter.progressBar(active.progress, 10);
 
-      const percentage = questService.getProgressPercentage(active);
-      const daysRemaining = questService.getDaysRemaining(active);
-      const progressBar = formatter.progressBar(percentage, 10);
-
-      questsText += `
+        questsText += `
 ${quest.icon} *${quest.title}*
-${progressBar} ${percentage}%
-📊 ${active.progress.currentValue}/${active.progress.targetValue} | ⏳ ${daysRemaining} дн.
-      `.trim() + '\n\n';
-    }
+${progressBar} ${active.progress}%
+📊 ${active.currentValue}/${active.targetValue} | ⏳ ${active.daysRemaining} дн.
+        `.trim() + '\n\n';
+      }
 
-    const message = `
+      const message = `
 🎯 *Активные квесты* (${activeQuests.length}/3)
 
 ${questsText}
 ${formatter.tip('Нажми на квест для подробностей')}
-    `.trim();
+      `.trim();
 
-    const keyboard: IInlineButton[][] = activeQuests.map((active) => {
-      const quest = questService.getQuest(active.questId);
-      return [{ text: `${quest?.icon || '🎯'} ${quest?.title || active.questId}`, callbackData: `quest:details:${active.questId}` }];
-    });
-    keyboard.push([{ text: '◀️ Назад', callbackData: 'quest:list' }]);
+      const keyboard: IInlineButton[][] = activeQuests.map((active) => {
+        return [{ text: `${active.quest.icon} ${active.quest.title}`, callbackData: `quest:details:${active.quest.id}` }];
+      });
+      keyboard.push([{ text: '◀️ Назад', callbackData: 'quest:list' }]);
 
-    return { success: true, message, keyboard };
+      return { success: true, message, keyboard };
+    } catch (error) {
+      return { success: false, error: 'Не удалось загрузить активные квесты' };
+    }
   }
 
   /**
@@ -420,18 +433,21 @@ ${progressText ? `\n${progressText}` : ''}
    * Start a quest
    */
   private async startQuest(ctx: ISleepCoreContext, questId: string): Promise<ICommandResult> {
-    const result = questService.startQuest(ctx.userId, questId);
+    try {
+      const engine = await getGamificationEngine();
+      const userId = parseInt(ctx.userId, 10);
+      const result = await engine.startQuest(userId, questId);
 
-    if (!result) {
-      return {
-        success: false,
-        error: 'Не удалось начать квест. Возможно, уже активно 3 квеста или квест недоступен.',
-      };
-    }
+      if (!result) {
+        return {
+          success: false,
+          error: 'Не удалось начать квест. Возможно, уже активно 3 квеста или квест недоступен.',
+        };
+      }
 
-    const quest = questService.getQuest(questId)!;
+      const quest = questService.getQuest(questId)!;
 
-    const message = `
+      const message = `
 🚀 *Квест начат!*
 
 ${quest.icon} *${quest.title}*
@@ -446,14 +462,17 @@ ${formatter.divider()}
 ${sonya.emoji} _Удачи! Я буду следить за твоим прогрессом._
 
 ${formatter.tip('Прогресс обновляется автоматически')}
-    `.trim();
+      `.trim();
 
-    const keyboard: IInlineButton[][] = [
-      [{ text: '🎯 Мои квесты', callbackData: 'quest:active' }],
-      [{ text: '◀️ К списку квестов', callbackData: 'quest:list' }],
-    ];
+      const keyboard: IInlineButton[][] = [
+        [{ text: '🎯 Мои квесты', callbackData: 'quest:active' }],
+        [{ text: '◀️ К списку квестов', callbackData: 'quest:list' }],
+      ];
 
-    return { success: true, message, keyboard };
+      return { success: true, message, keyboard };
+    } catch (error) {
+      return { success: false, error: 'Не удалось начать квест' };
+    }
   }
 
   /**
@@ -485,7 +504,7 @@ ${quest?.icon || '🎯'} ${quest?.title || questId}
   // ==================== Helpers ====================
 
   /**
-   * Format active quests preview for hub
+   * Format active quests preview for hub (legacy - uses questService)
    */
   private formatActiveQuestsPreview(activeQuests: ReturnType<typeof questService.getActiveQuests>): string {
     if (activeQuests.length === 0) return '';
@@ -498,6 +517,25 @@ ${quest?.icon || '🎯'} ${quest?.title || questId}
 
       const percentage = questService.getProgressPercentage(active);
       text += `${quest.icon} ${quest.title} — ${percentage}%\n`;
+    }
+
+    if (activeQuests.length > 2) {
+      text += `_...и ещё ${activeQuests.length - 2}_\n`;
+    }
+
+    return text;
+  }
+
+  /**
+   * Format active quests preview (new - uses GamificationEngine format)
+   */
+  private formatActiveQuestsPreviewNew(activeQuests: IActiveQuestInfo[]): string {
+    if (activeQuests.length === 0) return '';
+
+    let text = '*🎯 Активные квесты:*\n';
+
+    for (const active of activeQuests.slice(0, 2)) {
+      text += `${active.quest.icon} ${active.quest.title} — ${active.progress}%\n`;
     }
 
     if (activeQuests.length > 2) {
