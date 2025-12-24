@@ -223,6 +223,18 @@ export const DEFAULT_COMMAND_CONFIGS: Record<string, Partial<ICommandConfig>> = 
     showInMenu: false, // Available but not prominent
     availablePhases: ['assessment', 'active', 'maintenance', 'graduated'],
   },
+
+  // Phase 6.1: Content Library Integration
+  smart_tips: {
+    priority: 2,
+    category: 'therapy',
+    icon: '✨',
+    shortLabel: 'Умные советы',
+    relevantTimes: ['morning', 'day', 'evening', 'night'], // Always relevant
+    showInMenu: true,
+    proactive: true,
+    availablePhases: ['assessment', 'active', 'maintenance', 'graduated'],
+  },
 };
 
 // ==================== Command Registry ====================

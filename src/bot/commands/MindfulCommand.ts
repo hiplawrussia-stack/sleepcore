@@ -3,6 +3,12 @@
  * ======================================================
  * Provides MBT-I and ACT-I exercises.
  *
+ * Integrated with Content Library (Phase 6.1):
+ * - Dynamic content from JSON files
+ * - Evidence-based MBT-I/ACT-I techniques
+ * - Age-adaptive recommendations
+ * - JITAI pattern for just-in-time delivery
+ *
  * Based on 2025 research:
  * - Third-wave therapies trending in insomnia treatment
  * - Calm/Headspace patterns for engagement
@@ -14,149 +20,98 @@
 
 import type {
   ICommand,
+  IConversationCommand,
   ISleepCoreContext,
   ICommandResult,
   IInlineButton,
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-
-/**
- * Mindfulness practice type
- */
-interface PracticeInfo {
-  name: string;
-  icon: string;
-  duration: number;
-  type: 'mbti' | 'acti';
-  description: string;
-  instructions: string[];
-}
+import {
+  getContentService,
+  IContentItem,
+  AgeGroup,
+} from '../../modules/content';
 
 /**
  * /mindful Command Implementation
+ * Now integrated with Content Library for dynamic, evidence-based content
  */
-export class MindfulCommand implements ICommand {
+export class MindfulCommand implements ICommand, Partial<IConversationCommand> {
   readonly name = 'mindful';
   readonly description = 'Практики осознанности';
   readonly aliases = ['mindfulness', 'meditation', 'осознанность'];
   readonly requiresSession = false;
+  readonly steps = ['menu', 'show', 'more', 'done', 'timer'];
 
-  /**
-   * Available practices
-   */
-  private readonly practices: Record<string, PracticeInfo> = {
-    breath_awareness: {
-      name: 'Осознанное дыхание',
-      icon: '🧘',
-      duration: 5,
-      type: 'mbti',
-      description: 'Базовая практика внимательности к дыханию',
-      instructions: [
-        'Сядьте или лягте удобно',
-        'Закройте глаза или опустите взгляд',
-        'Направьте внимание на дыхание',
-        'Замечайте вдох... и выдох...',
-        'Когда мысли уводят — мягко возвращайтесь',
-        'Не пытайтесь изменить дыхание',
-        'Просто наблюдайте с любопытством',
-        'Продолжайте 5-10 минут',
-      ],
-    },
-    leaves_on_stream: {
-      name: 'Листья на ручье',
-      icon: '🍃',
-      duration: 10,
-      type: 'acti',
-      description: 'ACT-техника дефузии от навязчивых мыслей',
-      instructions: [
-        'Представьте ручей с плывущими листьями',
-        'Наблюдайте, как вода несёт их мимо',
-        'Когда возникает мысль — поместите её на лист',
-        'Наблюдайте, как лист уплывает вдаль',
-        'Не держите и не отталкивайте мысли',
-        'Позвольте им приходить и уходить',
-        'Если "застряли" — вернитесь к наблюдению за ручьём',
-        'Мысли — это просто мысли, не факты',
-      ],
-    },
-    acceptance: {
-      name: 'Принятие бессонницы',
-      icon: '🌙',
-      duration: 10,
-      type: 'acti',
-      description: 'Парадоксальное принятие: меньше борьбы — лучше сон',
-      instructions: [
-        'Лёжа в постели, признайте: "Сейчас я не сплю"',
-        'Вместо борьбы — примите этот момент',
-        'Скажите себе: "Я могу не спать и быть в порядке"',
-        'Отпустите давление "надо заснуть"',
-        'Наблюдайте за телесными ощущениями',
-        'Замечайте комфорт постели, температуру',
-        'Позвольте сну прийти, когда он готов',
-        'Отдых в постели тоже восстанавливает',
-      ],
-    },
-    thought_defusion: {
-      name: 'Я замечаю, что думаю...',
-      icon: '💭',
-      duration: 5,
-      type: 'acti',
-      description: 'Дистанцирование от тревожных мыслей о сне',
-      instructions: [
-        'Когда возникает тревожная мысль о сне...',
-        'Вместо "Я не засну" скажите:',
-        '"Я замечаю, что у меня мысль: я не засну"',
-        'Это создаёт расстояние между вами и мыслью',
-        'Попробуйте пропеть мысль на мотив песни',
-        'Или произнести голосом мультперсонажа',
-        'Мысль теряет силу, когда вы её наблюдаете',
-        'Вы — не ваши мысли',
-      ],
-    },
-    body_anchor: {
-      name: 'Якорь в теле',
-      icon: '⚓',
-      duration: 5,
-      type: 'mbti',
-      description: 'Возвращение в настоящий момент через тело',
-      instructions: [
-        'Почувствуйте контакт тела с поверхностью',
-        'Ощутите вес тела, гравитацию',
-        'Найдите точки опоры: спина, ноги, руки',
-        'Это ваш якорь в настоящем моменте',
-        'Когда мысли уносят — возвращайтесь к ощущениям',
-        'Тело всегда здесь и сейчас',
-        'Используйте его как якорь от тревоги',
-      ],
-    },
-  };
+  private contentService = getContentService();
 
   /**
    * Execute the command
+   * Uses Content Library for dynamic content delivery
    */
   async execute(ctx: ISleepCoreContext, args?: string): Promise<ICommandResult> {
+    // Determine user's age group (default to adult)
+    const ageGroup = this.getUserAgeGroup(ctx);
+
     if (args) {
-      const practice = this.practices[args.toLowerCase()];
-      if (practice) {
-        return this.showPractice(ctx, args.toLowerCase(), practice);
+      // Show specific practice by ID
+      const content = await this.contentService.getContent(args.toLowerCase());
+      if (content) {
+        return this.showPractice(ctx, content);
       }
     }
 
     // Check if user has MBT-I/ACT-I plan
-    const session = ctx.sleepCore.getSession(ctx.userId);
-    const hasPlan = session?.mbtiPlan || session?.actiPlan;
+    try {
+      const session = ctx.sleepCore.getSession(ctx.userId);
+      const hasPlan = session?.mbtiPlan || session?.actiPlan;
 
-    if (hasPlan) {
-      return this.showPersonalizedMenu(ctx, session);
+      if (hasPlan) {
+        return this.showPersonalizedMenu(ctx, ageGroup, session);
+      }
+    } catch {
+      // No session, show default menu
     }
 
-    return this.showMenu(ctx);
+    return this.showMenu(ctx, ageGroup);
+  }
+
+  // ==================== Helper Methods ====================
+
+  /**
+   * Get user's age group from context
+   * Falls back to 'adult' if not available in session
+   */
+  private getUserAgeGroup(ctx: ISleepCoreContext): AgeGroup {
+    try {
+      const session = ctx.sleepCore.getSession(ctx.userId);
+      // Session may have extended properties from user profile
+      const sessionData = session as unknown as Record<string, unknown>;
+      if (sessionData?.ageGroup && typeof sessionData.ageGroup === 'string') {
+        return sessionData.ageGroup as AgeGroup;
+      }
+      return 'adult';
+    } catch {
+      return 'adult';
+    }
   }
 
   // ==================== Response Handlers ====================
 
-  private async showMenu(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showMenu(
+    ctx: ISleepCoreContext,
+    ageGroup: AgeGroup
+  ): Promise<ICommandResult> {
+    // Fetch mindfulness content from Content Library
+    const content = await this.contentService.getMindfulnessContent(ageGroup);
+
+    // Build content list (max 5 for progressive disclosure)
+    const displayContent = content.slice(0, 5);
+    const contentList = displayContent
+      .map(item => `${item.icon} *${item.title}* — ${item.durationMinutes} мин`)
+      .join('\n');
+
     const message = `
 ${sonya.emoji} *${sonya.name}*
 
@@ -164,29 +119,32 @@ ${sonya.emoji} *${sonya.name}*
 
 ${formatter.header('Практики осознанности')}
 
-*MBT-I* (Mindfulness-Based Therapy for Insomnia):
-🧘 Осознанное дыхание — базовая практика
-⚓ Якорь в теле — заземление
+${contentList}
 
-*ACT-I* (Acceptance & Commitment Therapy):
-🍃 Листья на ручье — отпускание мыслей
-💭 Дефузия — дистанция от мыслей
-🌙 Принятие — парадоксальный подход
-
-${sonya.tip('ACT показывает 48% снижение тревоги о сне')}
+${sonya.tip('Регулярные практики улучшают сон за 2-4 недели')}
     `.trim();
 
-    const keyboard: IInlineButton[][] = [
-      [
-        { text: '🧘 Дыхание (5м)', callbackData: 'mindful:show:breath_awareness' },
-        { text: '⚓ Якорь (5м)', callbackData: 'mindful:show:body_anchor' },
-      ],
-      [
-        { text: '🍃 Листья (10м)', callbackData: 'mindful:show:leaves_on_stream' },
-        { text: '💭 Дефузия (5м)', callbackData: 'mindful:show:thought_defusion' },
-      ],
-      [{ text: '🌙 Принятие бессонницы', callbackData: 'mindful:show:acceptance' }],
-    ];
+    // Build keyboard dynamically (max 2 buttons per row)
+    const keyboard: IInlineButton[][] = [];
+    for (let i = 0; i < displayContent.length; i += 2) {
+      const row: IInlineButton[] = [];
+      row.push({
+        text: `${displayContent[i].icon} ${this.shortenTitle(displayContent[i].title)} (${displayContent[i].durationMinutes}м)`,
+        callbackData: `mindful:show:${displayContent[i].id}`,
+      });
+      if (displayContent[i + 1]) {
+        row.push({
+          text: `${displayContent[i + 1].icon} ${this.shortenTitle(displayContent[i + 1].title)} (${displayContent[i + 1].durationMinutes}м)`,
+          callbackData: `mindful:show:${displayContent[i + 1].id}`,
+        });
+      }
+      keyboard.push(row);
+    }
+
+    // Add "More content" button if there's more available
+    if (content.length > 5) {
+      keyboard.push([{ text: '📚 Больше практик', callbackData: 'mindful:more' }]);
+    }
 
     return {
       success: true,
@@ -197,20 +155,32 @@ ${sonya.tip('ACT показывает 48% снижение тревоги о с�
 
   private async showPersonalizedMenu(
     ctx: ISleepCoreContext,
+    ageGroup: AgeGroup,
     session: { mbtiPlan?: unknown; actiPlan?: unknown }
   ): Promise<ICommandResult> {
-    // Get personalized practice if available
-    let recommendedPractice = 'breath_awareness';
+    // Fetch mindfulness content and get recommendations
+    const content = await this.contentService.getMindfulnessContent(ageGroup);
+
+    // Get personalized recommendation
+    let recommendedContent: IContentItem | null = null;
     try {
-      const practice = ctx.sleepCore.getMindfulnessPractice(ctx.userId, 'bedtime', 10);
-      if (practice) {
-        recommendedPractice = practice.practice;
+      const practiceRec = ctx.sleepCore.getMindfulnessPractice(ctx.userId, 'bedtime', 10);
+      if (practiceRec) {
+        recommendedContent = await this.contentService.getContent(practiceRec.practice);
       }
     } catch {
-      // Use default
+      // Use first available
     }
 
-    const recommended = this.practices[recommendedPractice];
+    if (!recommendedContent && content.length > 0) {
+      recommendedContent = content[0];
+    }
+
+    if (!recommendedContent) {
+      return this.showMenu(ctx, ageGroup);
+    }
+
+    const otherContent = content.filter(c => c.id !== recommendedContent!.id).slice(0, 4);
 
     const message = `
 ${formatter.header('Практики осознанности')}
@@ -218,9 +188,9 @@ ${formatter.header('Практики осознанности')}
 ${formatter.success('У вас активный план терапии!')}
 
 *Рекомендовано сегодня:*
-${recommended.icon} ${recommended.name} (${recommended.duration} мин)
+${recommendedContent.icon} ${recommendedContent.title} (${recommendedContent.durationMinutes} мин)
 
-_${recommended.description}_
+_${recommendedContent.shortDescription}_
 
 ${formatter.divider()}
 
@@ -228,16 +198,24 @@ ${formatter.divider()}
     `.trim();
 
     const keyboard: IInlineButton[][] = [
-      [{ text: `${recommended.icon} Начать рекомендованную`, callbackData: `mindful:show:${recommendedPractice}` }],
-      [
-        { text: '🧘 Дыхание', callbackData: 'mindful:show:breath_awareness' },
-        { text: '🍃 Листья', callbackData: 'mindful:show:leaves_on_stream' },
-      ],
-      [
-        { text: '💭 Дефузия', callbackData: 'mindful:show:thought_defusion' },
-        { text: '🌙 Принятие', callbackData: 'mindful:show:acceptance' },
-      ],
+      [{ text: `${recommendedContent.icon} Начать рекомендованную`, callbackData: `mindful:show:${recommendedContent.id}` }],
     ];
+
+    // Add other content buttons
+    for (let i = 0; i < otherContent.length; i += 2) {
+      const row: IInlineButton[] = [];
+      row.push({
+        text: `${otherContent[i].icon} ${this.shortenTitle(otherContent[i].title)}`,
+        callbackData: `mindful:show:${otherContent[i].id}`,
+      });
+      if (otherContent[i + 1]) {
+        row.push({
+          text: `${otherContent[i + 1].icon} ${this.shortenTitle(otherContent[i + 1].title)}`,
+          callbackData: `mindful:show:${otherContent[i + 1].id}`,
+        });
+      }
+      keyboard.push(row);
+    }
 
     return {
       success: true,
@@ -246,29 +224,24 @@ ${formatter.divider()}
     };
   }
 
+  /**
+   * Show specific practice from Content Library
+   */
   private async showPractice(
     ctx: ISleepCoreContext,
-    id: string,
-    practice: PracticeInfo
+    content: IContentItem
   ): Promise<ICommandResult> {
-    const typeLabel = practice.type === 'mbti' ? 'MBT-I' : 'ACT-I';
-    const steps = formatter.numberedList(practice.instructions);
+    // Use ContentService's built-in formatting if steps exist
+    const formattedContent = content.steps && content.steps.length > 0
+      ? this.contentService.formatStepsForTelegram(content)
+      : this.contentService.formatForTelegram(content);
 
     const message = `
 ${sonya.emoji} *${sonya.name}*
 
 ${sonya.say('Отлично! Давай погрузимся в практику.')}
 
-${formatter.header(practice.name)}
-
-${practice.icon} *${practice.name}*
-⏱ ${practice.duration} минут | ${typeLabel}
-
-_${practice.description}_
-
-${formatter.divider()}
-
-${steps}
+${formattedContent}
 
 ${formatter.divider()}
 
@@ -276,8 +249,8 @@ ${sonya.tip('Регулярная практика улучшает сон за 
     `.trim();
 
     const keyboard: IInlineButton[][] = [
-      [{ text: '⏱ Запустить таймер', callbackData: `mindful:timer:${id}:${practice.duration}` }],
-      [{ text: '✅ Выполнено', callbackData: 'mindful:done' }],
+      [{ text: '⏱ Запустить таймер', callbackData: `mindful:timer:${content.id}:${content.durationMinutes}` }],
+      [{ text: '✅ Выполнено', callbackData: `mindful:done:${content.id}` }],
       [{ text: '◀️ К списку', callbackData: 'mindful:menu' }],
     ];
 
@@ -285,7 +258,190 @@ ${sonya.tip('Регулярная практика улучшает сон за 
       success: true,
       message,
       keyboard,
-      metadata: { practice: id, type: practice.type },
+      metadata: {
+        contentId: content.id,
+        category: content.category,
+        xpReward: content.reward.xp,
+      },
+    };
+  }
+
+  /**
+   * Shorten title for button display (max 12 chars)
+   */
+  private shortenTitle(title: string): string {
+    if (title.length <= 12) return title;
+    return title.slice(0, 10) + '...';
+  }
+
+  // ==================== Callback Handlers ====================
+
+  /**
+   * Handle callback queries for mindful command
+   * Callbacks: mindful:menu, mindful:show:{id}, mindful:more, mindful:done:{id}, mindful:timer:{id}:{duration}
+   */
+  async handleCallback(
+    ctx: ISleepCoreContext,
+    callbackData: string,
+    _conversationData: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const parts = callbackData.split(':');
+    const action = parts[1];
+    const ageGroup = this.getUserAgeGroup(ctx);
+
+    switch (action) {
+      case 'menu':
+        return this.showMenu(ctx, ageGroup);
+
+      case 'show': {
+        const contentId = parts[2];
+        const content = await this.contentService.getContent(contentId);
+        if (content) {
+          return this.showPractice(ctx, content);
+        }
+        return { success: false, error: 'Практика не найдена' };
+      }
+
+      case 'more':
+        return this.showMoreContent(ctx, ageGroup);
+
+      case 'done': {
+        const contentId = parts[2];
+        return this.handleCompletion(ctx, contentId);
+      }
+
+      case 'timer': {
+        const contentId = parts[2];
+        const duration = parseInt(parts[3]) || 10;
+        return this.startTimer(ctx, contentId, duration);
+      }
+
+      default:
+        return { success: false, error: 'Неизвестное действие' };
+    }
+  }
+
+  /**
+   * Show more content (all practices)
+   */
+  private async showMoreContent(
+    ctx: ISleepCoreContext,
+    ageGroup: AgeGroup
+  ): Promise<ICommandResult> {
+    const content = await this.contentService.getMindfulnessContent(ageGroup);
+
+    const contentList = content
+      .map(item => `${item.icon} *${item.title}* — ${item.durationMinutes} мин`)
+      .join('\n');
+
+    const message = `
+${sonya.emoji} *${sonya.name}*
+
+${formatter.header('Все практики осознанности')}
+
+${contentList}
+
+${sonya.tip('Выбери практику для начала')}
+    `.trim();
+
+    // Build keyboard with all content
+    const keyboard: IInlineButton[][] = [];
+    for (let i = 0; i < content.length; i += 2) {
+      const row: IInlineButton[] = [];
+      row.push({
+        text: `${content[i].icon} ${this.shortenTitle(content[i].title)}`,
+        callbackData: `mindful:show:${content[i].id}`,
+      });
+      if (content[i + 1]) {
+        row.push({
+          text: `${content[i + 1].icon} ${this.shortenTitle(content[i + 1].title)}`,
+          callbackData: `mindful:show:${content[i + 1].id}`,
+        });
+      }
+      keyboard.push(row);
+    }
+
+    keyboard.push([{ text: '◀️ Назад', callbackData: 'mindful:menu' }]);
+
+    return { success: true, message, keyboard };
+  }
+
+  /**
+   * Handle practice completion
+   */
+  private async handleCompletion(
+    ctx: ISleepCoreContext,
+    contentId: string
+  ): Promise<ICommandResult> {
+    const content = await this.contentService.getContent(contentId);
+    const xp = content?.reward.xp || 20;
+
+    // Record completion
+    await this.contentService.recordCompletion({
+      contentId,
+      userId: parseInt(ctx.userId),
+      completedAt: new Date(),
+      xpEarned: xp,
+    });
+
+    const message = `
+${sonya.emoji} *${sonya.name}*
+
+${formatter.success('Практика завершена!')}
+
+✨ +${xp} XP заработано
+
+${sonya.say('Прекрасно! Осознанность — это навык, который развивается с практикой.')}
+
+${sonya.tip('ACT показывает 48% снижение тревоги о сне при регулярной практике')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🔄 Другая практика', callbackData: 'mindful:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { xpEarned: xp, contentId },
+    };
+  }
+
+  /**
+   * Start timer for practice
+   */
+  private async startTimer(
+    ctx: ISleepCoreContext,
+    contentId: string,
+    duration: number
+  ): Promise<ICommandResult> {
+    const content = await this.contentService.getContent(contentId);
+
+    const message = `
+${sonya.emoji} *${sonya.name}*
+
+⏱ *Таймер запущен: ${duration} минут*
+
+${content?.icon || '🧘'} ${content?.title || 'Практика'}
+
+${sonya.say('Погрузись в практику. Я напомню, когда время закончится.')}
+
+${formatter.divider()}
+
+_Отпусти ожидания. Просто будь здесь и сейчас._
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '✅ Завершить раньше', callbackData: `mindful:done:${contentId}` }],
+      [{ text: '❌ Отменить', callbackData: 'mindful:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { timer: duration, contentId },
     };
   }
 }

@@ -14,6 +14,7 @@
  * - /help - Command reference
  * - /rehearsal - Pre-sleep mental rehearsal (Smart Memory Window)
  * - /recall - Morning memory quiz (Smart Memory Window)
+ * - /smart_tips - Context-aware content recommendations (Content Library)
  *
  * @packageDocumentation
  * @module @sleepcore/bot/commands
@@ -52,6 +53,9 @@ export { RecallCommand, recallCommand } from './RecallCommand';
 export { QuestCommand, questCommand } from './QuestCommand';
 export { BadgeCommand, badgeCommand } from './BadgeCommand';
 export { EvolutionCommand, evolutionCommand } from './EvolutionCommand';
+
+// Phase 6.1: Content Library Integration
+export { SmartTipsCommand, smartTipsCommand } from './SmartTipsCommand';
 
 // ==================== Handler ====================
 export { CommandHandler, createCommandHandler } from './CommandHandler';
@@ -92,6 +96,7 @@ import { recallCommand } from './RecallCommand';
 import { questCommand } from './QuestCommand';
 import { badgeCommand } from './BadgeCommand';
 import { evolutionCommand } from './EvolutionCommand';
+import { smartTipsCommand } from './SmartTipsCommand';
 
 /**
  * All registered commands
@@ -111,6 +116,8 @@ export const allCommands = [
   questCommand,
   badgeCommand,
   evolutionCommand,
+  // Phase 6.1: Content Library Integration
+  smartTipsCommand,
 ] as const;
 
 /**

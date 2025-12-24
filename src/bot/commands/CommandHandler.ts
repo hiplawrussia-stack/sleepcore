@@ -32,6 +32,8 @@ import { profileCommand } from './ProfileCommand';
 import { questCommand } from './QuestCommand';
 import { badgeCommand } from './BadgeCommand';
 import { evolutionCommand } from './EvolutionCommand';
+// Phase 6.1: Content Library Integration
+import { smartTipsCommand } from './SmartTipsCommand';
 
 /**
  * Command Handler implementation
@@ -396,6 +398,9 @@ export class CommandHandler implements ICommandRegistry {
     this.register(questCommand);
     this.register(badgeCommand);
     this.register(evolutionCommand);
+
+    // Phase 6.1: Content Library Integration
+    this.register(smartTipsCommand);
   }
 }
 
