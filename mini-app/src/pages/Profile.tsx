@@ -2,27 +2,27 @@
  * Profile Page
  * ============
  * User profile with stats, achievements, and settings.
+ * Uses TanStack Query for server state management.
  */
 
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/common';
-import { useTelegram, useHaptics } from '@/hooks';
-import { useUserStore } from '@/store';
+import { useTelegram, useHaptics, useUserProfile, useBreathingStats, useEvolution } from '@/hooks';
 import { formatDuration } from '@/components/breathing/patterns';
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
   const { user, showBackButton, hideBackButton } = useTelegram();
   const { isEnabled: hapticsEnabled, setEnabled: setHapticsEnabled, isAvailable: hapticsAvailable } = useHaptics();
-  const { profile, stats, loadProfile, loadStats } = useUserStore();
 
-  // Load data
-  useEffect(() => {
-    loadProfile();
-    loadStats();
-  }, [loadProfile, loadStats]);
+  // TanStack Query hooks for server state
+  const { profile, isLoading: isLoadingProfile } = useUserProfile();
+  const { stats, isLoading: isLoadingStats } = useBreathingStats();
+  const { evolution, isLoading: isLoadingEvolution } = useEvolution();
+
+  const isLoading = isLoadingProfile || isLoadingStats || isLoadingEvolution;
 
   // Setup back button
   useEffect(() => {
@@ -35,8 +35,22 @@ export const Profile: React.FC = () => {
     };
   }, [showBackButton, hideBackButton, navigate]);
 
-  // Evolution stage info
+  // Evolution stage info from API
   const getEvolutionInfo = () => {
+    if (evolution) {
+      return {
+        emoji: evolution.stageEmoji,
+        name: evolution.stageName,
+        description: evolution.nextStage
+          ? `${evolution.daysActive} дней активности`
+          : 'Мастер здорового сна',
+        progress: evolution.progress,
+        nextStage: evolution.nextStage,
+        daysToNext: evolution.daysToNext,
+      };
+    }
+
+    // Fallback to profile data
     if (!profile) return null;
 
     const stages = {
@@ -45,21 +59,32 @@ export const Profile: React.FC = () => {
         name: 'Совёнок Соня',
         description: 'Только начинаем путь к здоровому сну',
         nextStage: 'young_owl',
-        requirement: '10 записей + 7 дней streak',
+        progress: 0,
+        daysToNext: null,
       },
       young_owl: {
         emoji: '🦉',
         name: 'Молодая сова Соня',
         description: 'Уже многому научились вместе',
         nextStage: 'wise_owl',
-        requirement: '25 записей + 21 день streak',
+        progress: 0,
+        daysToNext: null,
       },
       wise_owl: {
         emoji: '🦉✨',
         name: 'Мудрая сова Соня',
         description: 'Мастер здорового сна',
         nextStage: null,
-        requirement: 'Максимальный уровень!',
+        progress: 100,
+        daysToNext: null,
+      },
+      master: {
+        emoji: '🏆🦉',
+        name: 'Мастер сна Соня',
+        description: 'Легенда здорового сна',
+        nextStage: null,
+        progress: 100,
+        daysToNext: null,
       },
     };
 
@@ -67,6 +92,19 @@ export const Profile: React.FC = () => {
   };
 
   const evolutionInfo = getEvolutionInfo();
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-night-900 px-4 py-6 pb-20">
+        <div className="animate-pulse">
+          <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-night-700" />
+          <div className="h-6 bg-night-700 rounded w-32 mx-auto mb-2" />
+          <div className="h-4 bg-night-700 rounded w-24 mx-auto" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-night-900 px-4 py-6 pb-20">
@@ -83,10 +121,10 @@ export const Profile: React.FC = () => {
           </span>
         </div>
         <h1 className="text-xl font-bold text-night-100">
-          {user?.firstName} {user?.lastName}
+          {profile?.firstName || user?.firstName} {profile?.lastName || user?.lastName}
         </h1>
-        {user?.username && (
-          <p className="text-night-400">@{user.username}</p>
+        {(profile?.username || user?.username) && (
+          <p className="text-night-400">@{profile?.username || user?.username}</p>
         )}
       </motion.div>
 
@@ -101,7 +139,7 @@ export const Profile: React.FC = () => {
           <Card variant="glass">
             <div className="flex items-center gap-4 mb-3">
               <span className="text-4xl">{evolutionInfo.emoji}</span>
-              <div>
+              <div className="flex-1">
                 <div className="font-semibold text-night-100">
                   {evolutionInfo.name}
                 </div>
@@ -111,9 +149,21 @@ export const Profile: React.FC = () => {
               </div>
             </div>
             {evolutionInfo.nextStage && (
-              <div className="text-xs text-night-500 border-t border-night-700 pt-3 mt-3">
-                Следующий уровень: {evolutionInfo.requirement}
-              </div>
+              <>
+                <div className="h-2 bg-night-700 rounded-full overflow-hidden mb-2">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${evolutionInfo.progress}%` }}
+                    transition={{ duration: 0.5, delay: 0.3 }}
+                    className="h-full bg-gradient-to-r from-primary-500 to-calm-purple rounded-full"
+                  />
+                </div>
+                <div className="text-xs text-night-500">
+                  {evolutionInfo.daysToNext
+                    ? `${evolutionInfo.daysToNext} дней до следующего уровня`
+                    : `Прогресс: ${evolutionInfo.progress}%`}
+                </div>
+              </>
             )}
           </Card>
         </motion.div>
@@ -154,6 +204,45 @@ export const Profile: React.FC = () => {
         </motion.div>
       )}
 
+      {/* Weekly progress chart */}
+      {stats?.weeklyProgress && stats.weeklyProgress.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="mb-6"
+        >
+          <Card>
+            <div className="text-sm font-medium text-night-300 mb-3">
+              Активность за неделю
+            </div>
+            <div className="flex items-end justify-between h-16 gap-1">
+              {stats.weeklyProgress.map((minutes, index) => {
+                const maxMinutes = Math.max(...stats.weeklyProgress, 1);
+                const height = (minutes / maxMinutes) * 100;
+                const days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+                return (
+                  <div key={index} className="flex-1 flex flex-col items-center">
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: `${Math.max(height, 4)}%` }}
+                      transition={{ duration: 0.3, delay: 0.4 + index * 0.05 }}
+                      className={`w-full rounded-t ${
+                        minutes > 0 ? 'bg-primary-500' : 'bg-night-700'
+                      }`}
+                    />
+                    <span className="text-[10px] text-night-500 mt-1">
+                      {days[index]}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </motion.div>
+      )}
+
       {/* XP progress */}
       {profile && (
         <motion.div
@@ -164,8 +253,8 @@ export const Profile: React.FC = () => {
         >
           <Card>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-night-300">Опыт (XP)</span>
-              <span className="font-bold text-primary-400">{profile.xp}</span>
+              <span className="text-night-300">Уровень {profile.level}</span>
+              <span className="font-bold text-primary-400">{profile.xp} XP</span>
             </div>
             <div className="h-2 bg-night-700 rounded-full overflow-hidden">
               <motion.div
@@ -221,7 +310,7 @@ export const Profile: React.FC = () => {
         </Card>
       </motion.div>
 
-      {/* Badges section (placeholder) */}
+      {/* Badges section */}
       {profile && profile.badges.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
