@@ -23,6 +23,7 @@ describe('CommandHandler', () => {
     });
 
     it('should register all default commands', () => {
+      // Core commands
       expect(handler.has('start')).toBe(true);
       expect(handler.has('diary')).toBe(true);
       expect(handler.has('today')).toBe(true);
@@ -31,6 +32,11 @@ describe('CommandHandler', () => {
       expect(handler.has('progress')).toBe(true);
       expect(handler.has('sos')).toBe(true);
       expect(handler.has('help')).toBe(true);
+      // Gamification commands (Sprint 7-8)
+      expect(handler.has('profile')).toBe(true);
+      expect(handler.has('quest')).toBe(true);
+      expect(handler.has('badges')).toBe(true);
+      expect(handler.has('sonya')).toBe(true);
     });
   });
 
@@ -94,7 +100,8 @@ describe('CommandHandler', () => {
   describe('getAll()', () => {
     it('should return all registered commands', () => {
       const commands = handler.getAll();
-      expect(commands.length).toBe(8);
+      // 8 core + 4 gamification = 12 commands
+      expect(commands.length).toBe(12);
     });
 
     it('should return command instances', () => {
@@ -125,7 +132,8 @@ describe('CommandHandler', () => {
     it('should return commands in BotFather format', () => {
       const commands = handler.getBotFatherCommands();
 
-      expect(commands.length).toBe(8);
+      // 8 core + 4 gamification = 12 commands
+      expect(commands.length).toBe(12);
       commands.forEach(cmd => {
         expect(cmd.command).toBeDefined();
         expect(cmd.description).toBeDefined();
@@ -162,8 +170,14 @@ describe('CommandHandler', () => {
       expect(handler.get('daily')?.name).toBe('today');
       expect(handler.get('calm')?.name).toBe('relax');
       expect(handler.get('meditation')?.name).toBe('mindful');
-      expect(handler.get('stats')?.name).toBe('progress');
+      // 'stats' now maps to 'profile' (Sprint 7 gamification)
+      expect(handler.get('stats')?.name).toBe('profile');
       expect(handler.get('emergency')?.name).toBe('sos');
+      // Gamification aliases
+      expect(handler.get('me')?.name).toBe('profile');
+      expect(handler.get('quests')?.name).toBe('quest');
+      expect(handler.get('achievements')?.name).toBe('badges');
+      expect(handler.get('evolution')?.name).toBe('sonya');
     });
   });
 });

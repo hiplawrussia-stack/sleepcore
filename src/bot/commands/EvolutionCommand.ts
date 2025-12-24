@@ -3,17 +3,17 @@
  * ===============================================
  * View Sonya's current evolution stage and progress.
  *
- * Research basis:
- * - Virtual pet mechanics increase user attachment
- * - Evolution systems provide long-term engagement goals
- * - Visual progress creates emotional investment
+ * Research basis (Sprint 8 - 2025):
+ * - Finch app model: 56% higher retention with virtual pet mechanics
+ * - Virtual pet evolution driven by care rating (not punishment)
+ * - Tamagotchi revival 2025: mental health connection recognized
+ * - White Hat Gamification: meaning, accomplishment, ownership
  *
  * @packageDocumentation
  * @module @sleepcore/bot/commands
  */
 
 import type {
-  ICommand,
   IConversationCommand,
   ISleepCoreContext,
   ICommandResult,
@@ -21,16 +21,18 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import { sonyaEvolutionService, EVOLUTION_STAGES, type SonyaStageId, type ISonyaStage } from '../../modules/evolution';
-import { badgeService } from '../../modules/quests';
+import { getGamificationEngine } from '../services/GamificationContext';
+import type { IGamificationEngine, IPlayerProfile } from '../../modules/gamification';
+import { EVOLUTION_STAGES, type SonyaStageId, type ISonyaStage } from '../../modules/evolution';
 
 /**
  * /sonya Command Implementation
+ * Migrated to GamificationEngine for SQLite persistence
  */
 export class EvolutionCommand implements IConversationCommand {
   readonly name = 'sonya';
   readonly description = 'Эволюция Сони';
-  readonly aliases = ['evolution', 'avatar', 'соня', 'эволюция'];
+  readonly aliases = ['evolution', 'avatar', 'эволюция', 'соня'];
   readonly requiresSession = false;
   readonly steps = ['status', 'history', 'abilities'];
 
@@ -106,8 +108,11 @@ export class EvolutionCommand implements IConversationCommand {
    * Show Sonya's current status
    */
   private async showSonyaStatus(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const userData = sonyaEvolutionService.getUserData(ctx.userId);
-    const currentStage = sonyaEvolutionService.getStage(userData.currentStage);
+    const engine = await getGamificationEngine();
+    const userId = parseInt(ctx.userId, 10);
+
+    const profile = await engine.getPlayerProfile(userId);
+    const currentStage = profile.sonyaStage;
 
     if (!currentStage) {
       return {
@@ -120,16 +125,29 @@ export class EvolutionCommand implements IConversationCommand {
     const stageVisual = this.getStageVisual(currentStage.id);
 
     // Get mood message based on stage
-    const moodMessage = this.getSonyaMoodMessage(currentStage.id, userData.daysActive);
+    const moodMessage = this.getSonyaMoodMessage(currentStage.id, profile.totalDaysActive);
 
-    // Get progress bar
-    const progressBar = sonyaEvolutionService.getProgressBar(ctx.userId, 10);
-
-    // Find next stage
+    // Calculate progress to next stage
     const currentIndex = EVOLUTION_STAGES.findIndex((s) => s.id === currentStage.id);
     const nextStage = currentIndex < EVOLUTION_STAGES.length - 1
       ? EVOLUTION_STAGES[currentIndex + 1]
       : null;
+
+    // Calculate progress bar
+    let progressBar = '';
+    let progressText = '';
+    if (nextStage) {
+      const progress = Math.min(100, Math.round((profile.totalDaysActive / nextStage.requiredDays) * 100));
+      progressBar = formatter.progressBar(progress, 10);
+      const daysRemaining = Math.max(0, nextStage.requiredDays - profile.totalDaysActive);
+      progressText = `*Прогресс к ${nextStage.emoji} ${nextStage.name}:*
+${progressBar} (${daysRemaining} дней до перехода)`;
+    }
+
+    // Count unlocked stages
+    const unlockedStages = EVOLUTION_STAGES.filter(
+      (s) => profile.totalDaysActive >= s.requiredDays
+    );
 
     const message = `
 ${stageVisual}
@@ -141,15 +159,15 @@ _"${moodMessage}"_
 ${formatter.divider()}
 
 *📊 Статус:*
-📅 Активных дней: ${userData.daysActive}
-🌟 Стадий открыто: ${userData.stagesUnlocked.length}/${EVOLUTION_STAGES.length}
+📅 Активных дней: ${profile.totalDaysActive}
+🌟 Стадий открыто: ${unlockedStages.length}/${EVOLUTION_STAGES.length}
+⭐ Уровень: ${profile.level}
 
 ${formatter.divider()}
 
 ${currentStage.description}
 
-${nextStage ? `*Прогресс к ${nextStage.emoji} ${nextStage.name}:*
-${progressBar} (${nextStage.requiredDays - userData.daysActive} дней до перехода)` : '🏆 _Максимальный уровень достигнут!_'}
+${nextStage ? progressText : '🏆 _Максимальный уровень достигнут!_'}
 
 ${formatter.tip(`${currentStage.abilities.length} способностей доступно`)}
     `.trim();
@@ -176,8 +194,15 @@ ${formatter.tip(`${currentStage.abilities.length} способностей до�
    * Show evolution history
    */
   private async showEvolutionHistory(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const userData = sonyaEvolutionService.getUserData(ctx.userId);
-    const unlockedStages = userData.stagesUnlocked;
+    const engine = await getGamificationEngine();
+    const userId = parseInt(ctx.userId, 10);
+
+    const profile = await engine.getPlayerProfile(userId);
+
+    // Determine unlocked stages based on days active
+    const unlockedStages = EVOLUTION_STAGES.filter(
+      (s) => profile.totalDaysActive >= s.requiredDays
+    );
 
     if (unlockedStages.length <= 1) {
       const message = `
@@ -198,10 +223,7 @@ ${formatter.info('История пока пуста')}
 
     let historyText = '';
 
-    for (const stageId of unlockedStages) {
-      const stage = EVOLUTION_STAGES.find((s) => s.id === stageId);
-      if (!stage) continue;
-
+    for (const stage of unlockedStages) {
       historyText += `${stage.emoji} *${stage.name}*\n`;
       historyText += `📅 Требовалось: ${stage.requiredDays} дней\n\n`;
     }
@@ -225,8 +247,11 @@ ${sonya.emoji} _Мы прошли этот путь вместе!_
    * Show current abilities
    */
   private async showAbilities(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const userData = sonyaEvolutionService.getUserData(ctx.userId);
-    const currentStage = sonyaEvolutionService.getStage(userData.currentStage);
+    const engine = await getGamificationEngine();
+    const userId = parseInt(ctx.userId, 10);
+
+    const profile = await engine.getPlayerProfile(userId);
+    const currentStage = profile.sonyaStage;
 
     if (!currentStage) {
       return { success: false, error: 'Не удалось получить данные' };
@@ -279,8 +304,11 @@ ${lockedAbilities.length > 5 ? `\n_...и ещё ${lockedAbilities.length - 5}_` 
    * Show next stage requirements
    */
   private async showNextStage(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const userData = sonyaEvolutionService.getUserData(ctx.userId);
-    const currentStage = sonyaEvolutionService.getStage(userData.currentStage);
+    const engine = await getGamificationEngine();
+    const userId = parseInt(ctx.userId, 10);
+
+    const profile = await engine.getPlayerProfile(userId);
+    const currentStage = profile.sonyaStage;
 
     if (!currentStage) {
       return { success: false, error: 'Не удалось получить данные' };
@@ -313,8 +341,8 @@ ${formatter.divider()}
       return { success: true, message, keyboard };
     }
 
-    const daysToNext = nextStage.requiredDays - userData.daysActive;
-    const progress = Math.min(100, Math.round((userData.daysActive / nextStage.requiredDays) * 100));
+    const daysToNext = Math.max(0, nextStage.requiredDays - profile.totalDaysActive);
+    const progress = Math.min(100, Math.round((profile.totalDaysActive / nextStage.requiredDays) * 100));
 
     const message = `
 🎯 *Следующий уровень*
@@ -325,7 +353,7 @@ ${nextStage.description}
 ${formatter.divider()}
 
 *Требования:*
-⬜ Активных дней: ${userData.daysActive}/${nextStage.requiredDays}
+⬜ Активных дней: ${profile.totalDaysActive}/${nextStage.requiredDays}
 
 ${formatter.divider()}
 
@@ -351,18 +379,18 @@ ${formatter.tip(progress >= 80 ? 'Почти готово!' : 'Продолжа�
    * Interact with Sonya
    */
   private async interactWithSonya(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    // Record interaction
-    sonyaEvolutionService.recordInteraction(ctx.userId, 'talk');
+    const engine = await getGamificationEngine();
+    const userId = parseInt(ctx.userId, 10);
 
-    const userData = sonyaEvolutionService.getUserData(ctx.userId);
-    const currentStage = sonyaEvolutionService.getStage(userData.currentStage);
+    // Record action which may trigger evolution check
+    const result = await engine.recordAction(userId, 'daily_check_in');
+
+    const profile = await engine.getPlayerProfile(userId);
+    const currentStage = profile.sonyaStage;
 
     if (!currentStage) {
       return { success: false, error: 'Не удалось получить данные' };
     }
-
-    // Check for evolution
-    const evolutionResult = await sonyaEvolutionService.checkEvolution(ctx.userId, userData.daysActive);
 
     // Generate response based on stage and time
     const hour = new Date().getHours();
@@ -373,23 +401,27 @@ ${formatter.tip(progress >= 80 ? 'Почти готово!' : 'Продолжа�
     const responses = this.getInteractionResponses(currentStage.id, timeOfDay);
     const response = responses[Math.floor(Math.random() * responses.length)];
 
+    // Check for evolution in result
     let evolutionMessage = '';
-    if (evolutionResult.evolved && evolutionResult.celebrationMessage) {
+    if (result.evolution?.evolved && result.evolution.currentStage) {
+      const newStage = result.evolution.currentStage;
       evolutionMessage = `
 
 🎉 *Соня эволюционировала!*
-${evolutionResult.currentStage.emoji} Новый уровень: *${evolutionResult.currentStage.name}*
+${newStage.emoji} Новый уровень: *${newStage.name}*
 
-_${evolutionResult.currentStage.description}_
+_${newStage.description}_
 
 🆕 Новые способности:
-${evolutionResult.currentStage.abilities.map((a: string) => `✨ ${a}`).join('\n')}
+${newStage.abilities.map((a: string) => `✨ ${a}`).join('\n')}
 
       `.trim();
+    }
 
-      // Award evolution badge
-      const stageLevel = EVOLUTION_STAGES.findIndex((s) => s.id === evolutionResult.currentStage.id);
-      badgeService.checkAndAwardBadges(ctx.userId, 'sonya_stage', stageLevel);
+    // Show celebrations
+    let celebrationsText = '';
+    if (result.celebrations.length > 0) {
+      celebrationsText = '\n\n' + result.celebrations.join('\n');
     }
 
     const message = `
@@ -398,10 +430,12 @@ ${sonya.emoji} *${sonya.name}*
 _"${response}"_
 
 ${evolutionMessage}
+${celebrationsText}
 
 ${formatter.divider()}
 
-📅 Активных дней: ${userData.daysActive}
+📅 Активных дней: ${profile.totalDaysActive}
+${result.xpEarned > 0 ? `💎 +${result.xpEarned} XP` : ''}
     `.trim();
 
     const keyboard: IInlineButton[][] = [
