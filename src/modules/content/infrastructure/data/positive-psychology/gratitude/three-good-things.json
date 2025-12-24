@@ -1,0 +1,61 @@
+{
+  "id": "gratitude-3good-001",
+  "version": 1,
+  "category": "positive-psychology",
+  "subcategory": "gratitude",
+  "type": "exercise",
+  "title": "Три хорошие вещи",
+  "shortDescription": "Ежедневная практика благодарности, доказанно повышающая счастье и снижающая депрессию",
+  "fullContent": "«Три хорошие вещи» — одна из самых изученных практик позитивной психологии. Мета-анализ 64 исследований показал значительное улучшение удовлетворённости жизнью и снижение тревоги.\n\nПрактика переключает фокус внимания с негатива на позитив, формируя новые нейронные связи.",
+  "steps": [
+    {
+      "order": 1,
+      "instruction": "Вечером, перед сном, возьми блокнот или открой заметки в телефоне.",
+      "duration": 30,
+      "tip": "Делай это в одно и то же время каждый день"
+    },
+    {
+      "order": 2,
+      "instruction": "Запиши 3 хорошие вещи, которые произошли сегодня.",
+      "duration": 120,
+      "tip": "Могут быть большие или маленькие: вкусный завтрак, улыбка друга, солнце"
+    },
+    {
+      "order": 3,
+      "instruction": "Для каждой вещи напиши: почему это произошло?",
+      "duration": 120,
+      "tip": "Это развивает оптимистичный стиль объяснения"
+    },
+    {
+      "order": 4,
+      "instruction": "Почувствуй благодарность за эти моменты. Позволь себе улыбнуться.",
+      "duration": 30,
+      "tip": "Задержись на приятных ощущениях"
+    }
+  ],
+  "ageGroups": ["child", "teen", "adult"],
+  "difficulty": "beginner",
+  "durationMinutes": 5,
+  "tags": ["благодарность", "позитивная психология", "дневник", "счастье"],
+  "emotionalStates": ["sadness", "depression", "neutral"],
+  "keywords": ["три хорошие вещи", "благодарность", "дневник благодарности"],
+  "evidenceLevel": "A",
+  "sources": [
+    {
+      "title": "Effects of gratitude interventions: meta-analysis",
+      "authors": "PMC",
+      "year": 2023,
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10393216/"
+    }
+  ],
+  "reward": {
+    "xp": 15,
+    "relatedQuestIds": ["gratitude_week"],
+    "relatedBadgeIds": ["grateful_heart"]
+  },
+  "icon": "✨",
+  "order": 1,
+  "isActive": true,
+  "createdAt": "2025-12-24T00:00:00Z",
+  "updatedAt": "2025-12-24T00:00:00Z"
+}

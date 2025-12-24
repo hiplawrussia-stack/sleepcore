@@ -25,5 +25,8 @@ npm-debug.log*
 .env
 .env.local
 
-# Runtime data
-data/
+# Runtime data (root level only)
+/data/
+
+# Allow content library data
+!src/modules/content/infrastructure/data/

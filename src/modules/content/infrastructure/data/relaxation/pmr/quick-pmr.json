@@ -1,0 +1,79 @@
+{
+  "id": "pmr-quick-001",
+  "version": 1,
+  "category": "relaxation",
+  "subcategory": "pmr",
+  "type": "exercise",
+  "title": "Быстрая мышечная релаксация",
+  "shortDescription": "5-минутная версия ПМР для быстрого снятия напряжения в течение дня",
+  "fullContent": "Сокращённая версия прогрессивной мышечной релаксации для ситуаций, когда нет времени на полное упражнение. Объединяет группы мышц для быстрого эффекта.\n\nИсследования показывают, что даже 5 минут ПМР значительно снижают тревожность.",
+  "steps": [
+    {
+      "order": 1,
+      "instruction": "Сядь удобно или встань. Сделай глубокий вдох и выдох.",
+      "duration": 10,
+      "tip": "Можно делать даже на работе или в школе"
+    },
+    {
+      "order": 2,
+      "instruction": "РУКИ: Сожми оба кулака, согни руки в локтях, напряги на 5 секунд... Расслабь.",
+      "duration": 15,
+      "tip": "Одновременно обе руки"
+    },
+    {
+      "order": 3,
+      "instruction": "ПЛЕЧИ И ШЕЯ: Подними плечи к ушам на 5 секунд... Опусти и расслабь.",
+      "duration": 15,
+      "tip": "Главные точки напряжения"
+    },
+    {
+      "order": 4,
+      "instruction": "ЛИЦО: Зажмурься, наморщи нос, сожми губы на 5 секунд... Расслабь.",
+      "duration": 15,
+      "tip": "Всё лицо одновременно"
+    },
+    {
+      "order": 5,
+      "instruction": "КОРПУС: Вдохни глубоко, напряги живот и грудь на 5 секунд... Выдохни и расслабь.",
+      "duration": 15,
+      "tip": "Центр тела"
+    },
+    {
+      "order": 6,
+      "instruction": "НОГИ: Напряги бёдра, голени, сожми пальцы ног на 5 секунд... Расслабь.",
+      "duration": 15,
+      "tip": "Все ноги одновременно"
+    },
+    {
+      "order": 7,
+      "instruction": "Сделай 3 глубоких вдоха и почувствуй расслабление во всём теле.",
+      "duration": 20,
+      "tip": "Отметь, как изменились ощущения"
+    }
+  ],
+  "ageGroups": ["teen", "adult"],
+  "difficulty": "beginner",
+  "durationMinutes": 5,
+  "tags": ["ПМР", "быстрая релаксация", "стресс", "перерыв"],
+  "emotionalStates": ["stress", "anxiety", "overwhelm"],
+  "keywords": ["быстрая релаксация", "5 минут", "экспресс"],
+  "evidenceLevel": "A",
+  "sources": [
+    {
+      "title": "Effectiveness of PMR, Deep Breathing in Promoting Relaxation",
+      "authors": "Toussaint et al.",
+      "year": 2021,
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8272667/"
+    }
+  ],
+  "reward": {
+    "xp": 15,
+    "relatedQuestIds": ["relaxation_week"],
+    "relatedBadgeIds": ["quick_relaxer"]
+  },
+  "icon": "⚡",
+  "order": 2,
+  "isActive": true,
+  "createdAt": "2025-12-24T00:00:00Z",
+  "updatedAt": "2025-12-24T00:00:00Z"
+}
