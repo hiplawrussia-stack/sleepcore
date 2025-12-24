@@ -1,0 +1,272 @@
+# E2E Testing Pipeline - SleepCore
+# Runs Playwright tests against API + Mini App
+# Uses sharding for parallel execution
+
+name: E2E Tests
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'api/**'
+      - 'mini-app/**'
+      - 'e2e/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'api/**'
+      - 'mini-app/**'
+      - 'e2e/**'
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: 'Browser to test'
+        required: false
+        default: 'chromium'
+        type: choice
+        options:
+          - chromium
+          - firefox
+          - webkit
+          - all
+
+# Cancel in-progress runs
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  API_URL: 'http://localhost:3001'
+  APP_URL: 'http://localhost:5173'
+
+jobs:
+  # Build and prepare test environment
+  setup:
+    name: Setup Test Environment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install API dependencies
+        run: npm ci
+        working-directory: api
+
+      - name: Install Mini App dependencies
+        run: npm ci
+        working-directory: mini-app
+
+      - name: Install E2E dependencies
+        run: npm ci
+        working-directory: e2e
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps
+        working-directory: e2e
+
+      - name: Build API
+        run: npm run build
+        working-directory: api
+
+      - name: Build Mini App
+        run: npm run build
+        working-directory: mini-app
+        env:
+          VITE_API_URL: ${{ env.API_URL }}
+
+      # Cache built artifacts for test jobs
+      - name: Upload API build
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-build
+          path: api/dist/
+          retention-days: 1
+
+      - name: Upload Mini App build
+        uses: actions/upload-artifact@v4
+        with:
+          name: mini-app-build
+          path: mini-app/dist/
+          retention-days: 1
+
+  # Run Playwright tests with sharding
+  test:
+    name: Playwright Tests (${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd api && npm ci
+          cd ../mini-app && npm ci
+          cd ../e2e && npm ci
+
+      - name: Restore Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
+
+      - name: Install Playwright browsers (if cache missed)
+        run: npx playwright install --with-deps
+        working-directory: e2e
+
+      - name: Download API build
+        uses: actions/download-artifact@v4
+        with:
+          name: api-build
+          path: api/dist/
+
+      - name: Download Mini App build
+        uses: actions/download-artifact@v4
+        with:
+          name: mini-app-build
+          path: mini-app/dist/
+
+      # Start services
+      - name: Start API server
+        run: |
+          cd api
+          npm start &
+          sleep 5
+        env:
+          DATABASE_PATH: ':memory:'
+          JWT_SECRET: 'e2e-test-secret'
+          BOT_TOKEN: 'test:bot:token'
+          PORT: 3001
+
+      - name: Start Mini App preview
+        run: |
+          cd mini-app
+          npx vite preview --port 5173 &
+          sleep 3
+
+      # Wait for services
+      - name: Wait for API
+        run: |
+          timeout 30 bash -c 'until curl -s http://localhost:3001/health; do sleep 1; done'
+        continue-on-error: true
+
+      - name: Wait for Mini App
+        run: |
+          timeout 30 bash -c 'until curl -s http://localhost:5173; do sleep 1; done'
+        continue-on-error: true
+
+      # Run tests
+      - name: Run Playwright tests
+        run: npx playwright test --shard=${{ matrix.shard }}/4
+        working-directory: e2e
+        env:
+          CI: true
+          API_URL: ${{ env.API_URL }}
+          APP_URL: ${{ env.APP_URL }}
+
+      # Upload results
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ matrix.shard }}
+          path: e2e/playwright-report/
+          retention-days: 30
+
+      - name: Upload test traces
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces-${{ matrix.shard }}
+          path: e2e/test-results/
+          retention-days: 7
+
+  # Merge and publish reports
+  report:
+    name: Merge Reports
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Playwright
+        run: npm install @playwright/test
+        working-directory: e2e
+
+      - name: Download all reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: playwright-report-*
+          path: all-reports/
+
+      - name: Merge reports
+        run: |
+          npx playwright merge-reports --reporter html ./all-reports
+        working-directory: e2e
+
+      - name: Upload merged report
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-merged
+          path: e2e/playwright-report/
+          retention-days: 30
+
+      # Deploy to GitHub Pages (optional)
+      - name: Deploy report to GitHub Pages
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: e2e/playwright-report
+          destination_dir: e2e-reports
+
+  # Summary status
+  e2e-success:
+    name: E2E Success
+    needs: [test, report]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check E2E status
+        run: |
+          if [[ "${{ needs.test.result }}" == "failure" ]]; then
+            echo "E2E tests failed!"
+            exit 1
+          fi
+          echo "E2E tests passed successfully!"

@@ -1,0 +1,184 @@
+# Security Scanning Pipeline - SleepCore
+# Weekly dependency audit and CodeQL analysis
+
+name: Security
+
+on:
+  schedule:
+    # Run every Monday at 9:00 UTC
+    - cron: '0 9 * * 1'
+  push:
+    branches:
+      - main
+    paths:
+      - '**/package.json'
+      - '**/package-lock.json'
+  workflow_dispatch:
+
+jobs:
+  # Dependency vulnerability scanning
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Audit root dependencies
+        run: npm audit --json > audit-root.json || true
+        continue-on-error: true
+
+      - name: Audit API dependencies
+        run: npm audit --json > audit-api.json || true
+        working-directory: api
+        continue-on-error: true
+
+      - name: Audit Mini App dependencies
+        run: npm audit --json > audit-mini-app.json || true
+        working-directory: mini-app
+        continue-on-error: true
+
+      - name: Audit E2E dependencies
+        run: npm audit --json > audit-e2e.json || true
+        working-directory: e2e
+        continue-on-error: true
+
+      - name: Upload audit reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-reports
+          path: |
+            audit-*.json
+            api/audit-*.json
+            mini-app/audit-*.json
+            e2e/audit-*.json
+          retention-days: 30
+
+      - name: Check for critical vulnerabilities
+        run: |
+          echo "Checking for critical vulnerabilities..."
+
+          # Check root
+          if npm audit --audit-level=critical 2>/dev/null; then
+            echo "Root: No critical vulnerabilities"
+          else
+            echo "Root: Critical vulnerabilities found!"
+            HAS_CRITICAL=true
+          fi
+
+          # Check API
+          cd api
+          if npm audit --audit-level=critical 2>/dev/null; then
+            echo "API: No critical vulnerabilities"
+          else
+            echo "API: Critical vulnerabilities found!"
+            HAS_CRITICAL=true
+          fi
+          cd ..
+
+          # Check Mini App
+          cd mini-app
+          if npm audit --audit-level=critical 2>/dev/null; then
+            echo "Mini App: No critical vulnerabilities"
+          else
+            echo "Mini App: Critical vulnerabilities found!"
+            HAS_CRITICAL=true
+          fi
+          cd ..
+
+          if [[ "$HAS_CRITICAL" == "true" ]]; then
+            echo "::warning::Critical vulnerabilities detected. Please review and update dependencies."
+          fi
+
+  # CodeQL analysis
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript-typescript']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'
+
+  # Secret scanning reminder
+  secret-check:
+    name: Secret Scanning Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for potential secrets
+        run: |
+          echo "Scanning for potential secrets in code..."
+
+          # Check for common secret patterns (basic check)
+          if grep -rE "(password|secret|api_key|apikey|token).*=.*['\"][^'\"]{8,}['\"]" \
+             --include="*.ts" --include="*.js" --include="*.json" \
+             --exclude-dir=node_modules \
+             --exclude-dir=dist \
+             --exclude="*.spec.ts" \
+             --exclude="*.test.ts" \
+             . 2>/dev/null; then
+            echo "::warning::Potential hardcoded secrets detected. Please review."
+          else
+            echo "No obvious hardcoded secrets found."
+          fi
+
+          # Check for .env files that shouldn't be committed
+          if find . -name ".env" -not -path "*/node_modules/*" | grep -q .; then
+            echo "::warning::.env files found in repository. Ensure they are in .gitignore."
+          fi
+
+  # License compliance
+  license-check:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install license-checker
+        run: npm install -g license-checker
+
+      - name: Check licenses (root)
+        run: |
+          npm ci
+          license-checker --summary --production
+        continue-on-error: true
+
+      - name: Check for problematic licenses
+        run: |
+          npm ci
+          # Fail on GPL licenses (example)
+          if license-checker --production --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;CC0-1.0;Unlicense" 2>/dev/null; then
+            echo "All licenses are compatible"
+          else
+            echo "::warning::Some dependencies have non-standard licenses. Please review."
+          fi
+        continue-on-error: true

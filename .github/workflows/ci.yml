@@ -1,0 +1,294 @@
+# CI Pipeline - SleepCore
+# Runs on every push and pull request
+# Jobs: lint, test, build for all packages
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+      - 'release/**'
+  pull_request:
+    branches:
+      - main
+
+# Cancel in-progress runs for same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Detect which packages changed
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      core: ${{ steps.filter.outputs.core }}
+      api: ${{ steps.filter.outputs.api }}
+      mini-app: ${{ steps.filter.outputs.mini-app }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            core:
+              - 'src/**'
+              - 'package.json'
+              - 'tsconfig.json'
+            api:
+              - 'api/**'
+            mini-app:
+              - 'mini-app/**'
+            e2e:
+              - 'e2e/**'
+
+  # Lint all TypeScript code
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+  # Run unit tests for core
+  test-core:
+    name: Test Core
+    needs: detect-changes
+    if: needs.detect-changes.outputs.core == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+        env:
+          CI: true
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-core
+          path: coverage/
+          retention-days: 7
+
+  # Run unit tests for API
+  test-api:
+    name: Test API
+    needs: detect-changes
+    if: needs.detect-changes.outputs.api == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: api/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+        env:
+          CI: true
+          DATABASE_PATH: ':memory:'
+          JWT_SECRET: 'test-secret'
+
+  # Run unit tests for Mini App
+  test-mini-app:
+    name: Test Mini App
+    needs: detect-changes
+    if: needs.detect-changes.outputs.mini-app == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mini-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: mini-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+        env:
+          CI: true
+
+  # Build core package
+  build-core:
+    name: Build Core
+    needs: [lint, test-core]
+    if: always() && needs.lint.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-core
+          path: dist/
+          retention-days: 7
+
+  # Build API
+  build-api:
+    name: Build API
+    needs: [lint, test-api]
+    if: always() && needs.lint.result == 'success'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: api/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-api
+          path: api/dist/
+          retention-days: 7
+
+  # Build Mini App
+  build-mini-app:
+    name: Build Mini App
+    needs: [lint, test-mini-app]
+    if: always() && needs.lint.result == 'success'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mini-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: mini-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: ${{ vars.API_URL || 'http://localhost:3001' }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-mini-app
+          path: mini-app/dist/
+          retention-days: 7
+
+  # Security audit
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Audit root dependencies
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Audit API dependencies
+        run: npm audit --audit-level=high
+        working-directory: api
+        continue-on-error: true
+
+      - name: Audit Mini App dependencies
+        run: npm audit --audit-level=high
+        working-directory: mini-app
+        continue-on-error: true
+
+  # Summary job
+  ci-success:
+    name: CI Success
+    needs: [build-core, build-api, build-mini-app, security]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check CI status
+        run: |
+          if [[ "${{ needs.build-core.result }}" == "failure" ]] || \
+             [[ "${{ needs.build-api.result }}" == "failure" ]] || \
+             [[ "${{ needs.build-mini-app.result }}" == "failure" ]]; then
+            echo "CI failed!"
+            exit 1
+          fi
+          echo "CI passed successfully!"

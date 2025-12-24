@@ -1,0 +1,171 @@
+# Dependabot Configuration - SleepCore
+# Automatically creates PRs for dependency updates
+
+version: 2
+
+registries:
+  npm-npmjs:
+    type: npm-registry
+    url: https://registry.npmjs.org
+    replaces-base: true
+
+updates:
+  # Root package
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    groups:
+      typescript:
+        patterns:
+          - "typescript"
+          - "@types/*"
+      testing:
+        patterns:
+          - "jest"
+          - "ts-jest"
+          - "@types/jest"
+      grammy:
+        patterns:
+          - "grammy"
+          - "@grammyjs/*"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "automated"
+
+  # API package
+  - package-ecosystem: "npm"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 3
+    groups:
+      express:
+        patterns:
+          - "express"
+          - "@types/express"
+          - "cors"
+          - "helmet"
+    commit-message:
+      prefix: "deps(api)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "api"
+      - "automated"
+
+  # Mini App package
+  - package-ecosystem: "npm"
+    directory: "/mini-app"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 3
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
+      vite:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "postcss"
+          - "autoprefixer"
+    commit-message:
+      prefix: "deps(mini-app)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "mini-app"
+      - "automated"
+
+  # E2E tests
+  - package-ecosystem: "npm"
+    directory: "/e2e"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 2
+    groups:
+      playwright:
+        patterns:
+          - "@playwright/*"
+          - "playwright"
+    commit-message:
+      prefix: "deps(e2e)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "e2e"
+      - "automated"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "ci/cd"
+      - "automated"
+
+  # Docker
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "docker"
+      include: "scope"
+    labels:
+      - "docker"
+      - "automated"
+
+  - package-ecosystem: "docker"
+    directory: "/api"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "docker(api)"
+      include: "scope"
+    labels:
+      - "docker"
+      - "api"
+      - "automated"
+
+  - package-ecosystem: "docker"
+    directory: "/e2e"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "docker(e2e)"
+      include: "scope"
+    labels:
+      - "docker"
+      - "e2e"
+      - "automated"
