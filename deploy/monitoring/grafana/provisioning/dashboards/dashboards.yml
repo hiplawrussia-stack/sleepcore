@@ -1,0 +1,14 @@
+# Grafana Dashboards Provisioning
+
+apiVersion: 1
+
+providers:
+  - name: 'SleepCore'
+    orgId: 1
+    folder: 'SleepCore'
+    folderUid: 'sleepcore'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

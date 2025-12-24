@@ -1,4 +1,4 @@
-# SleepCore API Production Dockerfile
+# SleepCore Bot Production Dockerfile
 # ====================================
 # Multi-stage build for optimized production image
 
@@ -7,7 +7,7 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies for native modules
 RUN apk add --no-cache python3 make g++
 
 # Copy package files
@@ -31,17 +31,18 @@ FROM node:20-alpine AS production
 
 # Labels
 LABEL org.opencontainers.image.source="https://github.com/your-org/sleepcore"
-LABEL org.opencontainers.image.description="SleepCore Backend API"
+LABEL org.opencontainers.image.description="SleepCore Telegram Bot"
 LABEL org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apk add --no-cache wget dumb-init
+# Install runtime dependencies only
+RUN apk add --no-cache \
+    wget \
+    dumb-init
 
 # Set environment
 ENV NODE_ENV=production
-ENV PORT=3001
 ENV TZ=Europe/Moscow
 
 # Copy built files and production dependencies
@@ -49,21 +50,21 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
-# Create non-root user ownership
-RUN chown -R node:node /app
+# Create data directory
+RUN mkdir -p /app/data && chown -R node:node /app
 
 # Use non-root user
 USER node
 
-# Expose port
-EXPOSE 3001
+# Expose port for health checks
+EXPOSE 3000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget --spider -q http://localhost:3001/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget --spider -q http://localhost:3000/health || exit 1
 
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the API (bypass npm for proper signal handling)
-CMD ["node", "dist/index.js"]
+# Start the bot
+CMD ["node", "dist/main.js"]

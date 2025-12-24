@@ -1,0 +1,169 @@
+# Prometheus Alert Rules
+# SleepCore Production
+
+groups:
+  - name: sleepcore-alerts
+    rules:
+      # ============================================
+      # Infrastructure Alerts
+      # ============================================
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 80% for more than 5 minutes (current: {{ $value }}%)"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% for more than 5 minutes (current: {{ $value }}%)"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk space is below 15% (current: {{ $value }}%)"
+
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk space on {{ $labels.instance }}"
+          description: "Disk space is below 5% (current: {{ $value }}%)"
+
+      # ============================================
+      # Container Alerts
+      # ============================================
+
+      - alert: ContainerDown
+        expr: absent(container_last_seen{name=~"sleepcore-.*"})
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.name }} is down"
+          description: "Container has been down for more than 1 minute"
+
+      - alert: ContainerHighCPU
+        expr: sum(rate(container_cpu_usage_seconds_total{name=~"sleepcore-.*"}[5m])) by (name) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} high CPU usage"
+          description: "Container CPU usage is above 80% (current: {{ $value }}%)"
+
+      - alert: ContainerHighMemory
+        expr: container_memory_usage_bytes{name=~"sleepcore-.*"} / container_spec_memory_limit_bytes{name=~"sleepcore-.*"} * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} high memory usage"
+          description: "Container memory usage is above 80% of limit (current: {{ $value }}%)"
+
+      - alert: ContainerRestarting
+        expr: increase(container_last_seen{name=~"sleepcore-.*"}[1h]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is restarting frequently"
+          description: "Container has restarted more than 3 times in the last hour"
+
+      # ============================================
+      # Application Alerts
+      # ============================================
+
+      - alert: HighErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) * 100 > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 5% (current: {{ $value }}%)"
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API response time"
+          description: "95th percentile response time is above 1 second (current: {{ $value }}s)"
+
+      - alert: BotNotResponding
+        expr: up{job="sleepcore-bot"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SleepCore Bot is not responding"
+          description: "The bot service has been down for more than 2 minutes"
+
+      - alert: APINotResponding
+        expr: up{job="sleepcore-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SleepCore API is not responding"
+          description: "The API service has been down for more than 2 minutes"
+
+      # ============================================
+      # Database Alerts
+      # ============================================
+
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database is not responding"
+
+      - alert: PostgresHighConnections
+        expr: pg_stat_activity_count / pg_settings_max_connections * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL high connection usage"
+          description: "Connection usage is above 80% (current: {{ $value }}%)"
+
+      # ============================================
+      # Traefik Alerts
+      # ============================================
+
+      - alert: TraefikDown
+        expr: up{job="traefik"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Traefik is down"
+          description: "Traefik reverse proxy is not responding"
+
+      - alert: SSLCertExpiringSoon
+        expr: (traefik_tls_certs_not_after - time()) / 86400 < 14
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate will expire in {{ $value }} days"
