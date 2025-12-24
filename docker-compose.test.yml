@@ -1,0 +1,65 @@
+version: '3.8'
+
+# Docker Compose configuration for E2E testing
+# Runs API, Mini App, and E2E tests together
+
+services:
+  # Backend API
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - NODE_ENV=test
+      - DATABASE_PATH=:memory:
+      - JWT_SECRET=test-secret-key-for-e2e
+      - BOT_TOKEN=test:bot:token
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Mini App (Vite dev server)
+  mini-app:
+    build:
+      context: ./mini-app
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://api:3001
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5173"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # E2E Tests with Playwright
+  e2e:
+    build:
+      context: ./e2e
+      dockerfile: Dockerfile
+    environment:
+      - API_URL=http://api:3001
+      - APP_URL=http://mini-app:5173
+      - CI=true
+    depends_on:
+      mini-app:
+        condition: service_healthy
+    volumes:
+      - ./e2e/playwright-report:/app/playwright-report
+      - ./e2e/test-results:/app/test-results
+
+# Network for service communication
+networks:
+  default:
+    name: sleepcore-test-network

@@ -9,8 +9,12 @@
     "dev": "tsc --watch",
     "test": "jest",
     "test:coverage": "jest --coverage",
+    "test:e2e": "cd e2e && npm test",
+    "test:e2e:ui": "cd e2e && npm run test:ui",
     "lint": "eslint src --ext .ts",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "api:dev": "cd api && npm run dev",
+    "mini-app:dev": "cd mini-app && npm run dev"
   },
   "keywords": [
     "digital-therapeutics",
