@@ -37,6 +37,8 @@ describe('CommandHandler', () => {
       expect(handler.has('quest')).toBe(true);
       expect(handler.has('badges')).toBe(true);
       expect(handler.has('sonya')).toBe(true);
+      // Content Library command (Phase 6.1)
+      expect(handler.has('smart_tips')).toBe(true);
     });
   });
 
@@ -100,8 +102,8 @@ describe('CommandHandler', () => {
   describe('getAll()', () => {
     it('should return all registered commands', () => {
       const commands = handler.getAll();
-      // 8 core + 4 gamification = 12 commands
-      expect(commands.length).toBe(12);
+      // 8 core + 4 gamification + 1 content library = 13 commands
+      expect(commands.length).toBe(13);
     });
 
     it('should return command instances', () => {
@@ -132,8 +134,8 @@ describe('CommandHandler', () => {
     it('should return commands in BotFather format', () => {
       const commands = handler.getBotFatherCommands();
 
-      // 8 core + 4 gamification = 12 commands
-      expect(commands.length).toBe(12);
+      // 8 core + 4 gamification + 1 content library = 13 commands
+      expect(commands.length).toBe(13);
       commands.forEach(cmd => {
         expect(cmd.command).toBeDefined();
         expect(cmd.description).toBeDefined();
