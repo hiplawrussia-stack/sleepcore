@@ -1,0 +1,180 @@
+/**
+ * Global Styles
+ * =============
+ * Base styles and Tailwind imports for SleepCore Mini App.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom base styles */
+@layer base {
+  html {
+    /* Prevent overscroll bounce on iOS */
+    overscroll-behavior: none;
+    /* Smooth scrolling */
+    scroll-behavior: smooth;
+  }
+
+  body {
+    /* Prevent text selection on touch devices */
+    -webkit-user-select: none;
+    user-select: none;
+    /* Prevent tap highlight */
+    -webkit-tap-highlight-color: transparent;
+    /* Prevent pull-to-refresh */
+    overscroll-behavior-y: contain;
+    /* Font smoothing */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Safe area insets for notched devices */
+  #root {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Focus styles */
+  *:focus {
+    outline: none;
+  }
+
+  *:focus-visible {
+    outline: 2px solid theme('colors.primary.500');
+    outline-offset: 2px;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: theme('colors.night.600');
+    border-radius: 2px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: theme('colors.night.500');
+  }
+}
+
+/* Custom components */
+@layer components {
+  /* Glass card effect */
+  .glass-card {
+    @apply bg-night-800/50 backdrop-blur-sm border border-night-700/50 rounded-2xl;
+  }
+
+  /* Soft button */
+  .btn-soft {
+    @apply px-4 py-2.5 rounded-xl font-medium transition-all;
+    @apply bg-night-800 hover:bg-night-700 text-night-100;
+    @apply active:scale-95;
+  }
+
+  /* Primary button */
+  .btn-primary {
+    @apply px-4 py-2.5 rounded-xl font-medium transition-all;
+    @apply bg-primary-500 hover:bg-primary-600 text-white;
+    @apply active:scale-95;
+  }
+
+  /* Glow effect */
+  .glow {
+    @apply shadow-glow;
+  }
+
+  .glow-lg {
+    @apply shadow-glow-lg;
+  }
+
+  /* Text gradient */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-primary-400 to-calm-purple;
+  }
+}
+
+/* Custom utilities */
+@layer utilities {
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Breathing animation */
+  .animate-breathe {
+    animation: breathe 4s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% {
+      transform: scale(0.9);
+      opacity: 0.8;
+    }
+    50% {
+      transform: scale(1.1);
+      opacity: 1;
+    }
+  }
+
+  /* Pulse glow animation */
+  .animate-pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 40px rgba(99, 102, 241, 0.4);
+    }
+  }
+
+  /* Fade in animation */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Slide up animation */
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

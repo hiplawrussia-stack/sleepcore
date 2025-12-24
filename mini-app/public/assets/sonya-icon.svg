@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Owl body -->
+  <ellipse cx="50" cy="55" rx="35" ry="40" fill="#4338ca"/>
+
+  <!-- Owl head -->
+  <circle cx="50" cy="35" r="30" fill="#4f46e5"/>
+
+  <!-- Eyes background -->
+  <circle cx="38" cy="32" r="12" fill="#ffffff"/>
+  <circle cx="62" cy="32" r="12" fill="#ffffff"/>
+
+  <!-- Pupils -->
+  <circle cx="40" cy="32" r="6" fill="#1e293b"/>
+  <circle cx="64" cy="32" r="6" fill="#1e293b"/>
+
+  <!-- Eye shine -->
+  <circle cx="42" cy="30" r="2" fill="#ffffff"/>
+  <circle cx="66" cy="30" r="2" fill="#ffffff"/>
+
+  <!-- Beak -->
+  <path d="M50 40 L46 48 L50 52 L54 48 Z" fill="#fcd34d"/>
+
+  <!-- Ears/tufts -->
+  <path d="M25 15 L35 25 L28 28 Z" fill="#4f46e5"/>
+  <path d="M75 15 L65 25 L72 28 Z" fill="#4f46e5"/>
+
+  <!-- Wings -->
+  <ellipse cx="22" cy="60" rx="8" ry="20" fill="#3730a3"/>
+  <ellipse cx="78" cy="60" rx="8" ry="20" fill="#3730a3"/>
+
+  <!-- Belly pattern -->
+  <ellipse cx="50" cy="65" rx="18" ry="22" fill="#818cf8" opacity="0.5"/>
+
+  <!-- Feet -->
+  <path d="M38 90 L35 95 M40 90 L40 96 M42 90 L45 95" stroke="#fcd34d" stroke-width="2" stroke-linecap="round"/>
+  <path d="M58 90 L55 95 M60 90 L60 96 M62 90 L65 95" stroke="#fcd34d" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Moon accent -->
+  <path d="M80 10 Q85 15 80 20 Q90 15 80 10" fill="#fcd34d" opacity="0.8"/>
+</svg>
