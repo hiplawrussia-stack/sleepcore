@@ -19,6 +19,7 @@ import type {
   IInlineButton,
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
+import { sonya } from '../persona';
 
 /**
  * /progress Command Implementation
@@ -103,6 +104,14 @@ ${formatter.tip('Чем больше данных, тем точнее анал�
     // Response status indicator
     const statusInfo = this.getResponseStatusInfo(report.responseStatus);
 
+    // Sonya's encouragement based on therapy week and response
+    const weekMessage = sonya.encourageByWeek(report.currentWeek);
+    const emotionalResponse = report.responseStatus === 'responding'
+      ? sonya.respondToEmotion('positive')
+      : report.responseStatus === 'partial'
+        ? sonya.respondToEmotion('hopeful')
+        : sonya.respondToEmotion('discouraged');
+
     // ISI change direction
     const isiDirection = report.isiChange > 0 ? '↓' : report.isiChange < 0 ? '↑' : '→';
     const isiChangeText = Math.abs(report.isiChange) > 0
@@ -126,6 +135,12 @@ ${formatter.tip('Чем больше данных, тем точнее анал�
       : 'Всё идёт хорошо!';
 
     const message = `
+${sonya.emoji} *${sonya.name}*
+
+${weekMessage.text}
+
+${emotionalResponse.text}
+
 ${formatter.header('Еженедельный отчёт')}
 
 ${formatter.treatmentWeek(report.currentWeek)}

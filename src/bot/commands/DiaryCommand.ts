@@ -24,6 +24,7 @@ import type {
   IInlineButton,
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
+import { sonya } from '../persona';
 
 /**
  * Diary entry steps
@@ -156,16 +157,21 @@ export class DiaryCommand implements IConversationCommand {
     data: DiaryData
   ): Promise<ICommandResult> {
     const dateStr = formatter.formatDate(new Date(data.date));
+    const greeting = sonya.greet({ timeOfDay: this.getTimeOfDay() });
 
     const message = `
+${sonya.emoji} *${sonya.name}*
+
+${greeting.text}
+
 ${formatter.header('Дневник сна')}
 
 📅 *${dateStr}*
 
-Расскажите, как вы спали прошлой ночью.
+Расскажи, как ты спал(а) прошлой ночью.
 Это займёт всего *3 касания*.
 
-${formatter.tip('Регулярное ведение дневника — ключ к успеху КПТ-И')}
+${sonya.tip('Регулярное ведение дневника — ключ к успеху КПТ-И')}
     `.trim();
 
     // Quick entry options for common patterns
@@ -439,10 +445,19 @@ ${formatter.header('Шаг 3/3: Качество сна')}
     // Get streak (would come from database)
     const streak = 1; // Demo value
 
-    const message = `
-${formatter.success('Запись сохранена!')}
+    // Sonya's response based on sleep quality
+    const sonyaResponse = data.sleepQuality! >= 4
+      ? sonya.celebrate('Запись сохранена! Отличный сон!')
+      : data.sleepQuality! >= 3
+        ? sonya.say('Запись сохранена! Продолжай отслеживать.')
+        : sonya.respondToEmotion('tired').text;
 
-${formatter.header('Ваш сон')}
+    const message = `
+${sonya.emoji} *${sonya.name}*
+
+${sonyaResponse}
+
+${formatter.header('Твой сон')}
 
 🛏 Легли: ${bedtime}
 ⏰ Встали: ${waketime}
@@ -454,7 +469,7 @@ ${formatter.divider()}
 ${formatter.sleepEfficiency(estimatedSE)}
 ${formatter.streakBadge(streak)}
 
-${formatter.tip('Заполняйте дневник каждое утро для лучших результатов')}
+${sonya.tip('Заполняй дневник каждое утро для лучших результатов')}
     `.trim();
 
     const keyboard: IInlineButton[][] = [
@@ -471,6 +486,14 @@ ${formatter.tip('Заполняйте дневник каждое утро дл�
   }
 
   // ==================== Helpers ====================
+
+  private getTimeOfDay(): 'morning' | 'day' | 'evening' | 'night' {
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour < 12) return 'morning';
+    if (hour >= 12 && hour < 17) return 'day';
+    if (hour >= 17 && hour < 22) return 'evening';
+    return 'night';
+  }
 
   private formatTime(hour: number, minute: number): string {
     return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;

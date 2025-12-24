@@ -21,6 +21,7 @@ import type {
   IInlineButton,
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
+import { sonya } from '../persona';
 
 /**
  * Relaxation technique details
@@ -151,15 +152,19 @@ export class RelaxCommand implements ICommand {
     let recommendation = '';
     try {
       const rec = ctx.sleepCore.getRelaxationRecommendation(ctx.userId, 'bedtime');
-      recommendation = `\n${formatter.tip(`Рекомендуем: ${rec.technique}`)}`;
+      recommendation = `\n${sonya.tip(`Рекомендую: ${rec.technique}`)}`;
     } catch {
       // No personalized recommendation available
     }
 
     const message = `
+${sonya.emoji} *${sonya.name}*
+
+Расслабление — важная часть подготовки ко сну.
+
 ${formatter.header('Техники релаксации')}
 
-Выберите технику для практики:
+Выбери технику для практики:
 
 🌬 *Дыхание* — 5 мин, быстрый эффект
 💪 *PMR* — 15 мин, глубокое расслабление
@@ -168,7 +173,7 @@ ${formatter.header('Техники релаксации')}
 🎲 *Шаффл* — 10 мин, от тревожных мыслей
 ${recommendation}
 
-${formatter.tip('Практикуйте за 30-60 минут до сна')}
+${sonya.tip('Практикуй за 30-60 минут до сна')}
     `.trim();
 
     const keyboard: IInlineButton[][] = [
@@ -198,6 +203,10 @@ ${formatter.tip('Практикуйте за 30-60 минут до сна')}
     const steps = formatter.numberedList(technique.steps);
 
     const message = `
+${sonya.emoji} *${sonya.name}*
+
+${sonya.say('Отличный выбор! Начинаем практику.')}
+
 ${formatter.header(technique.name)}
 
 ${technique.icon} *${technique.name}*
@@ -211,7 +220,7 @@ ${steps}
 
 ${formatter.divider()}
 
-${formatter.tip('Используйте эту технику каждый вечер для закрепления навыка')}
+${sonya.tip('Используй эту технику каждый вечер для закрепления навыка')}
     `.trim();
 
     const keyboard: IInlineButton[][] = [

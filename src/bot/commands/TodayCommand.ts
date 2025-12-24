@@ -21,6 +21,7 @@ import type {
   IInlineButton,
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
+import { sonya } from '../persona';
 
 /**
  * /today Command Implementation
@@ -139,7 +140,14 @@ ${formatter.tip('Чем больше данных, тем точнее реко�
     const timing = timingLabels[intervention.timing] || intervention.timing;
     const priorityStars = '⭐'.repeat(intervention.priority);
 
+    // Sonya's greeting
+    const greeting = sonya.greet({ timeOfDay: this.getTimeOfDay() });
+
     const message = `
+${sonya.emoji} *${sonya.name}*
+
+${greeting.text}
+
 ${formatter.header('Задание на сегодня')}
 
 ${icon} *${name}*
@@ -154,7 +162,7 @@ ${formatter.divider()}
 
 _💡 ${intervention.rationale}_
 
-${formatter.tip('Выполняйте задания последовательно для лучшего результата')}
+${sonya.tip('Выполняй задания последовательно для лучшего результата')}
     `.trim();
 
     const keyboard: IInlineButton[][] = [
@@ -169,6 +177,16 @@ ${formatter.tip('Выполняйте задания последователь�
       keyboard,
       metadata: { intervention },
     };
+  }
+
+  // ==================== Helpers ====================
+
+  private getTimeOfDay(): 'morning' | 'day' | 'evening' | 'night' {
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour < 12) return 'morning';
+    if (hour >= 12 && hour < 17) return 'day';
+    if (hour >= 17 && hour < 22) return 'evening';
+    return 'night';
   }
 }
 

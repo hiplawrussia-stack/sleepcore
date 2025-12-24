@@ -28,6 +28,10 @@
  */
 
 import { InlineKeyboard } from 'grammy';
+import {
+  adaptiveKeyboardService,
+  userInteractionRepository,
+} from '../../modules/adaptive-keyboard';
 
 // ==================== Types ====================
 
@@ -441,3 +445,41 @@ export class HubMenuService {
 export const hubMenu = new HubMenuService();
 
 export default hubMenu;
+
+// ==================== Adaptive Keyboard Integration ====================
+
+/**
+ * Build adaptive keyboard for a user
+ * Uses AdaptiveKeyboardService for personalized command ordering
+ *
+ * @param userId - User's Telegram ID
+ * @returns Personalized InlineKeyboard
+ */
+export async function buildAdaptiveHubKeyboard(userId: string): Promise<InlineKeyboard> {
+  return adaptiveKeyboardService.generateKeyboard(userId);
+}
+
+/**
+ * Record user command interaction for adaptive learning
+ *
+ * @param userId - User's Telegram ID
+ * @param command - Command that was clicked
+ * @param sessionId - Optional session identifier
+ */
+export async function recordHubInteraction(
+  userId: string,
+  command: string,
+  sessionId?: string
+): Promise<void> {
+  await adaptiveKeyboardService.recordCommandClick(userId, command, sessionId);
+}
+
+/**
+ * Get personalized keyboard layout for a user
+ *
+ * @param userId - User's Telegram ID
+ * @returns Keyboard layout with adaptation info
+ */
+export async function getAdaptiveLayout(userId: string) {
+  return adaptiveKeyboardService.generateLayout(userId);
+}

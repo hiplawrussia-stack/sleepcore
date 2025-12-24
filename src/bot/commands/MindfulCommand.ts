@@ -19,6 +19,7 @@ import type {
   IInlineButton,
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
+import { sonya } from '../persona';
 
 /**
  * Mindfulness practice type
@@ -157,6 +158,10 @@ export class MindfulCommand implements ICommand {
 
   private async showMenu(ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
+${sonya.emoji} *${sonya.name}*
+
+Осознанность помогает успокоить ум перед сном.
+
 ${formatter.header('Практики осознанности')}
 
 *MBT-I* (Mindfulness-Based Therapy for Insomnia):
@@ -168,7 +173,7 @@ ${formatter.header('Практики осознанности')}
 💭 Дефузия — дистанция от мыслей
 🌙 Принятие — парадоксальный подход
 
-${formatter.tip('ACT показывает 48% снижение тревоги о сне')}
+${sonya.tip('ACT показывает 48% снижение тревоги о сне')}
     `.trim();
 
     const keyboard: IInlineButton[][] = [
@@ -250,6 +255,10 @@ ${formatter.divider()}
     const steps = formatter.numberedList(practice.instructions);
 
     const message = `
+${sonya.emoji} *${sonya.name}*
+
+${sonya.say('Отлично! Давай погрузимся в практику.')}
+
 ${formatter.header(practice.name)}
 
 ${practice.icon} *${practice.name}*
@@ -263,7 +272,7 @@ ${steps}
 
 ${formatter.divider()}
 
-${formatter.tip('Регулярная практика улучшает сон за 2-4 недели')}
+${sonya.tip('Регулярная практика улучшает сон за 2-4 недели')}
     `.trim();
 
     const keyboard: IInlineButton[][] = [

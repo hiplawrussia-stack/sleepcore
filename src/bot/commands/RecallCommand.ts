@@ -28,6 +28,7 @@ import {
   type IRecallAnswer,
   getRuleById,
 } from '../../cognitive';
+import { sonya } from '../persona';
 
 /**
  * Quiz state for a user
@@ -156,13 +157,14 @@ export class RecallCommand implements ICommand {
     return {
       success: true,
       message:
+        `${sonya.emoji} *${sonya.name}*\n\n` +
         `☀️ *Утренний тест памяти*\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
         `📝 Вопрос ${index + 1}/${state.questions.length}\n\n` +
         `${question.question}\n\n` +
         (question.type === 'free_recall'
-          ? '_Напишите ответ или выберите действие:_'
-          : '_Выберите правильный ответ:_'),
+          ? '_Напиши ответ или выбери действие:_'
+          : '_Выбери правильный ответ:_'),
       keyboard,
     };
   }
@@ -438,8 +440,12 @@ export class RecallCommand implements ICommand {
     const total = state.answers.length;
     const percentage = Math.round((correct / total) * 100);
 
-    // Determine emoji
-    const emoji = percentage >= 80 ? '🌟' : percentage >= 50 ? '👍' : '💪';
+    // Sonya's response based on score
+    const sonyaResponse = percentage >= 80
+      ? sonya.celebrate('Отличный результат!')
+      : percentage >= 50
+        ? sonya.respondToEmotion('hopeful').text
+        : sonya.respondToEmotion('discouraged').text;
 
     const totalTime = Math.round(
       (Date.now() - state.startTime.getTime()) / 1000
@@ -449,13 +455,15 @@ export class RecallCommand implements ICommand {
     this.quizStates.delete(userId);
 
     const message =
-      `${emoji} *Результаты теста*\n` +
+      `${sonya.emoji} *${sonya.name}*\n\n` +
+      `${sonyaResponse}\n\n` +
+      `🌟 *Результаты теста*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
       `📊 *Правильно:* ${correct}/${total} (${percentage}%)\n` +
       `⏱ *Время:* ${totalTime} сек\n\n` +
       feedback +
       `\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `_Сегодня вечером — новая репетиция!_`;
+      `${sonya.remind('Сегодня вечером — новая репетиция!')}`;
 
     return {
       message,

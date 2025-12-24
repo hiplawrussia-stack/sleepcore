@@ -27,6 +27,7 @@ import {
   type ISmartMemoryWindowEngine,
   type IRehearsalSession,
 } from '../../cognitive';
+import { sonya } from '../persona';
 
 /**
  * /rehearsal Command Implementation
@@ -234,7 +235,13 @@ export class RehearsalCommand implements ICommand {
    * Format main rehearsal message
    */
   private formatRehearsalMessage(session: IRehearsalSession): string {
+    const greeting = sonya.greet({ timeOfDay: 'evening' });
+
     const lines: string[] = [
+      `${sonya.emoji} *${sonya.name}*`,
+      '',
+      `${greeting.text}`,
+      '',
       '🌙 *Вечерняя репетиция сна*',
       '━━━━━━━━━━━━━━━━━━━━━━━━',
       '',
@@ -253,11 +260,11 @@ export class RehearsalCommand implements ICommand {
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
     lines.push('');
     lines.push('💡 *Как это работает:*');
-    lines.push('1️⃣ Прочитайте правила');
-    lines.push('2️⃣ Пройдите визуализацию');
-    lines.push('3️⃣ Установите намерение запомнить');
-    lines.push('4️⃣ Ваш мозг консолидирует во сне');
-    lines.push('5️⃣ Утром проверьте себя (/recall)');
+    lines.push('1️⃣ Прочитай правила');
+    lines.push('2️⃣ Пройди визуализацию');
+    lines.push('3️⃣ Установи намерение запомнить');
+    lines.push('4️⃣ Твой мозг консолидирует во сне');
+    lines.push('5️⃣ Утром проверь себя (/recall)');
 
     return lines.join('\n');
   }

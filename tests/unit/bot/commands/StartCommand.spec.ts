@@ -53,7 +53,7 @@ describe('StartCommand', () => {
       const result = await command.execute(ctx);
 
       assertSuccessWithMessage(result);
-      assertContainsText(result, 'SleepCore');
+      assertContainsText(result, 'Соня');
     });
 
     it('should show welcome with user name', async () => {
@@ -93,7 +93,7 @@ describe('StartCommand', () => {
       const result = await command.handleStep(ctx, 'welcome', {});
 
       assertSuccessWithMessage(result);
-      assertContainsText(result, 'SleepCore');
+      assertContainsText(result, 'Соня');
     });
 
     it('should handle isi_intro step', async () => {
