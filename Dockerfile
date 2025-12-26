@@ -10,8 +10,9 @@ WORKDIR /app
 # Install build dependencies for native modules
 RUN apk add --no-cache python3 make g++
 
-# Copy package files
+# Copy package files and local packages
 COPY package*.json ./
+COPY packages ./packages
 
 # Install all dependencies (including dev for build)
 RUN npm ci
