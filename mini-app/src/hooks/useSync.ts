@@ -41,7 +41,7 @@ export const useSync = (): UseSyncReturn => {
     setSyncError,
   } = useSyncStore();
 
-  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Push pending changes to server
   const pushChanges = useCallback(async (): Promise<boolean> => {
