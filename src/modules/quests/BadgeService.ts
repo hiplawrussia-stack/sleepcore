@@ -742,7 +742,7 @@ export class BadgeService {
       ],
       epic: [
         `${badge.icon} Эпический бейдж: *${badge.name}*!`,
-        `${badge.icon} Невероятно! Ты заслужил *${badge.name}*!`,
+        `${badge.icon} Эпический! Ты заслужил *${badge.name}*!`,
       ],
       legendary: [
         `${badge.icon} ЛЕГЕНДАРНЫЙ БЕЙДЖ: *${badge.name}*!`,
