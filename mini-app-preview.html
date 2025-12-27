@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SleepCore Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #1a1a2e;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .preview {
+      width: 640px;
+      height: 360px;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #312e81 100%);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .preview::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                  radial-gradient(circle at 70% 70%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+      animation: pulse 4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+    .owl {
+      font-size: 80px;
+      margin-bottom: 16px;
+      z-index: 1;
+      filter: drop-shadow(0 4px 20px rgba(99, 102, 241, 0.5));
+    }
+    .title {
+      font-size: 42px;
+      font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: -1px;
+      z-index: 1;
+      text-shadow: 0 2px 20px rgba(99, 102, 241, 0.5);
+    }
+    .subtitle {
+      font-size: 18px;
+      color: #94a3b8;
+      margin-top: 8px;
+      z-index: 1;
+    }
+    .features {
+      display: flex;
+      gap: 24px;
+      margin-top: 24px;
+      z-index: 1;
+    }
+    .feature {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #cbd5e1;
+      font-size: 14px;
+    }
+    .feature-icon {
+      font-size: 18px;
+    }
+    .breathing-circle {
+      position: absolute;
+      width: 200px;
+      height: 200px;
+      border: 2px solid rgba(99, 102, 241, 0.3);
+      border-radius: 50%;
+      animation: breathe 4s ease-in-out infinite;
+    }
+    .breathing-circle:nth-child(2) {
+      width: 240px;
+      height: 240px;
+      animation-delay: 0.5s;
+      border-color: rgba(139, 92, 246, 0.2);
+    }
+    .breathing-circle:nth-child(3) {
+      width: 280px;
+      height: 280px;
+      animation-delay: 1s;
+      border-color: rgba(99, 102, 241, 0.1);
+    }
+    @keyframes breathe {
+      0%, 100% { transform: scale(0.9); opacity: 0.3; }
+      50% { transform: scale(1.1); opacity: 0.6; }
+    }
+  </style>
+</head>
+<body>
+  <div class="preview">
+    <div class="breathing-circle"></div>
+    <div class="breathing-circle"></div>
+    <div class="breathing-circle"></div>
+    <div class="owl">🦉</div>
+    <div class="title">SleepCore</div>
+    <div class="subtitle">Дыхательные практики для здорового сна</div>
+    <div class="features">
+      <div class="feature">
+        <span class="feature-icon">🌬️</span>
+        <span>Дыхание</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">😴</span>
+        <span>Релакс</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">📊</span>
+        <span>Прогресс</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
