@@ -1,0 +1,155 @@
+name: sleepcore
+services:
+  # Traefik - Reverse Proxy with SSL
+  traefik:
+    image: traefik:v3.2
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=tech@awfond.ru"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - sleepcore-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.sleepcore.ru`)"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+
+  # SleepCore Bot
+  bot:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: sleepcore-bot
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - BOT_TOKEN=${BOT_TOKEN}
+      - DATABASE_PATH=/app/data/bot.db
+      - ENABLE_ENHANCED_BOT=true
+      - TZ=Europe/Moscow
+    volumes:
+      - bot-data:/app/data
+    networks:
+      - sleepcore-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # SleepCore API
+  api:
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    container_name: sleepcore-api
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_PATH=/app/data/api.db
+      - JWT_SECRET=${JWT_SECRET}
+      - BOT_TOKEN=${BOT_TOKEN}
+      - CORS_ORIGIN=https://app.sleepcore.ru
+      - TZ=Europe/Moscow
+    volumes:
+      - api-data:/app/data
+    networks:
+      - sleepcore-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.sleepcore.ru`)"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.api.loadbalancer.server.port=3001"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Mini App (Static)
+  mini-app:
+    build:
+      context: ../mini-app
+      dockerfile: Dockerfile.prod
+      args:
+        - VITE_API_URL=https://api.sleepcore.ru
+    container_name: sleepcore-mini-app
+    restart: unless-stopped
+    networks:
+      - sleepcore-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`app.sleepcore.ru`)"
+      - "traefik.http.routers.app.tls.certresolver=letsencrypt"
+      - "traefik.http.services.app.loadbalancer.server.port=80"
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - sleepcore-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.sleepcore.ru`)"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus-simple.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - sleepcore-net
+
+  # Node Exporter
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+    networks:
+      - sleepcore-net
+
+networks:
+  sleepcore-net:
+    driver: bridge
+
+volumes:
+  letsencrypt:
+  bot-data:
+  api-data:
+  grafana-data:
+  prometheus-data:
