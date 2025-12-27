@@ -49,8 +49,8 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
-# Create non-root user ownership
-RUN chown -R node:node /app
+# Create data directory and set ownership
+RUN mkdir -p /app/data && chown -R node:node /app
 
 # Use non-root user
 USER node
