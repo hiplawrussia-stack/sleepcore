@@ -80,6 +80,29 @@ const AuthLoading: React.FC = () => {
   );
 };
 
+// Not in Telegram screen
+const NotInTelegram: React.FC = () => {
+  return (
+    <div className="min-h-screen bg-night-900 flex items-center justify-center p-4">
+      <div className="text-center max-w-sm">
+        <div className="text-6xl mb-6">🦉</div>
+        <h1 className="text-2xl font-bold text-night-100 mb-3">
+          SleepCore
+        </h1>
+        <p className="text-night-400 text-base mb-6">
+          Это приложение работает только внутри Telegram.
+        </p>
+        <a
+          href="https://t.me/SleepCore_Bot"
+          className="inline-block px-6 py-3 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-colors font-medium"
+        >
+          Открыть в Telegram
+        </a>
+      </div>
+    </div>
+  );
+};
+
 // Auth error screen
 const AuthError: React.FC<{ error: string; onRetry: () => void }> = ({
   error,
@@ -109,6 +132,15 @@ const AppContent: React.FC = () => {
   const { isAuthenticated, isAuthenticating, authError, authenticate } = useAuth();
   const location = useLocation();
 
+  // Check if we're in Telegram environment
+  const isInTelegram = telegram.isInTelegram();
+  const isDev = import.meta.env.DEV;
+
+  // In production, if not in Telegram, show "open in Telegram" screen
+  if (!isDev && !isInTelegram) {
+    return <NotInTelegram />;
+  }
+
   // Show loading while authenticating
   if (isAuthenticating) {
     return <AuthLoading />;
@@ -119,8 +151,7 @@ const AppContent: React.FC = () => {
     return <AuthError error={authError} onRetry={authenticate} />;
   }
 
-  // In development, allow access without auth
-  const isDev = import.meta.env.DEV;
+  // In production, require authentication
   if (!isDev && !isAuthenticated) {
     return <AuthLoading />;
   }
