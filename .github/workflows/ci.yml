@@ -8,11 +8,13 @@ on:
   push:
     branches:
       - main
+      - master
       - 'feature/**'
       - 'release/**'
   pull_request:
     branches:
       - main
+      - master
 
 # Cancel in-progress runs for same branch
 concurrency:
