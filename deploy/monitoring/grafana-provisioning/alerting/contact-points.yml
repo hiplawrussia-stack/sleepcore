@@ -1,0 +1,13 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: Telegram SleepCore
+    receivers:
+      - uid: telegram-sleepcore
+        type: telegram
+        settings:
+          bottoken: "8359599890:AAE4Ctsqaa1lGUYEiPCN31UPmOXggFw6fy0"
+          chatid: "-5137342324"
+          parse_mode: HTML
+        disableResolveMessage: false
