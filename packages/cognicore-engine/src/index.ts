@@ -15,10 +15,18 @@
 // =============================================================================
 
 export const COGNICORE_VERSION = {
-  version: '1.0.0-alpha.1',
+  version: '2.0.0-alpha.1',
   name: '@cognicore/engine',
-  description: 'POMDP-based Cognitive State Engine for Digital Therapeutics',
-  buildDate: '2025-12-20',
+  description: 'POMDP-based Cognitive State Engine for Digital Therapeutics with Nonlinear Dynamics',
+  buildDate: '2025-12-28',
+  phase: 'Phase 1 - Nonlinear Core',
+  features: [
+    'PLRNN for nonlinear psychological dynamics',
+    'KalmanFormer hybrid architecture',
+    'Voice biomarker analysis',
+    'Multimodal fusion (text + voice)',
+    'Early warning signal detection',
+  ],
 };
 
 // =============================================================================
@@ -272,3 +280,67 @@ export type DomainVertical =
   | 'anxiety'      // AnxietyCore - GAD
   | 'depression'   // DepressionCore - MDD
   | 'custom';      // Custom domain
+
+// =============================================================================
+// PHASE 1: NONLINEAR DYNAMICS ENGINE (2025)
+// =============================================================================
+
+// PLRNN Engine - Piecewise Linear RNN for nonlinear psychological dynamics
+export type {
+  IPLRNNEngine,
+  IPLRNNConfig,
+  IPLRNNState,
+  IPLRNNPrediction,
+  IPLRNNWeights,
+  IPLRNNTrainingSample,
+  IPLRNNTrainingResult,
+  ICausalNetwork,
+  ICausalNode as IPLRNNCausalNode,
+  ICausalEdge as IPLRNNCausalEdge,
+  IEarlyWarningSignal,
+  IInterventionSimulation,
+  PLRNNEngineFactory,
+} from './temporal/interfaces/IPLRNNEngine';
+
+export {
+  PLRNNEngine,
+  createPLRNNEngine,
+  DEFAULT_PLRNN_CONFIG,
+} from './temporal/engines/PLRNNEngine';
+
+// KalmanFormer Engine - Hybrid Kalman + Transformer architecture
+export type {
+  IKalmanFormerEngine,
+  IKalmanFormerConfig,
+  IKalmanFormerState,
+  IKalmanFormerPrediction,
+  IKalmanFormerWeights,
+  IKalmanFormerTrainingSample,
+  IAttentionWeights,
+  KalmanFormerEngineFactory,
+} from './temporal/interfaces/IKalmanFormer';
+
+export {
+  KalmanFormerEngine,
+  createKalmanFormerEngine,
+  DEFAULT_KALMANFORMER_CONFIG,
+} from './temporal/engines/KalmanFormerEngine';
+
+// Voice Input Adapter - Acoustic analysis & multimodal fusion
+export type {
+  IVoiceInputAdapter,
+  IVoiceAdapterConfig,
+  IVoiceProcessingResult,
+  IAcousticFeatures,
+  IProsodyFeatures,
+  IVoiceEmotionEstimate,
+  ITextAnalysis,
+  IMultimodalFusion,
+  VoiceInputAdapterFactory,
+} from './voice/interfaces/IVoiceAdapter';
+
+export {
+  VoiceInputAdapter,
+  createVoiceInputAdapter,
+  DEFAULT_VOICE_CONFIG,
+} from './voice/VoiceInputAdapter';
