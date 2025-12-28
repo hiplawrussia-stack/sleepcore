@@ -391,8 +391,22 @@ ${formatter.header('Шаг 3/3: Качество сна')}
     ctx: ISleepCoreContext,
     data: DiaryData
   ): Promise<ICommandResult> {
-    const bedtime = this.formatTime(data.bedtimeHour!, data.bedtimeMinute!);
-    const waketime = this.formatTime(data.waketimeHour!, data.waketimeMinute!);
+    // Validate required fields
+    if (
+      data.bedtimeHour === undefined ||
+      data.bedtimeMinute === undefined ||
+      data.waketimeHour === undefined ||
+      data.waketimeMinute === undefined ||
+      data.sleepQuality === undefined
+    ) {
+      return {
+        success: false,
+        message: `${sonya.emoji} Данные сессии потеряны. Пожалуйста, начните заново с /diary`,
+      };
+    }
+
+    const bedtime = this.formatTime(data.bedtimeHour, data.bedtimeMinute);
+    const waketime = this.formatTime(data.waketimeHour, data.waketimeMinute);
     const durationMinutes = this.calculateDuration(data);
 
     // Calculate approximate time in bed and estimate sleep time
@@ -495,13 +509,25 @@ ${sonya.tip('Заполняй дневник каждое утро для луч
     return 'night';
   }
 
-  private formatTime(hour: number, minute: number): string {
+  private formatTime(hour: number | undefined, minute: number | undefined): string {
+    if (hour === undefined || minute === undefined) {
+      return '--:--';
+    }
     return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
   }
 
   private calculateDuration(data: DiaryData): number {
-    let hours = data.waketimeHour! - data.bedtimeHour!;
-    let minutes = data.waketimeMinute! - data.bedtimeMinute!;
+    if (
+      data.waketimeHour === undefined ||
+      data.bedtimeHour === undefined ||
+      data.waketimeMinute === undefined ||
+      data.bedtimeMinute === undefined
+    ) {
+      return 0;
+    }
+
+    let hours = data.waketimeHour - data.bedtimeHour;
+    let minutes = data.waketimeMinute - data.bedtimeMinute;
 
     // Handle crossing midnight
     if (hours < 0) {
