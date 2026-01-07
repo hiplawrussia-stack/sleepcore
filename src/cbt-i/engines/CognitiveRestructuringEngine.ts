@@ -24,7 +24,6 @@
 import type {
   ICognitiveRestructuringEngine,
   IDysfunctionalBelief,
-  ICognitiveSession,
 } from '../interfaces/ICBTIComponents';
 import type { ISleepState } from '../../sleep/interfaces/ISleepState';
 

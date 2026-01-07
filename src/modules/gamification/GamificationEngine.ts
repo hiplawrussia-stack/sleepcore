@@ -28,7 +28,7 @@ import type {
 import type { IGamificationRepository, XPSource, StreakType } from '../../infrastructure/database';
 import { QuestService, type IQuest, type IActiveQuest, type IQuestCompletionResult } from '../quests/QuestService';
 import { BadgeService, type IBadge, type IUserBadge, type IBadgeAwardResult } from '../quests/BadgeService';
-import { SonyaEvolutionService, type ISonyaStage, type IEvolutionResult } from '../evolution/SonyaEvolutionService';
+import { SonyaEvolutionService, type IEvolutionResult } from '../evolution/SonyaEvolutionService';
 
 // ==================== XP CONFIGURATION ====================
 

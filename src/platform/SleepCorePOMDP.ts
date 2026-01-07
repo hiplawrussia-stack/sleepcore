@@ -18,7 +18,6 @@
 // Note: SleepCore implements its own POMDP on top of CogniCore's IStateVector
 // The core POMDP algorithms (Thompson Sampling, Kalman Filter) are implemented here
 import type { ISleepState, ISleepMetrics } from '../sleep/interfaces/ISleepState';
-import type { CBTIComponent, ICBTIIntervention } from '../cbt-i/interfaces/ICBTIComponents';
 
 /**
  * Sleep POMDP State

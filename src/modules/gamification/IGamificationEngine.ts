@@ -14,10 +14,9 @@
  * @module @sleepcore/modules/gamification
  */
 
-import type { EventEmitter } from 'events';
 import type { IQuest, IActiveQuest, IQuestCompletionResult } from '../quests/QuestService';
 import type { IBadge, IUserBadge, IBadgeAwardResult } from '../quests/BadgeService';
-import type { ISonyaStage, IUserEvolutionData, IEvolutionResult } from '../evolution/SonyaEvolutionService';
+import type { ISonyaStage, IEvolutionResult } from '../evolution/SonyaEvolutionService';
 
 // ==================== ACTION TYPES ====================
 

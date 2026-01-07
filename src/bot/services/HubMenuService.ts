@@ -30,7 +30,6 @@
 import { InlineKeyboard } from 'grammy';
 import {
   adaptiveKeyboardService,
-  userInteractionRepository,
 } from '../../modules/adaptive-keyboard';
 
 // ==================== Types ====================

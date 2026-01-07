@@ -21,7 +21,7 @@
  */
 
 import { InlineKeyboard } from 'grammy';
-import type { IMoodHistory, IMoodEntry, MoodLevel } from './EmojiSliderService';
+import type { IMoodHistory, MoodLevel } from './EmojiSliderService';
 
 // ==================== Types ====================
 

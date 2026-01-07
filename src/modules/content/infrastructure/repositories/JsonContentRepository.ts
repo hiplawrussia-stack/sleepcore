@@ -13,7 +13,6 @@ import {
   AgeGroup,
   DifficultyLevel,
   EmotionalState,
-  ContentItem,
 } from '../../domain/entities/ContentItem';
 import {
   IContentRepository,

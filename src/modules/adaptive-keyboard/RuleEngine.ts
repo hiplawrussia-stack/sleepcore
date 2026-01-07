@@ -15,7 +15,6 @@
  */
 
 import type { IUserBehaviorContext } from './UserInteractionRepository';
-import type { TimeOfDay } from '../../bot/commands/registry';
 
 /**
  * Available keyboard actions

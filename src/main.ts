@@ -25,7 +25,6 @@
 import { Bot, Context, session, SessionFlavor, GrammyError, HttpError, InlineKeyboard } from 'grammy';
 import { autoRetry } from '@grammyjs/auto-retry';
 import { hydrate, HydrateFlavor } from '@grammyjs/hydrate';
-import * as cron from 'node-cron';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -47,13 +46,11 @@ import {
   questCommand,
   badgeCommand,
   evolutionCommand,
-  commandDescriptions,
   type ICommandResult,
   // Context-Aware Architecture
   initializeCommandRegistry,
   getCommandRegistry,
   createContextAwareMenuService,
-  type ICommandContext,
 } from './bot/commands';
 
 // Sprint 3: Voice & Gamification Modules

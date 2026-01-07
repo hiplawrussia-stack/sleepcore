@@ -8,7 +8,6 @@
  */
 
 import type {
-  ISleepState,
   ISleepMetrics,
   ISleepDiaryEntry,
   SleepQualityRating,

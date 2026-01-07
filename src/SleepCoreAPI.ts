@@ -54,11 +54,8 @@ import {
 import {
   TCMIntegratedCBTIEngine,
   AyurvedaYogaEngine,
-  type TCMConstitution,
-  type TCMInsomniaPattern,
   type ITCMAssessment,
   type ITCMCBTIPlan,
-  type Dosha,
   type IAyurvedicAssessment,
   type IYogaNidraProtocol,
   type IDinacharya,
@@ -67,8 +64,6 @@ import {
 import {
   EuropeanGuideline2023,
   type EvidenceGrade,
-  type RecommendationStrength,
-  type TreatmentCategory,
   type IGuidelineRecommendation,
   type ICBTIComponentEvidence,
   type IPharmacologicalEvidence,

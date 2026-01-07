@@ -15,7 +15,6 @@
  * @module @sleepcore/modules/voice
  */
 
-import { createReadStream } from 'fs';
 import { writeFile, unlink } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';

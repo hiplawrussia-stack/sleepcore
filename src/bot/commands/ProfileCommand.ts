@@ -13,7 +13,6 @@
  */
 
 import type {
-  ICommand,
   IConversationCommand,
   ISleepCoreContext,
   ICommandResult,
@@ -21,7 +20,6 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { getGamificationEngine } from '../services/GamificationContext';
-import type { IPlayerProfile } from '../../modules/gamification';
 
 /**
  * /profile Command Implementation

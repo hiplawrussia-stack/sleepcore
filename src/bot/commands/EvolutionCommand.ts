@@ -22,8 +22,7 @@ import type {
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
 import { getGamificationEngine } from '../services/GamificationContext';
-import type { IGamificationEngine, IPlayerProfile } from '../../modules/gamification';
-import { EVOLUTION_STAGES, type SonyaStageId, type ISonyaStage } from '../../modules/evolution';
+import { EVOLUTION_STAGES, type SonyaStageId } from '../../modules/evolution';
 
 /**
  * /sonya Command Implementation

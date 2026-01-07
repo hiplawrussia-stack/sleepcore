@@ -37,7 +37,6 @@ import type {
   IDefusionTechnique,
   IValuesAssessment,
   ICommittedAction,
-  ACTProcess,
   SessionLevel,
 } from '../interfaces/IThirdWaveTherapies';
 import type { ISleepState } from '../../sleep/interfaces/ISleepState';

@@ -22,8 +22,7 @@ import type {
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
 import { getGamificationEngine } from '../services/GamificationContext';
-import type { IGamificationEngine, IPlayerProfile } from '../../modules/gamification';
-import type { IBadge, IUserBadge, BadgeCategory, BadgeRarity } from '../../modules/quests';
+import type { IBadge, BadgeCategory, BadgeRarity } from '../../modules/quests';
 
 /**
  * /badges Command Implementation

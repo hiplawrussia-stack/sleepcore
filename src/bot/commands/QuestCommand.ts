@@ -13,7 +13,6 @@
  */
 
 import type {
-  ICommand,
   IConversationCommand,
   ISleepCoreContext,
   ICommandResult,
@@ -22,7 +21,7 @@ import type {
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
 import { getGamificationEngine } from '../services/GamificationContext';
-import type { IGamificationEngine, IActiveQuestInfo } from '../../modules/gamification';
+import type { IActiveQuestInfo } from '../../modules/gamification';
 import { questService } from '../../modules/quests'; // Keep for quest definitions
 
 /**

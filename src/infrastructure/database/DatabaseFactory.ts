@@ -27,7 +27,6 @@
 
 import type {
   IDatabaseConnection,
-  IDatabaseConfig,
   IMigration,
   IMigrationRunner,
 } from './interfaces/IDatabaseConnection';
