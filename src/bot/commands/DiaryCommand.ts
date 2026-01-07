@@ -527,7 +527,7 @@ ${sonya.tip('Заполняй дневник каждое утро для луч
     }
 
     let hours = data.waketimeHour - data.bedtimeHour;
-    let minutes = data.waketimeMinute - data.bedtimeMinute;
+    const minutes = data.waketimeMinute - data.bedtimeMinute;
 
     // Handle crossing midnight
     if (hours < 0) {

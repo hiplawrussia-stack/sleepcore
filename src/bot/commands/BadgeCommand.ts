@@ -526,7 +526,7 @@ ${formatter.tip('Продолжай — ты близко к цели!')}
       const profile = await engine.getPlayerProfile(userId);
       const criteria = badge.criteria;
       let current = 0;
-      let target = criteria.value || 1;
+      const target = criteria.value || 1;
 
       // Match criteria type to profile data
       if (criteria.type === 'streak' && criteria.metric === 'diary_streak') {

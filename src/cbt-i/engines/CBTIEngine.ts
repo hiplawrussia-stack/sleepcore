@@ -301,7 +301,7 @@ export class CBTIEngine implements ICBTIEngine {
 
     // Determine new phase based on week
     let newPhase = plan.currentPhase;
-    let newWeek = plan.currentWeek + 1;
+    const newWeek = plan.currentWeek + 1;
 
     if (newWeek === 2 && plan.currentPhase === 'assessment') {
       newPhase = 'education';
