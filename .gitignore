@@ -28,5 +28,11 @@ npm-debug.log*
 # Runtime data (root level only)
 /data/
 
+# Claude Code
+.claude/
+
+# Archives
+*.zip
+
 # Allow content library data
 !src/modules/content/infrastructure/data/
