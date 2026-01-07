@@ -347,11 +347,13 @@ export class ProactiveNotificationService {
   /**
    * Convert Grammy InlineKeyboard to notification format
    */
-  private convertInlineKeyboard(keyboard: any): { text: string; callbackData?: string }[][] {
+  private convertInlineKeyboard(keyboard: {
+    inline_keyboard?: { text: string; callback_data?: string }[][];
+  }): { text: string; callbackData?: string }[][] {
     // Grammy InlineKeyboard stores buttons in inline_keyboard property
     const buttons = keyboard?.inline_keyboard || [];
-    return buttons.map((row: any[]) =>
-      row.map((btn: any) => ({
+    return buttons.map((row) =>
+      row.map((btn) => ({
         text: btn.text,
         callbackData: btn.callback_data,
       }))

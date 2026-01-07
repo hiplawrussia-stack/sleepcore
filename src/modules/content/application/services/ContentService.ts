@@ -17,7 +17,7 @@ import {
   IContentCompletion,
   IDailyContent,
 } from '../../domain/interfaces/IContentService';
-import { IContentRepository } from '../../domain/interfaces/IContentRepository';
+import { IContentRepository, IContentQuery } from '../../domain/interfaces/IContentRepository';
 import { getContentRepository } from '../../infrastructure/repositories/JsonContentRepository';
 
 /**
@@ -191,7 +191,7 @@ export class ContentService implements IContentService {
     ageGroup: AgeGroup,
     duration?: number
   ): Promise<IContentItem[]> {
-    const query: any = {
+    const query: IContentQuery = {
       category: 'relaxation',
       ageGroup,
       orderBy: 'order',
@@ -211,7 +211,7 @@ export class ContentService implements IContentService {
     ageGroup: AgeGroup,
     duration?: number
   ): Promise<IContentItem[]> {
-    const query: any = {
+    const query: IContentQuery = {
       category: 'mindfulness',
       ageGroup,
       orderBy: 'order',
@@ -318,7 +318,7 @@ export class ContentService implements IContentService {
     category: ContentCategory,
     context?: IContentContext
   ): Promise<IContentItem[]> {
-    const query: any = { category, orderBy: 'order' };
+    const query: IContentQuery = { category, orderBy: 'order' };
 
     if (context?.ageGroup) {
       query.ageGroup = context.ageGroup;

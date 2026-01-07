@@ -53,6 +53,27 @@ export interface IWhisperConfig {
 }
 
 /**
+ * Raw Whisper API response
+ */
+interface IWhisperApiResponse {
+  text: string;
+  language?: string;
+  duration?: number;
+  segments?: IWhisperApiSegment[];
+}
+
+/**
+ * Raw segment from Whisper API
+ */
+interface IWhisperApiSegment {
+  id: number;
+  start: number;
+  end: number;
+  text: string;
+  avg_logprob?: number;
+}
+
+/**
  * Default Russian prompt for better accuracy
  */
 const DEFAULT_RUSSIAN_PROMPT = 'Привет. Сегодня я хочу рассказать о своём сне и настроении...';
@@ -122,7 +143,7 @@ export class WhisperService {
         throw new Error(`Whisper API error: ${response.status} - ${errorText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as IWhisperApiResponse;
 
       return this.parseResponse(data);
     } finally {
@@ -158,8 +179,8 @@ export class WhisperService {
   /**
    * Parse Whisper API response into standardized result
    */
-  private parseResponse(data: any): ITranscriptionResult {
-    const segments: ITranscriptionSegment[] = (data.segments || []).map((seg: any) => ({
+  private parseResponse(data: IWhisperApiResponse): ITranscriptionResult {
+    const segments: ITranscriptionSegment[] = (data.segments || []).map((seg) => ({
       id: seg.id,
       start: seg.start,
       end: seg.end,

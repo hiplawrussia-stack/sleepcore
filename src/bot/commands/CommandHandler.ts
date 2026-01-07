@@ -15,7 +15,8 @@
  */
 
 import { Bot, Context } from 'grammy';
-import type { ICommand, ICommandRegistry, ISleepCoreContext, IUserSession } from './interfaces/ICommand';
+import type { InlineKeyboardButton } from 'grammy/types';
+import type { ICommand, ICommandRegistry, ISleepCoreContext, IUserSession, IConversationCommand, IInlineButton } from './interfaces/ICommand';
 import { SleepCoreAPI } from '../../SleepCoreAPI';
 
 // Import all commands
@@ -216,7 +217,7 @@ export class CommandHandler implements ICommandRegistry {
       const conversationData = session?.conversationData || {};
 
       // Handle callback
-      const result = await (command as any).handleCallback(
+      const result = await (command as IConversationCommand).handleCallback(
         sleepCoreCtx,
         data,
         conversationData
@@ -313,7 +314,7 @@ export class CommandHandler implements ICommandRegistry {
    */
   private async sendCommandResult(
     ctx: Context,
-    result: { success: boolean; message?: string; keyboard?: any[][]; error?: string }
+    result: { success: boolean; message?: string; keyboard?: IInlineButton[][]; error?: string }
   ): Promise<void> {
     if (!result.success && result.error) {
       await ctx.reply(`❌ ${result.error}`);
@@ -322,8 +323,8 @@ export class CommandHandler implements ICommandRegistry {
 
     if (!result.message) return;
 
-    // Build reply options
-    const options: any = {
+    // Build reply options - using type assertion for Grammy compatibility
+    const options: Parameters<typeof ctx.reply>[1] = {
       parse_mode: 'HTML',
     };
 
@@ -331,11 +332,7 @@ export class CommandHandler implements ICommandRegistry {
     if (result.keyboard) {
       options.reply_markup = {
         inline_keyboard: result.keyboard.map((row) =>
-          row.map((btn) => ({
-            text: btn.text,
-            callback_data: btn.callbackData,
-            url: btn.url,
-          }))
+          row.map((btn) => this.mapButton(btn))
         ),
       };
     }
@@ -344,36 +341,45 @@ export class CommandHandler implements ICommandRegistry {
   }
 
   /**
+   * Map IInlineButton to Grammy InlineKeyboardButton
+   */
+  private mapButton(btn: IInlineButton): InlineKeyboardButton {
+    if (btn.url) {
+      return { text: btn.text, url: btn.url };
+    }
+    return { text: btn.text, callback_data: btn.callbackData || 'noop' };
+  }
+
+  /**
    * Edit existing message or send new one
    */
   private async editOrSendMessage(
     ctx: Context,
-    result: { message?: string; keyboard?: any[][] }
+    result: { message?: string; keyboard?: IInlineButton[][] }
   ): Promise<void> {
     if (!result.message) return;
 
-    const options: any = {
-      parse_mode: 'HTML',
-    };
-
-    if (result.keyboard) {
-      options.reply_markup = {
-        inline_keyboard: result.keyboard.map((row) =>
-          row.map((btn) => ({
-            text: btn.text,
-            callback_data: btn.callbackData,
-            url: btn.url,
-          }))
-        ),
-      };
-    }
+    // Build inline keyboard markup if present
+    const replyMarkup = result.keyboard
+      ? {
+          inline_keyboard: result.keyboard.map((row) =>
+            row.map((btn) => this.mapButton(btn))
+          ),
+        }
+      : undefined;
 
     try {
       // Try to edit the message
-      await ctx.editMessageText(result.message, options);
+      await ctx.editMessageText(result.message, {
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup,
+      });
     } catch {
       // If edit fails, send new message
-      await ctx.reply(result.message, options);
+      await ctx.reply(result.message, {
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup,
+      });
     }
   }
 
