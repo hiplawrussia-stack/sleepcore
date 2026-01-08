@@ -89,9 +89,13 @@ import {
   createGrammySessionAdapter,
   UserRepository,
   SleepDiaryRepository,
+  AssessmentRepository,
+  TherapySessionRepository,
   type IDatabaseConnection,
   type GrammySessionAdapter,
   type ISleepDiaryEntryEntity,
+  type IAssessmentEntity,
+  type ITherapySessionEntity,
 } from './infrastructure/database';
 
 // ============================================================================
@@ -802,13 +806,15 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCom
  */
 interface SetupCallbacksOptions {
   sleepDiaryRepository?: SleepDiaryRepository;
+  assessmentRepository?: AssessmentRepository;
+  therapySessionRepository?: TherapySessionRepository;
 }
 
 /**
  * Setup callback query handlers
  */
 function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCallbacksOptions = {}): void {
-  const { sleepDiaryRepository } = options;
+  const { sleepDiaryRepository, assessmentRepository, therapySessionRepository } = options;
   bot.on('callback_query:data', async (ctx) => {
     const data = ctx.callbackQuery.data;
     ctx.session.lastActivityAt = new Date();
@@ -896,6 +902,40 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
                 step: (meta.step as string) || isiData.step,
               };
 
+              // === Database Persistence for ISI Assessment ===
+              // Save when ISI assessment is completed (step === 'isi_result')
+              if (meta.step === 'isi_result' && assessmentRepository) {
+                try {
+                  const isiScore = meta.isiScore as number;
+                  const severity = meta.severity as string;
+                  const answers = meta.isiAnswers as number[] || ctx.session.isiData?.answers || [];
+
+                  // Determine severity label for database
+                  let severityLabel: string;
+                  if (isiScore <= 7) severityLabel = 'none';
+                  else if (isiScore <= 14) severityLabel = 'subthreshold';
+                  else if (isiScore <= 21) severityLabel = 'moderate';
+                  else severityLabel = 'severe';
+
+                  const assessmentEntity: Omit<IAssessmentEntity, 'id' | 'createdAt' | 'updatedAt'> = {
+                    userId: sleepCoreCtx.userId,
+                    type: 'isi',
+                    score: isiScore,
+                    severity: severityLabel,
+                    category: severity,
+                    responsesJson: JSON.stringify(answers),
+                    interpretation: `ISI Score: ${isiScore}/28 - ${severityLabel}`,
+                    assessedAt: new Date(),
+                    deletedAt: null,
+                  };
+
+                  await assessmentRepository.insert(assessmentEntity);
+                  console.log(`[Database] ISI assessment saved for user ${sleepCoreCtx.userId}, score: ${isiScore}`);
+                } catch (error) {
+                  console.error('[Database] Failed to save ISI assessment:', error);
+                }
+              }
+
               // Check for onboarding completion
               if (result.metadata.onboardingCompleted) {
                 ctx.session.therapyState = {
@@ -904,6 +944,30 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
                   currentWeek: 0,
                   hasCompletedOnboarding: true,
                 };
+
+                // === Create Initial Therapy Session ===
+                if (therapySessionRepository) {
+                  try {
+                    const therapySession: Omit<ITherapySessionEntity, 'id' | 'createdAt' | 'updatedAt'> = {
+                      userId: sleepCoreCtx.userId,
+                      sessionType: 'cbti',
+                      week: 0,
+                      component: 'onboarding',
+                      status: 'completed',
+                      adherence: 100,
+                      homeworkCompleted: true,
+                      notesJson: JSON.stringify({ isiCompleted: true }),
+                      scheduledAt: new Date(),
+                      completedAt: new Date(),
+                      deletedAt: null,
+                    };
+
+                    await therapySessionRepository.insert(therapySession);
+                    console.log(`[Database] Initial therapy session created for user ${sleepCoreCtx.userId}`);
+                  } catch (error) {
+                    console.error('[Database] Failed to create therapy session:', error);
+                  }
+                }
               }
             }
           }
@@ -1899,11 +1963,14 @@ async function main(): Promise<void> {
   // --- Initialize Repositories (Session Persistence) ---
   let userRepository: UserRepository | undefined;
   let sleepDiaryRepository: SleepDiaryRepository | undefined;
+  let assessmentRepository: AssessmentRepository | undefined;
+  let therapySessionRepository: TherapySessionRepository | undefined;
   if (db) {
     userRepository = new UserRepository(db);
     sleepDiaryRepository = new SleepDiaryRepository(db);
-    console.log("[DB] UserRepository initialized for session persistence");
-    console.log("[DB] SleepDiaryRepository initialized for diary persistence");
+    assessmentRepository = new AssessmentRepository(db);
+    therapySessionRepository = new TherapySessionRepository(db);
+    console.log("[DB] Repositories initialized: User, SleepDiary, Assessment, TherapySession");
   }
 
   // --- Create Bot ---
@@ -1934,7 +2001,7 @@ async function main(): Promise<void> {
 
   // Setup handlers
   setupCommands(bot, api, { userRepository });
-  setupCallbacks(bot, api, { sleepDiaryRepository });
+  setupCallbacks(bot, api, { sleepDiaryRepository, assessmentRepository, therapySessionRepository });
   setupMessages(bot, api);
   setupVoiceHandlers(bot, api); // Sprint 3: Voice diary
   setupErrors(bot);
