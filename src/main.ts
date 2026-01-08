@@ -87,6 +87,7 @@ import { VERSION, BUILD_DATE } from './index';
 import {
   initializeDatabase,
   createGrammySessionAdapter,
+  UserRepository,
   type IDatabaseConnection,
   type GrammySessionAdapter,
 } from './infrastructure/database';
@@ -100,8 +101,11 @@ import {
  * Persisted per-user for therapy continuity
  */
 interface SessionData {
-  /** SleepCore user ID */
+  /** SleepCore user ID (Telegram ID as string) */
   userId: string;
+
+  /** Database user ID (primary key from users table) */
+  dbUserId?: number;
 
   /** User's display name */
   userName?: string;
@@ -407,10 +411,18 @@ async function initReplyKeyboard(ctx: MyContext): Promise<void> {
 }
 
 /**
+ * Options for setting up commands
+ */
+interface SetupCommandsOptions {
+  userRepository?: UserRepository;
+}
+
+/**
  * Setup command handlers
  */
-function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
+function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCommandsOptions = {}): void {
   const _commandHandler = createCommandHandler(api);
+  const { userRepository } = options;
 
   // /start command - Welcome + ISI assessment
   bot.command('start', async (ctx) => {
@@ -419,6 +431,39 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     ctx.session.userId = sleepCoreCtx.userId;
     ctx.session.lastActivityAt = new Date();
     ctx.session.userName = ctx.from?.first_name;
+
+    // === Database User Creation (Session Persistence) ===
+    // Research: GDPR requires audit trail of user consent
+    if (userRepository) {
+      try {
+        // Check if user already exists
+        let dbUser = await userRepository.findByExternalId(sleepCoreCtx.userId);
+
+        if (!dbUser) {
+          // Create new user in database
+          dbUser = await userRepository.insert({
+            externalId: sleepCoreCtx.userId,
+            firstName: ctx.from?.first_name,
+            lastName: ctx.from?.last_name,
+            timezone: 'Europe/Moscow', // Default timezone, can be updated later
+            locale: ctx.from?.language_code || 'ru',
+            consentGiven: true, // Implicit consent by starting the bot
+            consentDate: new Date(),
+          });
+          console.log(`[Database] Created user: ${dbUser.id} (external: ${sleepCoreCtx.userId})`);
+        } else {
+          // Update last activity
+          await userRepository.updateLastActivity(dbUser.id!);
+          console.log(`[Database] User exists: ${dbUser.id}, updated last activity`);
+        }
+
+        // Store database user ID in session for linking
+        ctx.session.dbUserId = dbUser.id;
+      } catch (error) {
+        console.error('[Database] User creation failed:', error);
+        // Continue without database - graceful degradation
+      }
+    }
 
     // Initialize streak data if not present
     if (!ctx.session.streakData) {
@@ -1778,6 +1823,13 @@ async function main(): Promise<void> {
     // Continue with in-memory sessions (sessionAdapter remains null)
   }
 
+  // --- Initialize User Repository (Session Persistence) ---
+  let userRepository: UserRepository | undefined;
+  if (db) {
+    userRepository = new UserRepository(db);
+    console.log("[DB] UserRepository initialized for session persistence");
+  }
+
   // --- Create Bot ---
   const bot = createBot(botConfig, {
     sessionStorage: sessionAdapter || undefined,
@@ -1805,7 +1857,7 @@ async function main(): Promise<void> {
   const notificationService = createProactiveNotificationService(bot as unknown as Bot<Context>, menuService);
 
   // Setup handlers
-  setupCommands(bot, api);
+  setupCommands(bot, api, { userRepository });
   setupCallbacks(bot, api);
   setupMessages(bot, api);
   setupVoiceHandlers(bot, api); // Sprint 3: Voice diary
