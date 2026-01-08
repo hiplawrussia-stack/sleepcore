@@ -88,8 +88,10 @@ import {
   initializeDatabase,
   createGrammySessionAdapter,
   UserRepository,
+  SleepDiaryRepository,
   type IDatabaseConnection,
   type GrammySessionAdapter,
+  type ISleepDiaryEntryEntity,
 } from './infrastructure/database';
 
 // ============================================================================
@@ -796,9 +798,17 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCom
 // ============================================================================
 
 /**
+ * Options for setting up callbacks
+ */
+interface SetupCallbacksOptions {
+  sleepDiaryRepository?: SleepDiaryRepository;
+}
+
+/**
  * Setup callback query handlers
  */
-function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
+function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCallbacksOptions = {}): void {
+  const { sleepDiaryRepository } = options;
   bot.on('callback_query:data', async (ctx) => {
     const data = ctx.callbackQuery.data;
     ctx.session.lastActivityAt = new Date();
@@ -902,6 +912,69 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
         case 'diary':
           if ('handleCallback' in diaryCommand) {
             result = await (diaryCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
+
+            // === Database Persistence for Sleep Diary ===
+            // Save to database when diary entry is completed (marked as 'saved' in metadata)
+            if (result?.metadata?.saved && sleepDiaryRepository) {
+              try {
+                const diaryData = result.metadata as {
+                  date: string;
+                  bedtimeHour: number;
+                  bedtimeMinute: number;
+                  waketimeHour: number;
+                  waketimeMinute: number;
+                  sleepQuality: number;
+                };
+
+                // Calculate metrics
+                const bedtime = `${diaryData.bedtimeHour.toString().padStart(2, '0')}:${diaryData.bedtimeMinute.toString().padStart(2, '0')}`;
+                const wakeTime = `${diaryData.waketimeHour.toString().padStart(2, '0')}:${diaryData.waketimeMinute.toString().padStart(2, '0')}`;
+
+                // Calculate duration (handling midnight crossing)
+                let hours = diaryData.waketimeHour - diaryData.bedtimeHour;
+                if (hours < 0) hours += 24;
+                const minutes = diaryData.waketimeMinute - diaryData.bedtimeMinute;
+                const timeInBed = hours * 60 + minutes;
+
+                // Estimate sleep metrics (simplified - would come from detailed entry)
+                const sleepOnsetLatency = 15; // Default estimate
+                const wakeAfterSleepOnset = Math.round(timeInBed * 0.1);
+                const totalSleepTime = timeInBed - sleepOnsetLatency - wakeAfterSleepOnset;
+                const sleepEfficiency = Math.round((totalSleepTime / timeInBed) * 100);
+
+                const diaryEntity: Omit<ISleepDiaryEntryEntity, 'id' | 'createdAt' | 'updatedAt'> = {
+                  userId: sleepCoreCtx.userId,
+                  date: diaryData.date,
+                  bedtime,
+                  lightsOffTime: bedtime,
+                  sleepOnsetLatency,
+                  wakeTime,
+                  outOfBedTime: wakeTime,
+                  nightAwakenings: 1,
+                  wakeAfterSleepOnset,
+                  totalSleepTime,
+                  timeInBed,
+                  sleepEfficiency,
+                  sleepQuality: diaryData.sleepQuality,
+                  morningMood: diaryData.sleepQuality,
+                  deletedAt: null,
+                };
+
+                await sleepDiaryRepository.upsert(diaryEntity);
+                console.log(`[Database] Diary entry saved for user ${sleepCoreCtx.userId}, date: ${diaryData.date}`);
+
+                // Update session cache
+                ctx.session.therapyState = {
+                  ...ctx.session.therapyState,
+                  hasActiveSession: true,
+                  lastDiaryDate: diaryData.date,
+                  currentWeek: ctx.session.therapyState?.currentWeek || 0,
+                };
+              } catch (error) {
+                console.error('[Database] Failed to save diary entry:', error);
+                // Graceful degradation: don't fail the user's experience
+              }
+            }
           }
           break;
 
@@ -1823,11 +1896,14 @@ async function main(): Promise<void> {
     // Continue with in-memory sessions (sessionAdapter remains null)
   }
 
-  // --- Initialize User Repository (Session Persistence) ---
+  // --- Initialize Repositories (Session Persistence) ---
   let userRepository: UserRepository | undefined;
+  let sleepDiaryRepository: SleepDiaryRepository | undefined;
   if (db) {
     userRepository = new UserRepository(db);
+    sleepDiaryRepository = new SleepDiaryRepository(db);
     console.log("[DB] UserRepository initialized for session persistence");
+    console.log("[DB] SleepDiaryRepository initialized for diary persistence");
   }
 
   // --- Create Bot ---
@@ -1858,7 +1934,7 @@ async function main(): Promise<void> {
 
   // Setup handlers
   setupCommands(bot, api, { userRepository });
-  setupCallbacks(bot, api);
+  setupCallbacks(bot, api, { sleepDiaryRepository });
   setupMessages(bot, api);
   setupVoiceHandlers(bot, api); // Sprint 3: Voice diary
   setupErrors(bot);
