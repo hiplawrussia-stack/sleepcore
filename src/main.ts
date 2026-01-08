@@ -47,6 +47,8 @@ import {
   badgeCommand,
   evolutionCommand,
   type ICommandResult,
+  type ISleepCoreContext,
+  type IConversationCommand,
   // Context-Aware Architecture
   initializeCommandRegistry,
   getCommandRegistry,
@@ -447,7 +449,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     await initReplyKeyboard(ctx);
 
     // Execute command
-    const result = await startCommand.execute(sleepCoreCtx as any);
+    const result = await startCommand.execute(sleepCoreCtx as ISleepCoreContext);
     await sendResultWithKeyboard(ctx, result);
 
     // Show streak milestone if achieved
@@ -478,7 +480,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
       ctx.session.onboardingProgress.completedSteps.push('first_diary_entry');
     }
 
-    const result = await diaryCommand.execute(sleepCoreCtx as any);
+    const result = await diaryCommand.execute(sleepCoreCtx as ISleepCoreContext);
     await sendResultWithKeyboard(ctx, result);
 
     // Show streak update
@@ -494,7 +496,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
   bot.command(['today', 'сегодня'], async (ctx) => {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
-    const result = await todayCommand.execute(sleepCoreCtx as any);
+    const result = await todayCommand.execute(sleepCoreCtx as ISleepCoreContext);
     await sendResultWithKeyboard(ctx, result);
   });
 
@@ -503,7 +505,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
     const args = ctx.message?.text?.split(' ').slice(1).join(' ');
-    const result = await relaxCommand.execute(sleepCoreCtx as any, args);
+    const result = await relaxCommand.execute(sleepCoreCtx as ISleepCoreContext, args);
     await sendResultWithKeyboard(ctx, result);
   });
 
@@ -512,7 +514,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
     const args = ctx.message?.text?.split(' ').slice(1).join(' ');
-    const result = await mindfulCommand.execute(sleepCoreCtx as any, args);
+    const result = await mindfulCommand.execute(sleepCoreCtx as ISleepCoreContext, args);
     await sendResultWithKeyboard(ctx, result);
   });
 
@@ -550,7 +552,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
   bot.command(['sos', 'помощь', 'emergency', 'crisis'], async (ctx) => {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
-    const result = await sosCommand.execute(sleepCoreCtx as any);
+    const result = await sosCommand.execute(sleepCoreCtx as ISleepCoreContext);
     await sendResultWithKeyboard(ctx, result);
   });
 
@@ -573,7 +575,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
     const args = ctx.message?.text?.split(' ').slice(1).join(' ');
-    const result = await rehearsalCommand.execute(sleepCoreCtx as any, args);
+    const result = await rehearsalCommand.execute(sleepCoreCtx as ISleepCoreContext, args);
     await sendResultWithKeyboard(ctx, result);
   });
 
@@ -582,7 +584,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
     const args = ctx.message?.text?.split(' ').slice(1).join(' ');
-    const result = await recallCommand.execute(sleepCoreCtx as any, args);
+    const result = await recallCommand.execute(sleepCoreCtx as ISleepCoreContext, args);
     await sendResultWithKeyboard(ctx, result);
   });
 
@@ -597,7 +599,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
 
     const args = ctx.message?.text?.split(' ').slice(1).join(' ');
-    const result = await questCommand.execute(sleepCoreCtx as any, args);
+    const result = await questCommand.execute(sleepCoreCtx as ISleepCoreContext, args);
     await sendResultWithKeyboard(ctx, result);
   });
 
@@ -610,7 +612,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
 
     const args = ctx.message?.text?.split(' ').slice(1).join(' ');
-    const result = await badgeCommand.execute(sleepCoreCtx as any, args);
+    const result = await badgeCommand.execute(sleepCoreCtx as ISleepCoreContext, args);
     await sendResultWithKeyboard(ctx, result);
   });
 
@@ -623,7 +625,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
 
     const args = ctx.message?.text?.split(' ').slice(1).join(' ');
-    const result = await evolutionCommand.execute(sleepCoreCtx as any, args);
+    const result = await evolutionCommand.execute(sleepCoreCtx as ISleepCoreContext, args);
     await sendResultWithKeyboard(ctx, result);
   });
 
@@ -772,47 +774,47 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
         case 'menu':
           switch (action) {
             case 'start':
-              result = await startCommand.execute(sleepCoreCtx as any);
+              result = await startCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             case 'diary':
-              result = await diaryCommand.execute(sleepCoreCtx as any);
+              result = await diaryCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             case 'today':
-              result = await todayCommand.execute(sleepCoreCtx as any);
+              result = await todayCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             case 'relax':
-              result = await relaxCommand.execute(sleepCoreCtx as any);
+              result = await relaxCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             case 'mindful':
-              result = await mindfulCommand.execute(sleepCoreCtx as any);
+              result = await mindfulCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             case 'progress':
-              result = await progressCommand.execute(sleepCoreCtx as any);
+              result = await progressCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             case 'sos':
-              result = await sosCommand.execute(sleepCoreCtx as any);
+              result = await sosCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             case 'help':
-              result = await helpCommand.execute(sleepCoreCtx as any);
+              result = await helpCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             case 'rehearsal':
-              result = await rehearsalCommand.execute(sleepCoreCtx as any);
+              result = await rehearsalCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             case 'recall':
-              result = await recallCommand.execute(sleepCoreCtx as any);
+              result = await recallCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             // Sprint 3: Gamification menu shortcuts
             case 'quest':
               sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
-              result = await questCommand.execute(sleepCoreCtx as any);
+              result = await questCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             case 'badges':
               sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
-              result = await badgeCommand.execute(sleepCoreCtx as any);
+              result = await badgeCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             case 'sonya':
               sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
-              result = await evolutionCommand.execute(sleepCoreCtx as any);
+              result = await evolutionCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
             default:
               await ctx.answerCallbackQuery({ text: 'OK' });
@@ -825,7 +827,7 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
             // Get ISI data from session or initialize
             const isiData = ctx.session.isiData || { answers: [], currentQuestion: 0, step: 'welcome' };
 
-            result = await (startCommand as any).handleCallback(sleepCoreCtx, data, {
+            result = await (startCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {
               isiAnswers: isiData.answers,
               step: isiData.step,
             });
@@ -854,16 +856,16 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
 
         case 'diary':
           if ('handleCallback' in diaryCommand) {
-            result = await (diaryCommand as any).handleCallback(sleepCoreCtx, data, {});
+            result = await (diaryCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
           }
           break;
 
         case 'relax':
-          result = await relaxCommand.execute(sleepCoreCtx as any, action);
+          result = await relaxCommand.execute(sleepCoreCtx as ISleepCoreContext, action);
           break;
 
         case 'mindful':
-          result = await mindfulCommand.execute(sleepCoreCtx as any, action);
+          result = await mindfulCommand.execute(sleepCoreCtx as ISleepCoreContext, action);
           break;
 
         case 'settings':
@@ -1216,7 +1218,7 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
         case 'cmd': {
           switch (action) {
             case 'diary': {
-              const diaryResult = await diaryCommand.execute(sleepCoreCtx as any);
+              const diaryResult = await diaryCommand.execute(sleepCoreCtx as ISleepCoreContext);
               if (diaryResult.message) {
                 const kb = diaryResult.keyboard ? buildKeyboard(diaryResult.keyboard) : undefined;
                 await ctx.editMessageText(diaryResult.message, {
@@ -1228,7 +1230,7 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
               return;
             }
             case 'relax': {
-              const relaxResult = await relaxCommand.execute(sleepCoreCtx as any);
+              const relaxResult = await relaxCommand.execute(sleepCoreCtx as ISleepCoreContext);
               if (relaxResult.message) {
                 const kb = relaxResult.keyboard ? buildKeyboard(relaxResult.keyboard) : undefined;
                 await ctx.editMessageText(relaxResult.message, {
@@ -1240,7 +1242,7 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
               return;
             }
             case 'sos': {
-              const sosResult = await sosCommand.execute(sleepCoreCtx as any);
+              const sosResult = await sosCommand.execute(sleepCoreCtx as ISleepCoreContext);
               if (sosResult.message) {
                 const kb = sosResult.keyboard ? buildKeyboard(sosResult.keyboard) : undefined;
                 await ctx.editMessageText(sosResult.message, {
@@ -1346,13 +1348,13 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
 
         case 'rehearsal':
           if ('handleCallback' in rehearsalCommand) {
-            result = await (rehearsalCommand as any).handleCallback(sleepCoreCtx, data, {});
+            result = await (rehearsalCommand as unknown as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
           }
           break;
 
         case 'recall':
           if ('handleCallback' in recallCommand) {
-            result = await (recallCommand as any).handleCallback(sleepCoreCtx, data, {});
+            result = await (recallCommand as unknown as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
           }
           break;
 
@@ -1362,7 +1364,7 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
           // Quest system callbacks
           sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'callback');
           if ('handleCallback' in questCommand) {
-            result = await (questCommand as any).handleCallback(sleepCoreCtx, data, {});
+            result = await (questCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
           }
           break;
 
@@ -1370,7 +1372,7 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
           // Badge system callbacks
           sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'callback');
           if ('handleCallback' in badgeCommand) {
-            result = await (badgeCommand as any).handleCallback(sleepCoreCtx, data, {});
+            result = await (badgeCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
           }
           break;
 
@@ -1378,7 +1380,7 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
           // Sonya evolution callbacks
           sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'callback');
           if ('handleCallback' in evolutionCommand) {
-            result = await (evolutionCommand as any).handleCallback(sleepCoreCtx, data, {});
+            result = await (evolutionCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
           }
           break;
 
@@ -1491,28 +1493,28 @@ function setupMessages(bot: Bot<MyContext>, api: SleepCoreAPI): void {
       // Execute corresponding command
       switch (buttonCommand) {
         case 'diary':
-          result = await diaryCommand.execute(sleepCoreCtx as any);
+          result = await diaryCommand.execute(sleepCoreCtx as ISleepCoreContext);
           break;
         case 'today':
-          result = await todayCommand.execute(sleepCoreCtx as any);
+          result = await todayCommand.execute(sleepCoreCtx as ISleepCoreContext);
           break;
         case 'relax':
-          result = await relaxCommand.execute(sleepCoreCtx as any);
+          result = await relaxCommand.execute(sleepCoreCtx as ISleepCoreContext);
           break;
         case 'mindful':
-          result = await mindfulCommand.execute(sleepCoreCtx as any);
+          result = await mindfulCommand.execute(sleepCoreCtx as ISleepCoreContext);
           break;
         case 'progress':
-          result = await progressCommand.execute(sleepCoreCtx as any);
+          result = await progressCommand.execute(sleepCoreCtx as ISleepCoreContext);
           break;
         case 'sos':
-          result = await sosCommand.execute(sleepCoreCtx as any);
+          result = await sosCommand.execute(sleepCoreCtx as ISleepCoreContext);
           break;
         case 'help':
-          result = await helpCommand.execute(sleepCoreCtx as any);
+          result = await helpCommand.execute(sleepCoreCtx as ISleepCoreContext);
           break;
         case 'start':
-          result = await startCommand.execute(sleepCoreCtx as any);
+          result = await startCommand.execute(sleepCoreCtx as ISleepCoreContext);
           break;
         case 'menu': {
           // Show context-aware menu
@@ -1713,7 +1715,7 @@ function setupErrors(bot: Bot<MyContext>): void {
  * Start health check server
  */
 function startHealth(port: number): void {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
   const http = require('http');
 
   http.createServer((req: { url: string }, res: { writeHead: (code: number, headers?: object) => void; end: (data?: string) => void }) => {
@@ -1800,7 +1802,7 @@ async function main(): Promise<void> {
   console.log('[AdaptiveKeyboard] Sprint 3 commands registered');
 
   // --- Initialize Proactive Notification Service ---
-  const notificationService = createProactiveNotificationService(bot as any, menuService);
+  const notificationService = createProactiveNotificationService(bot as unknown as Bot<Context>, menuService);
 
   // Setup handlers
   setupCommands(bot, api);

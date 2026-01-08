@@ -457,6 +457,8 @@ export class SleepCorePOMDP {
     const d = shape - 1 / 3;
     const c = 1 / Math.sqrt(9 * d);
 
+    // Marsaglia & Tsang rejection sampling - intentional infinite loop with return
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       let x: number;
       let v: number;

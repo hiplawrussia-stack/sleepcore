@@ -23,6 +23,7 @@
  */
 
 import { Bot, Context, Api, GrammyError, HttpError, InputFile } from 'grammy';
+import type { Update, Message, InlineKeyboardButton, KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardMarkup } from 'grammy/types';
 import { autoRetry } from '@grammyjs/auto-retry';
 import { run, RunnerHandle } from '@grammyjs/runner';
 import { hydrate, HydrateFlavor } from '@grammyjs/hydrate';
@@ -607,7 +608,7 @@ export class SleepCoreTelegramAdapter implements IPlatformAdapter {
 
   async handleWebhook(body: unknown): Promise<void> {
     // For webhook mode, process incoming update
-    await this.bot.handleUpdate(body as any);
+    await this.bot.handleUpdate(body as Update);
   }
 
   // ===========================================================================
@@ -853,7 +854,7 @@ export class SleepCoreTelegramAdapter implements IPlatformAdapter {
    * Convert sent message to universal format
    */
   private convertSentMessage(
-    msg: any,
+    msg: Message,
     chatId: string,
     type: MessageType = 'text'
   ): IUniversalMessage {
@@ -872,7 +873,7 @@ export class SleepCoreTelegramAdapter implements IPlatformAdapter {
   /**
    * Build reply markup from options
    */
-  private buildReplyMarkup(options?: ISendMessageOptions): any {
+  private buildReplyMarkup(options?: ISendMessageOptions): InlineKeyboardMarkup | ReplyKeyboardMarkup | { remove_keyboard: true } | undefined {
     if (!options) return undefined;
 
     if (options.removeKeyboard) {
@@ -899,27 +900,34 @@ export class SleepCoreTelegramAdapter implements IPlatformAdapter {
   /**
    * Convert inline keyboard to Telegram format
    */
-  private convertInlineKeyboard(keyboard: IInlineButton[][]): any[][] {
+  private convertInlineKeyboard(keyboard: IInlineButton[][]): InlineKeyboardButton[][] {
     return keyboard.map(row =>
-      row.map(btn => ({
-        text: btn.text,
-        callback_data: btn.callbackData,
-        url: btn.url,
-        switch_inline_query: btn.switchInlineQuery,
-      }))
+      row.map(btn => {
+        if (btn.url) {
+          return { text: btn.text, url: btn.url };
+        }
+        if (btn.switchInlineQuery !== undefined) {
+          return { text: btn.text, switch_inline_query: btn.switchInlineQuery };
+        }
+        return { text: btn.text, callback_data: btn.callbackData || 'noop' };
+      })
     );
   }
 
   /**
    * Convert reply keyboard to Telegram format
    */
-  private convertReplyKeyboard(keyboard: IKeyboardButton[][]): any[][] {
+  private convertReplyKeyboard(keyboard: IKeyboardButton[][]): KeyboardButton[][] {
     return keyboard.map(row =>
-      row.map(btn => ({
-        text: btn.text,
-        request_contact: btn.requestContact,
-        request_location: btn.requestLocation,
-      }))
+      row.map(btn => {
+        if (btn.requestContact) {
+          return { text: btn.text, request_contact: btn.requestContact };
+        }
+        if (btn.requestLocation) {
+          return { text: btn.text, request_location: btn.requestLocation };
+        }
+        return { text: btn.text };
+      })
     );
   }
 }

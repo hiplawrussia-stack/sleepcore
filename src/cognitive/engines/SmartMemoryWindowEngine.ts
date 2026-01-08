@@ -668,7 +668,7 @@ export class ConsolidationAnalyticsEngine implements IConsolidationAnalyticsEngi
       }
     }
 
-    const result: Record<SleepRuleCategory, number> = {} as any;
+    const result = {} as Record<SleepRuleCategory, number>;
     for (const [cat, data] of Object.entries(categoryScores)) {
       result[cat as SleepRuleCategory] = data.count > 0 ? data.total / data.count : 0;
     }

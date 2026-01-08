@@ -23,6 +23,7 @@ import type {
   ICommandResult,
   IInlineButton,
 } from './interfaces/ICommand';
+import type { ISleepDiaryEntry } from '../../sleep/interfaces/ISleepState';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
 
@@ -433,7 +434,7 @@ ${formatter.header('Шаг 3/3: Качество сна')}
       };
 
       // Use type assertion since we're providing a simplified entry
-      ctx.sleepCore.addDiaryEntry(entry as any);
+      ctx.sleepCore.addDiaryEntry(entry as ISleepDiaryEntry);
     } catch (error) {
       // Log error but continue to show summary
       console.error('Failed to save diary entry:', error);
