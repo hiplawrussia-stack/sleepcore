@@ -164,9 +164,9 @@ export class AdaptiveKeyboardService {
    */
   private buildLayout(
     adaptedCommands: IAdaptedCommand[],
-    context: IUserBehaviorContext
+    _context: IUserBehaviorContext
   ): IKeyboardLayout {
-    const visibleCommands = adaptedCommands.filter((c) => c.visible);
+    const _visibleCommands = adaptedCommands.filter((c) => c.visible);
     const hiddenCommands = adaptedCommands.filter((c) => !c.visible).map((c) => c.command);
     const highlightedCommands = adaptedCommands
       .filter((c) => c.visible && c.highlighted)

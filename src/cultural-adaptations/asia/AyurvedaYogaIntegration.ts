@@ -505,7 +505,7 @@ export class AyurvedaYogaEngine {
   /**
    * Recommend therapies
    */
-  private recommendTherapies(anidra: AnidraType, vikriti: IVikriti): AyurvedicTherapy[] {
+  private recommendTherapies(anidra: AnidraType, _vikriti: IVikriti): AyurvedicTherapy[] {
     const therapies: AyurvedicTherapy[] = ['yoga_nidra']; // Always recommended
 
     switch (anidra) {
@@ -529,7 +529,7 @@ export class AyurvedaYogaEngine {
   /**
    * Select herbs
    */
-  private selectHerbs(anidra: AnidraType, prakriti: Prakriti): IAyurvedicHerb[] {
+  private selectHerbs(anidra: AnidraType, _prakriti: Prakriti): IAyurvedicHerb[] {
     return SLEEP_HERBS.filter(herb =>
       herb.indication.includes(anidra) ||
       (anidra === 'mixed_anidra' && herb.indication.length > 1)

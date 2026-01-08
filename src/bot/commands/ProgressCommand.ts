@@ -49,7 +49,7 @@ export class ProgressCommand implements ICommand {
 
   // ==================== Response Handlers ====================
 
-  private async showNoSession(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showNoSession(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.warning('Сессия не найдена')}
 
@@ -65,7 +65,7 @@ ${formatter.tip('Используйте /start для начала')}
     return { success: true, message, keyboard };
   }
 
-  private async showInsufficientData(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showInsufficientData(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.info('Недостаточно данных')}
 

@@ -84,7 +84,7 @@ export class SleepRestrictionEngine implements ISleepRestrictionEngine {
     const prescribedBedtime = this.calculateBedtime(preferredWakeTime, prescribedTIB);
 
     // Calculate baseline efficiency
-    const avgEfficiency = this.calculateAverageEfficiency(sleepHistory);
+    const _avgEfficiency = this.calculateAverageEfficiency(sleepHistory);
 
     return {
       prescribedTIB,
@@ -170,7 +170,7 @@ export class SleepRestrictionEngine implements ISleepRestrictionEngine {
     }
 
     const avgEfficiency = this.calculateAverageEfficiency(recentMetrics);
-    const avgTST = this.calculateAverageTST(recentMetrics);
+    const _avgTST = this.calculateAverageTST(recentMetrics);
 
     // Graduation criteria:
     // 1. SE consistently ≥ 85% for 2 weeks

@@ -91,7 +91,7 @@ export class HelpCommand implements ICommand {
 
   // ==================== Response Handlers ====================
 
-  private async showHelp(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showHelp(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const commandsList = this.commands
       .map((cmd) => `${cmd.icon} *${cmd.name}* — ${cmd.description}`)
       .join('\n');

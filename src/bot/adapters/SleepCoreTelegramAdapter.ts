@@ -506,7 +506,7 @@ export class SleepCoreTelegramAdapter implements IPlatformAdapter {
   // USER/CHAT INFO
   // ===========================================================================
 
-  async getUser(userId: string): Promise<IUniversalUser | null> {
+  async getUser(_userId: string): Promise<IUniversalUser | null> {
     // Telegram doesn't have a direct getUser API for arbitrary users
     // User info comes from messages/callbacks
     return null;

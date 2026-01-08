@@ -291,7 +291,7 @@ ${sonya.tip('Регулярная практика — ключ к резуль�
   /**
    * Show message when no recommendations available
    */
-  private async showNoRecommendations(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showNoRecommendations(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${sonya.emoji} *${sonya.name}*
 

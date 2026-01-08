@@ -248,7 +248,7 @@ export class StreakService {
    */
   recordActivity(data: IStreakData, activityType: 'diary' | 'interaction' = 'interaction'): IStreakUpdateResult {
     const effectiveDate = this.getEffectiveDate();
-    const today = this.formatDate(this.getCurrentDate());
+    const _today = this.formatDate(this.getCurrentDate());
 
     // Grant weekly freeze first
     data = this.grantWeeklyFreeze(data);

@@ -640,7 +640,7 @@ export class CircadianAI {
    */
   private calculateSleepRestriction(
     assessment: ICircadianAssessment,
-    sleepState?: ISleepState
+    _sleepState?: ISleepState
   ): IChronotherapyPlan['sleepRestrictionAdjustments'] {
     const { chronotype, optimalSleepWindow } = assessment;
 

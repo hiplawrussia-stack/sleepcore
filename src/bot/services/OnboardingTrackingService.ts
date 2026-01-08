@@ -124,7 +124,7 @@ const STEP_NAMES: Record<OnboardingStep, string> = {
 /**
  * Target completion times (ms) - for progress tracking
  */
-const TARGET_COMPLETION_TIMES: Record<OnboardingStep, number> = {
+const _TARGET_COMPLETION_TIMES: Record<OnboardingStep, number> = {
   welcome_viewed: 10_000,       // 10 seconds
   name_collected: 30_000,       // 30 seconds
   age_confirmed: 20_000,        // 20 seconds

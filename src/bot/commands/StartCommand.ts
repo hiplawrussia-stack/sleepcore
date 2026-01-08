@@ -187,9 +187,10 @@ export class StartCommand implements IConversationCommand {
       case 'isi_q4':
       case 'isi_q5':
       case 'isi_q6':
-      case 'isi_q7':
+      case 'isi_q7': {
         const qNum = parseInt(step.replace('isi_q', ''));
         return this.showISIQuestion(ctx, qNum);
+      }
 
       case 'isi_result':
         return this.showISIResult(ctx, data as { isiAnswers: number[] });
@@ -293,7 +294,7 @@ ${formatter.tip('ISI — золотой стандарт оценки инсом
     };
   }
 
-  private async showISIIntro(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showISIIntro(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 📋 *Оценка качества сна (ISI)*
 
@@ -460,7 +461,7 @@ ${formatter.tip('КПТ-И — первая линия терапии инсом
     };
   }
 
-  private async showComplete(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showComplete(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     // Sonya celebrates the completion
     const encouragement = sonya.encourageByWeek(0);
 
@@ -490,7 +491,7 @@ ${formatter.tip('Начни с /diary — веди дневник сна каж�
     };
   }
 
-  private async showQuickTips(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showQuickTips(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const tips = [
       'Ложись и вставай в одно время (±30 мин)',
       'Кровать только для сна (не работа, не телефон)',

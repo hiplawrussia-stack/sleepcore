@@ -222,7 +222,7 @@ export class RehearsalEngine implements IRehearsalEngine {
   /**
    * Set learning intention message
    */
-  setLearningIntention(sessionId: string): string {
+  setLearningIntention(_sessionId: string): string {
     return (
       `✨ *Намерение установлено*\n\n` +
       `Ваш мозг теперь знает, что эта информация важна ` +
@@ -331,7 +331,7 @@ export class RecallEngine implements IRecallEngine {
   /**
    * Generate recognition question
    */
-  private generateRecognitionQuestion(rule: ISleepRule): string {
+  private generateRecognitionQuestion(_rule: ISleepRule): string {
     return 'Какое из этих правил мы обсуждали вчера вечером?';
   }
 
@@ -396,7 +396,7 @@ export class RecallEngine implements IRecallEngine {
     let partialScore = 0;
 
     switch (question.type) {
-      case 'free_recall':
+      case 'free_recall': {
         // Check for key concepts
         const rule = getRuleById(question.ruleId);
         if (rule) {
@@ -406,6 +406,7 @@ export class RecallEngine implements IRecallEngine {
           isCorrect = partialScore >= 0.5;
         }
         break;
+      }
 
       case 'recognition':
         isCorrect = question.correctAnswers.some(
@@ -414,7 +415,7 @@ export class RecallEngine implements IRecallEngine {
         partialScore = isCorrect ? 1 : 0;
         break;
 
-      case 'application':
+      case 'application': {
         // Check for keywords
         const hasKeyword = question.correctAnswers.some((keyword) =>
           response.includes(keyword.toLowerCase())
@@ -422,6 +423,7 @@ export class RecallEngine implements IRecallEngine {
         isCorrect = hasKeyword;
         partialScore = hasKeyword ? 1 : 0;
         break;
+      }
     }
 
     return {
@@ -743,7 +745,7 @@ export class ConsolidationAnalyticsEngine implements IConsolidationAnalyticsEngi
    */
   getRecommendations(
     analytics: IConsolidationAnalytics,
-    consolidationStates: IRuleConsolidationState[]
+    _consolidationStates: IRuleConsolidationState[]
   ): string[] {
     return analytics.recommendations;
   }

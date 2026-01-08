@@ -40,7 +40,7 @@ export class QuestCommand implements IConversationCommand {
   async execute(ctx: ISleepCoreContext, args?: string): Promise<ICommandResult> {
     if (args) {
       // Handle subcommands
-      const [subcommand, ...rest] = args.split(' ');
+      const [subcommand, ..._rest] = args.split(' ');
       switch (subcommand) {
         case 'active':
           return this.showActiveQuests(ctx);

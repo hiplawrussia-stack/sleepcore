@@ -249,7 +249,7 @@ export class GamificationEngine implements IGamificationEngine {
       for (const result of questResults) {
         if (result.completed && result.reward) {
           // Add quest completion XP
-          const questXpResult = await this.repository.addXP(
+          const _questXpResult = await this.repository.addXP(
             userId,
             result.reward.xp,
             'quest_complete',
@@ -475,8 +475,8 @@ export class GamificationEngine implements IGamificationEngine {
   // ==================== QUESTS ====================
 
   async getAvailableQuests(userId: number): Promise<IQuest[]> {
-    const activeQuests = await this.repository.getActiveQuests(userId);
-    const completedCount = await this.repository.getCompletedQuestCount(userId);
+    const _activeQuests = await this.repository.getActiveQuests(userId);
+    const _completedCount = await this.repository.getCompletedQuestCount(userId);
 
     // Use in-memory service for quest definitions
     return this.questService.getAvailableQuests(String(userId));
@@ -519,7 +519,7 @@ export class GamificationEngine implements IGamificationEngine {
     }
 
     // Start quest in repository
-    const userQuest = await this.repository.startQuest(userId, questId);
+    const _userQuest = await this.repository.startQuest(userId, questId);
 
     // Also track in in-memory service for compatibility
     const activeQuest = this.questService.startQuest(String(userId), questId);

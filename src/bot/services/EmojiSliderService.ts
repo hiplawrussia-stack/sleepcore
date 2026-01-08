@@ -324,7 +324,7 @@ export class EmojiSliderService {
 
     // 3 factors per row
     const itemsPerRow = 3;
-    let currentRow = 0;
+    let _currentRow = 0;
 
     for (let i = 0; i < factors.length; i++) {
       const factor = factors[i];
@@ -338,7 +338,7 @@ export class EmojiSliderService {
       // Add row break
       if ((i + 1) % itemsPerRow === 0 && i < factors.length - 1) {
         keyboard.row();
-        currentRow++;
+        _currentRow++;
       }
     }
 

@@ -154,7 +154,7 @@ const MOOD_SUGGESTIONS: Record<number, string[]> = {
 /**
  * Weekday names (Russian)
  */
-const WEEKDAYS = [
+const _WEEKDAYS = [
   'воскресенье',
   'понедельник',
   'вторник',
@@ -240,7 +240,7 @@ export class DailyGreetingService {
       userName,
       timeOfDay,
       currentStreak,
-      lastMoodLevel,
+      lastMoodLevel: _lastMoodLevel,
       hasPendingDiary,
       daysSinceLastActivity,
       isFirstTimeToday,

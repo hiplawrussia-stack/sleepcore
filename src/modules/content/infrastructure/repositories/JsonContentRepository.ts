@@ -182,11 +182,12 @@ export class JsonContentRepository implements IContentRepository {
           aVal = a.durationMinutes;
           bVal = b.durationMinutes;
           break;
-        case 'difficulty':
+        case 'difficulty': {
           const diffOrder = { beginner: 1, intermediate: 2, advanced: 3 };
           aVal = diffOrder[a.difficulty];
           bVal = diffOrder[b.difficulty];
           break;
+        }
         case 'createdAt':
           aVal = a.createdAt;
           bVal = b.createdAt;

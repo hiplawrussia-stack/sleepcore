@@ -156,7 +156,7 @@ ${sonya.tip('Регулярные практики улучшают сон за 
   private async showPersonalizedMenu(
     ctx: ISleepCoreContext,
     ageGroup: AgeGroup,
-    session: { mbtiPlan?: unknown; actiPlan?: unknown }
+    _session: { mbtiPlan?: unknown; actiPlan?: unknown }
   ): Promise<ICommandResult> {
     // Fetch mindfulness content and get recommendations
     const content = await this.contentService.getMindfulnessContent(ageGroup);

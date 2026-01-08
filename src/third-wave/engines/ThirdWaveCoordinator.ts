@@ -48,7 +48,7 @@ export class ThirdWaveCoordinator implements IThirdWaveCoordinator {
     sleepState: ISleepState,
     treatmentHistory?: { failedCBTI: boolean; preferences: string[] }
   ): IThirdWaveRecommendation {
-    const cognitions = sleepState.cognitions;
+    const _cognitions = sleepState.cognitions;
     const insomnia = sleepState.insomnia;
 
     // Calculate indicators

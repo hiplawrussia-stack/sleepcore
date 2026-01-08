@@ -81,7 +81,7 @@ export class ProfileCommand implements IConversationCommand {
     callbackData: string,
     _conversationData: Record<string, unknown>
   ): Promise<ICommandResult> {
-    const [, action, param] = callbackData.split(':');
+    const [, action, _param] = callbackData.split(':');
 
     switch (action) {
       case 'overview':

@@ -30,7 +30,7 @@ import { exec } from 'child_process';
 const execAsync = promisify(exec);
 const copyFile = promisify(fs.copyFile);
 const mkdir = promisify(fs.mkdir);
-const readdir = promisify(fs.readdir);
+const _readdir = promisify(fs.readdir);
 const stat = promisify(fs.stat);
 const unlink = promisify(fs.unlink);
 const readFile = promisify(fs.readFile);
@@ -560,7 +560,7 @@ export class BackupService {
 
   private async uploadToCloud(
     localPath: string,
-    metadata: IBackupMetadata
+    _metadata: IBackupMetadata
   ): Promise<string> {
     if (!this.config.cloudStorage) {
       throw new Error('Cloud storage not configured');

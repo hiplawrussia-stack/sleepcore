@@ -306,7 +306,7 @@ export class ContentService implements IContentService {
    */
   async getContent(
     id: string,
-    context?: IContentContext
+    _context?: IContentContext
   ): Promise<IContentItem | null> {
     return this.repository.getById(id);
   }

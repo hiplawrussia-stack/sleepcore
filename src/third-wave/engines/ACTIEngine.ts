@@ -533,7 +533,7 @@ export class ACTIEngine implements IACTIEngine {
    */
   generateCommittedActions(
     values: IValuesAssessment,
-    sleepState: ISleepState
+    _sleepState: ISleepState
   ): ICommittedAction[] {
     const actions: ICommittedAction[] = [];
 
@@ -714,7 +714,7 @@ export class ACTIEngine implements IACTIEngine {
   /**
    * Generate action for value domain
    */
-  private generateActionForDomain(domain: string, importance: number): ICommittedAction {
+  private generateActionForDomain(domain: string, _importance: number): ICommittedAction {
     const actions: Record<string, string> = {
       health: 'Сделать 10-минутную прогулку, даже если устал',
       relationships: 'Позвонить близкому человеку, несмотря на усталость',

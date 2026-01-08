@@ -417,7 +417,7 @@ export class QuestService {
     const progress = activeQuest.progress;
 
     switch (quest.progressType) {
-      case 'streak':
+      case 'streak': {
         // Check if consecutive day
         if (progress.lastUpdateDate === today) {
           // Already updated today
@@ -440,6 +440,7 @@ export class QuestService {
 
         progress.lastUpdateDate = today;
         break;
+      }
 
       case 'cumulative':
         progress.currentValue += value;

@@ -307,7 +307,7 @@ function buildKeyboard(buttons: { text: string; callbackData?: string; url?: str
  * Send command result to user
  * Uses legacy Markdown parse_mode for *bold* and _italic_ formatting
  */
-async function sendResult(ctx: MyContext, result: ICommandResult): Promise<void> {
+async function _sendResult(ctx: MyContext, result: ICommandResult): Promise<void> {
   if (!result.success && result.error) {
     await ctx.reply(`❌ ${result.error}`);
     return;
@@ -408,8 +408,7 @@ async function initReplyKeyboard(ctx: MyContext): Promise<void> {
  * Setup command handlers
  */
 function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const commandHandler = createCommandHandler(api);
+  const _commandHandler = createCommandHandler(api);
 
   // /start command - Welcome + ISI assessment
   bot.command('start', async (ctx) => {
@@ -519,7 +518,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI): void {
 
   // /progress command - Weekly progress report with streak visualization
   bot.command(['progress', 'прогресс'], async (ctx) => {
-    const sleepCoreCtx = extendContext(ctx, api);
+    const _sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
 
     // Initialize streak data if not present
@@ -1182,7 +1181,7 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI): void {
 
             // Generate contextual response based on mood
             const response = dailyGreeting.generateMoodResponse(moodLevel, ctx.from?.first_name);
-            const suggestions = dailyGreeting.getMoodSuggestions(moodLevel);
+            const _suggestions = dailyGreeting.getMoodSuggestions(moodLevel);
 
             // Build follow-up keyboard based on mood
             const followupKeyboard = new InlineKeyboard();
@@ -1515,7 +1514,7 @@ function setupMessages(bot: Bot<MyContext>, api: SleepCoreAPI): void {
         case 'start':
           result = await startCommand.execute(sleepCoreCtx as any);
           break;
-        case 'menu':
+        case 'menu': {
           // Show context-aware menu
           const menuContext = menuService.buildContext({
             therapyWeek: ctx.session.therapyState?.currentWeek,
@@ -1540,6 +1539,7 @@ function setupMessages(bot: Bot<MyContext>, api: SleepCoreAPI): void {
             reply_markup: inlineKb,
           });
           return;
+        }
         default:
           break;
       }

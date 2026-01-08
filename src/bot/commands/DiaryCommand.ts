@@ -412,7 +412,7 @@ ${formatter.header('Шаг 3/3: Качество сна')}
     // Calculate approximate time in bed and estimate sleep time
     // (In real app, would ask about time to fall asleep and awakenings)
     const estimatedSleepMinutes = Math.round(durationMinutes * 0.85); // Assume 85% SE
-    const sleepEfficiency = (estimatedSleepMinutes / durationMinutes) * 100;
+    const _sleepEfficiency = (estimatedSleepMinutes / durationMinutes) * 100;
 
     // Add entry to SleepCoreAPI
     // Note: Using simplified entry for bot - full entry would include all ISleepDiaryEntry fields

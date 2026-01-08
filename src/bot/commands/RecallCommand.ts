@@ -126,7 +126,7 @@ export class RecallCommand implements ICommand {
     }
 
     const question = state.questions[index];
-    const formatted = this.engine.recall.formatQuizMessage(question);
+    const _formatted = this.engine.recall.formatQuizMessage(question);
 
     // Update question start time
     state.questionStartTime = new Date();

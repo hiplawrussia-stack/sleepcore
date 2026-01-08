@@ -542,28 +542,32 @@ export class BadgeService {
         // Quest completion badges are awarded via awardBadge directly
         return false;
 
-      case 'streak':
+      case 'streak': {
         if (!streaks || !criteria.metric || criteria.value === undefined) return false;
         const streak = streaks.get(criteria.metric) || 0;
         return streak >= criteria.value;
+      }
 
-      case 'count':
+      case 'count': {
         if (!metrics || !criteria.metric || criteria.value === undefined) return false;
         const count = metrics.get(criteria.metric) || 0;
         return count >= criteria.value;
+      }
 
-      case 'first':
+      case 'first': {
         if (!metrics || !criteria.metric) return false;
         const firstCount = metrics.get(criteria.metric) || 0;
         return firstCount >= 1;
+      }
 
-      case 'special':
+      case 'special': {
         if (!metrics || !criteria.metric) return false;
         const specialCount = metrics.get(criteria.metric) || 0;
         if (criteria.value !== undefined) {
           return specialCount >= criteria.value;
         }
         return specialCount >= 1;
+      }
 
       default:
         return false;

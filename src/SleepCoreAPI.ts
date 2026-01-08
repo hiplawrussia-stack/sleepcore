@@ -414,14 +414,14 @@ export class SleepCoreAPI {
    */
   getRelaxationRecommendation(
     userId: string,
-    context: 'bedtime' | 'daytime' | 'wakeup' = 'bedtime'
+    _context: 'bedtime' | 'daytime' | 'wakeup' = 'bedtime'
   ): {
     technique: RelaxationTechnique;
     instructions: string[];
     duration: number;
   } {
     const userStates = this.sleepStates.get(userId) || [];
-    const lastState = userStates[userStates.length - 1];
+    const _lastState = userStates[userStates.length - 1];
 
     // Get from CBT-I engine's relaxation component
     const session = this.sessions.get(userId);

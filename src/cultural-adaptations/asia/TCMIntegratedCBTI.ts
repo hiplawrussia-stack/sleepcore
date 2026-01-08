@@ -455,7 +455,7 @@ export class TCMIntegratedCBTIEngine {
    * Determine insomnia pattern (证型)
    */
   private determineInsomniaPattern(sleepState: ISleepState): TCMInsomniaPattern {
-    const { cognitions, metrics, insomnia } = sleepState;
+    const { cognitions, metrics, insomnia: _insomnia } = sleepState;
 
     // Heart-Spleen Deficiency: difficulty initiating + poor memory/concentration
     if (metrics.sleepOnsetLatency > 45 && cognitions.sleepSelfEfficacy < 0.4) {

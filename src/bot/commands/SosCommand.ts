@@ -73,7 +73,7 @@ export class SosCommand implements ICommand {
 
   // ==================== Response Handlers ====================
 
-  private async showCrisisResources(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showCrisisResources(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const resourcesList = this.resources
       .map(
         (r) => `

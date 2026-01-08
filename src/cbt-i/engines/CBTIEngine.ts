@@ -348,7 +348,7 @@ export class CBTIEngine implements ICBTIEngine {
     recommendation: 'continue' | 'intensify' | 'modify' | 'graduate';
   } {
     const isiChange = plan.progress.isiBaseline - plan.progress.isiCurrent;
-    const seImprovement =
+    const _seImprovement =
       plan.progress.sleepEfficiencyCurrent - plan.progress.sleepEfficiencyBaseline;
 
     // Responder criteria: ISI reduction ≥ 6 or ISI ≤ 7

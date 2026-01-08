@@ -583,7 +583,7 @@ export class YearInPixelsService {
    */
   private calculateStreaks(
     moodMap: Map<string, MoodLevel>,
-    year: number
+    _year: number
   ): { current: number; longest: number } {
     const today = new Date();
     let current = 0;
