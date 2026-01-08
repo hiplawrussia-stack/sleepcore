@@ -184,6 +184,26 @@ export class SleepCoreAPI {
   private sessions: Map<string, ISleepCoreSession>;
   private sleepStates: Map<string, ISleepState[]>;
 
+  /**
+   * Optional database connection for admin/export features
+   * Set via setDatabase() after construction
+   */
+  private _db: import('./infrastructure/database/interfaces/IDatabaseConnection').IDatabaseConnection | null = null;
+
+  /**
+   * Get database connection (may be null)
+   */
+  get db(): import('./infrastructure/database/interfaces/IDatabaseConnection').IDatabaseConnection | null {
+    return this._db;
+  }
+
+  /**
+   * Set database connection for admin features
+   */
+  setDatabase(db: import('./infrastructure/database/interfaces/IDatabaseConnection').IDatabaseConnection): void {
+    this._db = db;
+  }
+
   constructor() {
     this.diaryService = new SleepDiaryService();
     this.cbtiEngine = new CBTIEngine();

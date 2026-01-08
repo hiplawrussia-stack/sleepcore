@@ -150,5 +150,66 @@ export {
   getGamificationEngine,
 } from './GamificationContext';
 
+// ==================== ISI Scheduling (Phase 1.3) ====================
+export {
+  ISISchedulingService,
+  createISISchedulingService,
+} from './ISISchedulingService';
+
+// ==================== Admin Dashboard (Phase 1.3) ====================
+export {
+  AdminDashboardService,
+  createAdminDashboardService,
+} from './AdminDashboardService';
+
+export type {
+  UserRole,
+  AdminAction,
+  IDashboardMetrics,
+  IUserSummary,
+  IAdminAuditEntry,
+} from './AdminDashboardService';
+
+// ==================== Adverse Event Reporting (Phase 1.3) ====================
+export {
+  AdverseEventService,
+  createAdverseEventService,
+  DTX_AE_CATEGORIES,
+} from './AdverseEventService';
+
+export type {
+  AESeverity,
+  SeriousnessCriteria,
+  AEOutcome,
+  CausalityAssessment,
+  Expectedness,
+  ActionTaken,
+  ReportStatus,
+  ICIOMSMinimumData,
+  IAdverseEventReport,
+  ISafetyAlert,
+} from './AdverseEventService';
+
+// ==================== Anonymized Data Export (Phase 1.3) ====================
+export {
+  AnonymizedDataExportService,
+  createAnonymizedDataExportService,
+  DEFAULT_EXPORT_CONFIG,
+} from './AnonymizedDataExportService';
+
+export type {
+  AnonymizationLevel,
+  ExportFormat,
+  DateTransformation,
+  AgeTransformation,
+  IExportConfig,
+  IAnonymizedParticipant,
+  IAnonymizedISI,
+  IAnonymizedDiaryEntry,
+  IAnonymizedAdverseEvent,
+  IAnonymizedDataset,
+  IExportAuditEntry,
+} from './AnonymizedDataExportService';
+
 // ==================== Modules Re-export ====================
 export * from '../../modules';

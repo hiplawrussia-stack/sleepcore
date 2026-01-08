@@ -102,8 +102,8 @@ describe('CommandHandler', () => {
   describe('getAll()', () => {
     it('should return all registered commands', () => {
       const commands = handler.getAll();
-      // 8 core + 4 gamification + 1 content library = 13 commands
-      expect(commands.length).toBe(13);
+      // 8 core + 4 gamification + 1 content library + 2 clinical (admin, aereport) = 15 commands
+      expect(commands.length).toBe(15);
     });
 
     it('should return command instances', () => {
@@ -134,8 +134,8 @@ describe('CommandHandler', () => {
     it('should return commands in BotFather format', () => {
       const commands = handler.getBotFatherCommands();
 
-      // 8 core + 4 gamification + 1 content library = 13 commands
-      expect(commands.length).toBe(13);
+      // 8 core + 4 gamification + 1 content library + 2 clinical (admin, aereport) = 15 commands
+      expect(commands.length).toBe(15);
       commands.forEach(cmd => {
         expect(cmd.command).toBeDefined();
         expect(cmd.description).toBeDefined();
