@@ -143,6 +143,24 @@ export type {
   IBeliefUpdateEngine,
 } from './belief/IBeliefUpdate';
 
+// Phase 1 Integration: BeliefStateAdapter
+// Bridges BeliefUpdateEngine with PLRNN/KalmanFormer nonlinear engines
+export {
+  BeliefStateAdapter,
+  createBeliefStateAdapter,
+  beliefStateToObservation,
+  beliefStateToUncertainty,
+  beliefStateToPLRNNState,
+  beliefStateToKalmanFormerState,
+  plrnnStateToBeliefUpdate,
+  kalmanFormerStateToBeliefUpdate,
+  mergeHybridPredictions,
+  DIMENSION_MAPPING,
+  DIMENSION_INDEX,
+} from './belief/BeliefStateAdapter';
+
+export type { IHybridPrediction } from './belief/BeliefStateAdapter';
+
 // =============================================================================
 // TEMPORAL ENGINE
 // =============================================================================

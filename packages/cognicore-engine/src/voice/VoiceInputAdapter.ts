@@ -32,27 +32,24 @@ import {
   DEFAULT_VOICE_CONFIG,
 } from './interfaces/IVoiceAdapter';
 
-/**
- * Emotion mappings for prosody features
- * Based on research: Scherer (2003), Russell circumplex model
- */
-const EMOTION_PROSODY_MAPPINGS = {
-  // High arousal emotions
-  anger: { pitchHigh: true, pitchVar: 'high', rateHigh: true, energyHigh: true },
-  fear: { pitchHigh: true, pitchVar: 'high', rateHigh: true, energyMid: true },
-  joy: { pitchHigh: true, pitchVar: 'high', rateMid: true, energyHigh: true },
-  surprise: { pitchHigh: true, pitchVar: 'very_high', rateHigh: true },
-
-  // Low arousal emotions
-  sadness: { pitchLow: true, pitchVar: 'low', rateLow: true, energyLow: true },
-  depression: { pitchLow: true, pitchVar: 'very_low', rateLow: true, energyLow: true, monotone: true },
-  fatigue: { pitchLow: true, pitchVar: 'low', rateLow: true, energyLow: true },
-
-  // Mixed
-  anxiety: { pitchHigh: true, pitchVar: 'irregular', rateHigh: true, hesitation: true, tremor: true },
-  stress: { pitchMid: true, pitchVar: 'irregular', jitterHigh: true, shimmerHigh: true },
-  neutral: { pitchMid: true, pitchVar: 'mid', rateMid: true, energyMid: true },
-};
+// Future: Emotion mappings for prosody features
+// Based on research: Scherer (2003), Russell circumplex model
+// Reserved for future emotion-to-prosody pattern matching
+// const EMOTION_PROSODY_MAPPINGS = {
+//   // High arousal emotions
+//   anger: { pitchHigh: true, pitchVar: 'high', rateHigh: true, energyHigh: true },
+//   fear: { pitchHigh: true, pitchVar: 'high', rateHigh: true, energyMid: true },
+//   joy: { pitchHigh: true, pitchVar: 'high', rateMid: true, energyHigh: true },
+//   surprise: { pitchHigh: true, pitchVar: 'very_high', rateHigh: true },
+//   // Low arousal emotions
+//   sadness: { pitchLow: true, pitchVar: 'low', rateLow: true, energyLow: true },
+//   depression: { pitchLow: true, pitchVar: 'very_low', rateLow: true, energyLow: true, monotone: true },
+//   fatigue: { pitchLow: true, pitchVar: 'low', rateLow: true, energyLow: true },
+//   // Mixed
+//   anxiety: { pitchHigh: true, pitchVar: 'irregular', rateHigh: true, hesitation: true, tremor: true },
+//   stress: { pitchMid: true, pitchVar: 'irregular', jitterHigh: true, shimmerHigh: true },
+//   neutral: { pitchMid: true, pitchVar: 'mid', rateMid: true, energyMid: true },
+// };
 
 /**
  * Risk keywords for text analysis
@@ -155,7 +152,7 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
     };
   }
 
-  async processFile(filePath: string): Promise<IVoiceProcessingResult> {
+  async processFile(_filePath: string): Promise<IVoiceProcessingResult> {
     // In a real implementation, this would read the file
     // For now, throw an error as we can't access files directly
     throw new Error('File processing not implemented. Use processAudio with audio buffer.');
@@ -220,15 +217,20 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
 
     // Extract MFCCs
     const mfccs = this.extractMFCCs(windowedFrames, sr);
-    const mfccMean = mfccs[0].map((_, i) =>
-      mfccs.reduce((sum, frame) => sum + frame[i], 0) / mfccs.length
-    );
-    const mfccStd = mfccs[0].map((_, i) => {
-      const mean = mfccMean[i];
-      return Math.sqrt(
-        mfccs.reduce((sum, frame) => sum + Math.pow(frame[i] - mean, 2), 0) / mfccs.length
-      );
-    });
+    const firstFrame = mfccs[0];
+    const mfccMean = firstFrame
+      ? firstFrame.map((_, i) =>
+          mfccs.reduce((sum, frame) => sum + (frame[i] ?? 0), 0) / mfccs.length
+        )
+      : [];
+    const mfccStd = firstFrame
+      ? firstFrame.map((_, i) => {
+          const mean = mfccMean[i] ?? 0;
+          return Math.sqrt(
+            mfccs.reduce((sum, frame) => sum + Math.pow((frame[i] ?? 0) - mean, 2), 0) / mfccs.length
+          );
+        })
+      : [];
 
     // Voice quality measures
     const voiceQuality = this.calculateVoiceQuality(windowedFrames, pitchContour, sr);
@@ -422,12 +424,12 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
   // TRANSCRIPTION
   // ============================================================================
 
-  async transcribe(audioBuffer: Float32Array): Promise<ITextAnalysis> {
+  async transcribe(_audioBuffer: Float32Array): Promise<ITextAnalysis> {
     if (!this.config.enableWhisper) {
       throw new Error('Whisper transcription not enabled');
     }
 
-    // In production, this would call the Whisper API
+    // In production, this would call the Whisper API with _audioBuffer
     // For now, return a placeholder that indicates transcription is needed
     console.warn('Whisper API integration requires external service. Returning placeholder.');
 
@@ -540,6 +542,9 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
       const pred = predictions[i];
       const actual = actuals[i];
 
+      // Skip if either is undefined
+      if (!pred || !actual) continue;
+
       // Error based on VAD distance
       const vadError = Math.sqrt(
         Math.pow(pred.vad.valence - actual.vad.valence, 2) +
@@ -559,13 +564,15 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
 
       // Smooth update
       const alpha = 0.1;
-      this.config.fusionWeights[0] = this.config.fusionWeights[0] * (1 - alpha) + textPerformance * alpha;
-      this.config.fusionWeights[1] = this.config.fusionWeights[1] * (1 - alpha) + voicePerformance * alpha;
+      const currentTextWeight = this.config.fusionWeights[0] ?? 0.5;
+      const currentVoiceWeight = this.config.fusionWeights[1] ?? 0.5;
+      this.config.fusionWeights[0] = currentTextWeight * (1 - alpha) + textPerformance * alpha;
+      this.config.fusionWeights[1] = currentVoiceWeight * (1 - alpha) + voicePerformance * alpha;
 
       // Normalize
-      const sum = this.config.fusionWeights[0] + this.config.fusionWeights[1];
-      this.config.fusionWeights[0] /= sum;
-      this.config.fusionWeights[1] /= sum;
+      const sum = (this.config.fusionWeights[0] ?? 0.5) + (this.config.fusionWeights[1] ?? 0.5);
+      this.config.fusionWeights[0] = (this.config.fusionWeights[0] ?? 0.5) / sum;
+      this.config.fusionWeights[1] = (this.config.fusionWeights[1] ?? 0.5) / sum;
     }
   }
 
@@ -575,9 +582,9 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
 
   private preEmphasis(signal: Float32Array, coef: number): Float32Array {
     const result = new Float32Array(signal.length);
-    result[0] = signal[0];
+    result[0] = signal[0] ?? 0;
     for (let i = 1; i < signal.length; i++) {
-      result[i] = signal[i] - coef * signal[i - 1];
+      result[i] = (signal[i] ?? 0) - coef * (signal[i - 1] ?? 0);
     }
     return result;
   }
@@ -599,7 +606,7 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
     const result = new Float32Array(N);
     for (let i = 0; i < N; i++) {
       const window = 0.54 - 0.46 * Math.cos(2 * Math.PI * i / (N - 1));
-      result[i] = frame[i] * window;
+      result[i] = (frame[i] ?? 0) * window;
     }
     return result;
   }
@@ -616,7 +623,7 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
       for (let lag = minLag; lag <= maxLag && lag < frame.length; lag++) {
         let corr = 0;
         for (let i = 0; i < frame.length - lag; i++) {
-          corr += frame[i] * frame[i + lag];
+          corr += (frame[i] ?? 0) * (frame[i + lag] ?? 0);
         }
 
         if (corr > maxCorr) {
@@ -666,8 +673,9 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
       let imag = 0;
       for (let n = 0; n < N; n++) {
         const angle = 2 * Math.PI * k * n / N;
-        real += frame[n] * Math.cos(angle);
-        imag -= frame[n] * Math.sin(angle);
+        const sample = frame[n] ?? 0;
+        real += sample * Math.cos(angle);
+        imag -= sample * Math.sin(angle);
       }
       result.push(Math.sqrt(real * real + imag * imag));
     }
@@ -698,7 +706,7 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
         const weight = k < binCenter
           ? (k - binLow) / (binCenter - binLow)
           : (binHigh - k) / (binHigh - binCenter);
-        energy += spectrum[k] * Math.max(0, weight);
+        energy += (spectrum[k] ?? 0) * Math.max(0, weight);
       }
 
       melEnergies.push(energy);
@@ -714,7 +722,7 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
     for (let k = 0; k < numCoeffs; k++) {
       let sum = 0;
       for (let n = 0; n < N; n++) {
-        sum += input[n] * Math.cos(Math.PI * k * (n + 0.5) / N);
+        sum += (input[n] ?? 0) * Math.cos(Math.PI * k * (n + 0.5) / N);
       }
       result.push(sum * Math.sqrt(2 / N));
     }
@@ -735,9 +743,9 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
       const frac = srcIndex - srcIndexFloor;
 
       if (srcIndexFloor + 1 < buffer.length) {
-        result[i] = buffer[srcIndexFloor] * (1 - frac) + buffer[srcIndexFloor + 1] * frac;
+        result[i] = (buffer[srcIndexFloor] ?? 0) * (1 - frac) + (buffer[srcIndexFloor + 1] ?? 0) * frac;
       } else {
-        result[i] = buffer[srcIndexFloor];
+        result[i] = buffer[srcIndexFloor] ?? 0;
       }
     }
 
@@ -807,9 +815,9 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
   private calculateVoiceQuality(
     frames: Float32Array[],
     pitchContour: number[],
-    sampleRate: number
+    _sampleRate: number
   ): IAcousticFeatures['voiceQuality'] {
-    const voicedFrames = frames.filter((_, i) => pitchContour[i] > 0);
+    const voicedFrames = frames.filter((_, i) => (pitchContour[i] ?? 0) > 0);
 
     if (voicedFrames.length < 3) {
       return { jitterLocal: 0, shimmerLocal: 0, hnr: 0, nhr: 0 };
@@ -819,7 +827,9 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
     const voicedPitches = pitchContour.filter(f => f > 0);
     let jitterSum = 0;
     for (let i = 1; i < voicedPitches.length; i++) {
-      jitterSum += Math.abs(voicedPitches[i] - voicedPitches[i - 1]);
+      const curr = voicedPitches[i] ?? 0;
+      const prev = voicedPitches[i - 1] ?? 0;
+      jitterSum += Math.abs(curr - prev);
     }
     const jitterLocal = (jitterSum / (voicedPitches.length - 1)) / (
       voicedPitches.reduce((a, b) => a + b, 0) / voicedPitches.length
@@ -831,7 +841,9 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
     );
     let shimmerSum = 0;
     for (let i = 1; i < amplitudes.length; i++) {
-      shimmerSum += Math.abs(amplitudes[i] - amplitudes[i - 1]);
+      const curr = amplitudes[i] ?? 0;
+      const prev = amplitudes[i - 1] ?? 0;
+      shimmerSum += Math.abs(curr - prev);
     }
     const shimmerLocal = (shimmerSum / (amplitudes.length - 1)) / (
       amplitudes.reduce((a, b) => a + b, 0) / amplitudes.length
@@ -851,7 +863,7 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
 
   private calculateTemporalFeatures(
     audioBuffer: Float32Array,
-    frames: Float32Array[],
+    _frames: Float32Array[],
     pitchContour: number[],
     sampleRate: number
   ): IAcousticFeatures['temporal'] {
@@ -862,17 +874,18 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
     // Estimate pauses (unvoiced segments)
     let pauseCount = 0;
     let pauseDuration = 0;
-    let inPause = pitchContour[0] === 0;
+    let inPause = (pitchContour[0] ?? 0) === 0;
 
     for (let i = 1; i < pitchContour.length; i++) {
-      if (pitchContour[i] === 0 && !inPause) {
+      const pitch = pitchContour[i] ?? 0;
+      if (pitch === 0 && !inPause) {
         inPause = true;
         pauseCount++;
-      } else if (pitchContour[i] > 0 && inPause) {
+      } else if (pitch > 0 && inPause) {
         inPause = false;
       }
 
-      if (pitchContour[i] === 0) {
+      if (pitch === 0) {
         pauseDuration += this.config.hopSizeMs / 1000;
       }
     }
@@ -911,7 +924,7 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
       let centroid = 0;
       for (let i = 0; i < spectrum.length; i++) {
         const freq = i * sampleRate / (2 * spectrum.length);
-        centroid += freq * spectrum[i] / total;
+        centroid += freq * (spectrum[i] ?? 0) / total;
       }
       totalCentroid += centroid;
 
@@ -919,7 +932,7 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
       if (prevSpectrum) {
         let flux = 0;
         for (let i = 0; i < spectrum.length; i++) {
-          flux += Math.pow(spectrum[i] - prevSpectrum[i], 2);
+          flux += Math.pow((spectrum[i] ?? 0) - (prevSpectrum[i] ?? 0), 2);
         }
         totalFlux += Math.sqrt(flux);
       }
@@ -953,7 +966,7 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
     // Clipping detection
     let clippedSamples = 0;
     for (let i = 0; i < audioBuffer.length; i++) {
-      if (Math.abs(audioBuffer[i]) > 0.99) {
+      if (Math.abs(audioBuffer[i] ?? 0) > 0.99) {
         clippedSamples++;
       }
     }
@@ -1121,7 +1134,7 @@ export class VoiceInputAdapter implements IVoiceInputAdapter {
 
   private calculateDepressionIndicators(
     acoustic: IAcousticFeatures,
-    prosody: IProsodyFeatures
+    _prosody: IProsodyFeatures
   ): IVoiceEmotionEstimate['depressionIndicators'] {
     // Flat affect: low pitch variation
     const pitchCV = acoustic.pitch.stdF0 / (acoustic.pitch.meanF0 || 1);

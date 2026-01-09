@@ -285,7 +285,7 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
       currentState = nextState;
     }
 
-    const finalState = trajectory[trajectory.length - 1];
+    const finalState = trajectory[trajectory.length - 1]!;
 
     // Compute confidence intervals
     const uncertainty = finalState.kalmanState.errorCovariance.map(row =>
@@ -293,10 +293,10 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     );
 
     const lower = finalState.kalmanState.stateEstimate.map((v, i) =>
-      v - 1.96 * uncertainty[i]
+      v - 1.96 * (uncertainty[i] ?? 0.1)
     );
     const upper = finalState.kalmanState.stateEstimate.map((v, i) =>
-      v + 1.96 * uncertainty[i]
+      v + 1.96 * (uncertainty[i] ?? 0.1)
     );
 
     // Get attention weights
@@ -354,7 +354,7 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
       .slice(0, 5)
       .map(obs => ({
         ...obs,
-        dimension: this.findMostInfluentialDimension(history[obs.index].observation),
+        dimension: this.findMostInfluentialDimension(history[obs.index]?.observation ?? []),
       }));
 
     // Determine temporal pattern
@@ -393,12 +393,16 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
     let totalError = 0;
     for (let t = 0; t < predictions.length; t++) {
-      for (let i = 0; i < predictions[t].length; i++) {
-        totalError += Math.pow(predictions[t][i] - actuals[t][i], 2);
+      const predRow = predictions[t];
+      const actualRow = actuals[t];
+      if (!predRow || !actualRow) continue;
+      for (let i = 0; i < predRow.length; i++) {
+        totalError += Math.pow((predRow[i] ?? 0) - (actualRow[i] ?? 0), 2);
       }
     }
 
-    const avgError = Math.sqrt(totalError / (predictions.length * predictions[0].length));
+    const firstPred = predictions[0];
+    const avgError = Math.sqrt(totalError / (predictions.length * (firstPred?.length ?? 1)));
 
     // Adjust blend ratio based on error
     // Higher error -> more Transformer (captures complex patterns)
@@ -435,15 +439,21 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
     for (const sample of samples) {
       // Initialize state
-      let state = this.initializeState(sample.observations[0], sample.timestamps[0]);
+      const firstObs = sample.observations[0];
+      const firstTimestamp = sample.timestamps[0];
+      if (!firstObs || !firstTimestamp) continue;
+      let state = this.initializeState(firstObs, firstTimestamp);
 
       for (let t = 1; t < sample.observations.length; t++) {
         // Update with observation
-        state = this.update(state, sample.observations[t], sample.timestamps[t]);
+        const obs = sample.observations[t];
+        const ts = sample.timestamps[t];
+        if (!obs || !ts) continue;
+        state = this.update(state, obs, ts);
 
         // Compute losses if ground truth available
-        if (sample.groundTruth && sample.groundTruth[t]) {
-          const target = sample.groundTruth[t];
+        const target = sample.groundTruth?.[t];
+        if (target) {
           const kalmanPred = state.kalmanState.stateEstimate;
           const transformerPred = this.transformerPredict(
             state.observationHistory,
@@ -451,8 +461,8 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
           );
 
           // MSE losses
-          const kLoss = kalmanPred.reduce((sum, p, i) => sum + Math.pow(p - target[i], 2), 0);
-          const tLoss = transformerPred.reduce((sum, p, i) => sum + Math.pow(p - target[i], 2), 0);
+          const kLoss = kalmanPred.reduce((sum, p, i) => sum + Math.pow(p - (target[i] ?? 0), 2), 0);
+          const tLoss = transformerPred.reduce((sum, p, i) => sum + Math.pow(p - (target[i] ?? 0), 2), 0);
 
           kalmanLoss += kLoss;
           transformerLoss += tLoss;
@@ -620,11 +630,11 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
     // Innovation: y = z - H * x_pred
     const Hx = this.matVec(H, predicted.predictedState);
-    const innovation = observation.map((z, i) => z - Hx[i]);
+    const innovation = observation.map((z, i) => z - (Hx[i] ?? 0));
 
     // State update: x = x_pred + K * y
     const Ky = this.matVec(gain, innovation);
-    const stateEstimate = predicted.predictedState.map((x, i) => x + Ky[i]);
+    const stateEstimate = predicted.predictedState.map((x, i) => x + (Ky[i] ?? 0));
 
     // Covariance update: P = (I - K * H) * P_pred
     const n = stateEstimate.length;
@@ -678,12 +688,13 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     const gain: number[][] = [];
 
     for (let i = 0; i < n; i++) {
-      gain[i] = [];
+      const row: number[] = [];
       for (let j = 0; j < m; j++) {
         const idx = i * m + j;
         // Sigmoid to bound gain values
-        gain[i][j] = this.sigmoid(gainVector[idx] || 0);
+        row[j] = this.sigmoid(gainVector[idx] ?? 0);
       }
+      gain[i] = row;
     }
 
     return gain;
@@ -703,7 +714,9 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     // Add positional embedding
     if (this.weights!.embedding.position) {
       const posEmb = this.weights!.embedding.position[position % this.weights!.embedding.position.length];
-      embedding = embedding.map((v, i) => v + (posEmb[i] || 0));
+      if (posEmb) {
+        embedding = embedding.map((v, i) => v + (posEmb[i] ?? 0));
+      }
     }
 
     // Add time embedding (sinusoidal)
@@ -713,9 +726,11 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
       for (let i = 0; i < embedDim; i += 2) {
         const freq = Math.pow(10000, i / embedDim);
-        embedding[i] += Math.sin(hour * 2 * Math.PI / 24 / freq);
+        const currVal = embedding[i] ?? 0;
+        embedding[i] = currVal + Math.sin(hour * 2 * Math.PI / 24 / freq);
         if (i + 1 < embedDim) {
-          embedding[i + 1] += Math.cos(dayOfWeek * 2 * Math.PI / 7 / freq);
+          const nextVal = embedding[i + 1] ?? 0;
+          embedding[i + 1] = nextVal + Math.cos(dayOfWeek * 2 * Math.PI / 7 / freq);
         }
       }
     }
@@ -756,7 +771,7 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     return output;
   }
 
-  private multiHeadAttention(input: number[][], layer: number): number[][] {
+  private multiHeadAttention(input: number[][], _layer: number): number[][] {
     const { numHeads, embedDim } = this.config;
     const headDim = embedDim / numHeads;
     const seqLen = input.length;
@@ -773,17 +788,21 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
       // Attention scores: softmax(Q * K' / sqrt(d))
       const scores: number[][] = [];
       for (let i = 0; i < seqLen; i++) {
-        scores[i] = [];
+        const scoreRow: number[] = [];
+        const Qi = Q[i];
+        if (!Qi) continue;
         for (let j = 0; j < seqLen; j++) {
           let score = 0;
+          const Kj = K[j];
+          if (!Kj) continue;
           for (let k = 0; k < headDim; k++) {
-            score += Q[i][k] * K[j][k];
+            score += (Qi[k] ?? 0) * (Kj[k] ?? 0);
           }
-          scores[i][j] = score / Math.sqrt(headDim) / this.config.temperature;
+          scoreRow[j] = score / Math.sqrt(headDim) / this.config.temperature;
         }
         // Softmax
-        const maxScore = Math.max(...scores[i]);
-        const expScores = scores[i].map(s => Math.exp(s - maxScore));
+        const maxScore = Math.max(...scoreRow);
+        const expScores = scoreRow.map(s => Math.exp(s - maxScore));
         const sumExp = expScores.reduce((a, b) => a + b, 0);
         scores[i] = expScores.map(e => e / sumExp);
       }
@@ -791,13 +810,17 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
       // Attended values
       for (let i = 0; i < seqLen; i++) {
         const attended = new Array(headDim).fill(0);
+        const scoresI = scores[i];
+        if (!scoresI) continue;
         for (let j = 0; j < seqLen; j++) {
+          const Vj = V[j];
+          if (!Vj) continue;
           for (let k = 0; k < headDim; k++) {
-            attended[k] += scores[i][j] * V[j][k];
+            attended[k] += (scoresI[j] ?? 0) * (Vj[k] ?? 0);
           }
         }
         if (!headOutputs[i]) headOutputs[i] = [];
-        headOutputs[i].push(...attended);
+        headOutputs[i]!.push(...attended);
       }
     }
 
@@ -806,15 +829,18 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
   private feedForward(input: number[][], layer: number): number[][] {
     const ff = this.weights!.transformer.feedforward[layer];
+    if (!ff) {
+      return input;
+    }
 
     return input.map(emb => {
       // Linear 1 + ReLU
-      let hidden = this.matVec([ff.linear1.map(row => row[0] || 0)], emb);
-      hidden = hidden.map((v, i) => Math.max(0, v + ff.bias1[i]));
+      let hidden = this.matVec([ff.linear1.map(row => row[0] ?? 0)], emb);
+      hidden = hidden.map((v, i) => Math.max(0, v + (ff.bias1[i] ?? 0)));
 
       // Linear 2
-      let output = this.matVec([ff.linear2.map(row => row[0] || 0)], hidden);
-      output = output.map((v, i) => v + ff.bias2[i]);
+      let output = this.matVec([ff.linear2.map(row => row[0] ?? 0)], hidden);
+      output = output.map((v, i) => v + (ff.bias2[i] ?? 0));
 
       return output;
     });
@@ -826,10 +852,13 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     layerNormIdx: number
   ): number[][] {
     const ln = this.weights!.transformer.layerNorm[layerNormIdx];
+    if (!ln) {
+      return residual;
+    }
 
     return residual.map((res, i) => {
       // Add
-      const added = res.map((r, j) => r + (output[i]?.[j] || 0));
+      const added = res.map((r, j) => r + (output[i]?.[j] ?? 0));
 
       // LayerNorm
       const mean = added.reduce((a, b) => a + b, 0) / added.length;
@@ -837,13 +866,13 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
       const std = Math.sqrt(variance + 1e-5);
 
       return added.map((v, j) =>
-        ((v - mean) / std) * ln.gamma[j] + ln.beta[j]
+        ((v - mean) / std) * (ln.gamma[j] ?? 1) + (ln.beta[j] ?? 0)
       );
     });
   }
 
   private transformerPredict(
-    history: Array<{ observation: number[]; timestamp: Date; embedding?: number[] }>,
+    _history: Array<{ observation: number[]; timestamp: Date; embedding?: number[] }>,
     contextEncoding: number[][]
   ): number[] {
     if (contextEncoding.length === 0) {
@@ -852,6 +881,9 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
     // Use last encoding for prediction
     const lastEncoding = contextEncoding[contextEncoding.length - 1];
+    if (!lastEncoding) {
+      return new Array(this.config.stateDim).fill(0);
+    }
 
     // Project to state space
     return this.matVec(this.weights!.outputProjection, lastEncoding);
@@ -859,19 +891,19 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
   private computeBlendRatio(
     contextEncoding: number[][],
-    kalmanState: IKalmanFilterState,
-    observation: number[]
+    _kalmanState: IKalmanFilterState,
+    _observation: number[]
   ): number {
     if (!this.weights!.blendPredictor) {
       return this.config.blendRatio;
     }
 
     // Use context to predict optimal blend
-    const lastContext = contextEncoding[contextEncoding.length - 1] ||
+    const lastContext = contextEncoding[contextEncoding.length - 1] ??
       new Array(this.config.embedDim).fill(0);
 
     const logit = lastContext.reduce((sum, v, i) =>
-      sum + v * this.weights!.blendPredictor!.weights[i], 0
+      sum + v * (this.weights!.blendPredictor!.weights[i] ?? 0), 0
     ) + this.weights!.blendPredictor!.bias;
 
     // Sigmoid to get ratio between 0 and 1
@@ -891,7 +923,7 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
   private computeConfidence(
     kalmanState: IKalmanFilterState,
     transformerPred: number[],
-    observation: number[]
+    _observation: number[]
   ): number {
     // Agreement between Kalman and Transformer
     const agreement = kalmanState.stateEstimate.reduce((sum, k, i) => {
@@ -916,18 +948,22 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     const weights: number[][] = [];
 
     for (let i = 0; i < seqLen; i++) {
-      weights[i] = [];
+      const weightRow: number[] = [];
+      const embI = embeddings[i];
+      if (!embI) continue;
       for (let j = 0; j < seqLen; j++) {
         let score = 0;
+        const embJ = embeddings[j];
+        if (!embJ) continue;
         for (let k = 0; k < embedDim; k++) {
-          score += embeddings[i][k] * embeddings[j][k];
+          score += (embI[k] ?? 0) * (embJ[k] ?? 0);
         }
-        weights[i][j] = score / Math.sqrt(embedDim);
+        weightRow[j] = score / Math.sqrt(embedDim);
       }
 
       // Softmax
-      const maxScore = Math.max(...weights[i]);
-      const expScores = weights[i].map(s => Math.exp(s - maxScore));
+      const maxScore = Math.max(...weightRow);
+      const expScores = weightRow.map(s => Math.exp(s - maxScore));
       const sumExp = expScores.reduce((a, b) => a + b, 0);
       weights[i] = expScores.map(e => e / sumExp);
     }
@@ -936,17 +972,19 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
   }
 
   private findMostInfluentialDimension(observation: number[]): string {
+    if (observation.length === 0) return 'unknown';
     let maxIdx = 0;
-    let maxVal = Math.abs(observation[0]);
+    let maxVal = Math.abs(observation[0] ?? 0);
 
     for (let i = 1; i < observation.length; i++) {
-      if (Math.abs(observation[i]) > maxVal) {
-        maxVal = Math.abs(observation[i]);
+      const absVal = Math.abs(observation[i] ?? 0);
+      if (absVal > maxVal) {
+        maxVal = absVal;
         maxIdx = i;
       }
     }
 
-    return STATE_DIMENSIONS[maxIdx] || `dim_${maxIdx}`;
+    return STATE_DIMENSIONS[maxIdx] ?? `dim_${maxIdx}`;
   }
 
   private detectPatternMatching(attentionWeights: number[][]): boolean {
@@ -954,11 +992,12 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     if (attentionWeights.length < 3) return false;
 
     const lastRow = attentionWeights[attentionWeights.length - 1];
-    const adjacentWeight = (lastRow[lastRow.length - 2] || 0) + (lastRow[lastRow.length - 1] || 0);
+    if (!lastRow || lastRow.length < 2) return false;
+    const adjacentWeight = (lastRow[lastRow.length - 2] ?? 0) + (lastRow[lastRow.length - 1] ?? 0);
     const totalWeight = lastRow.reduce((a, b) => a + b, 0);
 
     // If < 50% of attention is on adjacent tokens, it's pattern matching
-    return adjacentWeight / totalWeight < 0.5;
+    return totalWeight > 0 && adjacentWeight / totalWeight < 0.5;
   }
 
   // Matrix operations
@@ -985,11 +1024,12 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     const pe: number[][] = [];
 
     for (let pos = 0; pos < maxLen; pos++) {
-      pe[pos] = [];
+      const row: number[] = [];
       for (let i = 0; i < embedDim; i++) {
         const angle = pos / Math.pow(10000, (2 * Math.floor(i / 2)) / embedDim);
-        pe[pos][i] = i % 2 === 0 ? Math.sin(angle) : Math.cos(angle);
+        row[i] = i % 2 === 0 ? Math.sin(angle) : Math.cos(angle);
       }
+      pe[pos] = row;
     }
 
     return pe;
@@ -1002,9 +1042,10 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     headDim: number
   ): number[][][] {
     return Array(numLayers).fill(null).map(() =>
-      Array(numHeads).fill(null).map(() =>
-        this.initRandomMatrix(embedDim, headDim)[0]
-      )
+      Array(numHeads).fill(null).map(() => {
+        const matrix = this.initRandomMatrix(embedDim, headDim);
+        return matrix[0] ?? new Array(headDim).fill(0);
+      })
     );
   }
 
@@ -1020,7 +1061,7 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     return Array(rowsA).fill(null).map((_, i) =>
       Array(colsB).fill(0).map((_, j) =>
         Array(colsA).fill(0).reduce((sum, _, k) =>
-          sum + (A[i][k] || 0) * (B[k]?.[j] || 0), 0
+          sum + (A[i]?.[k] ?? 0) * (B[k]?.[j] ?? 0), 0
         )
       )
     );
@@ -1044,33 +1085,51 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
   private matInverse(A: number[][]): number[][] {
     const n = A.length;
-    const augmented = A.map((row, i) => [...row, ...this.initIdentityMatrix(n)[i]]);
+    const identity = this.initIdentityMatrix(n);
+    const augmented = A.map((row, i) => [...row, ...(identity[i] ?? Array(n).fill(0))]);
 
     for (let i = 0; i < n; i++) {
       let maxRow = i;
+      const rowI = augmented[i];
+      if (!rowI) continue;
+
       for (let k = i + 1; k < n; k++) {
-        if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
+        const rowK = augmented[k];
+        const rowMax = augmented[maxRow];
+        if (!rowK || !rowMax) continue;
+        if (Math.abs(rowK[i] ?? 0) > Math.abs(rowMax[i] ?? 0)) {
           maxRow = k;
         }
       }
-      [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
 
-      if (Math.abs(augmented[i][i]) < 1e-10) {
+      const rowMax = augmented[maxRow];
+      if (rowMax) {
+        augmented[i] = rowMax;
+        augmented[maxRow] = rowI;
+      }
+
+      const currentRow = augmented[i];
+      if (!currentRow) continue;
+
+      const pivotVal = currentRow[i] ?? 0;
+      if (Math.abs(pivotVal) < 1e-10) {
         return this.initDiagonalMatrix(n, 1);
       }
 
       for (let k = 0; k < n; k++) {
         if (k !== i) {
-          const factor = augmented[k][i] / augmented[i][i];
+          const rowK = augmented[k];
+          if (!rowK) continue;
+          const factor = (rowK[i] ?? 0) / pivotVal;
           for (let j = 0; j < 2 * n; j++) {
-            augmented[k][j] -= factor * augmented[i][j];
+            rowK[j] = (rowK[j] ?? 0) - factor * (currentRow[j] ?? 0);
           }
         }
       }
 
-      const pivot = augmented[i][i];
+      const pivot = currentRow[i] ?? 1;
       for (let j = 0; j < 2 * n; j++) {
-        augmented[i][j] /= pivot;
+        currentRow[j] = (currentRow[j] ?? 0) / pivot;
       }
     }
 

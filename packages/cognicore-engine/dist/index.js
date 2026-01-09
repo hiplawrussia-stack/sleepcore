@@ -547,6 +547,286 @@ function getComponentStatus(score) {
   return "critical";
 }
 
+// src/belief/BeliefStateAdapter.ts
+var DIMENSION_MAPPING = {
+  0: "valence",
+  1: "arousal",
+  2: "dominance",
+  3: "risk",
+  4: "resources"
+};
+var DIMENSION_INDEX = {
+  valence: 0,
+  arousal: 1,
+  dominance: 2,
+  risk: 3,
+  resources: 4
+};
+function beliefStateToObservation(belief) {
+  const valence = belief.emotional.valence.posterior.mean;
+  const arousal = belief.emotional.arousal.posterior.mean;
+  const dominance = belief.emotional.dominance.posterior.mean;
+  const risk = belief.risk.overallRisk.posterior.mean;
+  const resources = (belief.resources.energy.posterior.mean + belief.resources.copingCapacity.posterior.mean + belief.resources.socialSupport.posterior.mean) / 3;
+  return [valence, arousal, dominance, risk, resources];
+}
+function beliefStateToUncertainty(belief) {
+  return [
+    belief.emotional.valence.posterior.variance,
+    belief.emotional.arousal.posterior.variance,
+    belief.emotional.dominance.posterior.variance,
+    belief.risk.overallRisk.posterior.variance,
+    (belief.resources.energy.posterior.variance + belief.resources.copingCapacity.posterior.variance + belief.resources.socialSupport.posterior.variance) / 3
+  ];
+}
+function beliefStateToPLRNNState(belief, hiddenUnits = 16) {
+  const observation = beliefStateToObservation(belief);
+  const uncertainty = beliefStateToUncertainty(belief);
+  return {
+    latentState: observation,
+    // Use observation as initial latent state
+    hiddenActivations: new Array(hiddenUnits).fill(0).map(() => Math.random() * 0.1),
+    observedState: observation,
+    uncertainty,
+    timestamp: belief.timestamp,
+    timestep: 0
+  };
+}
+function plrnnStateToBeliefUpdate(plrnnState) {
+  const obs = plrnnState.observedState;
+  const unc = plrnnState.uncertainty;
+  return {
+    valence: { mean: obs[0] ?? 0, variance: unc[0] ?? 0.1 },
+    arousal: { mean: obs[1] ?? 0, variance: unc[1] ?? 0.1 },
+    dominance: { mean: obs[2] ?? 0.5, variance: unc[2] ?? 0.1 },
+    risk: { mean: obs[3] ?? 0.1, variance: unc[3] ?? 0.1 },
+    resources: { mean: obs[4] ?? 0.5, variance: unc[4] ?? 0.1 }
+  };
+}
+function beliefStateToKalmanFormerState(belief, _contextWindow = 24) {
+  const observation = beliefStateToObservation(belief);
+  const uncertainty = beliefStateToUncertainty(belief);
+  const dim = observation.length;
+  const covariance = uncertainty.map(
+    (v, i) => uncertainty.map((_, j) => i === j ? v : 0)
+  );
+  const kalmanState = {
+    // Current estimates
+    stateEstimate: observation,
+    errorCovariance: covariance,
+    // Predicted values (same as current for initial state)
+    predictedState: observation,
+    predictedCovariance: covariance,
+    // Innovation (zero for initial state)
+    innovation: new Array(dim).fill(0),
+    innovationCovariance: covariance,
+    // Kalman gain (identity-like for initial)
+    kalmanGain: new Array(dim).fill(0).map(
+      (_, i) => new Array(dim).fill(0).map((_2, j) => i === j ? 0.5 : 0)
+    ),
+    // 2025 Diagnostics
+    normalized_innovation_squared: 0,
+    isOutlier: false,
+    adaptedQ: null,
+    adaptedR: null,
+    // Metadata
+    timestep: 0,
+    timestamp: belief.timestamp
+  };
+  return {
+    kalmanState,
+    transformerHidden: [new Array(64).fill(0)],
+    // Placeholder for transformer hidden
+    observationHistory: [{
+      observation,
+      timestamp: belief.timestamp
+    }],
+    currentBlendRatio: 0.5,
+    confidence: belief.meta.overallConfidence,
+    timestamp: belief.timestamp
+  };
+}
+function kalmanFormerStateToBeliefUpdate(kfState) {
+  const state = kfState.kalmanState.stateEstimate;
+  const cov = kfState.kalmanState.errorCovariance;
+  return {
+    valence: { mean: state[0] ?? 0, variance: cov[0]?.[0] ?? 0.1 },
+    arousal: { mean: state[1] ?? 0, variance: cov[1]?.[1] ?? 0.1 },
+    dominance: { mean: state[2] ?? 0.5, variance: cov[2]?.[2] ?? 0.1 },
+    risk: { mean: state[3] ?? 0.1, variance: cov[3]?.[3] ?? 0.1 },
+    resources: { mean: state[4] ?? 0.5, variance: cov[4]?.[4] ?? 0.1 }
+  };
+}
+function mergeHybridPredictions(plrnnPred, kfPred, horizon = "medium", confidence = 0.5) {
+  let plrnnWeight;
+  let kfWeight;
+  let hoursAhead;
+  switch (horizon) {
+    case "short":
+      plrnnWeight = 0.3;
+      kfWeight = 0.7;
+      hoursAhead = 4;
+      break;
+    case "long":
+      plrnnWeight = 0.8;
+      kfWeight = 0.2;
+      hoursAhead = 48;
+      break;
+    case "medium":
+    default:
+      plrnnWeight = 0.5;
+      kfWeight = 0.5;
+      hoursAhead = 12;
+  }
+  let trajectory = [];
+  let finalPrediction = [];
+  if (plrnnPred && kfPred) {
+    const plrnnFinal = plrnnPred.meanPrediction;
+    const kfFinal = kfPred.blendedPrediction;
+    finalPrediction = plrnnFinal.map(
+      (p, i) => p * plrnnWeight + (kfFinal[i] ?? 0) * kfWeight
+    );
+    trajectory = plrnnPred.trajectory.map((state, idx) => {
+      const plrnnObs = state.observedState;
+      const kfObs = kfPred.trajectory?.[idx]?.kalmanState.stateEstimate ?? plrnnObs;
+      return plrnnObs.map((p, i) => p * plrnnWeight + (kfObs[i] ?? 0) * kfWeight);
+    });
+  } else if (plrnnPred) {
+    finalPrediction = plrnnPred.meanPrediction;
+    trajectory = plrnnPred.trajectory.map((s) => s.observedState);
+  } else if (kfPred) {
+    finalPrediction = kfPred.blendedPrediction;
+    trajectory = kfPred.trajectory?.map((s) => s.kalmanState.stateEstimate) ?? [finalPrediction];
+  }
+  const credibleIntervals = [{
+    lower: plrnnPred?.confidenceInterval.lower ?? finalPrediction.map((v) => v - 0.2),
+    upper: plrnnPred?.confidenceInterval.upper ?? finalPrediction.map((v) => v + 0.2),
+    level: 0.95
+  }];
+  let primaryEngine;
+  if (horizon === "long" || !kfPred && plrnnPred) {
+    primaryEngine = "plrnn";
+  } else if (horizon === "short" || !plrnnPred && kfPred) {
+    primaryEngine = "kalmanformer";
+  } else {
+    primaryEngine = "plrnn";
+  }
+  return {
+    plrnnPrediction: plrnnPred,
+    kalmanFormerPrediction: kfPred,
+    blendedPrediction: {
+      trajectory,
+      credibleIntervals,
+      finalPrediction
+    },
+    earlyWarningSignals: plrnnPred?.earlyWarningSignals ?? [],
+    attention: kfPred?.attention,
+    horizon,
+    hoursAhead,
+    confidence,
+    primaryEngine
+  };
+}
+var BeliefStateAdapter = class {
+  constructor(engines) {
+    __publicField(this, "plrnnEngine");
+    __publicField(this, "kalmanFormerEngine");
+    this.plrnnEngine = engines?.plrnn;
+    this.kalmanFormerEngine = engines?.kalmanFormer;
+  }
+  /**
+   * Set PLRNN engine
+   */
+  setPLRNNEngine(engine) {
+    this.plrnnEngine = engine;
+  }
+  /**
+   * Set KalmanFormer engine
+   */
+  setKalmanFormerEngine(engine) {
+    this.kalmanFormerEngine = engine;
+  }
+  /**
+   * Hybrid prediction using Phase 1 engines
+   * ROADMAP task 1.1.3 deliverable
+   */
+  predictHybrid(belief, horizon = "medium") {
+    const plrnnState = beliefStateToPLRNNState(belief);
+    const kfState = beliefStateToKalmanFormerState(belief);
+    const hoursMap = { short: 4, medium: 12, long: 48 };
+    const hours = hoursMap[horizon];
+    let plrnnPred;
+    let kfPred;
+    if (this.plrnnEngine) {
+      plrnnPred = this.plrnnEngine.predict(plrnnState, hours);
+    }
+    if (this.kalmanFormerEngine) {
+      kfPred = this.kalmanFormerEngine.predict(kfState, hours);
+    }
+    return mergeHybridPredictions(
+      plrnnPred,
+      kfPred,
+      horizon,
+      belief.meta.overallConfidence
+    );
+  }
+  /**
+   * Extract causal network from current belief and PLRNN weights
+   */
+  extractCausalNetwork(_belief) {
+    if (!this.plrnnEngine) {
+      return null;
+    }
+    return this.plrnnEngine.extractCausalNetwork();
+  }
+  /**
+   * Simulate intervention effect on belief state
+   */
+  simulateIntervention(belief, target, intervention, magnitude) {
+    if (!this.plrnnEngine) {
+      return null;
+    }
+    const plrnnState = beliefStateToPLRNNState(belief);
+    return this.plrnnEngine.simulateIntervention(
+      plrnnState,
+      target,
+      intervention,
+      magnitude
+    );
+  }
+  /**
+   * Get attention explanation for current state
+   */
+  explainPrediction(belief) {
+    if (!this.kalmanFormerEngine) {
+      return null;
+    }
+    const kfState = beliefStateToKalmanFormerState(belief);
+    return this.kalmanFormerEngine.explain(kfState);
+  }
+  /**
+   * Convert belief to observation vector
+   */
+  toObservation(belief) {
+    return beliefStateToObservation(belief);
+  }
+  /**
+   * Convert belief to PLRNN state
+   */
+  toPLRNNState(belief, hiddenUnits) {
+    return beliefStateToPLRNNState(belief, hiddenUnits);
+  }
+  /**
+   * Convert belief to KalmanFormer state
+   */
+  toKalmanFormerState(belief, contextWindow) {
+    return beliefStateToKalmanFormerState(belief, contextWindow);
+  }
+};
+function createBeliefStateAdapter(engines) {
+  return new BeliefStateAdapter(engines);
+}
+
 // src/temporal/interfaces/IPLRNNEngine.ts
 var DEFAULT_PLRNN_CONFIG = {
   latentDim: 5,
@@ -563,679 +843,6 @@ var DEFAULT_PLRNN_CONFIG = {
   dt: 1
   // 1 hour time steps
 };
-
-// src/temporal/engines/PLRNNEngine.ts
-var STATE_DIMENSIONS = ["valence", "arousal", "dominance", "risk", "resources"];
-var PLRNNEngine = class {
-  constructor(config) {
-    __publicField(this, "config");
-    __publicField(this, "weights", null);
-    __publicField(this, "initialized", false);
-    // Training state
-    __publicField(this, "trainingHistory", []);
-    __publicField(this, "adamState", null);
-    this.config = { ...DEFAULT_PLRNN_CONFIG, ...config };
-  }
-  // ============================================================================
-  // INITIALIZATION
-  // ============================================================================
-  initialize(config) {
-    if (config) {
-      this.config = { ...this.config, ...config };
-    }
-    const n = this.config.latentDim;
-    this.config.hiddenUnits;
-    const A = Array(n).fill(0).map(() => 0.9 + Math.random() * 0.1);
-    const W = this.initializeMatrix(n, n, "sparse");
-    const B = this.initializeMatrix(n, n, "identity");
-    const biasLatent = Array(n).fill(0).map(() => (Math.random() - 0.5) * 0.1);
-    const biasObserved = Array(n).fill(0).map(() => (Math.random() - 0.5) * 0.1);
-    let dendriticWeights;
-    let C;
-    if (this.config.connectivity === "dendritic" && this.config.dendriticBases) {
-      const d = this.config.dendriticBases;
-      dendriticWeights = this.initializeMatrix(n, d, "normal");
-      C = this.initializeMatrix(n, d, "normal");
-    }
-    this.weights = {
-      A,
-      W,
-      B,
-      C,
-      biasLatent,
-      biasObserved,
-      dendriticWeights,
-      meta: {
-        trainedAt: /* @__PURE__ */ new Date(),
-        trainingSamples: 0,
-        validationLoss: Infinity,
-        config: this.config
-      }
-    };
-    this.adamState = {
-      m: {},
-      v: {},
-      t: 0
-    };
-    this.initialized = true;
-  }
-  loadWeights(weights) {
-    this.weights = weights;
-    this.config = weights.meta.config;
-    this.initialized = true;
-  }
-  getWeights() {
-    if (!this.weights) {
-      throw new Error("PLRNN not initialized. Call initialize() first.");
-    }
-    return this.weights;
-  }
-  // ============================================================================
-  // FORWARD PASS
-  // ============================================================================
-  /**
-   * Forward pass: compute next state
-   *
-   * z_{t+1} = A * z_t + W * φ(z_t) + C * s_t + b_z
-   * x_t = B * z_t + b_x
-   *
-   * where φ(z) = max(z, 0) (ReLU for piecewise-linear dynamics)
-   */
-  forward(state, input) {
-    if (!this.weights || !this.initialized) {
-      throw new Error("PLRNN not initialized");
-    }
-    const { A, W, B, C, biasLatent, biasObserved, dendriticWeights } = this.weights;
-    const z = state.latentState;
-    const n = z.length;
-    const phiZ = z.map((v) => Math.max(0, v));
-    const Az = z.map((zi, i) => A[i] * zi);
-    const WphiZ = this.matVec(W, phiZ);
-    let dendriticTerm = Array(n).fill(0);
-    if (this.config.connectivity === "dendritic" && dendriticWeights && C) {
-      const bases = dendriticWeights.map(
-        (row) => row.reduce((sum, w, i) => sum + w * z[i % z.length], 0)
-      );
-      const activatedBases = bases.map((b) => Math.max(0, b));
-      dendriticTerm = C.map(
-        (row) => row.reduce((sum, c, i) => sum + c * activatedBases[i], 0)
-      );
-    }
-    let inputTerm = Array(n).fill(0);
-    if (input && C) {
-      inputTerm = C.map(
-        (row) => row.reduce((sum, c, i) => sum + c * (input[i] || 0), 0)
-      );
-    }
-    const zNext = Az.map(
-      (azi, i) => azi + WphiZ[i] + dendriticTerm[i] + inputTerm[i] + biasLatent[i]
-    );
-    const xNext = this.matVec(B, zNext).map((v, i) => v + biasObserved[i]);
-    const uncertainty = this.computeUncertainty(zNext, state.uncertainty);
-    const hiddenActivations = phiZ;
-    return {
-      latentState: zNext,
-      hiddenActivations,
-      observedState: xNext,
-      uncertainty,
-      timestamp: new Date(state.timestamp.getTime() + this.config.dt * 36e5),
-      timestep: state.timestep + 1
-    };
-  }
-  // ============================================================================
-  // PREDICTION
-  // ============================================================================
-  predict(currentState, horizon, input) {
-    const trajectory = [currentState];
-    let state = currentState;
-    for (let t = 0; t < horizon; t++) {
-      const inputT = input ? input[t] : void 0;
-      state = this.forward(state, inputT);
-      trajectory.push(state);
-    }
-    const finalState = trajectory[trajectory.length - 1];
-    const meanPrediction = finalState.observedState;
-    const uncertaintyScale = 1.96;
-    const lower = meanPrediction.map(
-      (m, i) => m - uncertaintyScale * Math.sqrt(finalState.uncertainty[i])
-    );
-    const upper = meanPrediction.map(
-      (m, i) => m + uncertaintyScale * Math.sqrt(finalState.uncertainty[i])
-    );
-    const variance = trajectory.map((s) => s.uncertainty);
-    const earlyWarningSignals = this.detectEarlyWarnings(trajectory, Math.min(5, trajectory.length));
-    return {
-      trajectory,
-      meanPrediction,
-      confidenceInterval: {
-        lower,
-        upper,
-        level: 0.95
-      },
-      variance,
-      earlyWarningSignals,
-      horizon
-    };
-  }
-  hybridPredict(currentState, horizon) {
-    const horizonMap = {
-      short: 3,
-      // 3 hours - use more Kalman-like behavior
-      medium: 12,
-      // 12 hours - balanced
-      long: 48
-      // 48 hours - full PLRNN nonlinear
-    };
-    const steps = horizonMap[horizon];
-    const originalL1 = this.config.l1Regularization;
-    if (horizon === "short") {
-      this.config.l1Regularization *= 2;
-    }
-    const prediction = this.predict(currentState, steps);
-    this.config.l1Regularization = originalL1;
-    return prediction;
-  }
-  // ============================================================================
-  // CAUSAL NETWORK EXTRACTION
-  // ============================================================================
-  extractCausalNetwork() {
-    if (!this.weights) {
-      throw new Error("PLRNN not initialized");
-    }
-    const { A, W } = this.weights;
-    const n = this.config.latentDim;
-    const nodes = STATE_DIMENSIONS.slice(0, n).map((label, i) => ({
-      id: `node_${i}`,
-      label,
-      selfWeight: A[i],
-      centrality: this.calculateCentrality(W, i),
-      value: 0
-      // Will be updated with actual state
-    }));
-    const edges = [];
-    const significanceThreshold = 0.1;
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        if (i !== j && Math.abs(W[i][j]) > significanceThreshold) {
-          edges.push({
-            source: `node_${j}`,
-            target: `node_${i}`,
-            weight: W[i][j],
-            lag: this.config.dt,
-            significance: this.computeEdgeSignificance(W[i][j], n)
-          });
-        }
-      }
-    }
-    const density = edges.length / (n * (n - 1));
-    const centralNode = nodes.reduce(
-      (max, node) => node.centrality > max.centrality ? node : max
-    ).label;
-    const feedbackLoops = this.detectFeedbackLoops(W, n);
-    return {
-      nodes,
-      edges,
-      metrics: {
-        density,
-        centralNode,
-        feedbackLoops
-      }
-    };
-  }
-  // ============================================================================
-  // INTERVENTION SIMULATION
-  // ============================================================================
-  simulateIntervention(currentState, target, intervention, magnitude) {
-    if (!this.weights) {
-      throw new Error("PLRNN not initialized");
-    }
-    const targetIdx = STATE_DIMENSIONS.indexOf(target);
-    if (targetIdx === -1) {
-      throw new Error(`Unknown target dimension: ${target}`);
-    }
-    const input = Array(this.config.latentDim).fill(0);
-    switch (intervention) {
-      case "increase":
-        input[targetIdx] = magnitude;
-        break;
-      case "decrease":
-        input[targetIdx] = -magnitude;
-        break;
-      case "stabilize":
-        input[targetIdx] = -currentState.latentState[targetIdx] * 0.5;
-        break;
-    }
-    const horizon = 24;
-    const baselineTrajectory = this.predict(currentState, horizon);
-    const interventionTrajectory = this.predict(currentState, horizon, Array(horizon).fill(input));
-    const effects = /* @__PURE__ */ new Map();
-    const n = this.config.latentDim;
-    for (let i = 0; i < n; i++) {
-      const baseline = baselineTrajectory.meanPrediction[i];
-      const intervened = interventionTrajectory.meanPrediction[i];
-      const effect = intervened - baseline;
-      effects.set(STATE_DIMENSIONS[i], effect);
-    }
-    let maxEffect = 0;
-    let timeToPeak = 0;
-    for (let t = 0; t < horizon; t++) {
-      const effect = Math.abs(
-        interventionTrajectory.trajectory[t].observedState[targetIdx] - baselineTrajectory.trajectory[t].observedState[targetIdx]
-      );
-      if (effect > maxEffect) {
-        maxEffect = effect;
-        timeToPeak = t * this.config.dt;
-      }
-    }
-    const sideEffects = [];
-    effects.forEach((effect, dimension) => {
-      if (dimension !== target && Math.abs(effect) > 0.1) {
-        sideEffects.push({ dimension, effect });
-      }
-    });
-    let duration = horizon;
-    for (let t = Math.floor(timeToPeak / this.config.dt); t < horizon; t++) {
-      const effect = Math.abs(
-        interventionTrajectory.trajectory[t].observedState[targetIdx] - baselineTrajectory.trajectory[t].observedState[targetIdx]
-      );
-      if (effect < maxEffect * 0.1) {
-        duration = t * this.config.dt;
-        break;
-      }
-    }
-    const confidence = 1 - interventionTrajectory.variance[horizon - 1][targetIdx];
-    return {
-      target: { dimension: target, intervention, magnitude },
-      response: {
-        effects,
-        timeToPeak,
-        duration,
-        sideEffects
-      },
-      confidence: Math.max(0, Math.min(1, confidence))
-    };
-  }
-  // ============================================================================
-  // EARLY WARNING SIGNALS
-  // ============================================================================
-  detectEarlyWarnings(stateHistory, windowSize) {
-    if (stateHistory.length < windowSize * 2) {
-      return [];
-    }
-    const signals = [];
-    const n = this.config.latentDim;
-    const earlyWindow = stateHistory.slice(0, windowSize);
-    const lateWindow = stateHistory.slice(-windowSize);
-    for (let dim = 0; dim < n; dim++) {
-      const dimLabel = STATE_DIMENSIONS[dim] || `dim_${dim}`;
-      const earlyAC = this.calculateAutocorrelation(
-        earlyWindow.map((s) => s.latentState[dim])
-      );
-      const lateAC = this.calculateAutocorrelation(
-        lateWindow.map((s) => s.latentState[dim])
-      );
-      if (lateAC > earlyAC + 0.1 && lateAC > 0.5) {
-        signals.push({
-          type: "autocorrelation",
-          dimension: dimLabel,
-          strength: (lateAC - earlyAC) / (1 - earlyAC),
-          estimatedTimeToTransition: this.estimateTransitionTime(lateAC),
-          confidence: Math.min(1, stateHistory.length / 50),
-          recommendation: `\u041F\u043E\u0432\u044B\u0448\u0435\u043D\u043D\u0430\u044F \u0430\u0432\u0442\u043E\u043A\u043E\u0440\u0440\u0435\u043B\u044F\u0446\u0438\u044F \u0432 ${dimLabel} \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0435\u0442 \u043D\u0430 \u043F\u0440\u0438\u0431\u043B\u0438\u0436\u0435\u043D\u0438\u0435 \u043A \u043F\u0435\u0440\u0435\u0445\u043E\u0434\u043D\u043E\u043C\u0443 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u044E. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u0442\u0441\u044F \u043F\u0440\u043E\u0444\u0438\u043B\u0430\u043A\u0442\u0438\u0447\u0435\u0441\u043A\u0430\u044F \u0438\u043D\u0442\u0435\u0440\u0432\u0435\u043D\u0446\u0438\u044F.`
-        });
-      }
-      const earlyVar = this.calculateVariance(
-        earlyWindow.map((s) => s.latentState[dim])
-      );
-      const lateVar = this.calculateVariance(
-        lateWindow.map((s) => s.latentState[dim])
-      );
-      if (lateVar > earlyVar * 1.5) {
-        signals.push({
-          type: "variance",
-          dimension: dimLabel,
-          strength: (lateVar - earlyVar) / earlyVar,
-          estimatedTimeToTransition: null,
-          confidence: Math.min(1, stateHistory.length / 50),
-          recommendation: `\u0423\u0432\u0435\u043B\u0438\u0447\u0435\u043D\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u0431\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u0438 ${dimLabel}. \u0421\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435 \u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0441\u044F \u043C\u0435\u043D\u0435\u0435 \u0441\u0442\u0430\u0431\u0438\u043B\u044C\u043D\u044B\u043C.`
-        });
-      }
-      const flickering = this.detectFlickering(
-        lateWindow.map((s) => s.latentState[dim])
-      );
-      if (flickering > 0.3) {
-        signals.push({
-          type: "flickering",
-          dimension: dimLabel,
-          strength: flickering,
-          estimatedTimeToTransition: 12,
-          // hours
-          confidence: 0.6,
-          recommendation: `\u041E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u043E "\u043C\u0435\u0440\u0446\u0430\u043D\u0438\u0435" \u0432 ${dimLabel} - \u043F\u0440\u0438\u0437\u043D\u0430\u043A \u0441\u043A\u043E\u0440\u043E\u0433\u043E \u043F\u0435\u0440\u0435\u0445\u043E\u0434\u0430 \u043C\u0435\u0436\u0434\u0443 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u044F\u043C\u0438.`
-        });
-      }
-    }
-    if (this.weights) {
-      const connectivity = this.calculateNetworkConnectivity(stateHistory);
-      if (connectivity.late > connectivity.early * 1.3) {
-        signals.push({
-          type: "connectivity",
-          dimension: "network",
-          strength: (connectivity.late - connectivity.early) / connectivity.early,
-          estimatedTimeToTransition: null,
-          confidence: 0.7,
-          recommendation: "\u0423\u0441\u0438\u043B\u0435\u043D\u0438\u0435 \u0441\u0432\u044F\u0437\u0435\u0439 \u043C\u0435\u0436\u0434\u0443 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u0438\u043C\u0438 \u0438\u0437\u043C\u0435\u0440\u0435\u043D\u0438\u044F\u043C\u0438. \u0421\u0438\u0441\u0442\u0435\u043C\u0430 \u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0441\u044F \u0431\u043E\u043B\u0435\u0435 \u0443\u044F\u0437\u0432\u0438\u043C\u043E\u0439 \u043A \u043A\u0430\u0441\u043A\u0430\u0434\u043D\u044B\u043C \u044D\u0444\u0444\u0435\u043A\u0442\u0430\u043C."
-        });
-      }
-    }
-    return signals;
-  }
-  // ============================================================================
-  // TRAINING
-  // ============================================================================
-  trainOnline(sample) {
-    if (!this.weights || !this.adamState) {
-      this.initialize();
-    }
-    const startTime = Date.now();
-    const { observations, timestamps } = sample;
-    if (observations.length < 2) {
-      return {
-        loss: Infinity,
-        validationLoss: Infinity,
-        epochs: 0,
-        trainingTime: 0,
-        converged: false,
-        weights: this.weights
-      };
-    }
-    let totalLoss = 0;
-    let state = this.initializeState(observations[0]);
-    for (let t = 0; t < observations.length - 1; t++) {
-      const predicted = this.forward(state);
-      const target = observations[t + 1];
-      const loss = this.calculateLoss([predicted.observedState], [target]);
-      totalLoss += loss;
-      this.updateWeightsOnline(state, predicted, target);
-      if (Math.random() < this.config.teacherForcingRatio) {
-        state = this.initializeState(target);
-        state.timestep = predicted.timestep;
-      } else {
-        state = predicted;
-      }
-    }
-    const avgLoss = totalLoss / (observations.length - 1);
-    this.trainingHistory.push(avgLoss);
-    this.weights.meta.trainingSamples++;
-    this.weights.meta.trainedAt = /* @__PURE__ */ new Date();
-    return {
-      loss: avgLoss,
-      validationLoss: avgLoss,
-      epochs: 1,
-      trainingTime: Date.now() - startTime,
-      converged: avgLoss < 0.1,
-      weights: this.weights
-    };
-  }
-  trainBatch(samples) {
-    const startTime = Date.now();
-    let totalLoss = 0;
-    for (const sample of samples) {
-      const result = this.trainOnline(sample);
-      totalLoss += result.loss;
-    }
-    const avgLoss = totalLoss / samples.length;
-    const converged = avgLoss < 0.05;
-    if (converged) {
-      this.weights.meta.validationLoss = avgLoss;
-    }
-    return {
-      loss: avgLoss,
-      validationLoss: avgLoss,
-      epochs: samples.length,
-      trainingTime: Date.now() - startTime,
-      converged,
-      weights: this.weights
-    };
-  }
-  calculateLoss(predicted, actual) {
-    let loss = 0;
-    let count = 0;
-    for (let t = 0; t < predicted.length; t++) {
-      for (let i = 0; i < predicted[t].length; i++) {
-        const diff = predicted[t][i] - actual[t][i];
-        loss += diff * diff;
-        count++;
-      }
-    }
-    return count > 0 ? loss / count : 0;
-  }
-  getComplexityMetrics() {
-    if (!this.weights) {
-      return { effectiveDimensionality: 0, sparsity: 0, lyapunovExponent: 0 };
-    }
-    const { W } = this.weights;
-    const n = W.length;
-    let zeroCount = 0;
-    let totalCount = 0;
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        if (Math.abs(W[i][j]) < 0.01) zeroCount++;
-        totalCount++;
-      }
-    }
-    const sparsity = zeroCount / totalCount;
-    const effectiveDimensionality = n * (1 - sparsity);
-    const maxEigenvalue = this.approximateMaxEigenvalue(W);
-    const lyapunovExponent = Math.log(Math.abs(maxEigenvalue));
-    return {
-      effectiveDimensionality,
-      sparsity,
-      lyapunovExponent
-    };
-  }
-  // ============================================================================
-  // PRIVATE HELPERS
-  // ============================================================================
-  initializeMatrix(rows, cols, type) {
-    const matrix = [];
-    const scale = Math.sqrt(2 / (rows + cols));
-    for (let i = 0; i < rows; i++) {
-      matrix[i] = [];
-      for (let j = 0; j < cols; j++) {
-        if (type === "identity") {
-          matrix[i][j] = i === j ? 1 : 0;
-        } else if (type === "sparse") {
-          matrix[i][j] = Math.random() < 0.2 ? (Math.random() - 0.5) * 2 * scale : 0;
-        } else {
-          matrix[i][j] = (Math.random() - 0.5) * 2 * scale;
-        }
-      }
-    }
-    return matrix;
-  }
-  matVec(A, v) {
-    return A.map((row) => row.reduce((sum, val, j) => sum + val * v[j], 0));
-  }
-  initializeState(observation) {
-    const n = this.config.latentDim;
-    const obs = observation.slice(0, n);
-    while (obs.length < n) {
-      obs.push(0);
-    }
-    return {
-      latentState: [...obs],
-      hiddenActivations: obs.map((v) => Math.max(0, v)),
-      observedState: [...obs],
-      uncertainty: Array(n).fill(0.1),
-      timestamp: /* @__PURE__ */ new Date(),
-      timestep: 0
-    };
-  }
-  computeUncertainty(zNext, prevUncertainty) {
-    const growthRate = 0.05;
-    const maxUncertainty = 1;
-    return prevUncertainty.map((u, i) => {
-      const stateDeviation = Math.abs(zNext[i]) > 2 ? 0.1 : 0;
-      const newU = u * (1 + growthRate) + stateDeviation;
-      return Math.min(maxUncertainty, newU);
-    });
-  }
-  calculateCentrality(W, nodeIdx) {
-    const outStrength = W[nodeIdx].reduce((sum, w) => sum + Math.abs(w), 0);
-    let inStrength = 0;
-    for (let i = 0; i < W.length; i++) {
-      inStrength += Math.abs(W[i][nodeIdx]);
-    }
-    return (outStrength + inStrength) / (2 * W.length);
-  }
-  computeEdgeSignificance(weight, n) {
-    const expectedWeight = 1 / n;
-    return Math.min(1, Math.abs(weight) / expectedWeight);
-  }
-  detectFeedbackLoops(W, n) {
-    const loops = [];
-    const threshold = 0.1;
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        if (Math.abs(W[i][j]) > threshold && Math.abs(W[j][i]) > threshold) {
-          loops.push([STATE_DIMENSIONS[i], STATE_DIMENSIONS[j]]);
-        }
-      }
-    }
-    return loops;
-  }
-  calculateAutocorrelation(series) {
-    if (series.length < 3) return 0;
-    const mean = series.reduce((a, b) => a + b, 0) / series.length;
-    let numerator = 0;
-    let denominator = 0;
-    for (let t = 0; t < series.length - 1; t++) {
-      numerator += (series[t] - mean) * (series[t + 1] - mean);
-    }
-    for (let t = 0; t < series.length; t++) {
-      denominator += (series[t] - mean) ** 2;
-    }
-    return denominator > 0 ? numerator / denominator : 0;
-  }
-  calculateVariance(series) {
-    if (series.length < 2) return 0;
-    const mean = series.reduce((a, b) => a + b, 0) / series.length;
-    const variance = series.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (series.length - 1);
-    return variance;
-  }
-  detectFlickering(series) {
-    if (series.length < 5) return 0;
-    const mean = series.reduce((a, b) => a + b, 0) / series.length;
-    let crossings = 0;
-    for (let t = 1; t < series.length; t++) {
-      if (series[t - 1] < mean && series[t] >= mean || series[t - 1] >= mean && series[t] < mean) {
-        crossings++;
-      }
-    }
-    const expectedCrossings = (series.length - 1) / 2;
-    const flickering = crossings / expectedCrossings;
-    return Math.max(0, flickering - 1);
-  }
-  estimateTransitionTime(autocorrelation) {
-    if (autocorrelation < 0.7) return null;
-    const timeScale = 1 / (1 - autocorrelation);
-    return Math.min(48, timeScale * this.config.dt);
-  }
-  calculateNetworkConnectivity(stateHistory) {
-    const midpoint = Math.floor(stateHistory.length / 2);
-    const calculateCorrelationMatrix = (states) => {
-      const n = this.config.latentDim;
-      let totalCorr = 0;
-      let count = 0;
-      for (let i = 0; i < n; i++) {
-        for (let j = i + 1; j < n; j++) {
-          const seriesI = states.map((s) => s.latentState[i]);
-          const seriesJ = states.map((s) => s.latentState[j]);
-          const corr = this.calculateCorrelation(seriesI, seriesJ);
-          totalCorr += Math.abs(corr);
-          count++;
-        }
-      }
-      return count > 0 ? totalCorr / count : 0;
-    };
-    return {
-      early: calculateCorrelationMatrix(stateHistory.slice(0, midpoint)),
-      late: calculateCorrelationMatrix(stateHistory.slice(midpoint))
-    };
-  }
-  calculateCorrelation(x, y) {
-    const n = x.length;
-    if (n < 3) return 0;
-    const meanX = x.reduce((a, b) => a + b, 0) / n;
-    const meanY = y.reduce((a, b) => a + b, 0) / n;
-    let numerator = 0;
-    let denomX = 0;
-    let denomY = 0;
-    for (let i = 0; i < n; i++) {
-      const dx = x[i] - meanX;
-      const dy = y[i] - meanY;
-      numerator += dx * dy;
-      denomX += dx * dx;
-      denomY += dy * dy;
-    }
-    const denom = Math.sqrt(denomX * denomY);
-    return denom > 0 ? numerator / denom : 0;
-  }
-  updateWeightsOnline(prevState, predicted, target) {
-    if (!this.weights || !this.adamState) return;
-    const { A, W, B, biasLatent, biasObserved } = this.weights;
-    const lr = this.config.learningRate;
-    const clip = this.config.gradientClip;
-    const l1 = this.config.l1Regularization;
-    const outputError = predicted.observedState.map((p, i) => target[i] - p);
-    const latentError = this.matVec(
-      B.map((row) => [...row]),
-      // Transpose approximation for square matrix
-      outputError
-    );
-    for (let i = 0; i < B.length; i++) {
-      for (let j = 0; j < B[i].length; j++) {
-        let grad = -outputError[i] * predicted.latentState[j];
-        grad = Math.max(-clip, Math.min(clip, grad));
-        B[i][j] -= lr * grad;
-      }
-      biasObserved[i] -= lr * Math.max(-clip, Math.min(clip, -outputError[i]));
-    }
-    for (let i = 0; i < A.length; i++) {
-      let grad = -latentError[i] * prevState.latentState[i];
-      grad = Math.max(-clip, Math.min(clip, grad));
-      A[i] -= lr * grad;
-    }
-    const phiZ = prevState.latentState.map((v) => Math.max(0, v));
-    for (let i = 0; i < W.length; i++) {
-      for (let j = 0; j < W[i].length; j++) {
-        let grad = -latentError[i] * phiZ[j];
-        grad += l1 * Math.sign(W[i][j]);
-        grad = Math.max(-clip, Math.min(clip, grad));
-        W[i][j] -= lr * grad;
-      }
-      biasLatent[i] -= lr * Math.max(-clip, Math.min(clip, -latentError[i]));
-    }
-  }
-  approximateMaxEigenvalue(W) {
-    const n = W.length;
-    let v = Array(n).fill(1 / Math.sqrt(n));
-    for (let iter = 0; iter < 20; iter++) {
-      const Av2 = this.matVec(W, v);
-      const norm = Math.sqrt(Av2.reduce((sum, x) => sum + x * x, 0));
-      if (norm < 1e-10) return 0;
-      v = Av2.map((x) => x / norm);
-    }
-    const Av = this.matVec(W, v);
-    return Av.reduce((sum, x, i) => sum + x * v[i], 0);
-  }
-};
-function createPLRNNEngine(config) {
-  const engine = new PLRNNEngine(config);
-  engine.initialize(config);
-  return engine;
-}
 
 // src/temporal/interfaces/IKalmanFormer.ts
 var DEFAULT_KALMANFORMER_CONFIG = {
@@ -1258,7 +865,7 @@ var DEFAULT_KALMANFORMER_CONFIG = {
 };
 
 // src/temporal/engines/KalmanFormerEngine.ts
-var STATE_DIMENSIONS2 = ["valence", "arousal", "dominance", "risk", "resources"];
+var STATE_DIMENSIONS = ["valence", "arousal", "dominance", "risk", "resources"];
 var KalmanFormerEngine = class {
   constructor(config) {
     __publicField(this, "config");
@@ -1444,10 +1051,10 @@ var KalmanFormerEngine = class {
       (row) => Math.sqrt(row.reduce((max, v) => Math.max(max, v), 0))
     );
     const lower = finalState.kalmanState.stateEstimate.map(
-      (v, i) => v - 1.96 * uncertainty[i]
+      (v, i) => v - 1.96 * (uncertainty[i] ?? 0.1)
     );
     const upper = finalState.kalmanState.stateEstimate.map(
-      (v, i) => v + 1.96 * uncertainty[i]
+      (v, i) => v + 1.96 * (uncertainty[i] ?? 0.1)
     );
     const attention = this.explain(finalState);
     return {
@@ -1492,7 +1099,7 @@ var KalmanFormerEngine = class {
     });
     const topInfluential = influenceScores.sort((a, b) => b.weight - a.weight).slice(0, 5).map((obs) => ({
       ...obs,
-      dimension: this.findMostInfluentialDimension(history[obs.index].observation)
+      dimension: this.findMostInfluentialDimension(history[obs.index]?.observation ?? [])
     }));
     const recentWeights = influenceScores.slice(-5);
     const earlyWeights = influenceScores.slice(0, 5);
@@ -1521,11 +1128,15 @@ var KalmanFormerEngine = class {
     }
     let totalError = 0;
     for (let t = 0; t < predictions.length; t++) {
-      for (let i = 0; i < predictions[t].length; i++) {
-        totalError += Math.pow(predictions[t][i] - actuals[t][i], 2);
+      const predRow = predictions[t];
+      const actualRow = actuals[t];
+      if (!predRow || !actualRow) continue;
+      for (let i = 0; i < predRow.length; i++) {
+        totalError += Math.pow((predRow[i] ?? 0) - (actualRow[i] ?? 0), 2);
       }
     }
-    const avgError = Math.sqrt(totalError / (predictions.length * predictions[0].length));
+    const firstPred = predictions[0];
+    const avgError = Math.sqrt(totalError / (predictions.length * (firstPred?.length ?? 1)));
     const errorThreshold = 0.5;
     let newRatio = this.config.blendRatio;
     if (avgError > errorThreshold) {
@@ -1546,18 +1157,24 @@ var KalmanFormerEngine = class {
     let kalmanLoss = 0;
     let transformerLoss = 0;
     for (const sample of samples) {
-      let state = this.initializeState(sample.observations[0], sample.timestamps[0]);
+      const firstObs = sample.observations[0];
+      const firstTimestamp = sample.timestamps[0];
+      if (!firstObs || !firstTimestamp) continue;
+      let state = this.initializeState(firstObs, firstTimestamp);
       for (let t = 1; t < sample.observations.length; t++) {
-        state = this.update(state, sample.observations[t], sample.timestamps[t]);
-        if (sample.groundTruth && sample.groundTruth[t]) {
-          const target = sample.groundTruth[t];
+        const obs = sample.observations[t];
+        const ts = sample.timestamps[t];
+        if (!obs || !ts) continue;
+        state = this.update(state, obs, ts);
+        const target = sample.groundTruth?.[t];
+        if (target) {
           const kalmanPred = state.kalmanState.stateEstimate;
           const transformerPred = this.transformerPredict(
             state.observationHistory,
             state.transformerHidden
           );
-          const kLoss = kalmanPred.reduce((sum, p, i) => sum + Math.pow(p - target[i], 2), 0);
-          const tLoss = transformerPred.reduce((sum, p, i) => sum + Math.pow(p - target[i], 2), 0);
+          const kLoss = kalmanPred.reduce((sum, p, i) => sum + Math.pow(p - (target[i] ?? 0), 2), 0);
+          const tLoss = transformerPred.reduce((sum, p, i) => sum + Math.pow(p - (target[i] ?? 0), 2), 0);
           kalmanLoss += kLoss;
           transformerLoss += tLoss;
           totalLoss += kLoss * (1 - state.currentBlendRatio) + tLoss * state.currentBlendRatio;
@@ -1686,9 +1303,9 @@ var KalmanFormerEngine = class {
   kalmanUpdate(predicted, observation, gain) {
     const H = this.weights.kalman.observationMatrix;
     const Hx = this.matVec(H, predicted.predictedState);
-    const innovation = observation.map((z, i) => z - Hx[i]);
+    const innovation = observation.map((z, i) => z - (Hx[i] ?? 0));
     const Ky = this.matVec(gain, innovation);
-    const stateEstimate = predicted.predictedState.map((x, i) => x + Ky[i]);
+    const stateEstimate = predicted.predictedState.map((x, i) => x + (Ky[i] ?? 0));
     const n = stateEstimate.length;
     const KH = this.matMul(gain, H);
     const IminusKH = this.matSub(this.initIdentityMatrix(n), KH);
@@ -1725,11 +1342,12 @@ var KalmanFormerEngine = class {
     const m = this.config.obsDim;
     const gain = [];
     for (let i = 0; i < n; i++) {
-      gain[i] = [];
+      const row = [];
       for (let j = 0; j < m; j++) {
         const idx = i * m + j;
-        gain[i][j] = this.sigmoid(gainVector[idx] || 0);
+        row[j] = this.sigmoid(gainVector[idx] ?? 0);
       }
+      gain[i] = row;
     }
     return gain;
   }
@@ -1739,16 +1357,20 @@ var KalmanFormerEngine = class {
     let embedding = this.matVec(obsMatrix, observation);
     if (this.weights.embedding.position) {
       const posEmb = this.weights.embedding.position[position % this.weights.embedding.position.length];
-      embedding = embedding.map((v, i) => v + (posEmb[i] || 0));
+      if (posEmb) {
+        embedding = embedding.map((v, i) => v + (posEmb[i] ?? 0));
+      }
     }
     if (this.config.timeEmbedding === "sinusoidal") {
       const hour = timestamp.getHours() + timestamp.getMinutes() / 60;
       const dayOfWeek = timestamp.getDay();
       for (let i = 0; i < embedDim; i += 2) {
         const freq = Math.pow(1e4, i / embedDim);
-        embedding[i] += Math.sin(hour * 2 * Math.PI / 24 / freq);
+        const currVal = embedding[i] ?? 0;
+        embedding[i] = currVal + Math.sin(hour * 2 * Math.PI / 24 / freq);
         if (i + 1 < embedDim) {
-          embedding[i + 1] += Math.cos(dayOfWeek * 2 * Math.PI / 7 / freq);
+          const nextVal = embedding[i + 1] ?? 0;
+          embedding[i + 1] = nextVal + Math.cos(dayOfWeek * 2 * Math.PI / 7 / freq);
         }
       }
     }
@@ -1771,7 +1393,7 @@ var KalmanFormerEngine = class {
     }
     return output;
   }
-  multiHeadAttention(input, layer) {
+  multiHeadAttention(input, _layer) {
     const { numHeads, embedDim } = this.config;
     const headDim = embedDim / numHeads;
     const seqLen = input.length;
@@ -1782,24 +1404,32 @@ var KalmanFormerEngine = class {
       const V = input.map((emb) => emb.slice(h * headDim, (h + 1) * headDim));
       const scores = [];
       for (let i = 0; i < seqLen; i++) {
-        scores[i] = [];
+        const scoreRow = [];
+        const Qi = Q[i];
+        if (!Qi) continue;
         for (let j = 0; j < seqLen; j++) {
           let score = 0;
+          const Kj = K[j];
+          if (!Kj) continue;
           for (let k = 0; k < headDim; k++) {
-            score += Q[i][k] * K[j][k];
+            score += (Qi[k] ?? 0) * (Kj[k] ?? 0);
           }
-          scores[i][j] = score / Math.sqrt(headDim) / this.config.temperature;
+          scoreRow[j] = score / Math.sqrt(headDim) / this.config.temperature;
         }
-        const maxScore = Math.max(...scores[i]);
-        const expScores = scores[i].map((s) => Math.exp(s - maxScore));
+        const maxScore = Math.max(...scoreRow);
+        const expScores = scoreRow.map((s) => Math.exp(s - maxScore));
         const sumExp = expScores.reduce((a, b) => a + b, 0);
         scores[i] = expScores.map((e) => e / sumExp);
       }
       for (let i = 0; i < seqLen; i++) {
         const attended = new Array(headDim).fill(0);
+        const scoresI = scores[i];
+        if (!scoresI) continue;
         for (let j = 0; j < seqLen; j++) {
+          const Vj = V[j];
+          if (!Vj) continue;
           for (let k = 0; k < headDim; k++) {
-            attended[k] += scores[i][j] * V[j][k];
+            attended[k] += (scoresI[j] ?? 0) * (Vj[k] ?? 0);
           }
         }
         if (!headOutputs[i]) headOutputs[i] = [];
@@ -1810,40 +1440,49 @@ var KalmanFormerEngine = class {
   }
   feedForward(input, layer) {
     const ff = this.weights.transformer.feedforward[layer];
+    if (!ff) {
+      return input;
+    }
     return input.map((emb) => {
-      let hidden = this.matVec([ff.linear1.map((row) => row[0] || 0)], emb);
-      hidden = hidden.map((v, i) => Math.max(0, v + ff.bias1[i]));
-      let output = this.matVec([ff.linear2.map((row) => row[0] || 0)], hidden);
-      output = output.map((v, i) => v + ff.bias2[i]);
+      let hidden = this.matVec([ff.linear1.map((row) => row[0] ?? 0)], emb);
+      hidden = hidden.map((v, i) => Math.max(0, v + (ff.bias1[i] ?? 0)));
+      let output = this.matVec([ff.linear2.map((row) => row[0] ?? 0)], hidden);
+      output = output.map((v, i) => v + (ff.bias2[i] ?? 0));
       return output;
     });
   }
   addAndNorm(residual, output, layerNormIdx) {
     const ln = this.weights.transformer.layerNorm[layerNormIdx];
+    if (!ln) {
+      return residual;
+    }
     return residual.map((res, i) => {
-      const added = res.map((r, j) => r + (output[i]?.[j] || 0));
+      const added = res.map((r, j) => r + (output[i]?.[j] ?? 0));
       const mean = added.reduce((a, b) => a + b, 0) / added.length;
       const variance = added.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / added.length;
       const std = Math.sqrt(variance + 1e-5);
       return added.map(
-        (v, j) => (v - mean) / std * ln.gamma[j] + ln.beta[j]
+        (v, j) => (v - mean) / std * (ln.gamma[j] ?? 1) + (ln.beta[j] ?? 0)
       );
     });
   }
-  transformerPredict(history, contextEncoding) {
+  transformerPredict(_history, contextEncoding) {
     if (contextEncoding.length === 0) {
       return new Array(this.config.stateDim).fill(0);
     }
     const lastEncoding = contextEncoding[contextEncoding.length - 1];
+    if (!lastEncoding) {
+      return new Array(this.config.stateDim).fill(0);
+    }
     return this.matVec(this.weights.outputProjection, lastEncoding);
   }
-  computeBlendRatio(contextEncoding, kalmanState, observation) {
+  computeBlendRatio(contextEncoding, _kalmanState, _observation) {
     if (!this.weights.blendPredictor) {
       return this.config.blendRatio;
     }
-    const lastContext = contextEncoding[contextEncoding.length - 1] || new Array(this.config.embedDim).fill(0);
+    const lastContext = contextEncoding[contextEncoding.length - 1] ?? new Array(this.config.embedDim).fill(0);
     const logit = lastContext.reduce(
-      (sum, v, i) => sum + v * this.weights.blendPredictor.weights[i],
+      (sum, v, i) => sum + v * (this.weights.blendPredictor.weights[i] ?? 0),
       0
     ) + this.weights.blendPredictor.bias;
     return this.sigmoid(logit);
@@ -1853,7 +1492,7 @@ var KalmanFormerEngine = class {
       (k, i) => (1 - ratio) * k + ratio * (transformer[i] || k)
     );
   }
-  computeConfidence(kalmanState, transformerPred, observation) {
+  computeConfidence(kalmanState, transformerPred, _observation) {
     const agreement = kalmanState.stateEstimate.reduce((sum, k, i) => {
       const t = transformerPred[i] || k;
       return sum + Math.exp(-Math.pow(k - t, 2));
@@ -1869,38 +1508,45 @@ var KalmanFormerEngine = class {
     const { embedDim } = this.config;
     const weights = [];
     for (let i = 0; i < seqLen; i++) {
-      weights[i] = [];
+      const weightRow = [];
+      const embI = embeddings[i];
+      if (!embI) continue;
       for (let j = 0; j < seqLen; j++) {
         let score = 0;
+        const embJ = embeddings[j];
+        if (!embJ) continue;
         for (let k = 0; k < embedDim; k++) {
-          score += embeddings[i][k] * embeddings[j][k];
+          score += (embI[k] ?? 0) * (embJ[k] ?? 0);
         }
-        weights[i][j] = score / Math.sqrt(embedDim);
+        weightRow[j] = score / Math.sqrt(embedDim);
       }
-      const maxScore = Math.max(...weights[i]);
-      const expScores = weights[i].map((s) => Math.exp(s - maxScore));
+      const maxScore = Math.max(...weightRow);
+      const expScores = weightRow.map((s) => Math.exp(s - maxScore));
       const sumExp = expScores.reduce((a, b) => a + b, 0);
       weights[i] = expScores.map((e) => e / sumExp);
     }
     return weights;
   }
   findMostInfluentialDimension(observation) {
+    if (observation.length === 0) return "unknown";
     let maxIdx = 0;
-    let maxVal = Math.abs(observation[0]);
+    let maxVal = Math.abs(observation[0] ?? 0);
     for (let i = 1; i < observation.length; i++) {
-      if (Math.abs(observation[i]) > maxVal) {
-        maxVal = Math.abs(observation[i]);
+      const absVal = Math.abs(observation[i] ?? 0);
+      if (absVal > maxVal) {
+        maxVal = absVal;
         maxIdx = i;
       }
     }
-    return STATE_DIMENSIONS2[maxIdx] || `dim_${maxIdx}`;
+    return STATE_DIMENSIONS[maxIdx] ?? `dim_${maxIdx}`;
   }
   detectPatternMatching(attentionWeights) {
     if (attentionWeights.length < 3) return false;
     const lastRow = attentionWeights[attentionWeights.length - 1];
-    const adjacentWeight = (lastRow[lastRow.length - 2] || 0) + (lastRow[lastRow.length - 1] || 0);
+    if (!lastRow || lastRow.length < 2) return false;
+    const adjacentWeight = (lastRow[lastRow.length - 2] ?? 0) + (lastRow[lastRow.length - 1] ?? 0);
     const totalWeight = lastRow.reduce((a, b) => a + b, 0);
-    return adjacentWeight / totalWeight < 0.5;
+    return totalWeight > 0 && adjacentWeight / totalWeight < 0.5;
   }
   // Matrix operations
   initIdentityMatrix(n) {
@@ -1922,19 +1568,21 @@ var KalmanFormerEngine = class {
   initPositionalEmbedding(maxLen, embedDim) {
     const pe = [];
     for (let pos = 0; pos < maxLen; pos++) {
-      pe[pos] = [];
+      const row = [];
       for (let i = 0; i < embedDim; i++) {
         const angle = pos / Math.pow(1e4, 2 * Math.floor(i / 2) / embedDim);
-        pe[pos][i] = i % 2 === 0 ? Math.sin(angle) : Math.cos(angle);
+        row[i] = i % 2 === 0 ? Math.sin(angle) : Math.cos(angle);
       }
+      pe[pos] = row;
     }
     return pe;
   }
   initTransformerWeights(numLayers, numHeads, embedDim, headDim) {
     return Array(numLayers).fill(null).map(
-      () => Array(numHeads).fill(null).map(
-        () => this.initRandomMatrix(embedDim, headDim)[0]
-      )
+      () => Array(numHeads).fill(null).map(() => {
+        const matrix = this.initRandomMatrix(embedDim, headDim);
+        return matrix[0] ?? new Array(headDim).fill(0);
+      })
     );
   }
   matVec(A, v) {
@@ -1947,7 +1595,7 @@ var KalmanFormerEngine = class {
     return Array(rowsA).fill(null).map(
       (_, i) => Array(colsB).fill(0).map(
         (_2, j) => Array(colsA).fill(0).reduce(
-          (sum, _3, k) => sum + (A[i][k] || 0) * (B[k]?.[j] || 0),
+          (sum, _3, k) => sum + (A[i]?.[k] ?? 0) * (B[k]?.[j] ?? 0),
           0
         )
       )
@@ -1968,29 +1616,44 @@ var KalmanFormerEngine = class {
   }
   matInverse(A) {
     const n = A.length;
-    const augmented = A.map((row, i) => [...row, ...this.initIdentityMatrix(n)[i]]);
+    const identity = this.initIdentityMatrix(n);
+    const augmented = A.map((row, i) => [...row, ...identity[i] ?? Array(n).fill(0)]);
     for (let i = 0; i < n; i++) {
       let maxRow = i;
+      const rowI = augmented[i];
+      if (!rowI) continue;
       for (let k = i + 1; k < n; k++) {
-        if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
+        const rowK = augmented[k];
+        const rowMax2 = augmented[maxRow];
+        if (!rowK || !rowMax2) continue;
+        if (Math.abs(rowK[i] ?? 0) > Math.abs(rowMax2[i] ?? 0)) {
           maxRow = k;
         }
       }
-      [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
-      if (Math.abs(augmented[i][i]) < 1e-10) {
+      const rowMax = augmented[maxRow];
+      if (rowMax) {
+        augmented[i] = rowMax;
+        augmented[maxRow] = rowI;
+      }
+      const currentRow = augmented[i];
+      if (!currentRow) continue;
+      const pivotVal = currentRow[i] ?? 0;
+      if (Math.abs(pivotVal) < 1e-10) {
         return this.initDiagonalMatrix(n, 1);
       }
       for (let k = 0; k < n; k++) {
         if (k !== i) {
-          const factor = augmented[k][i] / augmented[i][i];
+          const rowK = augmented[k];
+          if (!rowK) continue;
+          const factor = (rowK[i] ?? 0) / pivotVal;
           for (let j = 0; j < 2 * n; j++) {
-            augmented[k][j] -= factor * augmented[i][j];
+            rowK[j] = (rowK[j] ?? 0) - factor * (currentRow[j] ?? 0);
           }
         }
       }
-      const pivot = augmented[i][i];
+      const pivot = currentRow[i] ?? 1;
       for (let j = 0; j < 2 * n; j++) {
-        augmented[i][j] /= pivot;
+        currentRow[j] = (currentRow[j] ?? 0) / pivot;
       }
     }
     return augmented.map((row) => row.slice(n));
@@ -2001,6 +1664,1073 @@ var KalmanFormerEngine = class {
 };
 function createKalmanFormerEngine(config) {
   const engine = new KalmanFormerEngine(config);
+  engine.initialize(config);
+  return engine;
+}
+
+// src/temporal/engines/PLRNNEngine.ts
+var STATE_DIMENSIONS2 = ["valence", "arousal", "dominance", "risk", "resources"];
+var PLRNNEngine = class {
+  constructor(config) {
+    __publicField(this, "config");
+    __publicField(this, "weights", null);
+    __publicField(this, "initialized", false);
+    // Training state
+    __publicField(this, "trainingHistory", []);
+    __publicField(this, "adamState", null);
+    // KalmanFormer integration for hybrid predictions
+    // Per roadmap: Kalman for short-term, PLRNN for long-term
+    __publicField(this, "kalmanFormer", null);
+    __publicField(this, "kalmanFormerState", null);
+    this.config = { ...DEFAULT_PLRNN_CONFIG, ...config };
+  }
+  // ============================================================================
+  // INITIALIZATION
+  // ============================================================================
+  initialize(config) {
+    if (config) {
+      this.config = { ...this.config, ...config };
+    }
+    const n = this.config.latentDim;
+    const A = Array(n).fill(0).map(() => 0.85 + Math.random() * 0.1);
+    const W = this.initializeMatrix(n, n, "sparse_stable");
+    const B = this.initializeMatrix(n, n, "near_identity");
+    const biasLatent = Array(n).fill(0).map(() => 0);
+    const biasObserved = Array(n).fill(0).map(() => 0);
+    let dendriticWeights;
+    let C;
+    if (this.config.connectivity === "dendritic" && this.config.dendriticBases) {
+      const d = this.config.dendriticBases;
+      dendriticWeights = this.initializeMatrix(n, d, "normal");
+      C = this.initializeMatrix(n, d, "normal");
+    }
+    this.weights = {
+      A,
+      W,
+      B,
+      C,
+      biasLatent,
+      biasObserved,
+      dendriticWeights,
+      meta: {
+        trainedAt: /* @__PURE__ */ new Date(),
+        trainingSamples: 0,
+        validationLoss: Infinity,
+        config: this.config
+      }
+    };
+    this.adamState = {
+      m: {},
+      v: {},
+      t: 0
+    };
+    const kalmanConfig = {
+      stateDim: n,
+      obsDim: n,
+      embedDim: Math.max(32, n * 8),
+      // Scale with state dimension
+      numHeads: 4,
+      numLayers: 2,
+      contextWindow: 24,
+      blendRatio: 0.3,
+      // Favor Kalman for stability in short-term
+      learnedGain: true
+    };
+    this.kalmanFormer = new KalmanFormerEngine(kalmanConfig);
+    this.kalmanFormer.initialize(kalmanConfig);
+    this.initialized = true;
+  }
+  loadWeights(weights) {
+    this.weights = JSON.parse(JSON.stringify(weights));
+    if (weights.meta?.config) {
+      this.config = weights.meta.config;
+    }
+    this.initialized = true;
+  }
+  getWeights() {
+    if (!this.weights) {
+      throw new Error("PLRNN not initialized. Call initialize() first.");
+    }
+    return JSON.parse(JSON.stringify(this.weights));
+  }
+  // ============================================================================
+  // FORWARD PASS
+  // ============================================================================
+  /**
+   * Forward pass: compute next state
+   *
+   * z_{t+1} = A * z_t + W * φ(z_t) + C * s_t + b_z
+   * x_t = B * z_t + b_x
+   *
+   * where φ(z) = max(z, 0) (ReLU for piecewise-linear dynamics)
+   */
+  forward(state, input) {
+    if (!this.weights || !this.initialized) {
+      throw new Error("PLRNN not initialized");
+    }
+    const { A, W, B, C, biasLatent, biasObserved, dendriticWeights } = this.weights;
+    const z = state.latentState;
+    const n = z.length;
+    const phiZ = z.map((v) => Math.max(0, v));
+    const Az = z.map((zi, i) => (A[i] ?? 0.9) * zi);
+    const WphiZ = this.matVec(W, phiZ);
+    let dendriticTerm = Array(n).fill(0);
+    if (this.config.connectivity === "dendritic" && dendriticWeights && C) {
+      const bases = dendriticWeights.map(
+        (row) => row.reduce((sum, w, i) => sum + w * (z[i % z.length] ?? 0), 0)
+      );
+      const activatedBases = bases.map((b) => Math.max(0, b));
+      dendriticTerm = C.map(
+        (row) => row.reduce((sum, c, i) => sum + c * (activatedBases[i] ?? 0), 0)
+      );
+    }
+    let inputTerm = Array(n).fill(0);
+    if (input && C) {
+      inputTerm = C.map(
+        (row) => row.reduce((sum, c, i) => sum + c * (input[i] || 0), 0)
+      );
+    }
+    const stateClamp = 10;
+    const zNext = Az.map((azi, i) => {
+      const val = azi + (WphiZ[i] ?? 0) + (dendriticTerm[i] ?? 0) + (inputTerm[i] ?? 0) + (biasLatent[i] ?? 0);
+      return Math.max(-stateClamp, Math.min(stateClamp, Number.isFinite(val) ? val : 0));
+    });
+    const xNext = this.matVec(B, zNext).map((v, i) => {
+      const val = v + (biasObserved[i] ?? 0);
+      return Math.max(-stateClamp, Math.min(stateClamp, Number.isFinite(val) ? val : 0));
+    });
+    const uncertainty = this.computeUncertainty(zNext, state.uncertainty);
+    const hiddenActivations = phiZ;
+    return {
+      latentState: zNext,
+      hiddenActivations,
+      observedState: xNext,
+      uncertainty,
+      timestamp: new Date(state.timestamp.getTime() + this.config.dt * 36e5),
+      timestep: state.timestep + 1
+    };
+  }
+  // ============================================================================
+  // PREDICTION
+  // ============================================================================
+  predict(currentState, horizon, input) {
+    const trajectory = [currentState];
+    let state = currentState;
+    for (let t = 0; t < horizon; t++) {
+      const inputT = input ? input[t] : void 0;
+      state = this.forward(state, inputT);
+      trajectory.push(state);
+    }
+    const finalState = trajectory[trajectory.length - 1];
+    const meanPrediction = finalState.observedState;
+    const uncertaintyScale = 1.96;
+    const lower = meanPrediction.map(
+      (m, i) => m - uncertaintyScale * Math.sqrt(finalState.uncertainty[i] ?? 0.1)
+    );
+    const upper = meanPrediction.map(
+      (m, i) => m + uncertaintyScale * Math.sqrt(finalState.uncertainty[i] ?? 0.1)
+    );
+    const variance = trajectory.map((s) => s.uncertainty);
+    const earlyWarningSignals = this.detectEarlyWarnings(trajectory, Math.min(5, trajectory.length));
+    return {
+      trajectory,
+      meanPrediction,
+      confidenceInterval: {
+        lower,
+        upper,
+        level: 0.95
+      },
+      variance,
+      earlyWarningSignals,
+      horizon
+    };
+  }
+  hybridPredict(currentState, horizon) {
+    const horizonMap = {
+      short: 3,
+      // 3 steps - KalmanFormer optimal
+      medium: 12,
+      // 12 steps - blended approach
+      long: 48
+      // 48 steps - full PLRNN nonlinear
+    };
+    const steps = horizonMap[horizon];
+    if (horizon === "short" && this.kalmanFormer) {
+      if (!this.kalmanFormerState) {
+        this.kalmanFormerState = this.kalmanFormer.fromPLRNNState(currentState);
+      }
+      this.kalmanFormerState = this.kalmanFormer.update(
+        this.kalmanFormerState,
+        currentState.observedState,
+        currentState.timestamp
+      );
+      const kalmanPrediction = this.kalmanFormer.predict(this.kalmanFormerState, steps);
+      const trajectory = kalmanPrediction.trajectory?.map(
+        (s) => this.kalmanFormer.toPLRNNState(s)
+      ) ?? [currentState];
+      const variance = trajectory.map(
+        () => kalmanPrediction.covariance.map((row, i) => row[i] ?? 0.1)
+      );
+      return {
+        trajectory,
+        meanPrediction: kalmanPrediction.blendedPrediction,
+        confidenceInterval: kalmanPrediction.confidenceInterval,
+        variance,
+        earlyWarningSignals: this.detectEarlyWarnings(trajectory, Math.min(3, trajectory.length)),
+        horizon: steps
+      };
+    } else if (horizon === "medium" && this.kalmanFormer) {
+      const plrnnPrediction = this.predict(currentState, steps);
+      if (!this.kalmanFormerState) {
+        this.kalmanFormerState = this.kalmanFormer.fromPLRNNState(currentState);
+      }
+      this.kalmanFormerState = this.kalmanFormer.update(
+        this.kalmanFormerState,
+        currentState.observedState,
+        currentState.timestamp
+      );
+      const kalmanPrediction = this.kalmanFormer.predict(this.kalmanFormerState, steps);
+      const blendedMean = plrnnPrediction.meanPrediction.map((plrnnVal, i) => {
+        const kalmanVal = kalmanPrediction.blendedPrediction[i] ?? plrnnVal;
+        const kalmanWeight = 0.5;
+        return kalmanWeight * kalmanVal + (1 - kalmanWeight) * plrnnVal;
+      });
+      const lower = plrnnPrediction.confidenceInterval.lower.map((plrnnLower, i) => {
+        const kalmanLower = kalmanPrediction.confidenceInterval.lower[i] ?? plrnnLower;
+        return Math.min(plrnnLower, kalmanLower);
+      });
+      const upper = plrnnPrediction.confidenceInterval.upper.map((plrnnUpper, i) => {
+        const kalmanUpper = kalmanPrediction.confidenceInterval.upper[i] ?? plrnnUpper;
+        return Math.max(plrnnUpper, kalmanUpper);
+      });
+      return {
+        trajectory: plrnnPrediction.trajectory,
+        meanPrediction: blendedMean,
+        confidenceInterval: { lower, upper, level: 0.95 },
+        variance: plrnnPrediction.variance,
+        earlyWarningSignals: plrnnPrediction.earlyWarningSignals,
+        horizon: steps
+      };
+    } else {
+      return this.predict(currentState, steps);
+    }
+  }
+  /**
+   * Update KalmanFormer state with new observation
+   * Call this after each observation to maintain state synchronization
+   */
+  updateKalmanFormerState(observation, timestamp) {
+    if (!this.kalmanFormer) return;
+    if (!this.kalmanFormerState) {
+      const initialState = {
+        latentState: [...observation],
+        hiddenActivations: observation.map((v) => Math.max(0, v)),
+        observedState: [...observation],
+        uncertainty: Array(observation.length).fill(0.1),
+        timestamp,
+        timestep: 0
+      };
+      this.kalmanFormerState = this.kalmanFormer.fromPLRNNState(initialState);
+    } else {
+      this.kalmanFormerState = this.kalmanFormer.update(
+        this.kalmanFormerState,
+        observation,
+        timestamp
+      );
+    }
+  }
+  /**
+   * Get the current KalmanFormer state (for debugging/analysis)
+   */
+  getKalmanFormerState() {
+    return this.kalmanFormerState;
+  }
+  // ============================================================================
+  // CAUSAL NETWORK EXTRACTION
+  // ============================================================================
+  extractCausalNetwork() {
+    if (!this.weights) {
+      throw new Error("PLRNN not initialized");
+    }
+    const { A, W } = this.weights;
+    const n = this.config.latentDim;
+    const nodes = STATE_DIMENSIONS2.slice(0, n).map((label, i) => ({
+      id: `node_${i}`,
+      label,
+      selfWeight: A[i] ?? 0.9,
+      centrality: this.calculateCentrality(W, i),
+      value: 0
+      // Will be updated with actual state
+    }));
+    const edges = [];
+    const significanceThreshold = 0.1;
+    for (let i = 0; i < n; i++) {
+      const row = W[i];
+      if (!row) continue;
+      for (let j = 0; j < n; j++) {
+        const weight = row[j] ?? 0;
+        if (i !== j && Math.abs(weight) > significanceThreshold) {
+          edges.push({
+            source: `node_${j}`,
+            target: `node_${i}`,
+            weight,
+            lag: this.config.dt,
+            significance: this.computeEdgeSignificance(weight, n)
+          });
+        }
+      }
+    }
+    const density = edges.length / (n * (n - 1));
+    const centralNode = nodes.reduce(
+      (max, node) => node.centrality > max.centrality ? node : max
+    ).label;
+    const feedbackLoops = this.detectFeedbackLoops(W, n);
+    return {
+      nodes,
+      edges,
+      metrics: {
+        density,
+        centralNode,
+        feedbackLoops
+      }
+    };
+  }
+  // ============================================================================
+  // INTERVENTION SIMULATION
+  // ============================================================================
+  simulateIntervention(currentState, target, intervention, magnitude) {
+    if (!this.weights) {
+      throw new Error("PLRNN not initialized");
+    }
+    const targetIdx = STATE_DIMENSIONS2.indexOf(target);
+    if (targetIdx === -1) {
+      throw new Error(`Unknown target dimension: ${target}`);
+    }
+    const input = Array(this.config.latentDim).fill(0);
+    switch (intervention) {
+      case "increase":
+        input[targetIdx] = magnitude;
+        break;
+      case "decrease":
+        input[targetIdx] = -magnitude;
+        break;
+      case "stabilize":
+        input[targetIdx] = -(currentState.latentState[targetIdx] ?? 0) * 0.5;
+        break;
+    }
+    const horizon = 24;
+    const baselineTrajectory = this.predict(currentState, horizon);
+    const interventionTrajectory = this.predict(currentState, horizon, Array(horizon).fill(input));
+    const effects = /* @__PURE__ */ new Map();
+    const n = this.config.latentDim;
+    for (let i = 0; i < n; i++) {
+      const baseline = baselineTrajectory.meanPrediction[i] ?? 0;
+      const intervened = interventionTrajectory.meanPrediction[i] ?? 0;
+      const effect = intervened - baseline;
+      const dimLabel = STATE_DIMENSIONS2[i] ?? `dim_${i}`;
+      effects.set(dimLabel, effect);
+    }
+    let maxEffect = 0;
+    let timeToPeak = 0;
+    for (let t = 0; t < horizon; t++) {
+      const intState = interventionTrajectory.trajectory[t];
+      const baseState = baselineTrajectory.trajectory[t];
+      if (!intState || !baseState) continue;
+      const effect = Math.abs(
+        (intState.observedState[targetIdx] ?? 0) - (baseState.observedState[targetIdx] ?? 0)
+      );
+      if (effect > maxEffect) {
+        maxEffect = effect;
+        timeToPeak = t * this.config.dt;
+      }
+    }
+    const sideEffects = [];
+    effects.forEach((effect, dimension) => {
+      if (dimension !== target && Math.abs(effect) > 0.1) {
+        sideEffects.push({ dimension, effect });
+      }
+    });
+    let duration = horizon;
+    for (let t = Math.floor(timeToPeak / this.config.dt); t < horizon; t++) {
+      const intState = interventionTrajectory.trajectory[t];
+      const baseState = baselineTrajectory.trajectory[t];
+      if (!intState || !baseState) continue;
+      const effect = Math.abs(
+        (intState.observedState[targetIdx] ?? 0) - (baseState.observedState[targetIdx] ?? 0)
+      );
+      if (effect < maxEffect * 0.1) {
+        duration = t * this.config.dt;
+        break;
+      }
+    }
+    const finalVariance = interventionTrajectory.variance[horizon - 1];
+    const confidence = 1 - (finalVariance?.[targetIdx] ?? 0.5);
+    return {
+      target: { dimension: target, intervention, magnitude },
+      response: {
+        effects,
+        timeToPeak,
+        duration,
+        sideEffects
+      },
+      confidence: Math.max(0, Math.min(1, confidence))
+    };
+  }
+  // ============================================================================
+  // EARLY WARNING SIGNALS
+  // ============================================================================
+  detectEarlyWarnings(stateHistory, windowSize) {
+    if (stateHistory.length < windowSize * 2) {
+      return [];
+    }
+    const signals = [];
+    const n = this.config.latentDim;
+    const earlyWindow = stateHistory.slice(0, windowSize);
+    const lateWindow = stateHistory.slice(-windowSize);
+    for (let dim = 0; dim < n; dim++) {
+      const dimLabel = STATE_DIMENSIONS2[dim] ?? `dim_${dim}`;
+      const earlyAC = this.calculateAutocorrelation(
+        earlyWindow.map((s) => s.latentState[dim] ?? 0)
+      );
+      const lateAC = this.calculateAutocorrelation(
+        lateWindow.map((s) => s.latentState[dim] ?? 0)
+      );
+      if (lateAC > earlyAC + 0.1 && lateAC > 0.5) {
+        signals.push({
+          type: "autocorrelation",
+          dimension: dimLabel,
+          strength: (lateAC - earlyAC) / (1 - earlyAC),
+          estimatedTimeToTransition: this.estimateTransitionTime(lateAC),
+          confidence: Math.min(1, stateHistory.length / 50),
+          recommendation: `\u041F\u043E\u0432\u044B\u0448\u0435\u043D\u043D\u0430\u044F \u0430\u0432\u0442\u043E\u043A\u043E\u0440\u0440\u0435\u043B\u044F\u0446\u0438\u044F \u0432 ${dimLabel} \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0435\u0442 \u043D\u0430 \u043F\u0440\u0438\u0431\u043B\u0438\u0436\u0435\u043D\u0438\u0435 \u043A \u043F\u0435\u0440\u0435\u0445\u043E\u0434\u043D\u043E\u043C\u0443 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u044E. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u0442\u0441\u044F \u043F\u0440\u043E\u0444\u0438\u043B\u0430\u043A\u0442\u0438\u0447\u0435\u0441\u043A\u0430\u044F \u0438\u043D\u0442\u0435\u0440\u0432\u0435\u043D\u0446\u0438\u044F.`
+        });
+      }
+      const earlyVar = this.calculateVariance(
+        earlyWindow.map((s) => s.latentState[dim] ?? 0)
+      );
+      const lateVar = this.calculateVariance(
+        lateWindow.map((s) => s.latentState[dim] ?? 0)
+      );
+      if (lateVar > earlyVar * 1.5) {
+        signals.push({
+          type: "variance",
+          dimension: dimLabel,
+          strength: (lateVar - earlyVar) / earlyVar,
+          estimatedTimeToTransition: null,
+          confidence: Math.min(1, stateHistory.length / 50),
+          recommendation: `\u0423\u0432\u0435\u043B\u0438\u0447\u0435\u043D\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u0431\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u0438 ${dimLabel}. \u0421\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435 \u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0441\u044F \u043C\u0435\u043D\u0435\u0435 \u0441\u0442\u0430\u0431\u0438\u043B\u044C\u043D\u044B\u043C.`
+        });
+      }
+      const flickering = this.detectFlickering(
+        lateWindow.map((s) => s.latentState[dim] ?? 0)
+      );
+      if (flickering > 0.3) {
+        signals.push({
+          type: "flickering",
+          dimension: dimLabel,
+          strength: flickering,
+          estimatedTimeToTransition: 12,
+          // hours
+          confidence: 0.6,
+          recommendation: `\u041E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u043E "\u043C\u0435\u0440\u0446\u0430\u043D\u0438\u0435" \u0432 ${dimLabel} - \u043F\u0440\u0438\u0437\u043D\u0430\u043A \u0441\u043A\u043E\u0440\u043E\u0433\u043E \u043F\u0435\u0440\u0435\u0445\u043E\u0434\u0430 \u043C\u0435\u0436\u0434\u0443 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u044F\u043C\u0438.`
+        });
+      }
+    }
+    if (this.weights) {
+      const connectivity = this.calculateNetworkConnectivity(stateHistory);
+      if (connectivity.late > connectivity.early * 1.3) {
+        signals.push({
+          type: "connectivity",
+          dimension: "network",
+          strength: (connectivity.late - connectivity.early) / connectivity.early,
+          estimatedTimeToTransition: null,
+          confidence: 0.7,
+          recommendation: "\u0423\u0441\u0438\u043B\u0435\u043D\u0438\u0435 \u0441\u0432\u044F\u0437\u0435\u0439 \u043C\u0435\u0436\u0434\u0443 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u0438\u043C\u0438 \u0438\u0437\u043C\u0435\u0440\u0435\u043D\u0438\u044F\u043C\u0438. \u0421\u0438\u0441\u0442\u0435\u043C\u0430 \u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0441\u044F \u0431\u043E\u043B\u0435\u0435 \u0443\u044F\u0437\u0432\u0438\u043C\u043E\u0439 \u043A \u043A\u0430\u0441\u043A\u0430\u0434\u043D\u044B\u043C \u044D\u0444\u0444\u0435\u043A\u0442\u0430\u043C."
+        });
+      }
+    }
+    return signals;
+  }
+  // ============================================================================
+  // TRAINING
+  // ============================================================================
+  trainOnline(sample) {
+    if (!this.weights || !this.adamState) {
+      this.initialize();
+    }
+    const startTime = Date.now();
+    const { observations, timestamps: _timestamps } = sample;
+    if (observations.length < 2) {
+      return {
+        loss: Infinity,
+        validationLoss: Infinity,
+        epochs: 0,
+        trainingTime: 0,
+        converged: false,
+        weights: this.weights
+      };
+    }
+    let totalLoss = 0;
+    const firstObs = observations[0];
+    if (!firstObs) {
+      return {
+        loss: Infinity,
+        validationLoss: Infinity,
+        epochs: 0,
+        trainingTime: 0,
+        converged: false,
+        weights: this.weights
+      };
+    }
+    let state = this.initializeState(firstObs);
+    for (let t = 0; t < observations.length - 1; t++) {
+      const predicted = this.forward(state);
+      const target = observations[t + 1];
+      if (!target) continue;
+      const loss = this.calculateLoss([predicted.observedState], [target]);
+      totalLoss += loss;
+      this.updateWeightsOnline(state, predicted, target);
+      if (Math.random() < this.config.teacherForcingRatio) {
+        state = this.initializeState(target);
+        state.timestep = predicted.timestep;
+      } else {
+        state = predicted;
+      }
+    }
+    const avgLoss = totalLoss / (observations.length - 1);
+    this.trainingHistory.push(avgLoss);
+    this.weights.meta.trainingSamples++;
+    this.weights.meta.trainedAt = /* @__PURE__ */ new Date();
+    return {
+      loss: avgLoss,
+      validationLoss: avgLoss,
+      epochs: 1,
+      trainingTime: Date.now() - startTime,
+      converged: avgLoss < 0.1,
+      weights: this.weights
+    };
+  }
+  trainBatch(samples) {
+    const startTime = Date.now();
+    let totalLoss = 0;
+    for (const sample of samples) {
+      const result = this.trainOnline(sample);
+      totalLoss += result.loss;
+    }
+    const avgLoss = totalLoss / samples.length;
+    const converged = avgLoss < 0.05;
+    if (converged) {
+      this.weights.meta.validationLoss = avgLoss;
+    }
+    return {
+      loss: avgLoss,
+      validationLoss: avgLoss,
+      epochs: samples.length,
+      trainingTime: Date.now() - startTime,
+      converged,
+      weights: this.weights
+    };
+  }
+  calculateLoss(predicted, actual) {
+    let loss = 0;
+    let count = 0;
+    for (let t = 0; t < predicted.length; t++) {
+      const predRow = predicted[t];
+      const actualRow = actual[t];
+      if (!predRow || !actualRow) continue;
+      for (let i = 0; i < predRow.length; i++) {
+        const diff = (predRow[i] ?? 0) - (actualRow[i] ?? 0);
+        loss += diff * diff;
+        count++;
+      }
+    }
+    return count > 0 ? loss / count : 0;
+  }
+  getComplexityMetrics() {
+    if (!this.weights) {
+      return { effectiveDimensionality: 0, sparsity: 0, lyapunovExponent: 0 };
+    }
+    const { W } = this.weights;
+    const n = W.length;
+    let zeroCount = 0;
+    let totalCount = 0;
+    for (let i = 0; i < n; i++) {
+      const row = W[i];
+      if (!row) continue;
+      for (let j = 0; j < n; j++) {
+        if (Math.abs(row[j] ?? 0) < 0.01) zeroCount++;
+        totalCount++;
+      }
+    }
+    const sparsity = totalCount > 0 ? zeroCount / totalCount : 0;
+    const effectiveDimensionality = n * (1 - sparsity);
+    const maxEigenvalue = this.approximateMaxEigenvalue(W);
+    const lyapunovExponent = Math.log(Math.abs(maxEigenvalue));
+    return {
+      effectiveDimensionality,
+      sparsity,
+      lyapunovExponent
+    };
+  }
+  // ============================================================================
+  // PRIVATE HELPERS
+  // ============================================================================
+  initializeMatrix(rows, cols, type) {
+    const matrix = [];
+    const scale = Math.sqrt(2 / (rows + cols));
+    for (let i = 0; i < rows; i++) {
+      const row = [];
+      for (let j = 0; j < cols; j++) {
+        if (type === "identity") {
+          row[j] = i === j ? 1 : 0;
+        } else if (type === "near_identity") {
+          row[j] = i === j ? 1 + (Math.random() - 0.5) * 0.1 : (Math.random() - 0.5) * 0.02;
+        } else if (type === "sparse") {
+          row[j] = Math.random() < 0.2 ? (Math.random() - 0.5) * 2 * scale : 0;
+        } else if (type === "sparse_stable") {
+          const smallScale = scale * 0.3;
+          row[j] = Math.random() < 0.3 ? (Math.random() - 0.5) * 2 * smallScale : 0;
+        } else {
+          row[j] = (Math.random() - 0.5) * 2 * scale;
+        }
+      }
+      matrix[i] = row;
+    }
+    return matrix;
+  }
+  matVec(A, v) {
+    return A.map((row) => row.reduce((sum, val, j) => sum + val * (v[j] ?? 0), 0));
+  }
+  initializeState(observation) {
+    const n = this.config.latentDim;
+    const obs = observation.slice(0, n);
+    while (obs.length < n) {
+      obs.push(0);
+    }
+    return {
+      latentState: [...obs],
+      hiddenActivations: obs.map((v) => Math.max(0, v)),
+      observedState: [...obs],
+      uncertainty: Array(n).fill(0.1),
+      timestamp: /* @__PURE__ */ new Date(),
+      timestep: 0
+    };
+  }
+  computeUncertainty(zNext, prevUncertainty) {
+    const growthRate = 0.05;
+    const maxUncertainty = 1;
+    return prevUncertainty.map((u, i) => {
+      const stateDeviation = Math.abs(zNext[i] ?? 0) > 2 ? 0.1 : 0;
+      const newU = u * (1 + growthRate) + stateDeviation;
+      return Math.min(maxUncertainty, newU);
+    });
+  }
+  calculateCentrality(W, nodeIdx) {
+    const nodeRow = W[nodeIdx];
+    const outStrength = nodeRow ? nodeRow.reduce((sum, w) => sum + Math.abs(w), 0) : 0;
+    let inStrength = 0;
+    for (let i = 0; i < W.length; i++) {
+      const row = W[i];
+      if (row) {
+        inStrength += Math.abs(row[nodeIdx] ?? 0);
+      }
+    }
+    return (outStrength + inStrength) / (2 * W.length);
+  }
+  computeEdgeSignificance(weight, n) {
+    const expectedWeight = 1 / n;
+    return Math.min(1, Math.abs(weight) / expectedWeight);
+  }
+  detectFeedbackLoops(W, n) {
+    const loops = [];
+    const threshold = 0.1;
+    for (let i = 0; i < n; i++) {
+      const rowI = W[i];
+      const rowJ_check = W;
+      if (!rowI) continue;
+      for (let j = i + 1; j < n; j++) {
+        const rowJ = rowJ_check[j];
+        if (!rowJ) continue;
+        const wij = rowI[j] ?? 0;
+        const wji = rowJ[i] ?? 0;
+        if (Math.abs(wij) > threshold && Math.abs(wji) > threshold) {
+          const dimI = STATE_DIMENSIONS2[i] ?? `dim_${i}`;
+          const dimJ = STATE_DIMENSIONS2[j] ?? `dim_${j}`;
+          loops.push([dimI, dimJ]);
+        }
+      }
+    }
+    return loops;
+  }
+  calculateAutocorrelation(series) {
+    if (series.length < 3) return 0;
+    const mean = series.reduce((a, b) => a + b, 0) / series.length;
+    let numerator = 0;
+    let denominator = 0;
+    for (let t = 0; t < series.length - 1; t++) {
+      const vt = series[t] ?? 0;
+      const vt1 = series[t + 1] ?? 0;
+      numerator += (vt - mean) * (vt1 - mean);
+    }
+    for (let t = 0; t < series.length; t++) {
+      const vt = series[t] ?? 0;
+      denominator += (vt - mean) ** 2;
+    }
+    return denominator > 0 ? numerator / denominator : 0;
+  }
+  calculateVariance(series) {
+    if (series.length < 2) return 0;
+    const mean = series.reduce((a, b) => a + b, 0) / series.length;
+    const variance = series.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (series.length - 1);
+    return variance;
+  }
+  detectFlickering(series) {
+    if (series.length < 5) return 0;
+    const mean = series.reduce((a, b) => a + b, 0) / series.length;
+    let crossings = 0;
+    for (let t = 1; t < series.length; t++) {
+      const prev = series[t - 1] ?? 0;
+      const curr = series[t] ?? 0;
+      if (prev < mean && curr >= mean || prev >= mean && curr < mean) {
+        crossings++;
+      }
+    }
+    const expectedCrossings = (series.length - 1) / 2;
+    const flickering = crossings / expectedCrossings;
+    return Math.max(0, flickering - 1);
+  }
+  estimateTransitionTime(autocorrelation) {
+    if (autocorrelation < 0.7) return null;
+    const timeScale = 1 / (1 - autocorrelation);
+    return Math.min(48, timeScale * this.config.dt);
+  }
+  calculateNetworkConnectivity(stateHistory) {
+    const midpoint = Math.floor(stateHistory.length / 2);
+    const calculateCorrelationMatrix = (states) => {
+      const n = this.config.latentDim;
+      let totalCorr = 0;
+      let count = 0;
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const seriesI = states.map((s) => s.latentState[i] ?? 0);
+          const seriesJ = states.map((s) => s.latentState[j] ?? 0);
+          const corr = this.calculateCorrelation(seriesI, seriesJ);
+          totalCorr += Math.abs(corr);
+          count++;
+        }
+      }
+      return count > 0 ? totalCorr / count : 0;
+    };
+    return {
+      early: calculateCorrelationMatrix(stateHistory.slice(0, midpoint)),
+      late: calculateCorrelationMatrix(stateHistory.slice(midpoint))
+    };
+  }
+  calculateCorrelation(x, y) {
+    const n = x.length;
+    if (n < 3) return 0;
+    const meanX = x.reduce((a, b) => a + b, 0) / n;
+    const meanY = y.reduce((a, b) => a + b, 0) / n;
+    let numerator = 0;
+    let denomX = 0;
+    let denomY = 0;
+    for (let i = 0; i < n; i++) {
+      const dx = (x[i] ?? 0) - meanX;
+      const dy = (y[i] ?? 0) - meanY;
+      numerator += dx * dy;
+      denomX += dx * dx;
+      denomY += dy * dy;
+    }
+    const denom = Math.sqrt(denomX * denomY);
+    return denom > 0 ? numerator / denom : 0;
+  }
+  updateWeightsOnline(prevState, predicted, target) {
+    if (!this.weights || !this.adamState) return;
+    const { A, W, B, biasLatent, biasObserved } = this.weights;
+    const lr = this.config.learningRate;
+    const clip = this.config.gradientClip;
+    const l1 = this.config.l1Regularization;
+    const outputError = predicted.observedState.map((p, i) => (target[i] ?? 0) - p);
+    const latentError = this.matVec(
+      B.map((row) => [...row]),
+      // Transpose approximation for square matrix
+      outputError
+    );
+    for (let i = 0; i < B.length; i++) {
+      const rowB = B[i];
+      if (!rowB) continue;
+      const errI = outputError[i] ?? 0;
+      for (let j = 0; j < rowB.length; j++) {
+        let grad = -errI * (predicted.latentState[j] ?? 0);
+        grad = Math.max(-clip, Math.min(clip, grad));
+        const currentB = rowB[j] ?? 0;
+        rowB[j] = currentB - lr * grad;
+      }
+      const currentBiasObs = biasObserved[i];
+      if (currentBiasObs !== void 0) {
+        biasObserved[i] = currentBiasObs - lr * Math.max(-clip, Math.min(clip, -errI));
+      }
+    }
+    for (let i = 0; i < A.length; i++) {
+      const latErr = latentError[i] ?? 0;
+      const prevLatent = prevState.latentState[i] ?? 0;
+      let grad = -latErr * prevLatent;
+      grad = Math.max(-clip, Math.min(clip, grad));
+      const currentA = A[i];
+      if (currentA !== void 0) {
+        A[i] = currentA - lr * grad;
+      }
+    }
+    const phiZ = prevState.latentState.map((v) => Math.max(0, v));
+    for (let i = 0; i < W.length; i++) {
+      const rowW = W[i];
+      if (!rowW) continue;
+      const latErr = latentError[i] ?? 0;
+      for (let j = 0; j < rowW.length; j++) {
+        const phi = phiZ[j] ?? 0;
+        const wij = rowW[j] ?? 0;
+        let grad = -latErr * phi;
+        grad += l1 * Math.sign(wij);
+        grad = Math.max(-clip, Math.min(clip, grad));
+        rowW[j] = wij - lr * grad;
+      }
+      const currentBiasLat = biasLatent[i];
+      if (currentBiasLat !== void 0) {
+        biasLatent[i] = currentBiasLat - lr * Math.max(-clip, Math.min(clip, -latErr));
+      }
+    }
+  }
+  approximateMaxEigenvalue(W) {
+    const n = W.length;
+    let v = Array(n).fill(1 / Math.sqrt(n));
+    for (let iter = 0; iter < 20; iter++) {
+      const Av2 = this.matVec(W, v);
+      const norm = Math.sqrt(Av2.reduce((sum, x) => sum + x * x, 0));
+      if (norm < 1e-10) return 0;
+      v = Av2.map((x) => x / norm);
+    }
+    const Av = this.matVec(W, v);
+    return Av.reduce((sum, x, i) => sum + x * v[i], 0);
+  }
+  // ============================================================================
+  // BPTT SUPPORT METHODS (for PLRNNTrainer)
+  // ============================================================================
+  /**
+   * Get latent dimension
+   */
+  getLatentDim() {
+    return this.config.latentDim;
+  }
+  /**
+   * Get config
+   */
+  getConfig() {
+    return { ...this.config };
+  }
+  /**
+   * Compute gradients for a single timestep (for BPTT)
+   * Returns gradients for A, W, B, biasLatent, biasObserved
+   */
+  computeStepGradients(prevState, currentState, target, outputError) {
+    if (!this.weights) {
+      throw new Error("PLRNNEngine not initialized");
+    }
+    const { W, B } = this.weights;
+    const n = this.config.latentDim;
+    const obsError = outputError ?? currentState.observedState.map(
+      (pred, i) => pred - (target[i] ?? 0)
+    );
+    const dB = [];
+    for (let i = 0; i < n; i++) {
+      const row = [];
+      for (let j = 0; j < n; j++) {
+        row[j] = (obsError[i] ?? 0) * (currentState.latentState[j] ?? 0);
+      }
+      dB[i] = row;
+    }
+    const dBiasObserved = [...obsError];
+    const latentError = [];
+    for (let j = 0; j < n; j++) {
+      let sum = 0;
+      for (let i = 0; i < n; i++) {
+        const bRow = B[i];
+        if (bRow) {
+          sum += (bRow[j] ?? 0) * (obsError[i] ?? 0);
+        }
+      }
+      latentError[j] = sum;
+    }
+    const phiZ = prevState.latentState.map((v) => Math.max(0, v));
+    const phiDerivative = prevState.latentState.map((v) => v > 0 ? 1 : 0);
+    const dA = [];
+    for (let i = 0; i < n; i++) {
+      dA[i] = (latentError[i] ?? 0) * (prevState.latentState[i] ?? 0);
+    }
+    const dW = [];
+    for (let i = 0; i < n; i++) {
+      const row = [];
+      for (let j = 0; j < n; j++) {
+        row[j] = (latentError[i] ?? 0) * (phiZ[j] ?? 0);
+      }
+      dW[i] = row;
+    }
+    const dBiasLatent = [...latentError];
+    const wTransposeError = [];
+    for (let j = 0; j < n; j++) {
+      let sum = 0;
+      for (let i = 0; i < n; i++) {
+        const wRow = W[i];
+        if (wRow) {
+          sum += (wRow[j] ?? 0) * (latentError[i] ?? 0);
+        }
+      }
+      wTransposeError[j] = sum * (phiDerivative[j] ?? 0);
+    }
+    const propagatedError = latentError.map((ae, i) => {
+      const aVal = this.weights.A[i] ?? 0.9;
+      return aVal * ae + (wTransposeError[i] ?? 0);
+    });
+    return {
+      dA,
+      dW,
+      dB,
+      dBiasLatent,
+      dBiasObserved,
+      latentError: propagatedError
+    };
+  }
+  /**
+   * Apply accumulated gradients using Adam optimizer
+   */
+  applyGradients(gradients, learningRate, l1Reg = 0.01, l2Reg = 1e-4, gradClip = 1) {
+    if (!this.weights) {
+      throw new Error("PLRNNEngine not initialized");
+    }
+    const { A, W, B, biasLatent, biasObserved } = this.weights;
+    const n = this.config.latentDim;
+    if (!this.adamState) {
+      this.adamState = {
+        m: {},
+        v: {},
+        t: 0
+      };
+    }
+    this.adamState.t += 1;
+    const beta1 = 0.9;
+    const beta2 = 0.999;
+    const epsilon = 1e-8;
+    const t = this.adamState.t;
+    const biasCorrection1 = 1 - Math.pow(beta1, t);
+    const biasCorrection2 = 1 - Math.pow(beta2, t);
+    const clip = (g) => Math.max(-gradClip, Math.min(gradClip, g));
+    if (!this.adamState.m["A"]) {
+      this.adamState.m["A"] = [Array(n).fill(0)];
+      this.adamState.v["A"] = [Array(n).fill(0)];
+    }
+    for (let i = 0; i < n; i++) {
+      let grad = gradients.dA[i] ?? 0;
+      grad += l2Reg * (A[i] ?? 0);
+      grad = clip(grad);
+      const mA = this.adamState.m["A"][0];
+      const vA = this.adamState.v["A"][0];
+      mA[i] = beta1 * (mA[i] ?? 0) + (1 - beta1) * grad;
+      vA[i] = beta2 * (vA[i] ?? 0) + (1 - beta2) * grad * grad;
+      const mHat = mA[i] / biasCorrection1;
+      const vHat = vA[i] / biasCorrection2;
+      A[i] = (A[i] ?? 0.9) - learningRate * mHat / (Math.sqrt(vHat) + epsilon);
+    }
+    if (!this.adamState.m["W"]) {
+      this.adamState.m["W"] = Array(n).fill(null).map(() => Array(n).fill(0));
+      this.adamState.v["W"] = Array(n).fill(null).map(() => Array(n).fill(0));
+    }
+    for (let i = 0; i < n; i++) {
+      const wRow = W[i];
+      const dWRow = gradients.dW[i];
+      if (!wRow || !dWRow) continue;
+      for (let j = 0; j < n; j++) {
+        let grad = dWRow[j] ?? 0;
+        const wij = wRow[j] ?? 0;
+        grad += l1Reg * Math.sign(wij);
+        grad += l2Reg * wij;
+        grad = clip(grad);
+        const mW = this.adamState.m["W"];
+        const vW = this.adamState.v["W"];
+        mW[i][j] = beta1 * (mW[i][j] ?? 0) + (1 - beta1) * grad;
+        vW[i][j] = beta2 * (vW[i][j] ?? 0) + (1 - beta2) * grad * grad;
+        const mHat = mW[i][j] / biasCorrection1;
+        const vHat = vW[i][j] / biasCorrection2;
+        wRow[j] = wij - learningRate * mHat / (Math.sqrt(vHat) + epsilon);
+      }
+    }
+    if (!this.adamState.m["B"]) {
+      this.adamState.m["B"] = Array(n).fill(null).map(() => Array(n).fill(0));
+      this.adamState.v["B"] = Array(n).fill(null).map(() => Array(n).fill(0));
+    }
+    for (let i = 0; i < n; i++) {
+      const bRow = B[i];
+      const dBRow = gradients.dB[i];
+      if (!bRow || !dBRow) continue;
+      for (let j = 0; j < n; j++) {
+        let grad = dBRow[j] ?? 0;
+        grad += l2Reg * (bRow[j] ?? 0);
+        grad = clip(grad);
+        const mB = this.adamState.m["B"];
+        const vB = this.adamState.v["B"];
+        mB[i][j] = beta1 * (mB[i][j] ?? 0) + (1 - beta1) * grad;
+        vB[i][j] = beta2 * (vB[i][j] ?? 0) + (1 - beta2) * grad * grad;
+        const mHat = mB[i][j] / biasCorrection1;
+        const vHat = vB[i][j] / biasCorrection2;
+        bRow[j] = (bRow[j] ?? 0) - learningRate * mHat / (Math.sqrt(vHat) + epsilon);
+      }
+    }
+    if (!this.adamState.m["biasLatent"]) {
+      this.adamState.m["biasLatent"] = [Array(n).fill(0)];
+      this.adamState.v["biasLatent"] = [Array(n).fill(0)];
+    }
+    for (let i = 0; i < n; i++) {
+      let grad = clip(gradients.dBiasLatent[i] ?? 0);
+      const mBL = this.adamState.m["biasLatent"][0];
+      const vBL = this.adamState.v["biasLatent"][0];
+      mBL[i] = beta1 * (mBL[i] ?? 0) + (1 - beta1) * grad;
+      vBL[i] = beta2 * (vBL[i] ?? 0) + (1 - beta2) * grad * grad;
+      const mHat = mBL[i] / biasCorrection1;
+      const vHat = vBL[i] / biasCorrection2;
+      biasLatent[i] = (biasLatent[i] ?? 0) - learningRate * mHat / (Math.sqrt(vHat) + epsilon);
+    }
+    if (!this.adamState.m["biasObserved"]) {
+      this.adamState.m["biasObserved"] = [Array(n).fill(0)];
+      this.adamState.v["biasObserved"] = [Array(n).fill(0)];
+    }
+    for (let i = 0; i < n; i++) {
+      let grad = clip(gradients.dBiasObserved[i] ?? 0);
+      const mBO = this.adamState.m["biasObserved"][0];
+      const vBO = this.adamState.v["biasObserved"][0];
+      mBO[i] = beta1 * (mBO[i] ?? 0) + (1 - beta1) * grad;
+      vBO[i] = beta2 * (vBO[i] ?? 0) + (1 - beta2) * grad * grad;
+      const mHat = mBO[i] / biasCorrection1;
+      const vHat = vBO[i] / biasCorrection2;
+      biasObserved[i] = (biasObserved[i] ?? 0) - learningRate * mHat / (Math.sqrt(vHat) + epsilon);
+    }
+  }
+  /**
+   * Reset Adam optimizer state (for new training run)
+   */
+  resetAdamState() {
+    this.adamState = null;
+  }
+  /**
+   * Create a state from observation values
+   */
+  createState(observation, timestamp) {
+    const state = this.initializeState(observation);
+    if (timestamp) {
+      state.timestamp = timestamp;
+    }
+    return state;
+  }
+};
+function createPLRNNEngine(config) {
+  const engine = new PLRNNEngine(config);
   engine.initialize(config);
   return engine;
 }
@@ -2088,7 +2818,7 @@ var VoiceInputAdapter = class {
       quality
     };
   }
-  async processFile(filePath) {
+  async processFile(_filePath) {
     throw new Error("File processing not implemented. Use processAudio with audio buffer.");
   }
   async processWithTranscription(audioBuffer, existingTranscript) {
@@ -2125,15 +2855,16 @@ var VoiceInputAdapter = class {
     );
     const energyStats = this.calculateStats(energyContour);
     const mfccs = this.extractMFCCs(windowedFrames, sr);
-    const mfccMean = mfccs[0].map(
-      (_, i) => mfccs.reduce((sum, frame) => sum + frame[i], 0) / mfccs.length
-    );
-    const mfccStd = mfccs[0].map((_, i) => {
-      const mean = mfccMean[i];
+    const firstFrame = mfccs[0];
+    const mfccMean = firstFrame ? firstFrame.map(
+      (_, i) => mfccs.reduce((sum, frame) => sum + (frame[i] ?? 0), 0) / mfccs.length
+    ) : [];
+    const mfccStd = firstFrame ? firstFrame.map((_, i) => {
+      const mean = mfccMean[i] ?? 0;
       return Math.sqrt(
-        mfccs.reduce((sum, frame) => sum + Math.pow(frame[i] - mean, 2), 0) / mfccs.length
+        mfccs.reduce((sum, frame) => sum + Math.pow((frame[i] ?? 0) - mean, 2), 0) / mfccs.length
       );
-    });
+    }) : [];
     const voiceQuality = this.calculateVoiceQuality(windowedFrames, pitchContour, sr);
     const temporal = this.calculateTemporalFeatures(audioBuffer, frames, pitchContour, sr);
     const spectral = this.calculateSpectralFeatures(windowedFrames, sr, mfccMean, mfccStd);
@@ -2269,7 +3000,7 @@ var VoiceInputAdapter = class {
   // ============================================================================
   // TRANSCRIPTION
   // ============================================================================
-  async transcribe(audioBuffer) {
+  async transcribe(_audioBuffer) {
     if (!this.config.enableWhisper) {
       throw new Error("Whisper transcription not enabled");
     }
@@ -2355,6 +3086,7 @@ var VoiceInputAdapter = class {
     for (let i = 0; i < predictions.length; i++) {
       const pred = predictions[i];
       const actual = actuals[i];
+      if (!pred || !actual) continue;
       const vadError = Math.sqrt(
         Math.pow(pred.vad.valence - actual.vad.valence, 2) + Math.pow(pred.vad.arousal - actual.vad.arousal, 2) + Math.pow(pred.vad.dominance - actual.vad.dominance, 2)
       );
@@ -2366,11 +3098,13 @@ var VoiceInputAdapter = class {
       const textPerformance = 1 - textError / totalError;
       const voicePerformance = 1 - voiceError / totalError;
       const alpha = 0.1;
-      this.config.fusionWeights[0] = this.config.fusionWeights[0] * (1 - alpha) + textPerformance * alpha;
-      this.config.fusionWeights[1] = this.config.fusionWeights[1] * (1 - alpha) + voicePerformance * alpha;
-      const sum = this.config.fusionWeights[0] + this.config.fusionWeights[1];
-      this.config.fusionWeights[0] /= sum;
-      this.config.fusionWeights[1] /= sum;
+      const currentTextWeight = this.config.fusionWeights[0] ?? 0.5;
+      const currentVoiceWeight = this.config.fusionWeights[1] ?? 0.5;
+      this.config.fusionWeights[0] = currentTextWeight * (1 - alpha) + textPerformance * alpha;
+      this.config.fusionWeights[1] = currentVoiceWeight * (1 - alpha) + voicePerformance * alpha;
+      const sum = (this.config.fusionWeights[0] ?? 0.5) + (this.config.fusionWeights[1] ?? 0.5);
+      this.config.fusionWeights[0] = (this.config.fusionWeights[0] ?? 0.5) / sum;
+      this.config.fusionWeights[1] = (this.config.fusionWeights[1] ?? 0.5) / sum;
     }
   }
   // ============================================================================
@@ -2378,9 +3112,9 @@ var VoiceInputAdapter = class {
   // ============================================================================
   preEmphasis(signal, coef) {
     const result = new Float32Array(signal.length);
-    result[0] = signal[0];
+    result[0] = signal[0] ?? 0;
     for (let i = 1; i < signal.length; i++) {
-      result[i] = signal[i] - coef * signal[i - 1];
+      result[i] = (signal[i] ?? 0) - coef * (signal[i - 1] ?? 0);
     }
     return result;
   }
@@ -2396,7 +3130,7 @@ var VoiceInputAdapter = class {
     const result = new Float32Array(N);
     for (let i = 0; i < N; i++) {
       const window = 0.54 - 0.46 * Math.cos(2 * Math.PI * i / (N - 1));
-      result[i] = frame[i] * window;
+      result[i] = (frame[i] ?? 0) * window;
     }
     return result;
   }
@@ -2409,7 +3143,7 @@ var VoiceInputAdapter = class {
       for (let lag = minLag; lag <= maxLag && lag < frame.length; lag++) {
         let corr = 0;
         for (let i = 0; i < frame.length - lag; i++) {
-          corr += frame[i] * frame[i + lag];
+          corr += (frame[i] ?? 0) * (frame[i + lag] ?? 0);
         }
         if (corr > maxCorr) {
           maxCorr = corr;
@@ -2442,8 +3176,9 @@ var VoiceInputAdapter = class {
       let imag = 0;
       for (let n = 0; n < N; n++) {
         const angle = 2 * Math.PI * k * n / N;
-        real += frame[n] * Math.cos(angle);
-        imag -= frame[n] * Math.sin(angle);
+        const sample = frame[n] ?? 0;
+        real += sample * Math.cos(angle);
+        imag -= sample * Math.sin(angle);
       }
       result.push(Math.sqrt(real * real + imag * imag));
     }
@@ -2466,7 +3201,7 @@ var VoiceInputAdapter = class {
       let energy = 0;
       for (let k = binLow; k < binHigh && k < spectrum.length; k++) {
         const weight = k < binCenter ? (k - binLow) / (binCenter - binLow) : (binHigh - k) / (binHigh - binCenter);
-        energy += spectrum[k] * Math.max(0, weight);
+        energy += (spectrum[k] ?? 0) * Math.max(0, weight);
       }
       melEnergies.push(energy);
     }
@@ -2478,7 +3213,7 @@ var VoiceInputAdapter = class {
     for (let k = 0; k < numCoeffs; k++) {
       let sum = 0;
       for (let n = 0; n < N; n++) {
-        sum += input[n] * Math.cos(Math.PI * k * (n + 0.5) / N);
+        sum += (input[n] ?? 0) * Math.cos(Math.PI * k * (n + 0.5) / N);
       }
       result.push(sum * Math.sqrt(2 / N));
     }
@@ -2494,9 +3229,9 @@ var VoiceInputAdapter = class {
       const srcIndexFloor = Math.floor(srcIndex);
       const frac = srcIndex - srcIndexFloor;
       if (srcIndexFloor + 1 < buffer.length) {
-        result[i] = buffer[srcIndexFloor] * (1 - frac) + buffer[srcIndexFloor + 1] * frac;
+        result[i] = (buffer[srcIndexFloor] ?? 0) * (1 - frac) + (buffer[srcIndexFloor + 1] ?? 0) * frac;
       } else {
-        result[i] = buffer[srcIndexFloor];
+        result[i] = buffer[srcIndexFloor] ?? 0;
       }
     }
     return result;
@@ -2542,15 +3277,17 @@ var VoiceInputAdapter = class {
     const range = Math.max(...values) - Math.min(...values);
     return { meanEnergy: mean, stdEnergy: std, rangeEnergy: range };
   }
-  calculateVoiceQuality(frames, pitchContour, sampleRate) {
-    const voicedFrames = frames.filter((_, i) => pitchContour[i] > 0);
+  calculateVoiceQuality(frames, pitchContour, _sampleRate) {
+    const voicedFrames = frames.filter((_, i) => (pitchContour[i] ?? 0) > 0);
     if (voicedFrames.length < 3) {
       return { jitterLocal: 0, shimmerLocal: 0, hnr: 0, nhr: 0 };
     }
     const voicedPitches = pitchContour.filter((f) => f > 0);
     let jitterSum = 0;
     for (let i = 1; i < voicedPitches.length; i++) {
-      jitterSum += Math.abs(voicedPitches[i] - voicedPitches[i - 1]);
+      const curr = voicedPitches[i] ?? 0;
+      const prev = voicedPitches[i - 1] ?? 0;
+      jitterSum += Math.abs(curr - prev);
     }
     const jitterLocal = jitterSum / (voicedPitches.length - 1) / (voicedPitches.reduce((a, b) => a + b, 0) / voicedPitches.length) * 100;
     const amplitudes = voicedFrames.map(
@@ -2558,7 +3295,9 @@ var VoiceInputAdapter = class {
     );
     let shimmerSum = 0;
     for (let i = 1; i < amplitudes.length; i++) {
-      shimmerSum += Math.abs(amplitudes[i] - amplitudes[i - 1]);
+      const curr = amplitudes[i] ?? 0;
+      const prev = amplitudes[i - 1] ?? 0;
+      shimmerSum += Math.abs(curr - prev);
     }
     const shimmerLocal = shimmerSum / (amplitudes.length - 1) / (amplitudes.reduce((a, b) => a + b, 0) / amplitudes.length) * 100;
     const hnr = 20 * Math.log10(1 / (jitterLocal / 100 + shimmerLocal / 100 + 0.01));
@@ -2570,21 +3309,22 @@ var VoiceInputAdapter = class {
       nhr
     };
   }
-  calculateTemporalFeatures(audioBuffer, frames, pitchContour, sampleRate) {
+  calculateTemporalFeatures(audioBuffer, _frames, pitchContour, sampleRate) {
     const duration = audioBuffer.length / sampleRate;
     const voicedFrames = pitchContour.filter((f) => f > 0).length;
     const totalFrames = pitchContour.length;
     let pauseCount = 0;
     let pauseDuration = 0;
-    let inPause = pitchContour[0] === 0;
+    let inPause = (pitchContour[0] ?? 0) === 0;
     for (let i = 1; i < pitchContour.length; i++) {
-      if (pitchContour[i] === 0 && !inPause) {
+      const pitch = pitchContour[i] ?? 0;
+      if (pitch === 0 && !inPause) {
         inPause = true;
         pauseCount++;
-      } else if (pitchContour[i] > 0 && inPause) {
+      } else if (pitch > 0 && inPause) {
         inPause = false;
       }
-      if (pitchContour[i] === 0) {
+      if (pitch === 0) {
         pauseDuration += this.config.hopSizeMs / 1e3;
       }
     }
@@ -2611,13 +3351,13 @@ var VoiceInputAdapter = class {
       let centroid = 0;
       for (let i = 0; i < spectrum.length; i++) {
         const freq = i * sampleRate / (2 * spectrum.length);
-        centroid += freq * spectrum[i] / total;
+        centroid += freq * (spectrum[i] ?? 0) / total;
       }
       totalCentroid += centroid;
       if (prevSpectrum) {
         let flux = 0;
         for (let i = 0; i < spectrum.length; i++) {
-          flux += Math.pow(spectrum[i] - prevSpectrum[i], 2);
+          flux += Math.pow((spectrum[i] ?? 0) - (prevSpectrum[i] ?? 0), 2);
         }
         totalFlux += Math.sqrt(flux);
       }
@@ -2640,7 +3380,7 @@ var VoiceInputAdapter = class {
     const dynamicRange = maxEnergy - minEnergy;
     let clippedSamples = 0;
     for (let i = 0; i < audioBuffer.length; i++) {
-      if (Math.abs(audioBuffer[i]) > 0.99) {
+      if (Math.abs(audioBuffer[i] ?? 0) > 0.99) {
         clippedSamples++;
       }
     }
@@ -2754,7 +3494,7 @@ var VoiceInputAdapter = class {
     const confidence = acoustic.quality.signalQuality * acoustic.pitch.voicedRatio;
     return { valence, arousal, dominance, confidence };
   }
-  calculateDepressionIndicators(acoustic, prosody) {
+  calculateDepressionIndicators(acoustic, _prosody) {
     const pitchCV = acoustic.pitch.stdF0 / (acoustic.pitch.meanF0 || 1);
     const flatAffect = Math.max(0, 1 - pitchCV / 0.2);
     const psychomotorRetardation = Math.max(0, 1 - acoustic.temporal.speechRate / 3);
@@ -2980,11 +3720,14 @@ var COGNICORE_VERSION = {
   ]
 };
 
+exports.BeliefStateAdapter = BeliefStateAdapter;
 exports.COGNICORE_VERSION = COGNICORE_VERSION;
 exports.DEFAULT_EMOTION_VAD = DEFAULT_EMOTION_VAD;
 exports.DEFAULT_KALMANFORMER_CONFIG = DEFAULT_KALMANFORMER_CONFIG;
 exports.DEFAULT_PLRNN_CONFIG = DEFAULT_PLRNN_CONFIG;
 exports.DEFAULT_VOICE_CONFIG = DEFAULT_VOICE_CONFIG;
+exports.DIMENSION_INDEX = DIMENSION_INDEX;
+exports.DIMENSION_MAPPING = DIMENSION_MAPPING;
 exports.DISTORTION_INTERVENTIONS = DISTORTION_INTERVENTIONS;
 exports.DISTORTION_PATTERNS = DISTORTION_PATTERNS;
 exports.EMOTION_THERAPY_MAPPING = EMOTION_THERAPY_MAPPING;
@@ -2993,9 +3736,17 @@ exports.KalmanFormerEngine = KalmanFormerEngine;
 exports.PLRNNEngine = PLRNNEngine;
 exports.VoiceInputAdapter = VoiceInputAdapter;
 exports.WELLBEING_WEIGHTS = WELLBEING_WEIGHTS;
+exports.beliefStateToKalmanFormerState = beliefStateToKalmanFormerState;
+exports.beliefStateToObservation = beliefStateToObservation;
+exports.beliefStateToPLRNNState = beliefStateToPLRNNState;
+exports.beliefStateToUncertainty = beliefStateToUncertainty;
+exports.createBeliefStateAdapter = createBeliefStateAdapter;
 exports.createKalmanFormerEngine = createKalmanFormerEngine;
 exports.createPLRNNEngine = createPLRNNEngine;
 exports.createVoiceInputAdapter = createVoiceInputAdapter;
 exports.getComponentStatus = getComponentStatus;
+exports.kalmanFormerStateToBeliefUpdate = kalmanFormerStateToBeliefUpdate;
+exports.mergeHybridPredictions = mergeHybridPredictions;
+exports.plrnnStateToBeliefUpdate = plrnnStateToBeliefUpdate;
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map

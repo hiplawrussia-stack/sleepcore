@@ -22,8 +22,7 @@
 
 import type { IStateVector } from '../state/interfaces/IStateVector';
 import type { RiskLevel } from '../state/interfaces/IRiskState';
-import type { EmotionType, EmotionTrend } from '../state/interfaces/IEmotionalState';
-import type { ChangeStage } from '../state/interfaces/INarrativeState';
+import type { EmotionType } from '../state/interfaces/IEmotionalState';
 
 /**
  * Prediction time horizons

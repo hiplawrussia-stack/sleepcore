@@ -30,13 +30,11 @@ import type {
 } from './ITemporalPrediction';
 import { DEFAULT_TEMPORAL_CONFIG, HORIZON_HOURS } from './ITemporalPrediction';
 
-/**
- * Kalman Filter State
- */
-interface KalmanState {
-  estimate: number;      // x̂: State estimate
-  uncertainty: number;   // P: Estimate uncertainty (covariance)
-}
+// Future: Kalman Filter State for advanced state estimation
+// interface KalmanState {
+//   estimate: number;      // x̂: State estimate
+//   uncertainty: number;   // P: Estimate uncertainty (covariance)
+// }
 
 /**
  * Time series point
@@ -50,10 +48,16 @@ interface TimeSeriesPoint {
  * Temporal Echo Engine Implementation
  */
 export class TemporalEchoEngine implements ITemporalEchoEngine {
-  private config: TemporalEngineConfig;
+  // Configuration reserved for future Kalman/EWMA implementations
+  private readonly _config: TemporalEngineConfig;
 
   constructor(config: Partial<TemporalEngineConfig> = {}) {
-    this.config = { ...DEFAULT_TEMPORAL_CONFIG, ...config };
+    this._config = { ...DEFAULT_TEMPORAL_CONFIG, ...config };
+  }
+
+  /** Get engine configuration (for testing/debugging) */
+  getConfig(): TemporalEngineConfig {
+    return this._config;
   }
 
   /**
@@ -66,8 +70,9 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
   ): Promise<StateTrajectory> {
     // Extract time series for key metrics
     const wellbeingSeries = this.extractTimeSeries(stateHistory, s => s.wellbeingIndex / 100);
-    const riskSeries = this.extractTimeSeries(stateHistory, s => this.riskToNumber(s.risk.level));
-    const valenceSeries = this.extractTimeSeries(stateHistory, s => s.emotional.vad.valence);
+    // Future: riskSeries and valenceSeries can be extracted here for multi-dimensional forecasting
+    // using this.extractTimeSeries(stateHistory, s => this.riskToNumber(s.risk.level))
+    // and this.extractTimeSeries(stateHistory, s => s.emotional.vad.valence)
 
     // Generate predictions for each horizon
     const predictions = new Map<PredictionHorizon, PredictionPoint>();
@@ -307,12 +312,13 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
     // 1. Critical slowing down: increased autocorrelation
     const autocorr = this.calculateAutocorrelation(values, 1);
     if (autocorr > 0.7) {
+      const lastValue = values[values.length - 1] ?? 0.5;
       signals.push({
         id: `ews-autocorr-${Date.now()}`,
         type: 'increased_autocorrelation',
         detectedAt: new Date(),
         strength: autocorr,
-        possibleTransition: values[values.length - 1] < 0.4 ? 'crisis_approaching' : 'mood_shift',
+        possibleTransition: lastValue < 0.4 ? 'crisis_approaching' : 'mood_shift',
         confidence: 0.6,
         description: 'Состояние становится более "застойным" - возможен переход',
         recommendedActions: ['Увеличить частоту check-in', 'Предложить активность'],
@@ -337,7 +343,7 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
 
     // 3. Flickering (rapid oscillations)
     const signChanges = this.countSignChanges(values.map((v, i) =>
-      i > 0 ? v - values[i - 1] : 0
+      i > 0 ? v - (values[i - 1] ?? v) : 0
     ));
     if (signChanges > windowSize * 0.6) {
       signals.push({
@@ -430,7 +436,7 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
    * Get optimal intervention timing
    */
   async getOptimalInterventionTiming(
-    currentState: IStateVector,
+    _currentState: IStateVector,
     interventionType: string
   ): Promise<{
     optimalTime: Date;
@@ -508,40 +514,13 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
     }));
   }
 
-  /**
-   * Apply Kalman filter update
-   */
-  private kalmanUpdate(
-    state: KalmanState,
-    measurement: number,
-    Q: number = this.config.kalmanParams.processNoise,
-    R: number = this.config.kalmanParams.measurementNoise
-  ): KalmanState {
-    // Predict
-    const predictedUncertainty = state.uncertainty + Q;
+  // Future: Kalman filter update for state estimation
+  // See KalmanFormerEngine for advanced Kalman-Transformer hybrid implementation
+  // private kalmanUpdate(state: KalmanState, measurement: number, Q: number, R: number): KalmanState
 
-    // Update
-    const kalmanGain = predictedUncertainty / (predictedUncertainty + R);
-    const newEstimate = state.estimate + kalmanGain * (measurement - state.estimate);
-    const newUncertainty = (1 - kalmanGain) * predictedUncertainty;
-
-    return {
-      estimate: newEstimate,
-      uncertainty: newUncertainty,
-    };
-  }
-
-  /**
-   * Calculate EWMA
-   */
-  private ewma(values: number[], alpha: number = this.config.ewmaAlpha): number {
-    if (values.length === 0) return 0;
-    let result = values[0];
-    for (let i = 1; i < values.length; i++) {
-      result = alpha * values[i] + (1 - alpha) * result;
-    }
-    return result;
-  }
+  // Future: EWMA for trend smoothing
+  // Can be implemented when needed for real-time trend detection
+  // private ewma(values: number[], alpha: number): number
 
   /**
    * Convert risk level to number (0-1)
@@ -670,7 +649,7 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
    * Detect phase transitions
    */
   private detectPhaseTransitions(
-    history: IStateVector[],
+    _history: IStateVector[],
     current: IStateVector
   ): Array<{
     type: PhaseTransition;
@@ -746,12 +725,14 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
 
     if (goodHours.length > 0) {
       const bestHour = goodHours.sort((a, b) => b.avgWellbeing - a.avgWellbeing)[0];
-      windows.push({
-        startHour: bestHour.hour,
-        endHour: (bestHour.hour + 2) % 24,
-        interventionType: 'skill_building',
-        rationale: 'Наиболее стабильное позитивное состояние',
-      });
+      if (bestHour) {
+        windows.push({
+          startHour: bestHour.hour,
+          endHour: (bestHour.hour + 2) % 24,
+          interventionType: 'skill_building',
+          rationale: 'Наиболее стабильное позитивное состояние',
+        });
+      }
     }
 
     return windows;
@@ -779,10 +760,13 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
     let denominator = 0;
 
     for (let i = 0; i < values.length - lag; i++) {
-      numerator += (values[i] - avg) * (values[i + lag] - avg);
+      const vi = values[i] ?? 0;
+      const viLag = values[i + lag] ?? 0;
+      numerator += (vi - avg) * (viLag - avg);
     }
     for (let i = 0; i < values.length; i++) {
-      denominator += (values[i] - avg) ** 2;
+      const vi = values[i] ?? 0;
+      denominator += (vi - avg) ** 2;
     }
 
     return denominator !== 0 ? numerator / denominator : 0;
@@ -791,7 +775,9 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
   private countSignChanges(values: number[]): number {
     let changes = 0;
     for (let i = 1; i < values.length; i++) {
-      if ((values[i] > 0 && values[i - 1] < 0) || (values[i] < 0 && values[i - 1] > 0)) {
+      const curr = values[i] ?? 0;
+      const prev = values[i - 1] ?? 0;
+      if ((curr > 0 && prev < 0) || (curr < 0 && prev > 0)) {
         changes++;
       }
     }

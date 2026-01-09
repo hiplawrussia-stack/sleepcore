@@ -1,6 +1,6 @@
 {
   "name": "@cognicore/engine",
-  "version": "1.0.0-alpha.1",
+  "version": "2.0.0-phase1",
   "description": "POMDP-based Cognitive State Engine for Digital Therapeutics - World's first universal mental health AI platform",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

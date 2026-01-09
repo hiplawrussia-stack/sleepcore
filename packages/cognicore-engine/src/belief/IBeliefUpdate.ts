@@ -18,9 +18,8 @@
  */
 
 import type { IStateVector } from '../state/interfaces/IStateVector';
-import type { IEmotionalState, EmotionType } from '../state/interfaces/IEmotionalState';
-import type { ICognitiveState, CognitiveDistortionType } from '../state/interfaces/ICognitiveState';
-import type { IRiskState, RiskLevel } from '../state/interfaces/IRiskState';
+import type { EmotionType } from '../state/interfaces/IEmotionalState';
+import type { CognitiveDistortionType } from '../state/interfaces/ICognitiveState';
 
 /**
  * Observation types that can update beliefs

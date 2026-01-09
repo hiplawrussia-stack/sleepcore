@@ -20,8 +20,8 @@
  * © БФ "Другой путь", 2025
  */
 
-import type { IKalmanFilterState, IKalmanFilterConfig } from '../../twin/interfaces/IDigitalTwin';
-import type { IPLRNNState, IPLRNNPrediction } from './IPLRNNEngine';
+import type { IKalmanFilterState } from '../../twin/interfaces/IDigitalTwin';
+import type { IPLRNNState } from './IPLRNNEngine';
 
 /**
  * KalmanFormer Configuration

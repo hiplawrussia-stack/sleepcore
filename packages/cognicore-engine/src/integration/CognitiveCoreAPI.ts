@@ -94,6 +94,15 @@ import type {
   IContextualFeatures,
 } from '../intervention/IInterventionOptimizer';
 
+import {
+  CrisisDetector,
+  createCrisisDetector,
+} from '../crisis/CrisisDetector';
+import type {
+  CrisisDetectionResult,
+  StateRiskData,
+} from '../crisis/CrisisDetector';
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -459,6 +468,7 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
   private temporalEngine: TemporalEchoEngine;
   private cognitiveMirror: DeepCognitiveMirror;
   private interventionOptimizer: InterventionOptimizer;
+  private crisisDetector: CrisisDetector;
 
   // Intervention library
   private interventions: IIntervention[] = [];
@@ -482,6 +492,15 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
     this.interventionOptimizer = createInterventionOptimizer({
       enableCrisisOverride: config.crisisDetectionEnabled,
       enableContextualBandit: true,
+    });
+
+    // Initialize crisis detector (multi-layer detection)
+    this.crisisDetector = createCrisisDetector({
+      enableLayer1: true,
+      enableLayer2: true,
+      enableLayer3: true,
+      sensitivityLevel: 'high',
+      language: 'auto',
     });
 
     // Initialize default interventions
@@ -634,12 +653,14 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
       let currentState = await this.stateRepository.getState(userId);
       if (!currentState) {
         currentState = StateVector.createInitial(userId);
+        await this.stateRepository.saveState(userId, currentState);
       }
 
       // Create initial belief if needed
       let currentBelief = await this.stateRepository.getBelief(userId);
       if (!currentBelief) {
         currentBelief = this.beliefEngine.initializeBelief();
+        await this.stateRepository.saveBelief(userId, currentBelief);
       }
 
       // Create new session
@@ -809,8 +830,22 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
       const language = detectLanguage(command.text);
       session.context.language = language;
 
+      // 🚨 LAYER 1: Immediate raw text crisis check (BEFORE cognitive analysis)
+      // This catches crisis indicators even if cognitive analysis interprets text differently
+      const immediateCheck = this.crisisDetector.quickCheck(command.text);
+      let earlyWarningTriggered = false;
+
+      if (immediateCheck) {
+        earlyWarningTriggered = true;
+        // Log early warning but continue processing
+        // Full crisis detection will happen after state update
+      }
+
       // 1. Cognitive analysis
-      const analysis = this.cognitiveMirror.analyzeText(command.text, language);
+      const analysis = await this.cognitiveMirror.analyzeText(command.text, command.userId);
+
+      // Extract distortions from thoughts
+      const allDistortions = analysis.thoughts.flatMap(t => t.distortions);
 
       // Emit cognitive analysis event
       await this.emitEvent<TextAnalysisResultCompletedEvent>({
@@ -824,7 +859,7 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
           userId: command.userId,
           messageId: command.metadata?.messageId || '',
           analysis,
-          distortionsDetected: analysis.distortions.map(d => d.type),
+          distortionsDetected: allDistortions.map(d => d.type),
           insightsGenerated: 0,
         },
         metadata: this.createMetadata(command.userId, command.sessionId, correlationId),
@@ -836,7 +871,7 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
       // 3. Update belief state
       const previousBelief = session.currentBelief;
       const beliefUpdate = this.beliefEngine.updateBelief(previousBelief, observation);
-      const newBelief = beliefUpdate.posterior;
+      const newBelief = beliefUpdate.newBelief;
 
       // Emit belief update event
       await this.emitEvent<IBeliefUpdatedEvent>({
@@ -878,11 +913,34 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
         metadata: this.createMetadata(command.userId, command.sessionId, correlationId),
       });
 
-      // 5. Check for crisis
-      const crisisDetected = this.checkCrisis(analysis, newState);
+      // 5. Multi-layer crisis detection (combines raw text + patterns + state)
+      const stateRiskData: StateRiskData = {
+        overallRiskLevel: newState.risk.overallRiskLevel,
+        suicidalIdeation: newState.risk.suicidalIdeation,
+        selfHarmRisk: newState.risk.selfHarmRisk,
+        emotionalValence: newState.emotional.vad.valence,
+        recentTrend: 'stable', // TODO: calculate from history
+      };
 
-      if (crisisDetected) {
+      // Full multi-layer crisis detection
+      const crisisResult = this.crisisDetector.detect(command.text, stateRiskData);
+
+      // Crisis is detected if multi-layer detector says so OR early warning was triggered
+      const crisisDetected = crisisResult.isCrisis || earlyWarningTriggered;
+
+      // Also check legacy indicators for backwards compatibility
+      const legacyCrisis = this.checkCrisis(analysis, newState);
+      const finalCrisisDetected = crisisDetected || legacyCrisis;
+
+      if (finalCrisisDetected) {
         session.context.crisisMode = true;
+
+        // Combine indicators from all sources
+        const allTriggerIndicators = [
+          ...crisisResult.allIndicators,
+          ...(earlyWarningTriggered ? ['early_warning_raw_text'] : []),
+          ...this.extractCrisisIndicators(analysis),
+        ];
 
         await this.emitEvent<ICrisisDetectedEvent>({
           eventId: generateId(),
@@ -894,24 +952,24 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
           payload: {
             userId: command.userId,
             sessionId: command.sessionId,
-            riskLevel: newState.risk.overallRiskLevel,
-            triggerIndicators: analysis.crisisIndicators || [],
-            recommendedAction: 'immediate_response',
-            crisisType: 'acute_distress',
+            riskLevel: Math.max(newState.risk.overallRiskLevel, crisisResult.confidence),
+            triggerIndicators: [...new Set(allTriggerIndicators)],
+            recommendedAction: crisisResult.recommendedAction || 'immediate_response',
+            crisisType: crisisResult.crisisType || 'acute_distress',
           },
           metadata: this.createMetadata(command.userId, command.sessionId, correlationId),
         });
       }
 
       // 6. Generate insights
-      const insights = this.generateInsightsFromAnalysis(analysis, newState);
+      const insights = await this.generateInsightsFromAnalysis(analysis, newState, allDistortions);
 
       // 7. Generate Socratic questions if appropriate
       let socraticQuestions: SocraticQuestion[] | undefined;
-      if (analysis.distortions.length > 0 && !crisisDetected) {
-        socraticQuestions = this.cognitiveMirror.generateSocraticQuestions(
-          analysis.abcdChain?.belief?.thought || command.text,
-          analysis.distortions[0]?.type,
+      if (allDistortions.length > 0 && !finalCrisisDetected && analysis.thoughts.length > 0) {
+        const firstThought = analysis.thoughts[0];
+        socraticQuestions = await this.cognitiveMirror.generateSocraticQuestions(
+          firstThought,
           2
         );
       }
@@ -923,7 +981,7 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
         const shouldDeliver = await this.interventionOptimizer.shouldDeliver(
           command.userId,
           contextFeatures,
-          crisisDetected ? 'crisis_triggered' : 'event_triggered'
+          finalCrisisDetected ? 'crisis_triggered' : 'event_triggered'
         );
 
         if (shouldDeliver) {
@@ -958,7 +1016,7 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
         insights,
         socraticQuestions,
         recommendedIntervention,
-        crisisDetected,
+        finalCrisisDetected,
         language
       );
 
@@ -980,7 +1038,7 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
         newBelief,
         insights,
         socraticQuestions,
-        crisisDetected,
+        crisisDetected: finalCrisisDetected,
         recommendedIntervention,
         responseSuggestions,
       };
@@ -1002,8 +1060,9 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
     const startTime = Date.now();
 
     try {
-      const detectedLanguage = language || detectLanguage(text);
-      const analysis = this.cognitiveMirror.analyzeText(text, detectedLanguage);
+      // Use anonymous user for stateless analysis
+      const _detectedLanguage = language || detectLanguage(text);
+      const analysis = await this.cognitiveMirror.analyzeText(text, 'anonymous');
       return createResponse(true, analysis, undefined, startTime);
     } catch (error) {
       return createResponse(false, undefined, {
@@ -1052,7 +1111,7 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
         result.predictions = {};
 
         for (const horizon of horizons) {
-          const prediction = this.temporalEngine.predict(currentState, horizon);
+          const prediction = await this.temporalEngine.predictAtHorizon(currentState, horizon);
           result.predictions[horizon] = prediction;
         }
       }
@@ -1078,7 +1137,7 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
       }
 
       const beliefUpdate = this.beliefEngine.updateBelief(currentBelief, command.observation);
-      const newBelief = beliefUpdate.posterior;
+      const newBelief = beliefUpdate.newBelief;
       const newState = this.beliefEngine.beliefToStateVector(newBelief);
 
       await this.stateRepository.saveState(command.userId, newState);
@@ -1110,7 +1169,7 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
 
       const predictions: Record<string, ITemporalPrediction> = {};
       for (const horizon of horizons) {
-        predictions[horizon] = this.temporalEngine.predict(currentState, horizon);
+        predictions[horizon] = await this.temporalEngine.predictAtHorizon(currentState, horizon);
       }
 
       return createResponse(true, predictions, undefined, startTime);
@@ -1136,7 +1195,18 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
         }, startTime);
       }
 
-      const windows = this.temporalEngine.identifyVulnerabilityWindows(currentState);
+      // Get state history for trajectory prediction
+      const stateHistory = await this.stateRepository.getStateHistory(userId, 50);
+
+      // Generate trajectory predictions
+      const trajectory = await this.temporalEngine.predictTrajectory(
+        currentState,
+        stateHistory,
+        ['6h', '12h', '24h', '72h']
+      );
+
+      // Detect vulnerability windows from trajectory
+      const windows = this.temporalEngine.detectVulnerabilityWindows(trajectory);
       return createResponse(true, windows, undefined, startTime);
     } catch (error) {
       return createResponse(false, undefined, {
@@ -1323,13 +1393,12 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
         }, startTime);
       }
 
-      const insights = this.cognitiveMirror.generateInsight(
-        currentState.cognitive.primaryDistortions,
-        currentState.emotional.valence,
-        currentState.resource.energy
-      );
+      const insight = await this.cognitiveMirror.generateInsight({
+        userId,
+        insightType: 'pattern_observation',
+      });
 
-      return createResponse(true, insights ? [insights] : [], undefined, startTime);
+      return createResponse(true, insight ? [insight] : [], undefined, startTime);
     } catch (error) {
       return createResponse(false, undefined, {
         code: 'INSIGHT_ERROR',
@@ -1354,15 +1423,30 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
       }
 
       const questions: SocraticQuestion[] = [];
-      const distortions = currentState.cognitive.primaryDistortions;
+      const distortions = currentState.cognitive.activeDistortions;
 
-      for (const distortion of distortions.slice(0, 2)) {
-        const distortionQuestions = this.cognitiveMirror.generateSocraticQuestions(
-          '', // Would need recent thought
-          distortion,
-          Math.ceil(count / 2)
+      // Create a synthetic thought from active distortions for Socratic questioning
+      if (distortions.length > 0) {
+        const syntheticThought = {
+          id: generateId(),
+          content: 'Current cognitive pattern',
+          type: 'automatic_negative' as const,
+          distortions: distortions.map(d => ({
+            type: d.type,
+            confidence: d.confidence,
+            evidence: d.triggeredBy ? [d.triggeredBy] : [],
+          })),
+          cognitiveTriadTarget: 'self' as const,
+          believability: 0.7,
+          timestamp: new Date(),
+          confidence: 0.7,
+        };
+
+        const thoughtQuestions = await this.cognitiveMirror.generateSocraticQuestions(
+          syntheticThought,
+          count
         );
-        questions.push(...distortionQuestions);
+        questions.push(...thoughtQuestions);
       }
 
       return createResponse(true, questions.slice(0, count), undefined, startTime);
@@ -1399,12 +1483,28 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
         }, undefined, startTime);
       }
 
-      const riskLevel = currentState.risk.overallRiskLevel;
-      const isCrisis = riskLevel > 0.7;
+      // Convert risk level string to numeric value
+      const riskLevelMap: Record<string, number> = {
+        none: 0,
+        low: 0.2,
+        medium: 0.4,
+        high: 0.7,
+        critical: 0.85,
+      };
+      const riskLevel = riskLevelMap[currentState.risk.level] ?? 0;
+      const isCrisis = riskLevel >= 0.7;
       const indicators: string[] = [];
 
-      if (currentState.risk.suicidalIdeation > 0.3) indicators.push('suicidal_ideation');
-      if (currentState.risk.selfHarmRisk > 0.3) indicators.push('self_harm_risk');
+      // Check category risks
+      const suicidalRisk = currentState.risk.categoryRisks?.['suicidal_ideation'];
+      const selfHarmRisk = currentState.risk.categoryRisks?.['self_harm'];
+
+      if (suicidalRisk && riskLevelMap[suicidalRisk.level] > 0.3) {
+        indicators.push('suicidal_ideation');
+      }
+      if (selfHarmRisk && riskLevelMap[selfHarmRisk.level] > 0.3) {
+        indicators.push('self_harm_risk');
+      }
       if (currentState.emotional.arousal > 0.8) indicators.push('high_arousal');
       if (currentState.emotional.valence < -0.7) indicators.push('very_negative_mood');
 
@@ -1570,20 +1670,23 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
     analysis: TextAnalysisResult,
     text: string
   ): Observation {
-    // Extract emotional indicators
-    const emotionWords = analysis.emotions || [];
-    const hasNegativeEmotion = emotionWords.some(e =>
-      ['sad', 'angry', 'fearful', 'anxious', 'stressed'].includes(e)
+    // Extract emotional indicators from EmotionalConsequence objects
+    const emotions = analysis.emotions || [];
+    const hasNegativeEmotion = emotions.some(e =>
+      e.valence < -0.3 || ['sad', 'angry', 'fearful', 'anxious', 'stressed'].includes(e.emotion)
     );
-    const hasPositiveEmotion = emotionWords.some(e =>
-      ['happy', 'joyful', 'hopeful', 'calm', 'content'].includes(e)
+    const hasPositiveEmotion = emotions.some(e =>
+      e.valence > 0.3 || ['happy', 'joyful', 'hopeful', 'calm', 'content'].includes(e.emotion)
     );
+
+    // Extract distortions from thoughts
+    const allDistortions = analysis.thoughts.flatMap(t => t.distortions);
 
     // Estimate valence from analysis
     let valence = 0;
     if (hasNegativeEmotion) valence -= 0.3;
     if (hasPositiveEmotion) valence += 0.3;
-    if (analysis.distortions.length > 0) valence -= 0.1 * analysis.distortions.length;
+    if (allDistortions.length > 0) valence -= 0.1 * allDistortions.length;
 
     // Estimate arousal from punctuation and caps
     const hasExclamation = text.includes('!');
@@ -1592,26 +1695,31 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
     if (hasExclamation) arousal += 0.1;
     if (hasCaps) arousal += 0.2;
 
+    // Check for crisis indicators
+    const crisisIndicators = this.extractCrisisIndicators(analysis);
+
+    // Determine which components this observation informs
+    const informsComponents: ('emotional' | 'cognitive' | 'narrative' | 'risk' | 'resources')[] = ['emotional', 'cognitive'];
+    if (crisisIndicators.length > 0) {
+      informsComponents.push('risk');
+    }
+
     return {
-      observationId: generateId(),
-      timestamp: new Date(),
+      id: generateId(),
       type: 'text_message',
-      source: 'user_input',
-      dimensions: {
-        emotional: {
-          valence: { value: valence, confidence: 0.6 },
-          arousal: { value: arousal, confidence: 0.5 },
-        },
-        cognitive: {
-          distortionPresent: { value: analysis.distortions.length > 0 ? 1 : 0, confidence: 0.7 },
-          insightLevel: { value: analysis.insightLevel || 0.5, confidence: 0.5 },
-        },
-        risk: {
-          crisisIndicators: { value: (analysis.crisisIndicators?.length || 0) > 0 ? 1 : 0, confidence: 0.8 },
-        },
+      timestamp: new Date(),
+      data: {
+        text,
+        valence,
+        arousal,
+        distortions: allDistortions.map(d => d.type),
+        distortionCount: allDistortions.length,
+        insightLevel: analysis.metrics.insightReadiness,
+        crisisIndicators,
+        analysis,
       },
-      rawData: { text, analysis },
-      quality: 0.7,
+      reliability: 0.7,
+      informsComponents,
     };
   }
 
@@ -1668,10 +1776,48 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
   }
 
   /**
+   * Extract crisis indicators from analysis
+   */
+  private extractCrisisIndicators(analysis: TextAnalysisResult): string[] {
+    const indicators: string[] = [];
+
+    // Check for crisis-related emotions
+    const crisisEmotions = ['despair', 'hopeless', 'suicidal', 'panic'];
+    for (const emotion of analysis.emotions) {
+      if (crisisEmotions.includes(emotion.emotion) || emotion.intensity > 0.9) {
+        indicators.push(`high_intensity_${emotion.emotion}`);
+      }
+    }
+
+    // Check for crisis-related thoughts
+    for (const thought of analysis.thoughts) {
+      if (thought.content.toLowerCase().includes('suicide') ||
+          thought.content.toLowerCase().includes('самоубийств') ||
+          thought.content.toLowerCase().includes('не хочу жить') ||
+          thought.content.toLowerCase().includes('don\'t want to live')) {
+        indicators.push('suicidal_content');
+      }
+      if (thought.content.toLowerCase().includes('вред себе') ||
+          thought.content.toLowerCase().includes('hurt myself') ||
+          thought.content.toLowerCase().includes('harm myself')) {
+        indicators.push('self_harm_content');
+      }
+    }
+
+    // Check for high overall negativity
+    if (analysis.metrics.overallNegativity > 0.8) {
+      indicators.push('extreme_negativity');
+    }
+
+    return indicators;
+  }
+
+  /**
    * Check for crisis indicators
    */
   private checkCrisis(analysis: TextAnalysisResult, state: IStateVector): boolean {
-    if ((analysis.crisisIndicators?.length || 0) > 0) return true;
+    const crisisIndicators = this.extractCrisisIndicators(analysis);
+    if (crisisIndicators.length > 0) return true;
     if (state.risk.overallRiskLevel > 0.7) return true;
     if (state.risk.suicidalIdeation > 0.5) return true;
     if (state.risk.selfHarmRisk > 0.5) return true;
@@ -1681,19 +1827,23 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
   /**
    * Generate insights from analysis
    */
-  private generateInsightsFromAnalysis(
+  private async generateInsightsFromAnalysis(
     analysis: TextAnalysisResult,
-    state: IStateVector
-  ): ITherapeuticInsight[] {
+    state: IStateVector,
+    allDistortions?: Array<{ type: string }>
+  ): Promise<ITherapeuticInsight[]> {
     const insights: ITherapeuticInsight[] = [];
 
+    // Extract distortions if not provided
+    const distortions = allDistortions || analysis.thoughts.flatMap(t => t.distortions);
+
     // Pattern observation if distortions detected
-    if (analysis.distortions.length > 0) {
-      const insight = this.cognitiveMirror.generateInsight(
-        analysis.distortions.map(d => d.type),
-        state.emotional.valence,
-        state.resource.energy
-      );
+    if (distortions.length > 0 && analysis.chains.length > 0) {
+      const insight = await this.cognitiveMirror.generateInsight({
+        userId: state.userId,
+        currentChain: analysis.chains[0],
+        insightType: 'pattern_observation',
+      });
       if (insight) insights.push(insight);
     }
 
@@ -1713,13 +1863,13 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
       dominance: state.emotional.dominance,
       emotionalStability: 1 - state.emotional.emotionalLability,
       moodTrend: 'stable',
-      cognitiveDistortionCount: state.cognitive.primaryDistortions.length,
-      primaryDistortion: state.cognitive.primaryDistortions[0],
-      cognitiveFlexibility: state.cognitive.cognitiveFlexibility,
-      insightLevel: state.cognitive.insightLevel,
-      energyLevel: state.resource.energy,
-      copingCapacity: state.resource.copingCapacity,
-      socialSupport: state.resource.socialSupport,
+      cognitiveDistortionCount: state.cognitive.activeDistortions.length,
+      primaryDistortion: state.cognitive.activeDistortions[0]?.type,
+      cognitiveFlexibility: state.cognitive.thinkingStyle.flexibility,
+      insightLevel: state.cognitive.metacognition.selfAwareness,
+      energyLevel: state.resources.energy.current,
+      copingCapacity: state.resources.cognitiveCapacity.available,
+      socialSupport: state.resources.socialResources.network.qualityScore,
       riskLevel: state.risk.overallRiskLevel,
       crisisProximity: state.risk.crisisProximity,
       hourOfDay: new Date().getHours(),

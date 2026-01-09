@@ -30,7 +30,6 @@ import {
   type AutomaticThought,
   type ThoughtType,
   type DetectedDistortion,
-  type TextSpan,
   type EmotionalConsequence,
   type BehavioralUrge,
   type Disputation,
@@ -44,7 +43,6 @@ import {
   type InsightType,
   type InsightTiming,
   type TherapeuticExercise,
-  type ExerciseType,
   type AnalysisContext,
   type InsightContext,
   type DeepCognitiveMirrorConfig,
@@ -87,7 +85,7 @@ export class DeepCognitiveMirror implements IDeepCognitiveMirror {
   async analyzeText(
     text: string,
     userId: string | number,
-    context?: AnalysisContext
+    _context?: AnalysisContext
   ): Promise<TextAnalysisResult> {
     const startTime = Date.now();
 
@@ -192,7 +190,7 @@ export class DeepCognitiveMirror implements IDeepCognitiveMirror {
     const result = await this.analyzeText(text, userId);
 
     if (result.chains.length > 0) {
-      return result.chains[0];
+      return result.chains[0] ?? null;
     }
 
     return null;
@@ -363,6 +361,10 @@ export class DeepCognitiveMirror implements IDeepCognitiveMirror {
         }
 
         const definition = DISTORTION_DEFINITIONS[distortionType];
+        const firstChain = relatedChains[relatedChains.length - 1];
+        const lastChain = relatedChains[0];
+        if (!firstChain || !lastChain) continue;
+
         patterns.push({
           id: generateId('pattern'),
           name: `${definition?.name ?? distortionType} Pattern`,
@@ -372,8 +374,8 @@ export class DeepCognitiveMirror implements IDeepCognitiveMirror {
           triggerCategories: Array.from(triggerCategories),
           associatedDistortions: [distortionType],
           typicalEmotions: Array.from(emotions),
-          firstObserved: relatedChains[relatedChains.length - 1].timestamp,
-          lastObserved: relatedChains[0].timestamp,
+          firstObserved: firstChain.timestamp,
+          lastObserved: lastChain.timestamp,
           strength: Math.min(1, relatedChains.length / 10),
           isAdaptive: false,
         });
@@ -607,7 +609,7 @@ export class DeepCognitiveMirror implements IDeepCognitiveMirror {
 
     while (questions.length < count) {
       const randomQ = generalQuestions[Math.floor(Math.random() * generalQuestions.length)];
-      if (!questions.find(q => q.question === randomQ.question)) {
+      if (randomQ && !questions.find(q => q.question === randomQ.question)) {
         questions.push(randomQ);
       }
     }
@@ -746,7 +748,7 @@ export class DeepCognitiveMirror implements IDeepCognitiveMirror {
   // ============================================================
 
   async getRecommendedExercises(
-    userId: string | number,
+    _userId: string | number,
     focus?: CognitiveDistortionType | PatternType
   ): Promise<TherapeuticExercise[]> {
     const exercises: TherapeuticExercise[] = [];
@@ -1242,7 +1244,7 @@ export class DeepCognitiveMirror implements IDeepCognitiveMirror {
 
   private assessDistortionSeverity(
     text: string,
-    distortionType: CognitiveDistortionType
+    _distortionType: CognitiveDistortionType
   ): 'mild' | 'moderate' | 'severe' {
     // Check for intensity markers
     const severeMarkers = ['always', 'never', 'completely', 'absolutely', 'totally', 'всегда', 'никогда', 'абсолютно'];
@@ -1311,7 +1313,7 @@ export class DeepCognitiveMirror implements IDeepCognitiveMirror {
   private calculateOverallConfidence(
     events: ActivatingEvent[],
     thoughts: AutomaticThought[],
-    emotions: EmotionalConsequence[]
+    _emotions: EmotionalConsequence[]
   ): number {
     let total = 0;
     let count = 0;
@@ -1478,9 +1480,10 @@ export class DeepCognitiveMirror implements IDeepCognitiveMirror {
 
   private getNextSessionFocus(patterns: CognitivePattern[]): string[] {
     const focus: string[] = [];
+    const firstPattern = patterns[0];
 
-    if (patterns.length > 0) {
-      const mainDistortion = patterns[0].associatedDistortions[0];
+    if (firstPattern) {
+      const mainDistortion = firstPattern.associatedDistortions[0];
       if (mainDistortion) {
         const definition = DISTORTION_DEFINITIONS[mainDistortion];
         focus.push(`Address ${definition?.name ?? mainDistortion} pattern`);
@@ -1529,8 +1532,7 @@ export class DeepCognitiveMirror implements IDeepCognitiveMirror {
   }
 
   private generateInsightContent(type: InsightType, context: InsightContext): string {
-    const isRussian = this.config.languageStyle === 'youth_friendly'; // Simplified check
-
+    // Note: language detection (isRussian) reserved for future bilingual content
     switch (type) {
       case 'pattern_observation':
         if (context.currentPattern) {
@@ -1603,7 +1605,7 @@ export class DeepCognitiveMirror implements IDeepCognitiveMirror {
   }
 
   private async selectExercisesForInsight(
-    type: InsightType,
+    _type: InsightType,
     context: InsightContext
   ): Promise<TherapeuticExercise[]> {
     if (context.currentChain?.beliefs[0]?.distortions[0]) {
@@ -1628,7 +1630,7 @@ export class DeepCognitiveMirror implements IDeepCognitiveMirror {
     return 'check_in';
   }
 
-  private getPersonalizationFactors(userId: string | number): string[] {
+  private getPersonalizationFactors(_userId: string | number): string[] {
     // Would be based on user profile and history
     return ['language_style', 'distortion_profile', 'engagement_level'];
   }

@@ -44,10 +44,7 @@ import {
   INTERVENTION_CATEGORIES,
   TIME_OF_DAY_HOURS,
   InterventionCategory,
-  InterventionIntensity,
   DecisionPointType,
-  ExplorationStrategy,
-  OutcomeType,
   TimeOfDay,
   CreateInterventionOptimizer,
 } from './IInterventionOptimizer';
@@ -156,17 +153,20 @@ function softmax(values: number[], temperature: number = 1.0): number[] {
  * Weighted random selection
  */
 function weightedRandomSelect<T>(items: T[], weights: number[]): T {
+  if (items.length === 0) {
+    throw new Error('Cannot select from empty items array');
+  }
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   let random = Math.random() * totalWeight;
 
   for (let i = 0; i < items.length; i++) {
-    random -= weights[i];
+    random -= weights[i] ?? 0;
     if (random <= 0) {
-      return items[i];
+      return items[i]!;
     }
   }
 
-  return items[items.length - 1];
+  return items[items.length - 1]!;
 }
 
 // ============================================================================
@@ -281,7 +281,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
     if (shouldExplore && this.config.explorationStrategy === 'epsilon_greedy') {
       // Random exploration
       const randomIndex = Math.floor(Math.random() * eligibleInterventions.length);
-      selectedIntervention = eligibleInterventions[randomIndex];
+      selectedIntervention = eligibleInterventions[randomIndex]!;
       expectedReward = this.getArmMeanReward(selectedIntervention.id);
       probability = 1 / eligibleInterventions.length;
       alternatives = this.getAlternatives(eligibleInterventions, selectedIntervention.id);
@@ -337,7 +337,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
   private selectByStrategy(
     interventions: IIntervention[],
     context: IContextualFeatures,
-    userProfile: IUserInterventionProfile
+    _userProfile: IUserInterventionProfile
   ): {
     intervention: IIntervention;
     expectedReward: number;
@@ -387,17 +387,18 @@ export class InterventionOptimizer implements IInterventionOptimizer {
       const scoreValues = scores.map(s => s.score);
       const probabilities = softmax(scoreValues, this.config.temperature);
       const selected = weightedRandomSelect(scores, probabilities);
+      const selectedIndex = scores.indexOf(selected);
 
       return {
         intervention: selected.intervention,
         expectedReward: selected.score,
-        probability: probabilities[scores.indexOf(selected)],
+        probability: probabilities[selectedIndex] ?? 0,
         alternatives: this.createAlternativesFromScores(scores, selected.intervention.id),
       };
     }
 
     // For other strategies, select top scorer
-    const selected = scores[0];
+    const selected = scores[0]!;
     const totalScore = scores.reduce((sum, s) => sum + Math.max(0, s.score), 0);
     const probability = totalScore > 0 ? Math.max(0, selected.score) / totalScore : 1;
 
@@ -811,8 +812,11 @@ export class InterventionOptimizer implements IInterventionOptimizer {
 
     // Update each intervention
     for (const [interventionId, interventionOutcomes] of grouped) {
+      const firstOutcome = interventionOutcomes[0];
+      if (!firstOutcome) continue;
+
       const decisionPoint = this.decisionPoints.find(
-        dp => dp.id === interventionOutcomes[0].decisionPointId
+        dp => dp.id === firstOutcome.decisionPointId
       );
 
       if (decisionPoint) {
@@ -1258,7 +1262,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
   /**
    * Get crisis intervention
    */
-  async getCrisisIntervention(context: IContextualFeatures): Promise<IIntervention> {
+  async getCrisisIntervention(_context: IContextualFeatures): Promise<IIntervention> {
     if (this.crisisIntervention) {
       return this.crisisIntervention;
     }
@@ -1464,6 +1468,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
     scores: Array<{ intervention: IIntervention; score: number }>,
     selectedId: string
   ): IAlternativeIntervention[] {
+    const topScore = scores[0]?.score ?? 0;
     return scores
       .filter(s => s.intervention.id !== selectedId)
       .slice(0, 5)
@@ -1471,7 +1476,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
         interventionId: s.intervention.id,
         expectedReward: s.score,
         probability: 0,
-        reasonNotSelected: s.score < scores[0].score ? 'Lower expected reward' : 'Not selected by sampling',
+        reasonNotSelected: s.score < topScore ? 'Lower expected reward' : 'Not selected by sampling',
       }));
   }
 

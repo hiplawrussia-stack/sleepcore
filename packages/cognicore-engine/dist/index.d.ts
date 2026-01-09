@@ -2068,6 +2068,1105 @@ interface IBeliefUpdateEngine {
 }
 
 /**
+ * 🧠 PLRNN ENGINE INTERFACES
+ * ==========================
+ * Piecewise Linear Recurrent Neural Network for Mental Health Dynamics
+ *
+ * Scientific Foundation (2025 Research):
+ * - PLRNN outperforms Transformers for EMA forecasting (medRxiv 2025)
+ * - dendPLRNN for interpretable nonlinear dynamics (Durstewitz Lab)
+ * - State-space approach for computational psychiatry
+ *
+ * Key Advantages over Linear Kalman:
+ * - Captures nonlinear psychological dynamics (mood swings, tipping points)
+ * - Interpretable latent network structure
+ * - Predicts intervention effects through causal network analysis
+ *
+ * © БФ "Другой путь", 2025
+ */
+/**
+ * PLRNN Configuration
+ */
+interface IPLRNNConfig {
+    /** Dimensionality of latent state space (default: 5 for VAD + risk + resources) */
+    latentDim: number;
+    /** Number of hidden units in piecewise-linear layer */
+    hiddenUnits: number;
+    /** Connectivity pattern */
+    connectivity: 'sparse' | 'full' | 'dendritic';
+    /** Dendritic basis expansion (for dendPLRNN) */
+    dendriticBases?: number;
+    /** Learning rate for online adaptation */
+    learningRate: number;
+    /** Teacher forcing ratio (0-1) for training stability */
+    teacherForcingRatio: number;
+    /** Regularization strength for sparse connectivity */
+    l1Regularization: number;
+    /** Gradient clipping threshold */
+    gradientClip: number;
+    /** Number of steps for multi-step prediction */
+    predictionHorizon: number;
+    /** Time delta for continuous-time dynamics (hours) */
+    dt: number;
+}
+/**
+ * Default PLRNN Configuration
+ * Tuned for mental health EMA dynamics based on 2025 research
+ */
+declare const DEFAULT_PLRNN_CONFIG: IPLRNNConfig;
+/**
+ * PLRNN State
+ * Latent state representation with uncertainty
+ */
+interface IPLRNNState {
+    /** Current latent state vector z_t */
+    latentState: number[];
+    /** Hidden layer activations h_t */
+    hiddenActivations: number[];
+    /** Observation-space state estimate x_t */
+    observedState: number[];
+    /** State uncertainty (variance) */
+    uncertainty: number[];
+    /** Timestamp of this state */
+    timestamp: Date;
+    /** Time step index */
+    timestep: number;
+}
+/**
+ * PLRNN Prediction Result
+ */
+interface IPLRNNPrediction {
+    /** Predicted states over horizon */
+    trajectory: IPLRNNState[];
+    /** Mean prediction at horizon */
+    meanPrediction: number[];
+    /** Prediction confidence intervals */
+    confidenceInterval: {
+        lower: number[];
+        upper: number[];
+        level: number;
+    };
+    /** Prediction variance at each step */
+    variance: number[][];
+    /** Early warning signals detected */
+    earlyWarningSignals: IEarlyWarningSignal[];
+    /** Prediction horizon (hours) */
+    horizon: number;
+}
+/**
+ * Early Warning Signal (Critical Slowing Down)
+ * Based on 2025 research on critical transitions in mental health
+ */
+interface IEarlyWarningSignal {
+    /** Type of EWS */
+    type: 'autocorrelation' | 'variance' | 'connectivity' | 'flickering';
+    /** Which dimension is affected */
+    dimension: string;
+    /** Signal strength (0-1) */
+    strength: number;
+    /** Estimated time to transition (hours, null if unknown) */
+    estimatedTimeToTransition: number | null;
+    /** Confidence in the signal */
+    confidence: number;
+    /** Recommended action */
+    recommendation: string;
+}
+/**
+ * Causal Network extracted from PLRNN
+ * Interpretable psychological dynamics
+ */
+interface ICausalNetwork {
+    /** Nodes represent psychological dimensions */
+    nodes: ICausalNode$1[];
+    /** Edges represent causal influence strengths */
+    edges: ICausalEdge$1[];
+    /** Network-level metrics */
+    metrics: {
+        /** Average connectivity */
+        density: number;
+        /** Central node (most influential) */
+        centralNode: string;
+        /** Identified feedback loops */
+        feedbackLoops: string[][];
+    };
+}
+interface ICausalNode$1 {
+    id: string;
+    label: string;
+    /** Self-connection strength (autoregression) */
+    selfWeight: number;
+    /** Centrality in the network */
+    centrality: number;
+    /** Current value */
+    value: number;
+}
+interface ICausalEdge$1 {
+    source: string;
+    target: string;
+    /** Influence weight (positive = excitatory, negative = inhibitory) */
+    weight: number;
+    /** Time lag of influence (hours) */
+    lag: number;
+    /** Statistical significance */
+    significance: number;
+}
+/**
+ * Intervention Simulation Result
+ * Simulates effect of changing a node in the causal network
+ */
+interface IInterventionSimulation {
+    /** Intervention target */
+    target: {
+        dimension: string;
+        intervention: 'increase' | 'decrease' | 'stabilize';
+        magnitude: number;
+    };
+    /** Predicted system response */
+    response: {
+        /** Affected dimensions with effect sizes */
+        effects: Map<string, number>;
+        /** Time to peak effect (hours) */
+        timeToPeak: number;
+        /** Duration of effect (hours) */
+        duration: number;
+        /** Side effects (unintended changes) */
+        sideEffects: Array<{
+            dimension: string;
+            effect: number;
+        }>;
+    };
+    /** Confidence in simulation */
+    confidence: number;
+}
+/**
+ * PLRNN Model Weights
+ * Serializable for persistence
+ */
+interface IPLRNNWeights {
+    /** Diagonal autoregression matrix A */
+    A: number[];
+    /** Off-diagonal connection matrix W */
+    W: number[][];
+    /** Input matrix C (for dendritic bases) */
+    C?: number[][];
+    /** Observation matrix B */
+    B: number[][];
+    /** Bias vectors */
+    biasLatent: number[];
+    biasObserved: number[];
+    /** Dendritic weights (if dendPLRNN) */
+    dendriticWeights?: number[][];
+    /** Metadata */
+    meta: {
+        trainedAt: Date;
+        trainingSamples: number;
+        validationLoss: number;
+        config: IPLRNNConfig;
+    };
+}
+/**
+ * PLRNN Training Sample
+ */
+interface IPLRNNTrainingSample {
+    /** Observation sequence */
+    observations: number[][];
+    /** Timestamps */
+    timestamps: Date[];
+    /** User ID for personalization */
+    userId: string | number;
+    /** Optional ground truth latent states (for supervised training) */
+    groundTruth?: number[][];
+}
+/**
+ * PLRNN Training Result
+ */
+interface IPLRNNTrainingResult {
+    /** Final training loss */
+    loss: number;
+    /** Validation loss */
+    validationLoss: number;
+    /** Number of epochs */
+    epochs: number;
+    /** Training time (ms) */
+    trainingTime: number;
+    /** Convergence achieved */
+    converged: boolean;
+    /** Updated weights */
+    weights: IPLRNNWeights;
+}
+/**
+ * PLRNN Engine Interface
+ * Core nonlinear dynamics engine for cognitive state modeling
+ */
+interface IPLRNNEngine {
+    /**
+     * Initialize engine with configuration
+     */
+    initialize(config: Partial<IPLRNNConfig>): void;
+    /**
+     * Load pretrained weights
+     */
+    loadWeights(weights: IPLRNNWeights): void;
+    /**
+     * Get current weights
+     */
+    getWeights(): IPLRNNWeights;
+    /**
+     * Forward pass: compute next state
+     * z_{t+1} = A * z_t + W * φ(z_t) + C * s_t + bias
+     * where φ is ReLU (piecewise-linear)
+     */
+    forward(state: IPLRNNState, input?: number[]): IPLRNNState;
+    /**
+     * Multi-step prediction
+     */
+    predict(currentState: IPLRNNState, horizon: number, input?: number[][]): IPLRNNPrediction;
+    /**
+     * Hybrid prediction: PLRNN for long-term, Kalman for short-term
+     */
+    hybridPredict(currentState: IPLRNNState, horizon: 'short' | 'medium' | 'long'): IPLRNNPrediction;
+    /**
+     * Extract interpretable causal network from learned weights
+     * Key advantage of PLRNN over black-box models
+     */
+    extractCausalNetwork(): ICausalNetwork;
+    /**
+     * Simulate intervention on psychological dimension
+     */
+    simulateIntervention(currentState: IPLRNNState, target: string, intervention: 'increase' | 'decrease' | 'stabilize', magnitude: number): IInterventionSimulation;
+    /**
+     * Detect early warning signals of critical transition
+     * Based on critical slowing down theory
+     */
+    detectEarlyWarnings(stateHistory: IPLRNNState[], windowSize: number): IEarlyWarningSignal[];
+    /**
+     * Online training update
+     */
+    trainOnline(sample: IPLRNNTrainingSample): IPLRNNTrainingResult;
+    /**
+     * Batch training
+     */
+    trainBatch(samples: IPLRNNTrainingSample[]): IPLRNNTrainingResult;
+    /**
+     * Calculate reconstruction loss
+     */
+    calculateLoss(predicted: number[][], actual: number[][]): number;
+    /**
+     * Get model complexity metrics
+     */
+    getComplexityMetrics(): {
+        effectiveDimensionality: number;
+        sparsity: number;
+        lyapunovExponent: number;
+    };
+}
+/**
+ * Factory function type for PLRNN Engine
+ */
+type PLRNNEngineFactory = (config?: Partial<IPLRNNConfig>) => IPLRNNEngine;
+
+/**
+ * Twin state stability classification
+ * Extended with 2025 dynamical systems theory
+ */
+type TwinStability = 'stable' | 'metastable' | 'unstable' | 'critical' | 'transitioning';
+/**
+ * Attractor type in dynamical systems
+ */
+type AttractorType = 'point' | 'limit_cycle' | 'strange' | 'none' | 'quasi_periodic';
+/**
+ * Scenario outcome classification
+ */
+type ScenarioOutcome = 'improvement' | 'stable' | 'deterioration' | 'crisis' | 'recovery' | 'remission';
+/**
+ * Bifurcation type from dynamical systems theory
+ */
+type BifurcationType = 'saddle_node' | 'transcritical' | 'pitchfork' | 'hopf' | 'fold_bifurcation' | 'period_doubling' | 'blue_sky' | 'unknown';
+/**
+ * Digital phenotyping data source
+ * Based on 2025 sensor review (112 papers)
+ */
+type PhenotypingSource = 'gps_location' | 'accelerometer' | 'screen_time' | 'call_logs' | 'message_logs' | 'social_media' | 'sleep_tracking' | 'heart_rate' | 'ema_survey' | 'keyboard_dynamics' | 'voice_analysis' | 'facial_expression';
+/**
+ * State estimation method
+ * 2025: Multiple methods for ensemble approaches
+ */
+type StateEstimationMethod = 'kalman_filter' | 'extended_kalman' | 'unscented_kalman' | 'ensemble_kalman' | 'particle_filter' | 'bayesian_inference' | 'variational_bayes' | 'physics_informed_nn';
+/**
+ * Twin synchronization mode
+ * 2025: Bidirectional communication
+ */
+type SyncMode = 'unidirectional_p2v' | 'unidirectional_v2p' | 'bidirectional' | 'event_driven' | 'scheduled';
+/**
+ * Single state variable in the cognitive twin
+ * Enhanced with 2025 uncertainty quantification
+ */
+interface ITwinStateVariable {
+    id: string;
+    name: string;
+    nameRu: string;
+    value: number;
+    variance: number;
+    confidence: number;
+    velocity: number;
+    acceleration: number;
+    baselineValue: number;
+    historicalMean: number;
+    historicalStd: number;
+    kalmanState?: {
+        estimate: number;
+        errorCovariance: number;
+        processNoise: number;
+        measurementNoise: number;
+        gain: number;
+    };
+    posterior?: {
+        mean: number;
+        variance: number;
+        distribution: 'gaussian' | 'beta' | 'mixture';
+        parameters: Record<string, number>;
+    };
+    lastObserved: Date;
+    lastUpdated: Date;
+    observationCount: number;
+    dataSource: PhenotypingSource[];
+}
+/**
+ * Complete cognitive twin state snapshot
+ * Enhanced with 2025 MHDT framework
+ */
+interface IDigitalTwinState {
+    id: string;
+    userId: number;
+    timestamp: Date;
+    version: number;
+    variables: Map<string, ITwinStateVariable>;
+    overallWellbeing: number;
+    stability: TwinStability;
+    dominantAttractor: AttractorType;
+    resilience: number;
+    lyapunovExponent: number;
+    autocorrelation: number;
+    varianceRatio: number;
+    stateUncertainty: number;
+    dataQuality: number;
+    beliefState?: {
+        discreteBeliefs: Map<string, number>;
+        continuousBeliefs: Map<string, {
+            mean: number;
+            variance: number;
+        }>;
+        entropy: number;
+    };
+    phenotypeSummary?: {
+        activityLevel: number;
+        socialEngagement: number;
+        sleepRegularity: number;
+        moodVariability: number;
+        stressIndicators: number;
+        lastPhenotypingTimestamp: Date;
+    };
+    causalGraphId: string;
+    syncMetadata: {
+        lastSync: Date;
+        syncMode: SyncMode;
+        pendingUpdates: number;
+        syncHealth: number;
+    };
+}
+/**
+ * State trajectory over time
+ */
+interface IStateTrajectory {
+    userId: number;
+    timepoints: Date[];
+    states: IDigitalTwinState[];
+    interventionsApplied: IInterventionEvent[];
+    trajectoryMetrics?: {
+        volatility: number;
+        trend: number;
+        seasonality: number;
+        breakpoints: Date[];
+    };
+}
+/**
+ * Intervention event record
+ */
+interface IInterventionEvent {
+    id: string;
+    timestamp: Date;
+    interventionType: string;
+    targetVariable: string;
+    predictedEffect: number;
+    actualEffect: number;
+    effectiveness: number;
+    causalConfidence: number;
+    confounders: string[];
+}
+/**
+ * Kalman Filter state
+ */
+interface IKalmanFilterState {
+    stateEstimate: number[];
+    errorCovariance: number[][];
+    predictedState: number[];
+    predictedCovariance: number[][];
+    innovation: number[];
+    innovationCovariance: number[][];
+    kalmanGain: number[][];
+    normalized_innovation_squared: number;
+    isOutlier: boolean;
+    adaptedQ: number[][] | null;
+    adaptedR: number[][] | null;
+    timestep: number;
+    timestamp: Date;
+}
+/**
+ * Digital phenotyping observation
+ * Based on 2025 systematic review (112 papers)
+ */
+interface IPhenotypingObservation {
+    id: string;
+    userId: number;
+    timestamp: Date;
+    source: PhenotypingSource;
+    rawValue: number | string | number[];
+    unit: string;
+    processedFeatures: Map<string, number>;
+    dataQuality: number;
+    missingness: number;
+    isImputed: boolean;
+    isAnonymized: boolean;
+    aggregationLevel: 'raw' | 'hourly' | 'daily' | 'weekly';
+    contextTags: string[];
+}
+/**
+ * What-if scenario definition
+ * Enhanced with 2025 counterfactual reasoning
+ */
+interface IScenario {
+    id: string;
+    name: string;
+    nameRu: string;
+    description: string;
+    descriptionRu: string;
+    interventionType: string | null;
+    targetVariable: string | null;
+    interventionStrength: number;
+    horizonDays: number;
+    startState: IDigitalTwinState;
+    externalStressors: IExternalStressor[];
+    protectiveFactors: IProtectiveFactor[];
+    counterfactual?: {
+        interventionQuery: string;
+        conditioningSet: Map<string, number>;
+        mediatorBlocking: string[];
+    };
+}
+/**
+ * External stressor in scenario
+ */
+interface IExternalStressor {
+    type: 'work' | 'relationship' | 'health' | 'financial' | 'loss' | 'trauma' | 'other';
+    intensity: number;
+    onsetDay: number;
+    durationDays: number;
+    description: string;
+    affectedVariables: string[];
+    effectSize: Map<string, number>;
+}
+/**
+ * Protective factor in scenario
+ */
+interface IProtectiveFactor {
+    type: 'social_support' | 'therapy' | 'medication' | 'lifestyle' | 'coping_skills' | 'mindfulness';
+    strength: number;
+    reliability: number;
+    description: string;
+    bufferedVariables: string[];
+    bufferingEffect: Map<string, number>;
+}
+/**
+ * Scenario simulation result
+ * Enhanced with 2025 ensemble predictions
+ */
+interface IScenarioResult {
+    id: string;
+    scenario: IScenario;
+    simulatedAt: Date;
+    trajectories: ISimulatedTrajectory[];
+    expectedTrajectory: ISimulatedTrajectory;
+    outcome: ScenarioOutcome;
+    outcomeDistribution: Map<ScenarioOutcome, number>;
+    expectedEndState: Map<string, number>;
+    worstCaseEndState: Map<string, number>;
+    bestCaseEndState: Map<string, number>;
+    crisisProbability: number;
+    recoveryProbability: number;
+    tippingPointProbability: number;
+    expectedTimeToImprovement: number | null;
+    expectedTimeToCrisis: number | null;
+    predictionUncertainty: number;
+    aleatoric: number;
+    epistemic: number;
+    keyDrivers: Array<{
+        variable: string;
+        contribution: number;
+        direction: 'positive' | 'negative';
+    }>;
+    confidenceLevel: number;
+    simulationCount: number;
+    methodUsed: StateEstimationMethod;
+}
+/**
+ * Single simulated trajectory
+ */
+interface ISimulatedTrajectory {
+    id: string;
+    timepoints: number[];
+    states: Map<string, number[]>;
+    events: ITrajectoryEvent[];
+    finalOutcome: ScenarioOutcome;
+    probability: number;
+    confidenceBands?: {
+        lower: Map<string, number[]>;
+        upper: Map<string, number[]>;
+    };
+}
+/**
+ * Event during trajectory simulation
+ */
+interface ITrajectoryEvent {
+    day: number;
+    eventType: 'intervention' | 'stressor' | 'tipping_point' | 'recovery' | 'crisis' | 'regime_change';
+    description: string;
+    impact: Map<string, number>;
+    causalMechanism?: string;
+    counterfactualImpact?: number;
+}
+/**
+ * Detected tipping point (bifurcation)
+ * Enhanced with 2025 early warning signals research
+ */
+interface ITippingPoint {
+    id: string;
+    timestamp: Date;
+    detectedAt: Date;
+    bifurcationType: BifurcationType;
+    criticalParameter: string;
+    criticalThreshold: number;
+    currentDistance: number;
+    estimatedTimeToPoint: number;
+    confidenceInterval: [number, number];
+    preTransitionState: AttractorType;
+    postTransitionState: AttractorType;
+    expectedOutcome: ScenarioOutcome;
+    irreversibility: number;
+    earlyWarningStrength: number;
+    autocorrelationIncrease: number;
+    varianceIncrease: number;
+    crossCorrelationIncrease: number;
+    flickeringDetected: boolean;
+    skewnessChange: number;
+    detrended_fluctuation_exponent: number;
+    interventionWindowDays: number;
+    preventionProbability: number;
+    recommendedInterventions: IInterventionRecommendation[];
+}
+/**
+ * Intervention recommendation for preventing tipping point
+ */
+interface IInterventionRecommendation {
+    interventionType: string;
+    targetVariable: string;
+    expectedEffect: number;
+    urgency: 'low' | 'medium' | 'high' | 'critical';
+    feasibility: number;
+    description: string;
+    descriptionRu: string;
+}
+/**
+ * Personal twin parameters (learned from data)
+ * Enhanced with 2025 personalization research
+ */
+interface ITwinPersonalization {
+    userId: number;
+    learnedAt: Date;
+    lastValidated: Date;
+    meanReversionRate: Map<string, number>;
+    volatility: Map<string, number>;
+    sensitivityMatrix: Map<string, Map<string, number>>;
+    interventionResponse: Map<string, IInterventionResponseProfile>;
+    stressorVulnerability: Map<string, number>;
+    protectiveFactorEfficacy: Map<string, number>;
+    circadianPattern: Map<string, number[]>;
+    weeklyPattern: Map<string, number[]>;
+    seasonalPattern: Map<string, number[]>;
+    intraIndividualVariability: Map<string, number>;
+    responseLatency: Map<string, number>;
+    sustainedEffectRate: Map<string, number>;
+    learnedPriors: Map<string, {
+        mean: number;
+        variance: number;
+    }>;
+    dataPointsUsed: number;
+    fitQuality: number;
+    crossValidationScore: number;
+}
+/**
+ * Personalized intervention response profile
+ */
+interface IInterventionResponseProfile {
+    interventionType: string;
+    meanEffect: number;
+    effectVariability: number;
+    timeToOnset: number;
+    timeToPeak: number;
+    duration: number;
+    sustainedEffectRate: number;
+    moderators: Map<string, number>;
+    conditionalEffects: Map<string, number>;
+}
+/**
+ * Main Digital Twin service interface
+ */
+interface IDigitalTwinService {
+    createTwin(userId: number, initialObservations: IPhenotypingObservation[]): Promise<IDigitalTwinState>;
+    getTwin(userId: number): Promise<IDigitalTwinState | null>;
+    deleteTwin(userId: number): Promise<boolean>;
+    updateWithObservation(userId: number, observation: IPhenotypingObservation): Promise<IDigitalTwinState>;
+    batchUpdate(userId: number, observations: IPhenotypingObservation[]): Promise<IDigitalTwinState>;
+    estimateState(userId: number, method?: StateEstimationMethod): Promise<IDigitalTwinState>;
+    getStateHistory(userId: number, days: number): Promise<IStateTrajectory>;
+    getPersonalization(userId: number): Promise<ITwinPersonalization | null>;
+    updatePersonalization(userId: number): Promise<ITwinPersonalization>;
+    synchronize(userId: number): Promise<IDigitalTwinState>;
+}
+
+/**
+ * 🔮 KALMANFORMER INTERFACES
+ * ==========================
+ * Hybrid Kalman Filter + Transformer Architecture
+ *
+ * Scientific Foundation (2025 Research):
+ * - Nature Comm. 2024: "KalmanFormer: using Transformer to model Kalman Gain"
+ * - arXiv 2024: "Transformer-Based Approaches for Sensor Fusion in Autonomous Systems"
+ * - ICLR 2025: "State Space Models with Attention"
+ *
+ * Architecture:
+ * - Kalman Filter: Short-term dynamics, optimal for noisy observations
+ * - Transformer: Long-range dependencies, context modeling
+ * - Learned Kalman Gain: Adaptive trust between prediction and observation
+ *
+ * Key Innovation:
+ * Use Transformer attention to learn optimal Kalman Gain matrix
+ * based on observation context and historical patterns.
+ *
+ * © БФ "Другой путь", 2025
+ */
+
+/**
+ * KalmanFormer Configuration
+ */
+interface IKalmanFormerConfig {
+    /** State dimensionality */
+    stateDim: number;
+    /** Observation dimensionality */
+    obsDim: number;
+    /** Transformer embedding dimension */
+    embedDim: number;
+    /** Number of attention heads */
+    numHeads: number;
+    /** Number of transformer layers */
+    numLayers: number;
+    /** Context window size (historical observations) */
+    contextWindow: number;
+    /** Dropout rate for regularization */
+    dropout: number;
+    /** Kalman-Transformer blend ratio (0 = pure Kalman, 1 = pure Transformer) */
+    blendRatio: number;
+    /** Enable learned Kalman Gain */
+    learnedGain: boolean;
+    /** Temperature for attention softmax */
+    temperature: number;
+    /** Time embedding type */
+    timeEmbedding: 'sinusoidal' | 'learned' | 'none';
+    /** Maximum time gap for interpolation (hours) */
+    maxTimeGap: number;
+}
+/**
+ * Default KalmanFormer Configuration
+ */
+declare const DEFAULT_KALMANFORMER_CONFIG: IKalmanFormerConfig;
+/**
+ * Attention Weights for interpretability
+ */
+interface IAttentionWeights {
+    /** Self-attention weights [numHeads, seqLen, seqLen] */
+    selfAttention: number[][][];
+    /** Cross-attention weights (if applicable) */
+    crossAttention?: number[][][];
+    /** Which historical observations influenced prediction most */
+    topInfluentialObservations: Array<{
+        index: number;
+        timestamp: Date;
+        weight: number;
+        dimension: string;
+    }>;
+    /** Temporal attention pattern (recency vs. relevance) */
+    temporalPattern: 'recency_bias' | 'pattern_matching' | 'uniform';
+}
+/**
+ * KalmanFormer State
+ * Extended Kalman state with Transformer context
+ */
+interface IKalmanFormerState {
+    /** Standard Kalman state */
+    kalmanState: IKalmanFilterState;
+    /** Transformer hidden state (context encoding) */
+    transformerHidden: number[][];
+    /** Historical observation buffer */
+    observationHistory: Array<{
+        observation: number[];
+        timestamp: Date;
+        embedding?: number[];
+    }>;
+    /** Learned Kalman Gain (if enabled) */
+    learnedGain?: number[][];
+    /** Current blend ratio (may adapt) */
+    currentBlendRatio: number;
+    /** Confidence in prediction */
+    confidence: number;
+    /** Timestamp */
+    timestamp: Date;
+}
+/**
+ * KalmanFormer Prediction Result
+ */
+interface IKalmanFormerPrediction {
+    /** State estimate */
+    stateEstimate: number[];
+    /** Covariance estimate */
+    covariance: number[][];
+    /** Kalman contribution to prediction */
+    kalmanContribution: number[];
+    /** Transformer contribution to prediction */
+    transformerContribution: number[];
+    /** Final blended prediction */
+    blendedPrediction: number[];
+    /** Confidence intervals */
+    confidenceInterval: {
+        lower: number[];
+        upper: number[];
+        level: number;
+    };
+    /** Attention weights for interpretability */
+    attention: IAttentionWeights;
+    /** Prediction horizon */
+    horizon: number;
+    /** Trajectory for multi-step prediction */
+    trajectory?: IKalmanFormerState[];
+}
+/**
+ * KalmanFormer Model Weights
+ */
+interface IKalmanFormerWeights {
+    /** Kalman matrices */
+    kalman: {
+        stateTransition: number[][];
+        observationMatrix: number[][];
+        processNoise: number[][];
+        measurementNoise: number[][];
+    };
+    /** Transformer weights */
+    transformer: {
+        queryWeights: number[][][];
+        keyWeights: number[][][];
+        valueWeights: number[][][];
+        outputProjection: number[][];
+        feedforward: {
+            linear1: number[][];
+            linear2: number[][];
+            bias1: number[];
+            bias2: number[];
+        }[];
+        layerNorm: {
+            gamma: number[];
+            beta: number[];
+        }[];
+    };
+    /** Gain predictor (if learned gain enabled) */
+    gainPredictor?: {
+        weights: number[][];
+        bias: number[];
+    };
+    /** Embedding layers */
+    embedding: {
+        observation: number[][];
+        time?: number[][];
+        position?: number[][];
+    };
+    /** Output projection */
+    outputProjection: number[][];
+    /** Blend ratio predictor */
+    blendPredictor?: {
+        weights: number[];
+        bias: number;
+    };
+    /** Metadata */
+    meta: {
+        trainedAt: Date;
+        trainingSamples: number;
+        validationLoss: number;
+        config: IKalmanFormerConfig;
+    };
+}
+/**
+ * Training sample for KalmanFormer
+ */
+interface IKalmanFormerTrainingSample {
+    /** Observation sequence */
+    observations: number[][];
+    /** Timestamps */
+    timestamps: Date[];
+    /** Optional ground truth states */
+    groundTruth?: number[][];
+    /** User ID for personalization */
+    userId: string | number;
+    /** Context information (external factors) */
+    context?: Array<{
+        timeOfDay: number;
+        dayOfWeek: number;
+        eventType?: string;
+    }>;
+}
+/**
+ * KalmanFormer Engine Interface
+ */
+interface IKalmanFormerEngine {
+    /**
+     * Initialize engine
+     */
+    initialize(config?: Partial<IKalmanFormerConfig>): void;
+    /**
+     * Load pretrained weights
+     */
+    loadWeights(weights: IKalmanFormerWeights): void;
+    /**
+     * Get current weights
+     */
+    getWeights(): IKalmanFormerWeights;
+    /**
+     * Process single observation
+     * Updates state using hybrid Kalman-Transformer approach
+     */
+    update(state: IKalmanFormerState, observation: number[], timestamp: Date): IKalmanFormerState;
+    /**
+     * Predict next state(s)
+     */
+    predict(state: IKalmanFormerState, horizon: number): IKalmanFormerPrediction;
+    /**
+     * Get attention-based explanation
+     * Which historical observations influenced the prediction
+     */
+    explain(state: IKalmanFormerState): IAttentionWeights;
+    /**
+     * Adapt blend ratio based on prediction errors
+     */
+    adaptBlendRatio(predictions: number[][], actuals: number[][]): number;
+    /**
+     * Train on batch of samples
+     */
+    train(samples: IKalmanFormerTrainingSample[]): {
+        loss: number;
+        kalmanLoss: number;
+        transformerLoss: number;
+        epochs: number;
+    };
+    /**
+     * Convert to/from PLRNN state for interoperability
+     */
+    toPLRNNState(state: IKalmanFormerState): IPLRNNState;
+    fromPLRNNState(plrnnState: IPLRNNState): IKalmanFormerState;
+    /**
+     * Get model complexity metrics
+     */
+    getComplexityMetrics(): {
+        totalParameters: number;
+        kalmanParameters: number;
+        transformerParameters: number;
+        effectiveContextLength: number;
+    };
+}
+/**
+ * Factory type
+ */
+type KalmanFormerEngineFactory = (config?: Partial<IKalmanFormerConfig>) => IKalmanFormerEngine;
+
+/**
+ * BELIEF STATE ADAPTER
+ * ====================
+ * Bridge between BeliefUpdateEngine (linear Bayesian) and Phase 1 engines
+ * (PLRNN nonlinear dynamics, KalmanFormer hybrid)
+ *
+ * Scientific Foundation:
+ * - ROADMAP task 1.1.3: "BeliefUpdateEngine.predictHybrid()"
+ * - Converts BeliefState <-> IPLRNNState <-> IKalmanFormerState
+ * - Enables nonlinear prediction while maintaining Bayesian uncertainty
+ *
+ * (c) BF "Drugoi Put", 2025
+ */
+
+/**
+ * Dimension mapping from BeliefState to 5D state vector
+ * S_t = (valence, arousal, dominance, risk, resources)
+ */
+declare const DIMENSION_MAPPING: {
+    readonly 0: "valence";
+    readonly 1: "arousal";
+    readonly 2: "dominance";
+    readonly 3: "risk";
+    readonly 4: "resources";
+};
+declare const DIMENSION_INDEX: Record<string, number>;
+/**
+ * Hybrid prediction result combining Bayesian uncertainty with nonlinear dynamics
+ */
+interface IHybridPrediction {
+    /** PLRNN prediction for nonlinear dynamics */
+    plrnnPrediction?: IPLRNNPrediction;
+    /** KalmanFormer prediction for short-term accuracy */
+    kalmanFormerPrediction?: IKalmanFormerPrediction;
+    /** Blended prediction with uncertainty */
+    blendedPrediction: {
+        /** Mean prediction at each horizon step */
+        trajectory: number[][];
+        /** Bayesian credible intervals */
+        credibleIntervals: Array<{
+            lower: number[];
+            upper: number[];
+            level: number;
+        }>;
+        /** Final prediction */
+        finalPrediction: number[];
+    };
+    /** Early warning signals from PLRNN */
+    earlyWarningSignals: IEarlyWarningSignal[];
+    /** Attention explanation from KalmanFormer */
+    attention?: IAttentionWeights;
+    /** Prediction horizon used */
+    horizon: 'short' | 'medium' | 'long';
+    /** Hours ahead */
+    hoursAhead: number;
+    /** Confidence in prediction */
+    confidence: number;
+    /** Which engine contributed most */
+    primaryEngine: 'plrnn' | 'kalmanformer' | 'bayesian';
+}
+/**
+ * Convert BeliefState to 5D observation vector
+ * Maps complex belief structure to simple [V, A, D, risk, resources] vector
+ */
+declare function beliefStateToObservation(belief: BeliefState): number[];
+/**
+ * Extract uncertainty vector from BeliefState
+ */
+declare function beliefStateToUncertainty(belief: BeliefState): number[];
+/**
+ * Convert BeliefState to IPLRNNState
+ */
+declare function beliefStateToPLRNNState(belief: BeliefState, hiddenUnits?: number): IPLRNNState;
+/**
+ * Convert IPLRNNState back to partial BeliefState update
+ * Returns the dimensions that should be updated
+ */
+declare function plrnnStateToBeliefUpdate(plrnnState: IPLRNNState): Record<string, {
+    mean: number;
+    variance: number;
+}>;
+/**
+ * Convert BeliefState to IKalmanFormerState
+ */
+declare function beliefStateToKalmanFormerState(belief: BeliefState, _contextWindow?: number): IKalmanFormerState;
+/**
+ * Convert IKalmanFormerState back to partial BeliefState update
+ */
+declare function kalmanFormerStateToBeliefUpdate(kfState: IKalmanFormerState): Record<string, {
+    mean: number;
+    variance: number;
+}>;
+/**
+ * Merge prediction results from multiple engines
+ */
+declare function mergeHybridPredictions(plrnnPred?: IPLRNNPrediction, kfPred?: IKalmanFormerPrediction, horizon?: 'short' | 'medium' | 'long', confidence?: number): IHybridPrediction;
+/**
+ * BeliefStateAdapter class
+ * Bridges BeliefUpdateEngine with Phase 1 nonlinear engines
+ */
+declare class BeliefStateAdapter {
+    private plrnnEngine?;
+    private kalmanFormerEngine?;
+    constructor(engines?: IBeliefAdapterEngines);
+    /**
+     * Set PLRNN engine
+     */
+    setPLRNNEngine(engine: IBeliefAdapterEngines['plrnn']): void;
+    /**
+     * Set KalmanFormer engine
+     */
+    setKalmanFormerEngine(engine: IBeliefAdapterEngines['kalmanFormer']): void;
+    /**
+     * Hybrid prediction using Phase 1 engines
+     * ROADMAP task 1.1.3 deliverable
+     */
+    predictHybrid(belief: BeliefState, horizon?: 'short' | 'medium' | 'long'): IHybridPrediction;
+    /**
+     * Extract causal network from current belief and PLRNN weights
+     */
+    extractCausalNetwork(_belief: BeliefState): ICausalNetwork | null;
+    /**
+     * Simulate intervention effect on belief state
+     */
+    simulateIntervention(belief: BeliefState, target: string, intervention: 'increase' | 'decrease' | 'stabilize', magnitude: number): IInterventionSimulation | null;
+    /**
+     * Get attention explanation for current state
+     */
+    explainPrediction(belief: BeliefState): IAttentionWeights | null;
+    /**
+     * Convert belief to observation vector
+     */
+    toObservation(belief: BeliefState): number[];
+    /**
+     * Convert belief to PLRNN state
+     */
+    toPLRNNState(belief: BeliefState, hiddenUnits?: number): IPLRNNState;
+    /**
+     * Convert belief to KalmanFormer state
+     */
+    toKalmanFormerState(belief: BeliefState, contextWindow?: number): IKalmanFormerState;
+}
+/**
+ * Engine types for factory function
+ */
+interface IBeliefAdapterEngines {
+    plrnn?: {
+        forward: (state: IPLRNNState, input?: number[]) => IPLRNNState;
+        predict: (state: IPLRNNState, horizon: number) => IPLRNNPrediction;
+        extractCausalNetwork: () => ICausalNetwork;
+        simulateIntervention: (state: IPLRNNState, target: string, intervention: 'increase' | 'decrease' | 'stabilize', magnitude: number) => IInterventionSimulation;
+    };
+    kalmanFormer?: {
+        update: (state: IKalmanFormerState, observation: number[], timestamp: Date) => IKalmanFormerState;
+        predict: (state: IKalmanFormerState, horizon: number) => IKalmanFormerPrediction;
+        explain: (state: IKalmanFormerState) => IAttentionWeights;
+    };
+}
+/**
+ * Factory function
+ */
+declare function createBeliefStateAdapter(engines?: IBeliefAdapterEngines): BeliefStateAdapter;
+
+/**
  * ⏰ TEMPORAL PREDICTION INTERFACES
  * ==================================
  * Temporal Echo Engine - State Forecasting System
@@ -3841,7 +4940,7 @@ type CausalInterventionType = 'challenge' | 'cognitive_reframe' | 'social_prompt
 /**
  * A node in the causal graph representing a variable
  */
-interface ICausalNode$1 {
+interface ICausalNode {
     /** Unique identifier */
     readonly id: string;
     /** Human-readable name (English) */
@@ -3893,7 +4992,7 @@ interface ICausalNodeMetadata {
 /**
  * A directed edge representing causal relationship
  */
-interface ICausalEdge$1 {
+interface ICausalEdge {
     /** Unique identifier */
     readonly id: string;
     /** Source node (cause) */
@@ -3945,9 +5044,9 @@ interface ICausalGraph {
     /** Last update timestamp */
     updatedAt: Date;
     /** All nodes in the graph */
-    nodes: Map<string, ICausalNode$1>;
+    nodes: Map<string, ICausalNode>;
     /** All edges in the graph */
-    edges: Map<string, ICausalEdge$1>;
+    edges: Map<string, ICausalEdge>;
     /** nodeId -> childIds */
     adjacencyList: Map<string, string[]>;
     /** nodeId -> parentIds */
@@ -5622,682 +6721,6 @@ interface IPipelineResult {
 }
 
 /**
- * Twin state stability classification
- * Extended with 2025 dynamical systems theory
- */
-type TwinStability = 'stable' | 'metastable' | 'unstable' | 'critical' | 'transitioning';
-/**
- * Attractor type in dynamical systems
- */
-type AttractorType = 'point' | 'limit_cycle' | 'strange' | 'none' | 'quasi_periodic';
-/**
- * Scenario outcome classification
- */
-type ScenarioOutcome = 'improvement' | 'stable' | 'deterioration' | 'crisis' | 'recovery' | 'remission';
-/**
- * Bifurcation type from dynamical systems theory
- */
-type BifurcationType = 'saddle_node' | 'transcritical' | 'pitchfork' | 'hopf' | 'fold_bifurcation' | 'period_doubling' | 'blue_sky' | 'unknown';
-/**
- * Digital phenotyping data source
- * Based on 2025 sensor review (112 papers)
- */
-type PhenotypingSource = 'gps_location' | 'accelerometer' | 'screen_time' | 'call_logs' | 'message_logs' | 'social_media' | 'sleep_tracking' | 'heart_rate' | 'ema_survey' | 'keyboard_dynamics' | 'voice_analysis' | 'facial_expression';
-/**
- * State estimation method
- * 2025: Multiple methods for ensemble approaches
- */
-type StateEstimationMethod = 'kalman_filter' | 'extended_kalman' | 'unscented_kalman' | 'ensemble_kalman' | 'particle_filter' | 'bayesian_inference' | 'variational_bayes' | 'physics_informed_nn';
-/**
- * Twin synchronization mode
- * 2025: Bidirectional communication
- */
-type SyncMode = 'unidirectional_p2v' | 'unidirectional_v2p' | 'bidirectional' | 'event_driven' | 'scheduled';
-/**
- * Single state variable in the cognitive twin
- * Enhanced with 2025 uncertainty quantification
- */
-interface ITwinStateVariable {
-    id: string;
-    name: string;
-    nameRu: string;
-    value: number;
-    variance: number;
-    confidence: number;
-    velocity: number;
-    acceleration: number;
-    baselineValue: number;
-    historicalMean: number;
-    historicalStd: number;
-    kalmanState?: {
-        estimate: number;
-        errorCovariance: number;
-        processNoise: number;
-        measurementNoise: number;
-        gain: number;
-    };
-    posterior?: {
-        mean: number;
-        variance: number;
-        distribution: 'gaussian' | 'beta' | 'mixture';
-        parameters: Record<string, number>;
-    };
-    lastObserved: Date;
-    lastUpdated: Date;
-    observationCount: number;
-    dataSource: PhenotypingSource[];
-}
-/**
- * Complete cognitive twin state snapshot
- * Enhanced with 2025 MHDT framework
- */
-interface IDigitalTwinState {
-    id: string;
-    userId: number;
-    timestamp: Date;
-    version: number;
-    variables: Map<string, ITwinStateVariable>;
-    overallWellbeing: number;
-    stability: TwinStability;
-    dominantAttractor: AttractorType;
-    resilience: number;
-    lyapunovExponent: number;
-    autocorrelation: number;
-    varianceRatio: number;
-    stateUncertainty: number;
-    dataQuality: number;
-    beliefState?: {
-        discreteBeliefs: Map<string, number>;
-        continuousBeliefs: Map<string, {
-            mean: number;
-            variance: number;
-        }>;
-        entropy: number;
-    };
-    phenotypeSummary?: {
-        activityLevel: number;
-        socialEngagement: number;
-        sleepRegularity: number;
-        moodVariability: number;
-        stressIndicators: number;
-        lastPhenotypingTimestamp: Date;
-    };
-    causalGraphId: string;
-    syncMetadata: {
-        lastSync: Date;
-        syncMode: SyncMode;
-        pendingUpdates: number;
-        syncHealth: number;
-    };
-}
-/**
- * State trajectory over time
- */
-interface IStateTrajectory {
-    userId: number;
-    timepoints: Date[];
-    states: IDigitalTwinState[];
-    interventionsApplied: IInterventionEvent[];
-    trajectoryMetrics?: {
-        volatility: number;
-        trend: number;
-        seasonality: number;
-        breakpoints: Date[];
-    };
-}
-/**
- * Intervention event record
- */
-interface IInterventionEvent {
-    id: string;
-    timestamp: Date;
-    interventionType: string;
-    targetVariable: string;
-    predictedEffect: number;
-    actualEffect: number;
-    effectiveness: number;
-    causalConfidence: number;
-    confounders: string[];
-}
-/**
- * Kalman Filter state
- */
-interface IKalmanFilterState {
-    stateEstimate: number[];
-    errorCovariance: number[][];
-    predictedState: number[];
-    predictedCovariance: number[][];
-    innovation: number[];
-    innovationCovariance: number[][];
-    kalmanGain: number[][];
-    normalized_innovation_squared: number;
-    isOutlier: boolean;
-    adaptedQ: number[][] | null;
-    adaptedR: number[][] | null;
-    timestep: number;
-    timestamp: Date;
-}
-/**
- * Digital phenotyping observation
- * Based on 2025 systematic review (112 papers)
- */
-interface IPhenotypingObservation {
-    id: string;
-    userId: number;
-    timestamp: Date;
-    source: PhenotypingSource;
-    rawValue: number | string | number[];
-    unit: string;
-    processedFeatures: Map<string, number>;
-    dataQuality: number;
-    missingness: number;
-    isImputed: boolean;
-    isAnonymized: boolean;
-    aggregationLevel: 'raw' | 'hourly' | 'daily' | 'weekly';
-    contextTags: string[];
-}
-/**
- * What-if scenario definition
- * Enhanced with 2025 counterfactual reasoning
- */
-interface IScenario {
-    id: string;
-    name: string;
-    nameRu: string;
-    description: string;
-    descriptionRu: string;
-    interventionType: string | null;
-    targetVariable: string | null;
-    interventionStrength: number;
-    horizonDays: number;
-    startState: IDigitalTwinState;
-    externalStressors: IExternalStressor[];
-    protectiveFactors: IProtectiveFactor[];
-    counterfactual?: {
-        interventionQuery: string;
-        conditioningSet: Map<string, number>;
-        mediatorBlocking: string[];
-    };
-}
-/**
- * External stressor in scenario
- */
-interface IExternalStressor {
-    type: 'work' | 'relationship' | 'health' | 'financial' | 'loss' | 'trauma' | 'other';
-    intensity: number;
-    onsetDay: number;
-    durationDays: number;
-    description: string;
-    affectedVariables: string[];
-    effectSize: Map<string, number>;
-}
-/**
- * Protective factor in scenario
- */
-interface IProtectiveFactor {
-    type: 'social_support' | 'therapy' | 'medication' | 'lifestyle' | 'coping_skills' | 'mindfulness';
-    strength: number;
-    reliability: number;
-    description: string;
-    bufferedVariables: string[];
-    bufferingEffect: Map<string, number>;
-}
-/**
- * Scenario simulation result
- * Enhanced with 2025 ensemble predictions
- */
-interface IScenarioResult {
-    id: string;
-    scenario: IScenario;
-    simulatedAt: Date;
-    trajectories: ISimulatedTrajectory[];
-    expectedTrajectory: ISimulatedTrajectory;
-    outcome: ScenarioOutcome;
-    outcomeDistribution: Map<ScenarioOutcome, number>;
-    expectedEndState: Map<string, number>;
-    worstCaseEndState: Map<string, number>;
-    bestCaseEndState: Map<string, number>;
-    crisisProbability: number;
-    recoveryProbability: number;
-    tippingPointProbability: number;
-    expectedTimeToImprovement: number | null;
-    expectedTimeToCrisis: number | null;
-    predictionUncertainty: number;
-    aleatoric: number;
-    epistemic: number;
-    keyDrivers: Array<{
-        variable: string;
-        contribution: number;
-        direction: 'positive' | 'negative';
-    }>;
-    confidenceLevel: number;
-    simulationCount: number;
-    methodUsed: StateEstimationMethod;
-}
-/**
- * Single simulated trajectory
- */
-interface ISimulatedTrajectory {
-    id: string;
-    timepoints: number[];
-    states: Map<string, number[]>;
-    events: ITrajectoryEvent[];
-    finalOutcome: ScenarioOutcome;
-    probability: number;
-    confidenceBands?: {
-        lower: Map<string, number[]>;
-        upper: Map<string, number[]>;
-    };
-}
-/**
- * Event during trajectory simulation
- */
-interface ITrajectoryEvent {
-    day: number;
-    eventType: 'intervention' | 'stressor' | 'tipping_point' | 'recovery' | 'crisis' | 'regime_change';
-    description: string;
-    impact: Map<string, number>;
-    causalMechanism?: string;
-    counterfactualImpact?: number;
-}
-/**
- * Detected tipping point (bifurcation)
- * Enhanced with 2025 early warning signals research
- */
-interface ITippingPoint {
-    id: string;
-    timestamp: Date;
-    detectedAt: Date;
-    bifurcationType: BifurcationType;
-    criticalParameter: string;
-    criticalThreshold: number;
-    currentDistance: number;
-    estimatedTimeToPoint: number;
-    confidenceInterval: [number, number];
-    preTransitionState: AttractorType;
-    postTransitionState: AttractorType;
-    expectedOutcome: ScenarioOutcome;
-    irreversibility: number;
-    earlyWarningStrength: number;
-    autocorrelationIncrease: number;
-    varianceIncrease: number;
-    crossCorrelationIncrease: number;
-    flickeringDetected: boolean;
-    skewnessChange: number;
-    detrended_fluctuation_exponent: number;
-    interventionWindowDays: number;
-    preventionProbability: number;
-    recommendedInterventions: IInterventionRecommendation[];
-}
-/**
- * Intervention recommendation for preventing tipping point
- */
-interface IInterventionRecommendation {
-    interventionType: string;
-    targetVariable: string;
-    expectedEffect: number;
-    urgency: 'low' | 'medium' | 'high' | 'critical';
-    feasibility: number;
-    description: string;
-    descriptionRu: string;
-}
-/**
- * Personal twin parameters (learned from data)
- * Enhanced with 2025 personalization research
- */
-interface ITwinPersonalization {
-    userId: number;
-    learnedAt: Date;
-    lastValidated: Date;
-    meanReversionRate: Map<string, number>;
-    volatility: Map<string, number>;
-    sensitivityMatrix: Map<string, Map<string, number>>;
-    interventionResponse: Map<string, IInterventionResponseProfile>;
-    stressorVulnerability: Map<string, number>;
-    protectiveFactorEfficacy: Map<string, number>;
-    circadianPattern: Map<string, number[]>;
-    weeklyPattern: Map<string, number[]>;
-    seasonalPattern: Map<string, number[]>;
-    intraIndividualVariability: Map<string, number>;
-    responseLatency: Map<string, number>;
-    sustainedEffectRate: Map<string, number>;
-    learnedPriors: Map<string, {
-        mean: number;
-        variance: number;
-    }>;
-    dataPointsUsed: number;
-    fitQuality: number;
-    crossValidationScore: number;
-}
-/**
- * Personalized intervention response profile
- */
-interface IInterventionResponseProfile {
-    interventionType: string;
-    meanEffect: number;
-    effectVariability: number;
-    timeToOnset: number;
-    timeToPeak: number;
-    duration: number;
-    sustainedEffectRate: number;
-    moderators: Map<string, number>;
-    conditionalEffects: Map<string, number>;
-}
-/**
- * Main Digital Twin service interface
- */
-interface IDigitalTwinService {
-    createTwin(userId: number, initialObservations: IPhenotypingObservation[]): Promise<IDigitalTwinState>;
-    getTwin(userId: number): Promise<IDigitalTwinState | null>;
-    deleteTwin(userId: number): Promise<boolean>;
-    updateWithObservation(userId: number, observation: IPhenotypingObservation): Promise<IDigitalTwinState>;
-    batchUpdate(userId: number, observations: IPhenotypingObservation[]): Promise<IDigitalTwinState>;
-    estimateState(userId: number, method?: StateEstimationMethod): Promise<IDigitalTwinState>;
-    getStateHistory(userId: number, days: number): Promise<IStateTrajectory>;
-    getPersonalization(userId: number): Promise<ITwinPersonalization | null>;
-    updatePersonalization(userId: number): Promise<ITwinPersonalization>;
-    synchronize(userId: number): Promise<IDigitalTwinState>;
-}
-
-/**
- * 🧠 PLRNN ENGINE INTERFACES
- * ==========================
- * Piecewise Linear Recurrent Neural Network for Mental Health Dynamics
- *
- * Scientific Foundation (2025 Research):
- * - PLRNN outperforms Transformers for EMA forecasting (medRxiv 2025)
- * - dendPLRNN for interpretable nonlinear dynamics (Durstewitz Lab)
- * - State-space approach for computational psychiatry
- *
- * Key Advantages over Linear Kalman:
- * - Captures nonlinear psychological dynamics (mood swings, tipping points)
- * - Interpretable latent network structure
- * - Predicts intervention effects through causal network analysis
- *
- * © БФ "Другой путь", 2025
- */
-/**
- * PLRNN Configuration
- */
-interface IPLRNNConfig {
-    /** Dimensionality of latent state space (default: 5 for VAD + risk + resources) */
-    latentDim: number;
-    /** Number of hidden units in piecewise-linear layer */
-    hiddenUnits: number;
-    /** Connectivity pattern */
-    connectivity: 'sparse' | 'full' | 'dendritic';
-    /** Dendritic basis expansion (for dendPLRNN) */
-    dendriticBases?: number;
-    /** Learning rate for online adaptation */
-    learningRate: number;
-    /** Teacher forcing ratio (0-1) for training stability */
-    teacherForcingRatio: number;
-    /** Regularization strength for sparse connectivity */
-    l1Regularization: number;
-    /** Gradient clipping threshold */
-    gradientClip: number;
-    /** Number of steps for multi-step prediction */
-    predictionHorizon: number;
-    /** Time delta for continuous-time dynamics (hours) */
-    dt: number;
-}
-/**
- * Default PLRNN Configuration
- * Tuned for mental health EMA dynamics based on 2025 research
- */
-declare const DEFAULT_PLRNN_CONFIG: IPLRNNConfig;
-/**
- * PLRNN State
- * Latent state representation with uncertainty
- */
-interface IPLRNNState {
-    /** Current latent state vector z_t */
-    latentState: number[];
-    /** Hidden layer activations h_t */
-    hiddenActivations: number[];
-    /** Observation-space state estimate x_t */
-    observedState: number[];
-    /** State uncertainty (variance) */
-    uncertainty: number[];
-    /** Timestamp of this state */
-    timestamp: Date;
-    /** Time step index */
-    timestep: number;
-}
-/**
- * PLRNN Prediction Result
- */
-interface IPLRNNPrediction {
-    /** Predicted states over horizon */
-    trajectory: IPLRNNState[];
-    /** Mean prediction at horizon */
-    meanPrediction: number[];
-    /** Prediction confidence intervals */
-    confidenceInterval: {
-        lower: number[];
-        upper: number[];
-        level: number;
-    };
-    /** Prediction variance at each step */
-    variance: number[][];
-    /** Early warning signals detected */
-    earlyWarningSignals: IEarlyWarningSignal[];
-    /** Prediction horizon (hours) */
-    horizon: number;
-}
-/**
- * Early Warning Signal (Critical Slowing Down)
- * Based on 2025 research on critical transitions in mental health
- */
-interface IEarlyWarningSignal {
-    /** Type of EWS */
-    type: 'autocorrelation' | 'variance' | 'connectivity' | 'flickering';
-    /** Which dimension is affected */
-    dimension: string;
-    /** Signal strength (0-1) */
-    strength: number;
-    /** Estimated time to transition (hours, null if unknown) */
-    estimatedTimeToTransition: number | null;
-    /** Confidence in the signal */
-    confidence: number;
-    /** Recommended action */
-    recommendation: string;
-}
-/**
- * Causal Network extracted from PLRNN
- * Interpretable psychological dynamics
- */
-interface ICausalNetwork {
-    /** Nodes represent psychological dimensions */
-    nodes: ICausalNode[];
-    /** Edges represent causal influence strengths */
-    edges: ICausalEdge[];
-    /** Network-level metrics */
-    metrics: {
-        /** Average connectivity */
-        density: number;
-        /** Central node (most influential) */
-        centralNode: string;
-        /** Identified feedback loops */
-        feedbackLoops: string[][];
-    };
-}
-interface ICausalNode {
-    id: string;
-    label: string;
-    /** Self-connection strength (autoregression) */
-    selfWeight: number;
-    /** Centrality in the network */
-    centrality: number;
-    /** Current value */
-    value: number;
-}
-interface ICausalEdge {
-    source: string;
-    target: string;
-    /** Influence weight (positive = excitatory, negative = inhibitory) */
-    weight: number;
-    /** Time lag of influence (hours) */
-    lag: number;
-    /** Statistical significance */
-    significance: number;
-}
-/**
- * Intervention Simulation Result
- * Simulates effect of changing a node in the causal network
- */
-interface IInterventionSimulation {
-    /** Intervention target */
-    target: {
-        dimension: string;
-        intervention: 'increase' | 'decrease' | 'stabilize';
-        magnitude: number;
-    };
-    /** Predicted system response */
-    response: {
-        /** Affected dimensions with effect sizes */
-        effects: Map<string, number>;
-        /** Time to peak effect (hours) */
-        timeToPeak: number;
-        /** Duration of effect (hours) */
-        duration: number;
-        /** Side effects (unintended changes) */
-        sideEffects: Array<{
-            dimension: string;
-            effect: number;
-        }>;
-    };
-    /** Confidence in simulation */
-    confidence: number;
-}
-/**
- * PLRNN Model Weights
- * Serializable for persistence
- */
-interface IPLRNNWeights {
-    /** Diagonal autoregression matrix A */
-    A: number[];
-    /** Off-diagonal connection matrix W */
-    W: number[][];
-    /** Input matrix C (for dendritic bases) */
-    C?: number[][];
-    /** Observation matrix B */
-    B: number[][];
-    /** Bias vectors */
-    biasLatent: number[];
-    biasObserved: number[];
-    /** Dendritic weights (if dendPLRNN) */
-    dendriticWeights?: number[][];
-    /** Metadata */
-    meta: {
-        trainedAt: Date;
-        trainingSamples: number;
-        validationLoss: number;
-        config: IPLRNNConfig;
-    };
-}
-/**
- * PLRNN Training Sample
- */
-interface IPLRNNTrainingSample {
-    /** Observation sequence */
-    observations: number[][];
-    /** Timestamps */
-    timestamps: Date[];
-    /** User ID for personalization */
-    userId: string | number;
-    /** Optional ground truth latent states (for supervised training) */
-    groundTruth?: number[][];
-}
-/**
- * PLRNN Training Result
- */
-interface IPLRNNTrainingResult {
-    /** Final training loss */
-    loss: number;
-    /** Validation loss */
-    validationLoss: number;
-    /** Number of epochs */
-    epochs: number;
-    /** Training time (ms) */
-    trainingTime: number;
-    /** Convergence achieved */
-    converged: boolean;
-    /** Updated weights */
-    weights: IPLRNNWeights;
-}
-/**
- * PLRNN Engine Interface
- * Core nonlinear dynamics engine for cognitive state modeling
- */
-interface IPLRNNEngine {
-    /**
-     * Initialize engine with configuration
-     */
-    initialize(config: Partial<IPLRNNConfig>): void;
-    /**
-     * Load pretrained weights
-     */
-    loadWeights(weights: IPLRNNWeights): void;
-    /**
-     * Get current weights
-     */
-    getWeights(): IPLRNNWeights;
-    /**
-     * Forward pass: compute next state
-     * z_{t+1} = A * z_t + W * φ(z_t) + C * s_t + bias
-     * where φ is ReLU (piecewise-linear)
-     */
-    forward(state: IPLRNNState, input?: number[]): IPLRNNState;
-    /**
-     * Multi-step prediction
-     */
-    predict(currentState: IPLRNNState, horizon: number, input?: number[][]): IPLRNNPrediction;
-    /**
-     * Hybrid prediction: PLRNN for long-term, Kalman for short-term
-     */
-    hybridPredict(currentState: IPLRNNState, horizon: 'short' | 'medium' | 'long'): IPLRNNPrediction;
-    /**
-     * Extract interpretable causal network from learned weights
-     * Key advantage of PLRNN over black-box models
-     */
-    extractCausalNetwork(): ICausalNetwork;
-    /**
-     * Simulate intervention on psychological dimension
-     */
-    simulateIntervention(currentState: IPLRNNState, target: string, intervention: 'increase' | 'decrease' | 'stabilize', magnitude: number): IInterventionSimulation;
-    /**
-     * Detect early warning signals of critical transition
-     * Based on critical slowing down theory
-     */
-    detectEarlyWarnings(stateHistory: IPLRNNState[], windowSize: number): IEarlyWarningSignal[];
-    /**
-     * Online training update
-     */
-    trainOnline(sample: IPLRNNTrainingSample): IPLRNNTrainingResult;
-    /**
-     * Batch training
-     */
-    trainBatch(samples: IPLRNNTrainingSample[]): IPLRNNTrainingResult;
-    /**
-     * Calculate reconstruction loss
-     */
-    calculateLoss(predicted: number[][], actual: number[][]): number;
-    /**
-     * Get model complexity metrics
-     */
-    getComplexityMetrics(): {
-        effectiveDimensionality: number;
-        sparsity: number;
-        lyapunovExponent: number;
-    };
-}
-/**
- * Factory function type for PLRNN Engine
- */
-type PLRNNEngineFactory = (config?: Partial<IPLRNNConfig>) => IPLRNNEngine;
-
-/**
  * 🧠 PLRNN ENGINE IMPLEMENTATION
  * ==============================
  * Piecewise Linear Recurrent Neural Network for Mental Health Dynamics
@@ -6337,6 +6760,8 @@ declare class PLRNNEngine implements IPLRNNEngine {
     private initialized;
     private trainingHistory;
     private adamState;
+    private kalmanFormer;
+    private kalmanFormerState;
     constructor(config?: Partial<IPLRNNConfig>);
     initialize(config?: Partial<IPLRNNConfig>): void;
     loadWeights(weights: IPLRNNWeights): void;
@@ -6352,6 +6777,15 @@ declare class PLRNNEngine implements IPLRNNEngine {
     forward(state: IPLRNNState, input?: number[]): IPLRNNState;
     predict(currentState: IPLRNNState, horizon: number, input?: number[][]): IPLRNNPrediction;
     hybridPredict(currentState: IPLRNNState, horizon: 'short' | 'medium' | 'long'): IPLRNNPrediction;
+    /**
+     * Update KalmanFormer state with new observation
+     * Call this after each observation to maintain state synchronization
+     */
+    updateKalmanFormerState(observation: number[], timestamp: Date): void;
+    /**
+     * Get the current KalmanFormer state (for debugging/analysis)
+     */
+    getKalmanFormerState(): IKalmanFormerState | null;
     extractCausalNetwork(): ICausalNetwork;
     simulateIntervention(currentState: IPLRNNState, target: string, intervention: 'increase' | 'decrease' | 'stabilize', magnitude: number): IInterventionSimulation;
     detectEarlyWarnings(stateHistory: IPLRNNState[], windowSize: number): IEarlyWarningSignal[];
@@ -6378,271 +6812,49 @@ declare class PLRNNEngine implements IPLRNNEngine {
     private calculateCorrelation;
     private updateWeightsOnline;
     private approximateMaxEigenvalue;
+    /**
+     * Get latent dimension
+     */
+    getLatentDim(): number;
+    /**
+     * Get config
+     */
+    getConfig(): IPLRNNConfig;
+    /**
+     * Compute gradients for a single timestep (for BPTT)
+     * Returns gradients for A, W, B, biasLatent, biasObserved
+     */
+    computeStepGradients(prevState: IPLRNNState, currentState: IPLRNNState, target: number[], outputError?: number[]): {
+        dA: number[];
+        dW: number[][];
+        dB: number[][];
+        dBiasLatent: number[];
+        dBiasObserved: number[];
+        latentError: number[];
+    };
+    /**
+     * Apply accumulated gradients using Adam optimizer
+     */
+    applyGradients(gradients: {
+        dA: number[];
+        dW: number[][];
+        dB: number[][];
+        dBiasLatent: number[];
+        dBiasObserved: number[];
+    }, learningRate: number, l1Reg?: number, l2Reg?: number, gradClip?: number): void;
+    /**
+     * Reset Adam optimizer state (for new training run)
+     */
+    resetAdamState(): void;
+    /**
+     * Create a state from observation values
+     */
+    createState(observation: number[], timestamp?: Date): IPLRNNState;
 }
 /**
  * Factory function
  */
 declare function createPLRNNEngine(config?: Partial<IPLRNNConfig>): IPLRNNEngine;
-
-/**
- * 🔮 KALMANFORMER INTERFACES
- * ==========================
- * Hybrid Kalman Filter + Transformer Architecture
- *
- * Scientific Foundation (2025 Research):
- * - Nature Comm. 2024: "KalmanFormer: using Transformer to model Kalman Gain"
- * - arXiv 2024: "Transformer-Based Approaches for Sensor Fusion in Autonomous Systems"
- * - ICLR 2025: "State Space Models with Attention"
- *
- * Architecture:
- * - Kalman Filter: Short-term dynamics, optimal for noisy observations
- * - Transformer: Long-range dependencies, context modeling
- * - Learned Kalman Gain: Adaptive trust between prediction and observation
- *
- * Key Innovation:
- * Use Transformer attention to learn optimal Kalman Gain matrix
- * based on observation context and historical patterns.
- *
- * © БФ "Другой путь", 2025
- */
-
-/**
- * KalmanFormer Configuration
- */
-interface IKalmanFormerConfig {
-    /** State dimensionality */
-    stateDim: number;
-    /** Observation dimensionality */
-    obsDim: number;
-    /** Transformer embedding dimension */
-    embedDim: number;
-    /** Number of attention heads */
-    numHeads: number;
-    /** Number of transformer layers */
-    numLayers: number;
-    /** Context window size (historical observations) */
-    contextWindow: number;
-    /** Dropout rate for regularization */
-    dropout: number;
-    /** Kalman-Transformer blend ratio (0 = pure Kalman, 1 = pure Transformer) */
-    blendRatio: number;
-    /** Enable learned Kalman Gain */
-    learnedGain: boolean;
-    /** Temperature for attention softmax */
-    temperature: number;
-    /** Time embedding type */
-    timeEmbedding: 'sinusoidal' | 'learned' | 'none';
-    /** Maximum time gap for interpolation (hours) */
-    maxTimeGap: number;
-}
-/**
- * Default KalmanFormer Configuration
- */
-declare const DEFAULT_KALMANFORMER_CONFIG: IKalmanFormerConfig;
-/**
- * Attention Weights for interpretability
- */
-interface IAttentionWeights {
-    /** Self-attention weights [numHeads, seqLen, seqLen] */
-    selfAttention: number[][][];
-    /** Cross-attention weights (if applicable) */
-    crossAttention?: number[][][];
-    /** Which historical observations influenced prediction most */
-    topInfluentialObservations: Array<{
-        index: number;
-        timestamp: Date;
-        weight: number;
-        dimension: string;
-    }>;
-    /** Temporal attention pattern (recency vs. relevance) */
-    temporalPattern: 'recency_bias' | 'pattern_matching' | 'uniform';
-}
-/**
- * KalmanFormer State
- * Extended Kalman state with Transformer context
- */
-interface IKalmanFormerState {
-    /** Standard Kalman state */
-    kalmanState: IKalmanFilterState;
-    /** Transformer hidden state (context encoding) */
-    transformerHidden: number[][];
-    /** Historical observation buffer */
-    observationHistory: Array<{
-        observation: number[];
-        timestamp: Date;
-        embedding?: number[];
-    }>;
-    /** Learned Kalman Gain (if enabled) */
-    learnedGain?: number[][];
-    /** Current blend ratio (may adapt) */
-    currentBlendRatio: number;
-    /** Confidence in prediction */
-    confidence: number;
-    /** Timestamp */
-    timestamp: Date;
-}
-/**
- * KalmanFormer Prediction Result
- */
-interface IKalmanFormerPrediction {
-    /** State estimate */
-    stateEstimate: number[];
-    /** Covariance estimate */
-    covariance: number[][];
-    /** Kalman contribution to prediction */
-    kalmanContribution: number[];
-    /** Transformer contribution to prediction */
-    transformerContribution: number[];
-    /** Final blended prediction */
-    blendedPrediction: number[];
-    /** Confidence intervals */
-    confidenceInterval: {
-        lower: number[];
-        upper: number[];
-        level: number;
-    };
-    /** Attention weights for interpretability */
-    attention: IAttentionWeights;
-    /** Prediction horizon */
-    horizon: number;
-    /** Trajectory for multi-step prediction */
-    trajectory?: IKalmanFormerState[];
-}
-/**
- * KalmanFormer Model Weights
- */
-interface IKalmanFormerWeights {
-    /** Kalman matrices */
-    kalman: {
-        stateTransition: number[][];
-        observationMatrix: number[][];
-        processNoise: number[][];
-        measurementNoise: number[][];
-    };
-    /** Transformer weights */
-    transformer: {
-        queryWeights: number[][][];
-        keyWeights: number[][][];
-        valueWeights: number[][][];
-        outputProjection: number[][];
-        feedforward: {
-            linear1: number[][];
-            linear2: number[][];
-            bias1: number[];
-            bias2: number[];
-        }[];
-        layerNorm: {
-            gamma: number[];
-            beta: number[];
-        }[];
-    };
-    /** Gain predictor (if learned gain enabled) */
-    gainPredictor?: {
-        weights: number[][];
-        bias: number[];
-    };
-    /** Embedding layers */
-    embedding: {
-        observation: number[][];
-        time?: number[][];
-        position?: number[][];
-    };
-    /** Output projection */
-    outputProjection: number[][];
-    /** Blend ratio predictor */
-    blendPredictor?: {
-        weights: number[];
-        bias: number;
-    };
-    /** Metadata */
-    meta: {
-        trainedAt: Date;
-        trainingSamples: number;
-        validationLoss: number;
-        config: IKalmanFormerConfig;
-    };
-}
-/**
- * Training sample for KalmanFormer
- */
-interface IKalmanFormerTrainingSample {
-    /** Observation sequence */
-    observations: number[][];
-    /** Timestamps */
-    timestamps: Date[];
-    /** Optional ground truth states */
-    groundTruth?: number[][];
-    /** User ID for personalization */
-    userId: string | number;
-    /** Context information (external factors) */
-    context?: Array<{
-        timeOfDay: number;
-        dayOfWeek: number;
-        eventType?: string;
-    }>;
-}
-/**
- * KalmanFormer Engine Interface
- */
-interface IKalmanFormerEngine {
-    /**
-     * Initialize engine
-     */
-    initialize(config?: Partial<IKalmanFormerConfig>): void;
-    /**
-     * Load pretrained weights
-     */
-    loadWeights(weights: IKalmanFormerWeights): void;
-    /**
-     * Get current weights
-     */
-    getWeights(): IKalmanFormerWeights;
-    /**
-     * Process single observation
-     * Updates state using hybrid Kalman-Transformer approach
-     */
-    update(state: IKalmanFormerState, observation: number[], timestamp: Date): IKalmanFormerState;
-    /**
-     * Predict next state(s)
-     */
-    predict(state: IKalmanFormerState, horizon: number): IKalmanFormerPrediction;
-    /**
-     * Get attention-based explanation
-     * Which historical observations influenced the prediction
-     */
-    explain(state: IKalmanFormerState): IAttentionWeights;
-    /**
-     * Adapt blend ratio based on prediction errors
-     */
-    adaptBlendRatio(predictions: number[][], actuals: number[][]): number;
-    /**
-     * Train on batch of samples
-     */
-    train(samples: IKalmanFormerTrainingSample[]): {
-        loss: number;
-        kalmanLoss: number;
-        transformerLoss: number;
-        epochs: number;
-    };
-    /**
-     * Convert to/from PLRNN state for interoperability
-     */
-    toPLRNNState(state: IKalmanFormerState): IPLRNNState;
-    fromPLRNNState(plrnnState: IPLRNNState): IKalmanFormerState;
-    /**
-     * Get model complexity metrics
-     */
-    getComplexityMetrics(): {
-        totalParameters: number;
-        kalmanParameters: number;
-        transformerParameters: number;
-        effectiveContextLength: number;
-    };
-}
-/**
- * Factory type
- */
-type KalmanFormerEngineFactory = (config?: Partial<IKalmanFormerConfig>) => IKalmanFormerEngine;
 
 /**
  * 🔮 KALMANFORMER ENGINE IMPLEMENTATION
@@ -7163,13 +7375,13 @@ declare class VoiceInputAdapter implements IVoiceInputAdapter {
     constructor(config?: Partial<IVoiceAdapterConfig>);
     initialize(config?: Partial<IVoiceAdapterConfig>): Promise<void>;
     processAudio(audioBuffer: Float32Array, sampleRate?: number): Promise<IVoiceProcessingResult>;
-    processFile(filePath: string): Promise<IVoiceProcessingResult>;
+    processFile(_filePath: string): Promise<IVoiceProcessingResult>;
     processWithTranscription(audioBuffer: Float32Array, existingTranscript?: string): Promise<IVoiceProcessingResult>;
     extractAcousticFeatures(audioBuffer: Float32Array): IAcousticFeatures;
     extractProsodyFeatures(audioBuffer: Float32Array, acousticFeatures?: IAcousticFeatures): IProsodyFeatures;
     mapToEmotion(acoustic: IAcousticFeatures, prosody: IProsodyFeatures): IVoiceEmotionEstimate;
     fuseModalities(voiceEmotion: IVoiceEmotionEstimate, textAnalysis: ITextAnalysis): IMultimodalFusion;
-    transcribe(audioBuffer: Float32Array): Promise<ITextAnalysis>;
+    transcribe(_audioBuffer: Float32Array): Promise<ITextAnalysis>;
     analyzeText(text: string): ITextAnalysis;
     addRealtimeChunk(chunk: Float32Array): void;
     getRealtimeEstimate(): IVoiceEmotionEstimate | null;
@@ -7248,4 +7460,4 @@ type SupportedLanguage = 'en' | 'ru';
  */
 type DomainVertical = 'addiction' | 'sleep' | 'pain' | 'anxiety' | 'depression' | 'custom';
 
-export { type ABCDChain, type AgeGroup$1 as AgeGroup, type AttentionalBias, type BeliefState$1 as BeliefState, type BeliefUpdate, type BeliefUpdateResult, COGNICORE_VERSION, type ChangeStage, type CognitiveDistortion, type CognitiveDistortionType, type CognitiveLoad, type CognitiveTriad, type ComponentStatus, type CopingStrategy, type CopingStrategyType, type CoreBeliefPattern, DEFAULT_EMOTION_VAD, DEFAULT_KALMANFORMER_CONFIG, DEFAULT_PLRNN_CONFIG, DEFAULT_VOICE_CONFIG, DISTORTION_INTERVENTIONS, DISTORTION_PATTERNS, type DetectedDistortion, type DomainVertical, EMOTION_THERAPY_MAPPING, type EmotionPattern, type EmotionTrend, type EmotionType$1 as EmotionType, type EnergyLevel, type IAcousticFeatures, type IAttentionWeights, type IBeliefUpdateEngine, type ICausalEdge$1 as ICausalEdge, type ICausalGraph, type ICausalNetwork, type ICausalNode$1 as ICausalNode, type ICognitiveDistortionDetector, type ICognitiveState, type ICognitiveStateBuilder, type ICognitiveStateFactory, type IConstitutionalPrinciple, type IContextualFeatures, type ICounterfactualExplanation, type ICrisisDetectionResult, type IDecisionPoint, type IDeepCognitiveMirror, type IDigitalTwinService, type IDigitalTwinState, type IEarlyWarningSignal, type IEmotionalState$1 as IEmotionalState, type IEmotionalStateBuilder, type IEmotionalStateFactory, type IEscalationDecision, type IExplainabilityService, type IFeatureAttribution, type IGlobalFeatureImportance, type IHumanEscalationRequest, type IIncomingMessage, type IIntervention$1 as IIntervention, type IInterventionOptimizer, type IInterventionOutcome, type IInterventionSelection, type IInterventionSimulation, type IInterventionTarget, type IKalmanFormerConfig, type IKalmanFormerEngine, type IKalmanFormerPrediction, type IKalmanFormerState, type IKalmanFormerTrainingSample, type IKalmanFormerWeights, type IMessageAnalysis, type IMetacognitiveState, type IModelCard, type IMotivationalState, type IMultimodalFusion, INDEX_THRESHOLDS, type INarrativeExplanation, type INarrativeState, type INarrativeStateBuilder, type ICausalEdge as IPLRNNCausalEdge, type ICausalNode as IPLRNNCausalNode, type IPLRNNConfig, type IPLRNNEngine, type IPLRNNPrediction, type IPLRNNState, type IPLRNNTrainingResult, type IPLRNNTrainingSample, type IPLRNNWeights, type IPipelineResult, type IProsodyFeatures, type IResourceState, type IResourceStateBuilder, type IRiskState, type IRiskStateBuilder, type ISHAPExplanation, type ISafetyContext, type ISafetyInvariant, type ISafetyValidationResult, type IScenario, type IScenarioResult, type IStateTrajectory, type IStateVector, type IStateVectorBuilder, type IStateVectorFactory, type IStateVectorRepository, type IStateVectorService, type ITemporalEchoEngine, type ITextAnalysis, type ITippingPoint, type ITwinStateVariable, type IVADMapper, type IVoiceAdapterConfig, type IVoiceEmotionEstimate, type IVoiceInputAdapter, type IVoiceProcessingResult, KalmanFormerEngine, type KalmanFormerEngineFactory, type MessageIntent, type Metacognition, type NarrativeChapter, type NarrativeMoment, type NarrativeRole, type NarrativeTheme, type Observation, type ObservationSource, type PERMADimensions, PLRNNEngine, type PLRNNEngineFactory, type AgeGroup as PipelineAgeGroup, type ProtectiveFactor, type RegulationEffectiveness, type Resilience, type RiskFactor, type RiskLevel$2 as RiskLevel, type RiskTrajectory, type SafetyLevel, type SafetyPlan, type RiskLevel$1 as SafetyRiskLevel, type ScoredEmotion, type SocialResources, type SocraticQuestion, type StageTransition, type StateBasedRecommendation, type StateQuality, type StateSummary, type StateTransition, type SupportedLanguage, type TemporalPrediction, type TextAnalysisResult, type TherapeuticInsight, type ThinkingStyle, type VADDimensions, VoiceInputAdapter, type VoiceInputAdapterFactory, type VulnerabilityWindow, WELLBEING_WEIGHTS, createKalmanFormerEngine, createPLRNNEngine, createVoiceInputAdapter, getComponentStatus };
+export { type ABCDChain, type AgeGroup$1 as AgeGroup, type AttentionalBias, type BeliefState$1 as BeliefState, BeliefStateAdapter, type BeliefUpdate, type BeliefUpdateResult, COGNICORE_VERSION, type ChangeStage, type CognitiveDistortion, type CognitiveDistortionType, type CognitiveLoad, type CognitiveTriad, type ComponentStatus, type CopingStrategy, type CopingStrategyType, type CoreBeliefPattern, DEFAULT_EMOTION_VAD, DEFAULT_KALMANFORMER_CONFIG, DEFAULT_PLRNN_CONFIG, DEFAULT_VOICE_CONFIG, DIMENSION_INDEX, DIMENSION_MAPPING, DISTORTION_INTERVENTIONS, DISTORTION_PATTERNS, type DetectedDistortion, type DomainVertical, EMOTION_THERAPY_MAPPING, type EmotionPattern, type EmotionTrend, type EmotionType$1 as EmotionType, type EnergyLevel, type IAcousticFeatures, type IAttentionWeights, type IBeliefUpdateEngine, type ICausalEdge, type ICausalGraph, type ICausalNetwork, type ICausalNode, type ICognitiveDistortionDetector, type ICognitiveState, type ICognitiveStateBuilder, type ICognitiveStateFactory, type IConstitutionalPrinciple, type IContextualFeatures, type ICounterfactualExplanation, type ICrisisDetectionResult, type IDecisionPoint, type IDeepCognitiveMirror, type IDigitalTwinService, type IDigitalTwinState, type IEarlyWarningSignal, type IEmotionalState$1 as IEmotionalState, type IEmotionalStateBuilder, type IEmotionalStateFactory, type IEscalationDecision, type IExplainabilityService, type IFeatureAttribution, type IGlobalFeatureImportance, type IHumanEscalationRequest, type IHybridPrediction, type IIncomingMessage, type IIntervention$1 as IIntervention, type IInterventionOptimizer, type IInterventionOutcome, type IInterventionSelection, type IInterventionSimulation, type IInterventionTarget, type IKalmanFormerConfig, type IKalmanFormerEngine, type IKalmanFormerPrediction, type IKalmanFormerState, type IKalmanFormerTrainingSample, type IKalmanFormerWeights, type IMessageAnalysis, type IMetacognitiveState, type IModelCard, type IMotivationalState, type IMultimodalFusion, INDEX_THRESHOLDS, type INarrativeExplanation, type INarrativeState, type INarrativeStateBuilder, type ICausalEdge$1 as IPLRNNCausalEdge, type ICausalNode$1 as IPLRNNCausalNode, type IPLRNNConfig, type IPLRNNEngine, type IPLRNNPrediction, type IPLRNNState, type IPLRNNTrainingResult, type IPLRNNTrainingSample, type IPLRNNWeights, type IPipelineResult, type IProsodyFeatures, type IResourceState, type IResourceStateBuilder, type IRiskState, type IRiskStateBuilder, type ISHAPExplanation, type ISafetyContext, type ISafetyInvariant, type ISafetyValidationResult, type IScenario, type IScenarioResult, type IStateTrajectory, type IStateVector, type IStateVectorBuilder, type IStateVectorFactory, type IStateVectorRepository, type IStateVectorService, type ITemporalEchoEngine, type ITextAnalysis, type ITippingPoint, type ITwinStateVariable, type IVADMapper, type IVoiceAdapterConfig, type IVoiceEmotionEstimate, type IVoiceInputAdapter, type IVoiceProcessingResult, KalmanFormerEngine, type KalmanFormerEngineFactory, type MessageIntent, type Metacognition, type NarrativeChapter, type NarrativeMoment, type NarrativeRole, type NarrativeTheme, type Observation, type ObservationSource, type PERMADimensions, PLRNNEngine, type PLRNNEngineFactory, type AgeGroup as PipelineAgeGroup, type ProtectiveFactor, type RegulationEffectiveness, type Resilience, type RiskFactor, type RiskLevel$2 as RiskLevel, type RiskTrajectory, type SafetyLevel, type SafetyPlan, type RiskLevel$1 as SafetyRiskLevel, type ScoredEmotion, type SocialResources, type SocraticQuestion, type StageTransition, type StateBasedRecommendation, type StateQuality, type StateSummary, type StateTransition, type SupportedLanguage, type TemporalPrediction, type TextAnalysisResult, type TherapeuticInsight, type ThinkingStyle, type VADDimensions, VoiceInputAdapter, type VoiceInputAdapterFactory, type VulnerabilityWindow, WELLBEING_WEIGHTS, beliefStateToKalmanFormerState, beliefStateToObservation, beliefStateToPLRNNState, beliefStateToUncertainty, createBeliefStateAdapter, createKalmanFormerEngine, createPLRNNEngine, createVoiceInputAdapter, getComponentStatus, kalmanFormerStateToBeliefUpdate, mergeHybridPredictions, plrnnStateToBeliefUpdate };
