@@ -76,3 +76,45 @@ export {
   type IBackupResult,
   type IRestoreResult,
 } from './BackupService';
+
+// ============================================================================
+// Automated Backup Scheduler (2025 Best Practices)
+// ============================================================================
+
+export {
+  AutomatedBackupScheduler,
+  createAutomatedBackupScheduler,
+  type IGFSRetentionConfig,
+  type IBackupScheduleConfig,
+  type IHealthConfig,
+  type BackupType,
+  type IBackupHealthAlert,
+  type IBackupHealthStatus,
+  type IAutomatedBackupConfig,
+} from './AutomatedBackupScheduler';
+
+// ============================================================================
+// PHI Encryption Manager (2025 HIPAA Compliance)
+// ============================================================================
+
+export {
+  PHIEncryptionManager,
+  getPHIEncryptionManager,
+  PHI_FIELD_DEFINITIONS,
+  type IPHIEncryptionStatus,
+  type PHIFieldDefinitions,
+} from './PHIEncryptionManager';
+
+// ============================================================================
+// PHI Data Migration (Plaintext to Encrypted)
+// ============================================================================
+
+export {
+  PHIDataMigration,
+  createPHIDataMigration,
+  runPHIMigration,
+  type IPHIMigrationConfig,
+  type IPHIMigrationResult,
+  type IMigrationProgress,
+  type IFieldMigrationResult,
+} from './PHIDataMigration';

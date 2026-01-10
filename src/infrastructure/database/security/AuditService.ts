@@ -133,7 +133,18 @@ const DEFAULT_CONFIG: Required<IAuditServiceConfig> = {
   captureOldValues: true,
   captureNewValues: true,
   retentionDays: 2190, // 6 years (HIPAA requirement)
-  redactedFields: ['password', 'token', 'secret', 'key', 'ssn', 'credit_card'],
+  redactedFields: [
+    // Authentication secrets
+    'password', 'token', 'secret', 'key', 'apiKey', 'api_key',
+    // Financial PII
+    'ssn', 'credit_card', 'insuranceId', 'insurance_id',
+    // Personal PII (GDPR/152-FZ)
+    'firstName', 'first_name', 'lastName', 'last_name', 'email',
+    'phoneNumber', 'phone_number', 'address', 'dateOfBirth', 'date_of_birth',
+    // Healthcare PHI (HIPAA)
+    'diagnosis', 'medications', 'symptoms', 'therapyNotes', 'therapy_notes',
+    'sleepNotes', 'sleep_notes', 'dreamContent', 'dream_content', 'stressFactors',
+  ],
 };
 
 /**

@@ -25,9 +25,9 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { promisify } from 'util';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const copyFile = promisify(fs.copyFile);
 const mkdir = promisify(fs.mkdir);
 const _readdir = promisify(fs.readdir);
@@ -295,11 +295,17 @@ export class BackupService {
     const pgDatabase = process.env.PGDATABASE || 'sleepcore';
     const pgUser = process.env.PGUSER || 'postgres';
 
-    // Execute pg_dump
-    const dumpCommand = `pg_dump -h ${pgHost} -p ${pgPort} -U ${pgUser} -d ${pgDatabase} -F c -f "${backupPath}"`;
-
+    // Execute pg_dump using execFile to prevent command injection (OWASP A03:2025)
+    // Never use exec() with user-controllable input - use execFile() with argument array
     try {
-      await execAsync(dumpCommand, {
+      await execFileAsync('pg_dump', [
+        '-h', pgHost,
+        '-p', pgPort,
+        '-U', pgUser,
+        '-d', pgDatabase,
+        '-F', 'c',
+        '-f', backupPath,
+      ], {
         env: { ...process.env, PGPASSWORD: process.env.PGPASSWORD },
       });
     } catch (error) {
