@@ -1,6 +1,6 @@
 # SleepCore Production Launch Plan
 
-> **Version**: 1.15
+> **Version**: 1.16
 > **Created**: 2026-01-08
 > **Status**: Active
 > **Last Updated**: 2026-01-10
@@ -138,7 +138,18 @@ SleepCore is an AI-powered digital therapeutic (DTx) for chronic insomnia treatm
 | Health Connect = new Android standard | HIGH | Google |
 | Oura: best sleep accuracy | HIGH | Industry consensus |
 
-### 7. Telegram Compliance
+### 7. Predictive Modeling (PLRNN)
+
+| Finding | Confidence | Source |
+|---------|------------|--------|
+| PLRNN outperforms linear models for EMA prediction | HIGH | npj Digital Medicine 2025 |
+| PLRNNs provide most accurate mental health forecasts | HIGH | medRxiv 2025 |
+| Dendritic PLRNN: interpretable nonlinear dynamics | HIGH | Durstewitz Lab 2025 |
+| Hybrid prediction: Kalman (short-term) + PLRNN (long-term) | HIGH | npj Digital Medicine 2025 |
+| Early warning signals: autocorrelation, variance, connectivity | HIGH | Nature Reviews Psychology 2025 |
+| 5D state sufficient for sleep dynamics modeling | MEDIUM | CogniCore Engine 2.0 |
+
+### 8. Telegram Compliance
 
 | Finding | Confidence | Source |
 |---------|------------|--------|
@@ -562,6 +573,7 @@ PHASE 6: Continuous ──────────────┘ ← Ongoing
 | 2026-01-09 | 1.13 | Anonymized data export implemented - AnonymizedDataExportService.ts + AdminCommand.ts integration (GDPR Art. 89, HIPAA Safe Harbor 18 identifiers, 152-FZ depersonalization, EMA Policy 0070, ICMJE data sharing statement, k-anonymity validation, CSV/JSON/NDJSON formats, 21 CFR Part 11 audit trail) |
 | 2026-01-10 | 1.14 | Crisis detection integrated - CrisisDetectionService.ts wrapping CogniCore Engine CrisisDetector (3-layer detection, bilingual RU/EN, C-SSRS severity levels, automatic session interruption, ICH E6(R3) real-time safety monitoring, 31 unit tests) |
 | 2026-01-10 | 1.15 | Escalation protocol implemented - CrisisEscalationService.ts (SAMHSA 2025 Guidelines, admin Telegram notifications, auto-AE for CRITICAL, Stanley-Brown Safety Planning, bilingual RU/EN, Safety Plan keyboard, CommandHandler integration, 38 unit tests) |
+| 2026-01-10 | 1.16 | PLRNN-based sleep prediction integrated - SleepPredictionService.ts (npj Digital Medicine 2025 research: PLRNN outperforms linear models for EMA prediction; 5D state vector mapping: SE, SOL, WASO, TST, Quality; early warning signals for sleep deterioration; hybrid prediction with Kalman for short-term; causal network extraction; intervention simulation; online learning; bilingual RU/EN warnings and recommendations; 40 unit tests) |
 
 ---
 

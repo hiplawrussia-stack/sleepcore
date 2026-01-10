@@ -243,5 +243,20 @@ export type {
   ICrisisEscalationConfig,
 } from './CrisisEscalationService';
 
+// ==================== Sleep Prediction (Phase 2.1 PLRNN) ====================
+export {
+  SleepPredictionService,
+  createSleepPredictionService,
+  DEFAULT_SLEEP_PREDICTION_CONFIG,
+  SLEEP_DIMENSION_MAPPING,
+} from './SleepPredictionService';
+
+export type {
+  ISleepPredictionConfig,
+  ISleepHistoryEntry,
+  ISleepPrediction,
+  ISleepEarlyWarning,
+} from './SleepPredictionService';
+
 // ==================== Modules Re-export ====================
 export * from '../../modules';
