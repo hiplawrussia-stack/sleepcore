@@ -1,6 +1,6 @@
 # SleepCore Production Launch Plan
 
-> **Version**: 1.14
+> **Version**: 1.15
 > **Created**: 2026-01-08
 > **Status**: Active
 > **Last Updated**: 2026-01-10
@@ -272,6 +272,7 @@ SleepCore is an AI-powered digital therapeutic (DTx) for chronic insomnia treatm
 - [x] Implement adverse event reporting - AdverseEventService + /aereport command (ICH E6(R3), ICH E2A/E2B, CIOMS Form I, Roszdravnadzor Order 200n, DTx-specific "digitalovigilance")
 - [x] Set up anonymized data export - AnonymizedDataExportService.ts (GDPR Art. 89, HIPAA Safe Harbor 18 identifiers, 152-FZ depersonalization, ICMJE data sharing, k-anonymity validation, CSV/JSON/NDJSON formats, audit trail)
 - [x] Integrate crisis detection - CrisisDetectionService.ts wrapping CogniCore Engine's CrisisDetector (3-layer detection: keywords, patterns, state-based; bilingual RU/EN crisis resources; C-SSRS inspired severity levels; automatic session interruption for high/critical severity; ICH E6(R3) real-time safety monitoring)
+- [x] Implement escalation protocol - CrisisEscalationService.ts (SAMHSA 2025 Guidelines compliant; admin Telegram notifications for HIGH/CRITICAL; auto-AE creation for CRITICAL; Stanley-Brown Safety Planning 6-step flow; bilingual RU/EN messages; configurable escalation timeout; Safety Plan keyboard in crisis response; 38 unit tests)
 
 ### 1.4 Recruitment
 
@@ -288,7 +289,7 @@ SleepCore is an AI-powered digital therapeutic (DTx) for chronic insomnia treatm
 | Protocol design | COMPLETE | docs/ethics/STUDY_PROTOCOL.md |
 | Ethics approval | NOT STARTED | Checklist ready |
 | Recruitment materials | NOT STARTED | |
-| Technical implementation | COMPLETE | All Phase 1.3 requirements implemented: consent flow, ISI scheduling, admin dashboard, AE reporting, anonymized data export |
+| Technical implementation | COMPLETE | All Phase 1.3 requirements implemented: consent flow, ISI scheduling, admin dashboard, AE reporting, anonymized data export, crisis detection, escalation protocol |
 | Data collection | NOT STARTED | |
 | Analysis | NOT STARTED | |
 
@@ -560,6 +561,7 @@ PHASE 6: Continuous ──────────────┘ ← Ongoing
 | 2026-01-08 | 1.12 | Adverse event reporting implemented - AdverseEventService.ts + AEReportCommand.ts (ICH E6(R3), ICH E2A/E2B 15/7 day deadlines, CIOMS Form I, Roszdravnadzor Order 200n, DTx-specific categories, auto-ISI-deterioration detection, safety alerts) |
 | 2026-01-09 | 1.13 | Anonymized data export implemented - AnonymizedDataExportService.ts + AdminCommand.ts integration (GDPR Art. 89, HIPAA Safe Harbor 18 identifiers, 152-FZ depersonalization, EMA Policy 0070, ICMJE data sharing statement, k-anonymity validation, CSV/JSON/NDJSON formats, 21 CFR Part 11 audit trail) |
 | 2026-01-10 | 1.14 | Crisis detection integrated - CrisisDetectionService.ts wrapping CogniCore Engine CrisisDetector (3-layer detection, bilingual RU/EN, C-SSRS severity levels, automatic session interruption, ICH E6(R3) real-time safety monitoring, 31 unit tests) |
+| 2026-01-10 | 1.15 | Escalation protocol implemented - CrisisEscalationService.ts (SAMHSA 2025 Guidelines, admin Telegram notifications, auto-AE for CRITICAL, Stanley-Brown Safety Planning, bilingual RU/EN, Safety Plan keyboard, CommandHandler integration, 38 unit tests) |
 
 ---
 

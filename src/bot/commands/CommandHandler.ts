@@ -19,6 +19,7 @@ import type { InlineKeyboardButton } from 'grammy/types';
 import type { ICommand, ICommandRegistry, ISleepCoreContext, IUserSession, IConversationCommand, IInlineButton } from './interfaces/ICommand';
 import { SleepCoreAPI } from '../../SleepCoreAPI';
 import { CrisisDetectionService, createCrisisDetectionService, ICrisisResponse } from '../services/CrisisDetectionService';
+import { CrisisEscalationService, createCrisisEscalationService } from '../services/CrisisEscalationService';
 
 // Import all commands
 import { startCommand } from './StartCommand';
@@ -50,10 +51,17 @@ export class CommandHandler implements ICommandRegistry {
   private sessions: Map<string, IUserSession> = new Map();
   private sleepCore: SleepCoreAPI;
   private crisisDetection: CrisisDetectionService;
+  private crisisEscalation: CrisisEscalationService;
+  private bot?: Bot<Context>;
 
-  constructor(sleepCore?: SleepCoreAPI, crisisDetection?: CrisisDetectionService) {
+  constructor(
+    sleepCore?: SleepCoreAPI,
+    crisisDetection?: CrisisDetectionService,
+    crisisEscalation?: CrisisEscalationService
+  ) {
     this.sleepCore = sleepCore || new SleepCoreAPI();
     this.crisisDetection = crisisDetection || createCrisisDetectionService();
+    this.crisisEscalation = crisisEscalation || createCrisisEscalationService();
     this.registerDefaultCommands();
   }
 
@@ -62,6 +70,23 @@ export class CommandHandler implements ICommandRegistry {
    */
   getCrisisDetectionService(): CrisisDetectionService {
     return this.crisisDetection;
+  }
+
+  /**
+   * Get crisis escalation service (for admin dashboard access)
+   */
+  getCrisisEscalationService(): CrisisEscalationService {
+    return this.crisisEscalation;
+  }
+
+  /**
+   * Configure admin escalation settings
+   */
+  configureEscalation(config: {
+    adminUserIds?: string[];
+    adminChatId?: string;
+  }): void {
+    this.crisisEscalation.updateConfig(config);
   }
 
   // ==================== ICommandRegistry Implementation ====================
@@ -119,6 +144,10 @@ export class CommandHandler implements ICommandRegistry {
    * Register all commands with Grammy bot
    */
   registerWithBot(bot: Bot<Context>): void {
+    // Store bot reference for escalation notifications
+    this.bot = bot;
+    this.crisisEscalation.setBot(bot);
+
     // Register each command
     for (const command of this.commands.values()) {
       bot.command(command.name, async (ctx) => {
@@ -175,8 +204,12 @@ export class CommandHandler implements ICommandRegistry {
       if (messageText) {
         const crisisResponse = await this.checkForCrisis(ctx, sleepCoreCtx, messageText);
         if (crisisResponse?.shouldInterrupt) {
-          // Crisis detected - send crisis response and interrupt normal flow
-          await ctx.reply(crisisResponse.message, { parse_mode: 'HTML' });
+          // Crisis detected - send crisis response with Safety Plan keyboard
+          const safetyPlanKeyboard = this.buildSafetyPlanKeyboard(sleepCoreCtx.languageCode);
+          await ctx.reply(crisisResponse.message, {
+            parse_mode: 'HTML',
+            reply_markup: safetyPlanKeyboard,
+          });
           return;
         }
       }
@@ -226,13 +259,31 @@ export class CommandHandler implements ICommandRegistry {
         sleepCoreCtx.chatId.toString()
       );
 
-      // Log high-severity events for admin dashboard
+      // Escalation protocol for HIGH/CRITICAL severity
+      // Per SAMHSA 2025 Guidelines & ICH E6(R3) real-time safety monitoring
       if (response.severity === 'high' || response.severity === 'critical') {
-        console.warn('[CommandHandler] Crisis detected:', {
+        console.warn('[CommandHandler] Crisis detected, triggering escalation:', {
           userId: sleepCoreCtx.userId,
           severity: response.severity,
           action: response.action,
         });
+
+        // Trigger escalation (admin notifications, auto-AE for critical)
+        try {
+          const escalationResult = await this.crisisEscalation.escalate(response.event);
+
+          if (escalationResult.escalated) {
+            console.info('[CommandHandler] Escalation completed:', {
+              level: escalationResult.level,
+              notificationsSent: escalationResult.notificationsSent,
+              aeCreated: escalationResult.aeCreated,
+              aeId: escalationResult.aeId,
+            });
+          }
+        } catch (escalationError) {
+          // Escalation failure should not block crisis response to user
+          console.error('[CommandHandler] Escalation error:', escalationError);
+        }
       }
 
       return response;
@@ -408,6 +459,50 @@ export class CommandHandler implements ICommandRegistry {
       return { text: btn.text, url: btn.url };
     }
     return { text: btn.text, callback_data: btn.callbackData || 'noop' };
+  }
+
+  /**
+   * Build Safety Plan keyboard for crisis response
+   * Based on Stanley-Brown Safety Planning (6-step protocol)
+   */
+  private buildSafetyPlanKeyboard(languageCode: string): { inline_keyboard: InlineKeyboardButton[][] } {
+    const isRussian = languageCode === 'ru' || !languageCode.startsWith('en');
+
+    return {
+      inline_keyboard: [
+        // Row 1: Safety Plan and SOS
+        [
+          {
+            text: isRussian ? '📋 План безопасности' : '📋 Safety Plan',
+            callback_data: 'crisis:safety_plan:start',
+          },
+          {
+            text: isRussian ? '🆘 SOS Помощь' : '🆘 SOS Help',
+            callback_data: 'sos:menu',
+          },
+        ],
+        // Row 2: Relaxation and Distraction
+        [
+          {
+            text: isRussian ? '🧘 Расслабление' : '🧘 Relaxation',
+            callback_data: 'relax:menu',
+          },
+          {
+            text: isRussian ? '💭 Отвлечься' : '💭 Distraction',
+            callback_data: 'crisis:distraction:start',
+          },
+        ],
+        // Row 3: Talk to someone
+        [
+          {
+            text: isRussian ? '📞 Позвонить на горячую линию' : '📞 Call Crisis Hotline',
+            url: isRussian
+              ? 'tel:88002000122'   // Russian crisis line
+              : 'tel:988',          // US 988 Lifeline
+          },
+        ],
+      ],
+    };
   }
 
   /**

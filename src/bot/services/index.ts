@@ -226,5 +226,22 @@ export type {
   ICrisisDetectionServiceConfig,
 } from './CrisisDetectionService';
 
+// ==================== Crisis Escalation (Phase 1.4 Safety) ====================
+export {
+  CrisisEscalationService,
+  createCrisisEscalationService,
+  crisisEscalationService,
+  DEFAULT_ESCALATION_CONFIG,
+  SAFETY_PLAN_STEPS,
+} from './CrisisEscalationService';
+
+export type {
+  EscalationLevel,
+  IAdminNotification,
+  ISafetyPlanStep,
+  IUserSafetyPlan,
+  ICrisisEscalationConfig,
+} from './CrisisEscalationService';
+
 // ==================== Modules Re-export ====================
 export * from '../../modules';
