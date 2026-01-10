@@ -1,3 +1,5 @@
+export { CrisisDetectionResult, CrisisDetector, CrisisDetectorConfig, CrisisSeverity, CrisisType, DEFAULT_CRISIS_CONFIG, LayerResult, StateRiskData, createCrisisDetector, defaultCrisisDetector } from './crisis/index.js';
+
 /**
  * 🎭 EMOTIONAL STATE INTERFACE
  * ============================

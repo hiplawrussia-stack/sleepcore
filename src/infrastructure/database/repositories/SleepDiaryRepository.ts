@@ -21,6 +21,7 @@ import type {
   ISleepDiaryEntryEntity,
 } from '../interfaces/IRepository';
 import { BaseRepository, type IBaseRow } from './BaseRepository';
+import { getPHIEncryptionManager } from '../security/PHIEncryptionManager';
 
 /**
  * Database row for sleep diary entry
@@ -57,6 +58,8 @@ export class SleepDiaryRepository
   }
 
   protected rowToEntity(row: ISleepDiaryRow): ISleepDiaryEntryEntity {
+    const phiManager = getPHIEncryptionManager();
+
     return {
       id: row.id,
       userId: row.user_id,
@@ -73,7 +76,8 @@ export class SleepDiaryRepository
       sleepEfficiency: row.sleep_efficiency,
       sleepQuality: row.sleep_quality,
       morningMood: row.morning_mood,
-      notes: row.notes,
+      // PHI field - decrypt on read
+      notes: phiManager.decryptField(row.notes) ?? undefined,
       createdAt: this.parseDate(row.created_at),
       updatedAt: this.parseDate(row.updated_at),
       deletedAt: row.deleted_at ? this.parseDate(row.deleted_at) : null,
@@ -84,6 +88,7 @@ export class SleepDiaryRepository
     entity: Partial<ISleepDiaryEntryEntity>
   ): Record<string, unknown> {
     const params: Record<string, unknown> = {};
+    const phiManager = getPHIEncryptionManager();
 
     if (entity.id !== undefined) params.id = entity.id;
     if (entity.userId !== undefined) params.user_id = entity.userId;
@@ -100,7 +105,8 @@ export class SleepDiaryRepository
     if (entity.sleepEfficiency !== undefined) params.sleep_efficiency = entity.sleepEfficiency;
     if (entity.sleepQuality !== undefined) params.sleep_quality = entity.sleepQuality;
     if (entity.morningMood !== undefined) params.morning_mood = entity.morningMood;
-    if (entity.notes !== undefined) params.notes = entity.notes;
+    // PHI field - encrypt on write
+    if (entity.notes !== undefined) params.notes = phiManager.encryptField(entity.notes);
 
     return params;
   }

@@ -3704,6 +3704,556 @@ function createVoiceInputAdapter(config) {
   return new VoiceInputAdapter(config);
 }
 
+// src/crisis/CrisisDetector.ts
+var CRITICAL_KEYWORDS = {
+  // Suicidal ideation - Russian
+  ru_suicidal: [
+    "\u0441\u0443\u0438\u0446\u0438\u0434",
+    "\u0441\u0430\u043C\u043E\u0443\u0431\u0438\u0439\u0441\u0442\u0432",
+    "\u043F\u043E\u043A\u043E\u043D\u0447\u0438\u0442\u044C \u0441 \u0441\u043E\u0431\u043E\u0439",
+    "\u043F\u043E\u043A\u043E\u043D\u0447\u0443 \u0441 \u0441\u043E\u0431\u043E\u0439",
+    "\u0443\u0431\u0438\u0442\u044C \u0441\u0435\u0431\u044F",
+    "\u0443\u0431\u044C\u044E \u0441\u0435\u0431\u044F",
+    "\u0445\u043E\u0447\u0443 \u0443\u043C\u0435\u0440\u0435\u0442\u044C",
+    "\u0445\u043E\u0447\u0443 \u0441\u0434\u043E\u0445\u043D\u0443\u0442\u044C",
+    "\u0443\u043C\u0435\u0440\u0435\u0442\u044C",
+    "\u0441\u0434\u043E\u0445\u043D\u0443\u0442\u044C",
+    // standalone for mixed language detection
+    "\u043D\u0435 \u0445\u043E\u0447\u0443 \u0436\u0438\u0442\u044C",
+    "\u043D\u0435 \u0445\u043E\u0447\u0443 \u0431\u043E\u043B\u044C\u0448\u0435 \u0436\u0438\u0442\u044C",
+    "\u0443\u0441\u0442\u0430\u043B \u0436\u0438\u0442\u044C",
+    "\u0443\u0441\u0442\u0430\u043B\u0430 \u0436\u0438\u0442\u044C",
+    "\u043B\u0443\u0447\u0448\u0435 \u0431\u044B \u044F \u0443\u043C\u0435\u0440",
+    "\u043B\u0443\u0447\u0448\u0435 \u0431\u044B \u044F \u0443\u043C\u0435\u0440\u043B\u0430",
+    "\u043B\u0443\u0447\u0448\u0435 \u0431\u044B \u043C\u0435\u043D\u044F \u043D\u0435 \u0431\u044B\u043B\u043E",
+    "\u043F\u043E\u0432\u0435\u0441\u0438\u0442\u044C\u0441\u044F",
+    "\u043F\u043E\u0432\u0435\u0448\u0443\u0441\u044C",
+    "\u0432\u0441\u043A\u0440\u044B\u0442\u044C \u0432\u0435\u043D\u044B",
+    "\u0432\u0441\u043A\u0440\u043E\u044E \u0432\u0435\u043D\u044B",
+    "\u043F\u0440\u044B\u0433\u043D\u0443 \u0441",
+    "\u0441\u043F\u0440\u044B\u0433\u043D\u0443 \u0441",
+    "\u043D\u0430\u0433\u043B\u043E\u0442\u0430\u044E\u0441\u044C \u0442\u0430\u0431\u043B\u0435\u0442\u043E\u043A",
+    "\u0442\u0430\u0431\u043B\u0435\u0442\u043A\u0438 \u0432\u044B\u043F\u044C\u044E",
+    "\u0436\u0438\u0437\u043D\u044C \u043D\u0435 \u0438\u043C\u0435\u0435\u0442 \u0441\u043C\u044B\u0441\u043B\u0430",
+    "\u0437\u0430\u0447\u0435\u043C \u0436\u0438\u0442\u044C",
+    "\u043D\u0435\u0437\u0430\u0447\u0435\u043C \u0436\u0438\u0442\u044C",
+    "\u0432\u0441\u0435\u043C \u0431\u0443\u0434\u0435\u0442 \u043B\u0443\u0447\u0448\u0435 \u0431\u0435\u0437 \u043C\u0435\u043D\u044F",
+    "\u043D\u0438\u043A\u043E\u043C\u0443 \u043D\u0435 \u043D\u0443\u0436\u0435\u043D",
+    "\u043D\u0438\u043A\u043E\u043C\u0443 \u043D\u0435 \u043D\u0443\u0436\u043D\u0430",
+    "\u043A\u043E\u043D\u0435\u0446 \u0432\u0441\u0435\u043C\u0443",
+    "\u0445\u043E\u0447\u0443 \u0438\u0441\u0447\u0435\u0437\u043D\u0443\u0442\u044C",
+    "\u0445\u043E\u0447\u0443 \u043F\u0440\u043E\u043F\u0430\u0441\u0442\u044C"
+  ],
+  // Suicidal ideation - English
+  en_suicidal: [
+    "suicide",
+    "kill myself",
+    "end my life",
+    "end it all",
+    "want to die",
+    "wanna die",
+    "wish i was dead",
+    "wish i were dead",
+    "don't want to live",
+    "do not want to live",
+    "tired of living",
+    "better off dead",
+    "better if i was gone",
+    "world without me",
+    "hang myself",
+    "slit my wrists",
+    "overdose",
+    "jump off",
+    "no reason to live",
+    "life is meaningless",
+    "pointless to live",
+    "everyone would be better",
+    "nobody needs me",
+    "no one cares",
+    "disappear forever",
+    "cease to exist"
+  ],
+  // Self-harm - Russian
+  ru_selfharm: [
+    "\u043F\u043E\u0440\u0435\u0437\u0430\u0442\u044C \u0441\u0435\u0431\u044F",
+    "\u043F\u043E\u0440\u0435\u0436\u0443 \u0441\u0435\u0431\u044F",
+    "\u0440\u0435\u0436\u0443 \u0441\u0435\u0431\u044F",
+    "\u0440\u0435\u0436\u0443\u0441\u044C",
+    "\u0432\u0440\u0435\u0434 \u0441\u0435\u0431\u0435",
+    "\u043D\u0430\u0432\u0440\u0435\u0434\u0438\u0442\u044C \u0441\u0435\u0431\u0435",
+    "\u043F\u0440\u0438\u0447\u0438\u043D\u0438\u0442\u044C \u0431\u043E\u043B\u044C \u0441\u0435\u0431\u0435",
+    "\u0431\u044C\u044E \u0441\u0435\u0431\u044F",
+    "\u0443\u0434\u0430\u0440\u044E \u0441\u0435\u0431\u044F",
+    "\u0446\u0430\u0440\u0430\u043F\u0430\u044E \u0441\u0435\u0431\u044F",
+    "\u0441\u0435\u043B\u0444\u0445\u0430\u0440\u043C",
+    "\u0441\u0430\u043C\u043E\u043F\u043E\u0432\u0440\u0435\u0436\u0434\u0435\u043D\u0438"
+  ],
+  // Self-harm - English
+  en_selfharm: [
+    "cut myself",
+    "cutting myself",
+    "hurt myself",
+    "hurting myself",
+    "harm myself",
+    "harming myself",
+    "self-harm",
+    "selfharm",
+    "self harm",
+    "self-injury",
+    "self injury",
+    "burn myself",
+    "punch myself",
+    "hit myself"
+  ],
+  // Hopelessness indicators - Russian
+  ru_hopeless: [
+    "\u0431\u0435\u0437\u043D\u0430\u0434\u0451\u0436\u043D\u043E",
+    "\u0431\u0435\u0437\u043D\u0430\u0434\u0435\u0436\u043D\u043E",
+    "\u043D\u0435\u0442 \u043D\u0430\u0434\u0435\u0436\u0434\u044B",
+    "\u043D\u0438\u0447\u0435\u0433\u043E \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u0441\u044F",
+    "\u043D\u0438\u043A\u043E\u0433\u0434\u0430 \u043D\u0435 \u0441\u0442\u0430\u043D\u0435\u0442 \u043B\u0443\u0447\u0448\u0435",
+    "\u0432\u0441\u0435\u0433\u0434\u0430 \u0431\u0443\u0434\u0435\u0442 \u043F\u043B\u043E\u0445\u043E",
+    "\u0432\u044B\u0445\u043E\u0434\u0430 \u043D\u0435\u0442",
+    "\u043D\u0435\u0442 \u0432\u044B\u0445\u043E\u0434\u0430",
+    "\u0442\u0443\u043F\u0438\u043A",
+    "\u0432 \u043B\u043E\u0432\u0443\u0448\u043A\u0435",
+    "\u0437\u0430\u0441\u0442\u0440\u044F\u043B \u043D\u0430\u0432\u0441\u0435\u0433\u0434\u0430",
+    "\u0431\u0435\u0441\u0441\u043C\u044B\u0441\u043B\u0435\u043D\u043D\u043E \u0432\u0441\u0451",
+    "\u043D\u0438\u0447\u0435\u0433\u043E \u043D\u0435 \u043F\u043E\u043C\u043E\u0436\u0435\u0442"
+  ],
+  // Hopelessness indicators - English
+  en_hopeless: [
+    "hopeless",
+    "no hope",
+    "nothing will change",
+    "nothing will ever change",
+    "never get better",
+    "always be like this",
+    "no way out",
+    "trapped forever",
+    "stuck forever",
+    "pointless",
+    "nothing helps",
+    "can't go on"
+  ]
+};
+var CONTEXT_PATTERNS = {
+  // Planning language
+  planning: [
+    /план.*(?:убить|умереть|покончить|суицид)/i,
+    /готов(?:а|лю)?.*(?:умереть|уйти|покончить)/i,
+    /решил(?:а)?.*(?:убить|покончить|уйти)/i,
+    /plan.*(?:kill|die|end|suicide)/i,
+    /ready to.*(?:die|end|go)/i,
+    /decided to.*(?:kill|end|die)/i,
+    /going to.*(?:kill myself|end it)/i
+  ],
+  // Farewell language
+  farewell: [
+    /прощ(?:ай|айте).*(?:всем?|навсегда)/i,
+    /последн(?:ий|яя|ее).*(?:раз|сообщение|письмо)/i,
+    /goodbye.*(?:forever|everyone|all)/i,
+    /this is.*(?:goodbye|the end|my last)/i,
+    /final.*(?:message|goodbye|words)/i
+  ],
+  // Giving away possessions
+  giving_away: [
+    /отда(?:м|ю).*(?:вещи|всё|деньги)/i,
+    /раздам.*(?:вещи|всё)/i,
+    /giving away.*(?:stuff|things|everything)/i,
+    /want you to have/i
+  ],
+  // Time pressure
+  urgency: [
+    /сегодня.*(?:ночью?|вечером|конец)/i,
+    /(?:это|вот).*конец/i,
+    /tonight.*(?:end|over|die)/i,
+    /this is.*(?:it|the end)/i,
+    /won'?t.*(?:see|be here).*(?:tomorrow|morning)/i
+  ],
+  // Absolute negative statements
+  absolutes: [
+    /никогда.*(?:не буд|не стан|не измен)/i,
+    /всегда.*(?:плохо|одинок|страда)/i,
+    /никто.*(?:не поможет|не понима|не люб)/i,
+    /never.*(?:get better|change|be happy)/i,
+    /always.*(?:alone|suffering|miserable)/i,
+    /nobody.*(?:cares|understands|loves)/i,
+    /everyone.*(?:hates|against|better without)/i
+  ]
+};
+var PROTECTIVE_FACTORS = [
+  // Russian - more specific patterns to avoid false positives
+  /но\s+(?:хочу|буду|попробу|есть надежда)/i,
+  /не\s+(?:хочу умирать|собираюсь|буду этого делать)/i,
+  /помог(?:и|ите)/i,
+  /нужна помощь/i,
+  /хочу\s+жить/i,
+  // must be "хочу жить" directly, not separated
+  /хочу\s+(?:измени|помощ)/i,
+  // English - more specific patterns
+  /but\s+(?:i\s+)?(?:want to|will|trying|there's hope)/i,
+  /(?:i\s+)?don'?t\s+(?:want to die|going to|actually)/i,
+  /help me/i,
+  /need help/i,
+  /want to\s+(?:live|change|get help)/i
+];
+var DEFAULT_CRISIS_CONFIG = {
+  enableLayer1: true,
+  enableLayer2: true,
+  enableLayer3: true,
+  sensitivityLevel: "high",
+  language: "auto"
+};
+var CrisisDetector = class {
+  constructor(config = {}) {
+    __publicField(this, "config");
+    this.config = { ...DEFAULT_CRISIS_CONFIG, ...config };
+  }
+  /**
+   * Main detection method - analyzes text for crisis indicators
+   * This should be called BEFORE any cognitive analysis
+   */
+  detect(rawText, stateRiskData) {
+    const startTime = Date.now();
+    const normalizedText = this.normalizeText(rawText);
+    const detectedLanguage = this.detectLanguage(normalizedText);
+    const layer1 = this.config.enableLayer1 ? this.runLayer1RawTextScan(normalizedText, detectedLanguage) : this.emptyLayerResult();
+    const layer2 = this.config.enableLayer2 ? this.runLayer2PatternAnalysis(normalizedText) : this.emptyLayerResult();
+    const layer3 = this.config.enableLayer3 && stateRiskData ? this.runLayer3StateAnalysis(stateRiskData) : this.emptyLayerResult();
+    const hasProtectiveFactors = this.checkProtectiveFactors(normalizedText);
+    const result = this.aggregateResults(layer1, layer2, layer3, hasProtectiveFactors);
+    return {
+      ...result,
+      layer1RawText: layer1,
+      layer2Pattern: layer2,
+      layer3State: layer3,
+      detectedAt: /* @__PURE__ */ new Date(),
+      processingTimeMs: Date.now() - startTime
+    };
+  }
+  /**
+   * Quick check - returns true if ANY crisis indicator found
+   * Use for immediate bypass decisions
+   */
+  quickCheck(rawText) {
+    const normalizedText = this.normalizeText(rawText);
+    const language = this.detectLanguage(normalizedText);
+    const keywords = language === "ru" ? [...CRITICAL_KEYWORDS.ru_suicidal, ...CRITICAL_KEYWORDS.ru_selfharm] : language === "en" ? [...CRITICAL_KEYWORDS.en_suicidal, ...CRITICAL_KEYWORDS.en_selfharm] : [
+      ...CRITICAL_KEYWORDS.ru_suicidal,
+      ...CRITICAL_KEYWORDS.ru_selfharm,
+      ...CRITICAL_KEYWORDS.en_suicidal,
+      ...CRITICAL_KEYWORDS.en_selfharm
+    ];
+    for (const keyword of keywords) {
+      if (normalizedText.includes(keyword.toLowerCase())) {
+        return true;
+      }
+    }
+    return false;
+  }
+  // ==========================================================================
+  // LAYER 1: Raw Text Keyword Scanning
+  // ==========================================================================
+  runLayer1RawTextScan(text, language) {
+    const indicators = [];
+    const matchedPatterns = [];
+    const keywordSets = this.getKeywordSets(language);
+    for (const [category, keywords] of Object.entries(keywordSets)) {
+      for (const keyword of keywords) {
+        if (text.includes(keyword.toLowerCase())) {
+          indicators.push(`keyword_${category}`);
+          matchedPatterns.push(keyword);
+        }
+      }
+    }
+    const confidence = this.calculateLayer1Confidence(indicators);
+    return {
+      triggered: indicators.length > 0,
+      confidence,
+      indicators: [...new Set(indicators)],
+      matchedPatterns: [...new Set(matchedPatterns)]
+    };
+  }
+  getKeywordSets(language) {
+    if (language === "ru") {
+      return {
+        suicidal: CRITICAL_KEYWORDS.ru_suicidal,
+        selfharm: CRITICAL_KEYWORDS.ru_selfharm,
+        hopeless: CRITICAL_KEYWORDS.ru_hopeless
+      };
+    } else if (language === "en") {
+      return {
+        suicidal: CRITICAL_KEYWORDS.en_suicidal,
+        selfharm: CRITICAL_KEYWORDS.en_selfharm,
+        hopeless: CRITICAL_KEYWORDS.en_hopeless
+      };
+    } else {
+      return {
+        suicidal: [...CRITICAL_KEYWORDS.ru_suicidal, ...CRITICAL_KEYWORDS.en_suicidal],
+        selfharm: [...CRITICAL_KEYWORDS.ru_selfharm, ...CRITICAL_KEYWORDS.en_selfharm],
+        hopeless: [...CRITICAL_KEYWORDS.ru_hopeless, ...CRITICAL_KEYWORDS.en_hopeless]
+      };
+    }
+  }
+  calculateLayer1Confidence(indicators) {
+    if (indicators.length === 0) return 0;
+    let score = 0;
+    for (const indicator of indicators) {
+      if (indicator.includes("suicidal")) score += 0.4;
+      else if (indicator.includes("selfharm")) score += 0.3;
+      else if (indicator.includes("hopeless")) score += 0.2;
+      else score += 0.1;
+    }
+    return Math.min(1, score);
+  }
+  // ==========================================================================
+  // LAYER 2: Pattern & Context Analysis
+  // ==========================================================================
+  runLayer2PatternAnalysis(text) {
+    const indicators = [];
+    const matchedPatterns = [];
+    for (const [category, patterns] of Object.entries(CONTEXT_PATTERNS)) {
+      for (const pattern of patterns) {
+        if (pattern.test(text)) {
+          indicators.push(`pattern_${category}`);
+          const match = text.match(pattern);
+          if (match) {
+            matchedPatterns.push(match[0]);
+          }
+        }
+      }
+    }
+    const confidence = this.calculateLayer2Confidence(indicators);
+    return {
+      triggered: indicators.length > 0,
+      confidence,
+      indicators: [...new Set(indicators)],
+      matchedPatterns
+    };
+  }
+  calculateLayer2Confidence(indicators) {
+    if (indicators.length === 0) return 0;
+    let score = 0;
+    for (const indicator of indicators) {
+      if (indicator.includes("planning")) score += 0.5;
+      else if (indicator.includes("farewell")) score += 0.4;
+      else if (indicator.includes("giving_away")) score += 0.3;
+      else if (indicator.includes("urgency")) score += 0.4;
+      else if (indicator.includes("absolutes")) score += 0.2;
+      else score += 0.1;
+    }
+    return Math.min(1, score);
+  }
+  // ==========================================================================
+  // LAYER 3: State-Based Risk Analysis
+  // ==========================================================================
+  runLayer3StateAnalysis(stateRisk) {
+    const indicators = [];
+    const matchedPatterns = [];
+    if (stateRisk.overallRiskLevel >= 0.7) {
+      indicators.push("state_high_overall_risk");
+      matchedPatterns.push(`risk_level=${stateRisk.overallRiskLevel.toFixed(2)}`);
+    }
+    if (stateRisk.suicidalIdeation > 0.5) {
+      indicators.push("state_suicidal_ideation");
+      matchedPatterns.push(`suicidal_ideation=${stateRisk.suicidalIdeation.toFixed(2)}`);
+    }
+    if (stateRisk.selfHarmRisk > 0.5) {
+      indicators.push("state_self_harm_risk");
+      matchedPatterns.push(`self_harm_risk=${stateRisk.selfHarmRisk.toFixed(2)}`);
+    }
+    if (stateRisk.emotionalValence < -0.7) {
+      indicators.push("state_severe_negative_affect");
+      matchedPatterns.push(`valence=${stateRisk.emotionalValence.toFixed(2)}`);
+    }
+    if (stateRisk.recentTrend === "declining") {
+      indicators.push("state_declining_trend");
+      matchedPatterns.push("trend=declining");
+    }
+    const confidence = this.calculateLayer3Confidence(stateRisk, indicators);
+    return {
+      triggered: indicators.length > 0,
+      confidence,
+      indicators,
+      matchedPatterns
+    };
+  }
+  calculateLayer3Confidence(stateRisk, indicators) {
+    if (indicators.length === 0) return 0;
+    const riskScore = stateRisk.overallRiskLevel * 0.3 + stateRisk.suicidalIdeation * 0.4 + stateRisk.selfHarmRisk * 0.3;
+    return Math.min(1, riskScore);
+  }
+  // ==========================================================================
+  // PROTECTIVE FACTORS
+  // ==========================================================================
+  checkProtectiveFactors(text) {
+    for (const pattern of PROTECTIVE_FACTORS) {
+      if (pattern.test(text)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  // ==========================================================================
+  // RESULT AGGREGATION
+  // ==========================================================================
+  aggregateResults(layer1, layer2, layer3, hasProtectiveFactors) {
+    const allIndicators = [
+      ...layer1.indicators,
+      ...layer2.indicators,
+      ...layer3.indicators
+    ];
+    const anyTriggered = layer1.triggered || layer2.triggered || layer3.triggered;
+    const combinedConfidence = this.calculateCombinedConfidence(layer1, layer2, layer3, hasProtectiveFactors);
+    const severity = this.determineSeverity(layer1, layer2, layer3, combinedConfidence, hasProtectiveFactors);
+    const crisisType = this.determineCrisisType(allIndicators);
+    const { recommendedAction, urgency } = this.determineResponse(severity, crisisType);
+    const primaryIndicator = this.findPrimaryIndicator(layer1, layer2, layer3);
+    return {
+      isCrisis: anyTriggered && severity !== "none" && severity !== "low",
+      severity,
+      crisisType,
+      confidence: combinedConfidence,
+      allIndicators,
+      primaryIndicator,
+      recommendedAction,
+      urgency
+    };
+  }
+  calculateCombinedConfidence(layer1, layer2, layer3, hasProtectiveFactors) {
+    const base = layer1.confidence * 0.5 + layer2.confidence * 0.3 + layer3.confidence * 0.2;
+    const adjusted = hasProtectiveFactors ? base * 0.85 : base;
+    return Math.min(1, adjusted);
+  }
+  determineSeverity(layer1, layer2, layer3, confidence, hasProtectiveFactors) {
+    if (layer1.indicators.includes("keyword_suicidal") && layer2.indicators.includes("pattern_planning")) {
+      return "critical";
+    }
+    if (confidence > 0.8 && layer1.triggered && layer2.triggered) {
+      return hasProtectiveFactors ? "high" : "critical";
+    }
+    if (layer1.indicators.includes("keyword_suicidal")) {
+      return hasProtectiveFactors ? "moderate" : "high";
+    }
+    if (layer2.indicators.includes("pattern_farewell") || layer2.indicators.includes("pattern_urgency")) {
+      return "high";
+    }
+    if (layer1.indicators.includes("keyword_selfharm")) {
+      return hasProtectiveFactors ? "low" : "moderate";
+    }
+    if (layer3.indicators.includes("state_suicidal_ideation") || layer3.indicators.includes("state_high_overall_risk")) {
+      return "moderate";
+    }
+    if (layer1.indicators.includes("keyword_hopeless") && !layer1.indicators.includes("keyword_suicidal")) {
+      return "low";
+    }
+    if (layer2.triggered && layer2.indicators.length === 1 && layer2.indicators[0] === "pattern_absolutes") {
+      return "low";
+    }
+    if (!layer1.triggered && !layer2.triggered && !layer3.triggered) {
+      return "none";
+    }
+    return "low";
+  }
+  determineCrisisType(indicators) {
+    const hasSuicidalKeyword = indicators.some((i) => i.includes("suicidal"));
+    const hasPlanning = indicators.some((i) => i.includes("planning"));
+    if (hasSuicidalKeyword && hasPlanning) {
+      return "suicidal_intent";
+    }
+    if (hasSuicidalKeyword) {
+      return "suicidal_ideation";
+    }
+    if (indicators.some((i) => i.includes("selfharm") || i.includes("self_harm"))) {
+      return "self_harm";
+    }
+    if (indicators.some((i) => i.includes("hopeless") || i.includes("absolutes"))) {
+      return "acute_distress";
+    }
+    if (indicators.some((i) => i.includes("urgency"))) {
+      return "panic_attack";
+    }
+    return "unknown";
+  }
+  determineResponse(severity, _crisisType) {
+    switch (severity) {
+      case "critical":
+        return { recommendedAction: "emergency_escalation", urgency: "immediate" };
+      case "high":
+        return { recommendedAction: "crisis_protocol", urgency: "urgent" };
+      case "moderate":
+        return { recommendedAction: "supportive_response", urgency: "soon" };
+      case "low":
+        return { recommendedAction: "monitor", urgency: "routine" };
+      case "none":
+      default:
+        return { recommendedAction: "none", urgency: "routine" };
+    }
+  }
+  findPrimaryIndicator(layer1, layer2, layer3) {
+    const allIndicators = [...layer1.indicators, ...layer2.indicators, ...layer3.indicators];
+    if (allIndicators.some((i) => i.includes("suicidal"))) {
+      return allIndicators.find((i) => i.includes("suicidal")) || null;
+    }
+    if (allIndicators.some((i) => i.includes("planning"))) {
+      return allIndicators.find((i) => i.includes("planning")) || null;
+    }
+    if (allIndicators.some((i) => i.includes("selfharm") || i.includes("self_harm"))) {
+      return allIndicators.find((i) => i.includes("selfharm") || i.includes("self_harm")) || null;
+    }
+    return allIndicators[0] || null;
+  }
+  // ==========================================================================
+  // UTILITY METHODS
+  // ==========================================================================
+  normalizeText(text) {
+    return text.toLowerCase().replace(/\s+/g, " ").trim();
+  }
+  detectLanguage(text) {
+    if (this.config.language !== "auto") {
+      return this.config.language === "ru" ? "ru" : "en";
+    }
+    const cyrillicPattern = /[а-яё]/i;
+    const latinPattern = /[a-z]/i;
+    const hasCyrillic = cyrillicPattern.test(text);
+    const hasLatin = latinPattern.test(text);
+    if (hasCyrillic && hasLatin) return "both";
+    if (hasCyrillic) return "ru";
+    return "en";
+  }
+  emptyLayerResult() {
+    return {
+      triggered: false,
+      confidence: 0,
+      indicators: [],
+      matchedPatterns: []
+    };
+  }
+  /**
+   * Get crisis resources for user
+   */
+  getCrisisResources(language = "ru") {
+    if (language === "ru") {
+      return [
+        "\u0422\u0435\u043B\u0435\u0444\u043E\u043D \u0434\u043E\u0432\u0435\u0440\u0438\u044F: 8-800-2000-122 (\u0431\u0435\u0441\u043F\u043B\u0430\u0442\u043D\u043E)",
+        "\u0426\u0435\u043D\u0442\u0440 \u044D\u043A\u0441\u0442\u0440\u0435\u043D\u043D\u043E\u0439 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u043E\u0439 \u043F\u043E\u043C\u043E\u0449\u0438 \u041C\u0427\u0421: 8-499-216-50-50",
+        "\u0414\u0435\u0442\u0441\u043A\u0438\u0439 \u0442\u0435\u043B\u0435\u0444\u043E\u043D \u0434\u043E\u0432\u0435\u0440\u0438\u044F: 8-800-2000-122",
+        "\u041F\u043E\u043C\u043E\u0449\u044C \u0432\u0437\u0440\u043E\u0441\u043B\u044B\u043C: 051 (\u0441 \u043C\u043E\u0431\u0438\u043B\u044C\u043D\u043E\u0433\u043E 8-495-051)"
+      ];
+    }
+    return [
+      "National Suicide Prevention Lifeline: 988",
+      "Crisis Text Line: Text HOME to 741741",
+      "International Association for Suicide Prevention: https://www.iasp.info/resources/Crisis_Centres/"
+    ];
+  }
+};
+function createCrisisDetector(config) {
+  return new CrisisDetector(config);
+}
+var defaultCrisisDetector = createCrisisDetector();
+
 // src/index.ts
 var COGNICORE_VERSION = {
   version: "2.0.0-alpha.1",
@@ -3722,6 +4272,8 @@ var COGNICORE_VERSION = {
 
 exports.BeliefStateAdapter = BeliefStateAdapter;
 exports.COGNICORE_VERSION = COGNICORE_VERSION;
+exports.CrisisDetector = CrisisDetector;
+exports.DEFAULT_CRISIS_CONFIG = DEFAULT_CRISIS_CONFIG;
 exports.DEFAULT_EMOTION_VAD = DEFAULT_EMOTION_VAD;
 exports.DEFAULT_KALMANFORMER_CONFIG = DEFAULT_KALMANFORMER_CONFIG;
 exports.DEFAULT_PLRNN_CONFIG = DEFAULT_PLRNN_CONFIG;
@@ -3741,9 +4293,11 @@ exports.beliefStateToObservation = beliefStateToObservation;
 exports.beliefStateToPLRNNState = beliefStateToPLRNNState;
 exports.beliefStateToUncertainty = beliefStateToUncertainty;
 exports.createBeliefStateAdapter = createBeliefStateAdapter;
+exports.createCrisisDetector = createCrisisDetector;
 exports.createKalmanFormerEngine = createKalmanFormerEngine;
 exports.createPLRNNEngine = createPLRNNEngine;
 exports.createVoiceInputAdapter = createVoiceInputAdapter;
+exports.defaultCrisisDetector = defaultCrisisDetector;
 exports.getComponentStatus = getComponentStatus;
 exports.kalmanFormerStateToBeliefUpdate = kalmanFormerStateToBeliefUpdate;
 exports.mergeHybridPredictions = mergeHybridPredictions;

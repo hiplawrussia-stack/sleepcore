@@ -21,6 +21,7 @@ import type {
   ITherapySessionEntity,
 } from '../interfaces/IRepository';
 import { BaseRepository, type IBaseRow } from './BaseRepository';
+import { getPHIEncryptionManager } from '../security/PHIEncryptionManager';
 
 /**
  * Database row for therapy session entity
@@ -52,6 +53,8 @@ export class TherapySessionRepository
   }
 
   protected rowToEntity(row: ITherapySessionRow): ITherapySessionEntity {
+    const phiManager = getPHIEncryptionManager();
+
     return {
       id: row.id,
       userId: row.user_id,
@@ -61,7 +64,8 @@ export class TherapySessionRepository
       status: row.status as ITherapySessionEntity['status'],
       adherence: row.adherence,
       homeworkCompleted: row.homework_completed === 1,
-      notesJson: row.notes_json,
+      // PHI field - decrypt on read (contains therapy notes)
+      notesJson: phiManager.decryptField(row.notes_json) ?? undefined,
       scheduledAt: new Date(row.scheduled_at),
       completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
       createdAt: this.parseDate(row.created_at),
@@ -74,6 +78,7 @@ export class TherapySessionRepository
     entity: Partial<ITherapySessionEntity>
   ): Record<string, unknown> {
     const params: Record<string, unknown> = {};
+    const phiManager = getPHIEncryptionManager();
 
     if (entity.id !== undefined) params.id = entity.id;
     if (entity.userId !== undefined) params.user_id = entity.userId;
@@ -85,7 +90,8 @@ export class TherapySessionRepository
     if (entity.homeworkCompleted !== undefined) {
       params.homework_completed = entity.homeworkCompleted ? 1 : 0;
     }
-    if (entity.notesJson !== undefined) params.notes_json = entity.notesJson;
+    // PHI field - encrypt on write (contains therapy notes)
+    if (entity.notesJson !== undefined) params.notes_json = phiManager.encryptField(entity.notesJson);
     if (entity.scheduledAt !== undefined) {
       params.scheduled_at = entity.scheduledAt instanceof Date
         ? entity.scheduledAt.toISOString()
@@ -266,6 +272,10 @@ export class TherapySessionRepository
     homeworkCompleted: boolean,
     notes?: string
   ): Promise<boolean> {
+    const phiManager = getPHIEncryptionManager();
+    // PHI field - encrypt notes before storing (therapy session notes)
+    const encryptedNotes = notes ? phiManager.encryptField(notes) : null;
+
     const result = await this.db.execute(
       `UPDATE ${this.tableName}
        SET status = 'completed',
@@ -275,7 +285,7 @@ export class TherapySessionRepository
            notes_json = COALESCE(?, notes_json),
            updated_at = datetime('now')
        WHERE id = ? AND status = 'in_progress' AND deleted_at IS NULL`,
-      [adherence, homeworkCompleted ? 1 : 0, notes, sessionId]
+      [adherence, homeworkCompleted ? 1 : 0, encryptedNotes, sessionId]
     );
     return result.changes > 0;
   }
@@ -284,13 +294,19 @@ export class TherapySessionRepository
    * Skip a session
    */
   async skipSession(sessionId: number, reason?: string): Promise<boolean> {
+    const phiManager = getPHIEncryptionManager();
+    // PHI field - encrypt skip reason (may contain sensitive context)
+    const encryptedReason = reason
+      ? phiManager.encryptField(JSON.stringify({ skipReason: reason }))
+      : null;
+
     const result = await this.db.execute(
       `UPDATE ${this.tableName}
        SET status = 'skipped',
            notes_json = COALESCE(?, notes_json),
            updated_at = datetime('now')
        WHERE id = ? AND status IN ('scheduled', 'in_progress') AND deleted_at IS NULL`,
-      [reason ? JSON.stringify({ skipReason: reason }) : null, sessionId]
+      [encryptedReason, sessionId]
     );
     return result.changes > 0;
   }

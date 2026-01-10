@@ -174,6 +174,33 @@ export {
   type IBackupServiceConfig,
   type IBackupResult,
   type IRestoreResult,
+
+  // Automated Backup Scheduler (2025 Best Practices)
+  AutomatedBackupScheduler,
+  createAutomatedBackupScheduler,
+  type IGFSRetentionConfig,
+  type IBackupScheduleConfig,
+  type IHealthConfig,
+  type BackupType,
+  type IBackupHealthAlert,
+  type IBackupHealthStatus,
+  type IAutomatedBackupConfig,
+
+  // PHI Encryption Manager
+  PHIEncryptionManager,
+  getPHIEncryptionManager,
+  PHI_FIELD_DEFINITIONS,
+  type IPHIEncryptionStatus,
+  type PHIFieldDefinitions,
+
+  // PHI Data Migration
+  PHIDataMigration,
+  createPHIDataMigration,
+  runPHIMigration,
+  type IPHIMigrationConfig,
+  type IPHIMigrationResult,
+  type IMigrationProgress,
+  type IFieldMigrationResult,
 } from './security';
 
 // ============================================================================

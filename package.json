@@ -47,6 +47,8 @@
     "@grammyjs/hydrate": "^1.6.0",
     "@grammyjs/parse-mode": "^2.2.0",
     "@grammyjs/runner": "^2.0.3",
+    "@sentry/node": "^10.32.1",
+    "@sentry/profiling-node": "^10.32.1",
     "@types/node-cron": "^3.0.11",
     "better-sqlite3": "^11.6.0",
     "dotenv": "^17.2.3",

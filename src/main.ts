@@ -17,10 +17,15 @@
  * - Proactive check-in reminders (node-cron)
  * - Graceful shutdown
  * - Health monitoring
+ * - Sentry error tracking (HIPAA-compliant)
  *
  * @packageDocumentation
  * @module @sleepcore/app/main
  */
+
+// CRITICAL: Sentry instrumentation MUST be imported FIRST
+// This enables auto-instrumentation for all subsequent imports
+import './infrastructure/monitoring/instrument';
 
 import { Bot, Context, session, SessionFlavor, GrammyError, HttpError, InlineKeyboard } from 'grammy';
 import { autoRetry } from '@grammyjs/auto-retry';
@@ -91,12 +96,17 @@ import {
   SleepDiaryRepository,
   AssessmentRepository,
   TherapySessionRepository,
+  GamificationRepository,
+  createAutomatedBackupScheduler,
   type IDatabaseConnection,
   type GrammySessionAdapter,
   type ISleepDiaryEntryEntity,
   type IAssessmentEntity,
   type ITherapySessionEntity,
 } from './infrastructure/database';
+
+// Monitoring imports (Sentry)
+import { sentryService } from './infrastructure/monitoring';
 
 // ============================================================================
 // TYPES
@@ -808,13 +818,52 @@ interface SetupCallbacksOptions {
   sleepDiaryRepository?: SleepDiaryRepository;
   assessmentRepository?: AssessmentRepository;
   therapySessionRepository?: TherapySessionRepository;
+  gamificationRepository?: GamificationRepository;
 }
 
 /**
  * Setup callback query handlers
  */
 function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCallbacksOptions = {}): void {
-  const { sleepDiaryRepository, assessmentRepository, therapySessionRepository } = options;
+  const { sleepDiaryRepository, assessmentRepository, therapySessionRepository, gamificationRepository } = options;
+
+  // Helper: Ensure gamification session is active (ethical engagement tracking)
+  // Creates or continues a session for wellbeing monitoring
+  async function ensureGamificationSession(dbUserId: number | undefined): Promise<void> {
+    if (!gamificationRepository || !dbUserId) return;
+    try {
+      const currentSession = await gamificationRepository.getCurrentSession(dbUserId);
+      if (!currentSession) {
+        await gamificationRepository.startSession(dbUserId);
+      }
+    } catch (error) {
+      console.error('[Gamification] Failed to ensure session:', error);
+    }
+  }
+
+  // Helper: Persist XP gain to database (with level-up detection)
+  // Reserved for future use when more XP events are added to callbacks
+  // Uses XPSource types: 'daily_check_in' | 'emotion_log' | 'challenge_complete' | 'quest_complete' |
+  // 'streak_bonus' | 'first_action' | 'helping_others' | 'crisis_overcome' | 'milestone_reached' |
+  // 'ai_interaction' | 'sleep_diary' | 'assessment_complete'
+  async function _persistXPGain(
+    dbUserId: number | undefined,
+    amount: number,
+    source: 'daily_check_in' | 'sleep_diary' | 'quest_complete' | 'streak_bonus' | 'ai_interaction' | 'assessment_complete'
+  ): Promise<{ leveledUp: boolean; newLevel?: number } | null> {
+    if (!gamificationRepository || !dbUserId) return null;
+    try {
+      const result = await gamificationRepository.addXP(dbUserId, amount, source);
+      if (result.leveledUp) {
+        console.log(`[Gamification] User ${dbUserId} leveled up to ${result.newLevel}!`);
+      }
+      return { leveledUp: result.leveledUp, newLevel: result.newLevel };
+    } catch (error) {
+      console.error('[Gamification] Failed to persist XP:', error);
+      return null;
+    }
+  }
+
   bot.on('callback_query:data', async (ctx) => {
     const data = ctx.callbackQuery.data;
     ctx.session.lastActivityAt = new Date();
@@ -1545,6 +1594,8 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
         case 'quest':
           // Quest system callbacks
           sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'callback');
+          // Ensure session is active for ethical engagement tracking
+          ensureGamificationSession(ctx.session.dbUserId).catch(() => {});
           if ('handleCallback' in questCommand) {
             result = await (questCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
           }
@@ -1553,6 +1604,8 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
         case 'badge':
           // Badge system callbacks
           sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'callback');
+          // Ensure session is active for ethical engagement tracking
+          ensureGamificationSession(ctx.session.dbUserId).catch(() => {});
           if ('handleCallback' in badgeCommand) {
             result = await (badgeCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
           }
@@ -1561,6 +1614,8 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
         case 'sonya':
           // Sonya evolution callbacks
           sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'callback');
+          // Ensure session is active for ethical engagement tracking
+          ensureGamificationSession(ctx.session.dbUserId).catch(() => {});
           if ('handleCallback' in evolutionCommand) {
             result = await (evolutionCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
           }
@@ -1766,10 +1821,18 @@ function setupMessages(bot: Bot<MyContext>, api: SleepCoreAPI): void {
 // ============================================================================
 
 /**
+ * Options for setting up voice handlers
+ */
+interface SetupVoiceHandlersOptions {
+  gamificationRepository?: GamificationRepository;
+}
+
+/**
  * Setup voice message handlers
  * Research: Fabla App shows "speech carries information we don't always consciously recognize"
  */
-function setupVoiceHandlers(bot: Bot<MyContext>, api: SleepCoreAPI): void {
+function setupVoiceHandlers(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupVoiceHandlersOptions = {}): void {
+  const { gamificationRepository } = options;
   // Check if Whisper API is configured
   const openaiApiKey = process.env.OPENAI_API_KEY;
 
@@ -1845,8 +1908,22 @@ function setupVoiceHandlers(bot: Bot<MyContext>, api: SleepCoreAPI): void {
       if (result.success) {
         await questService.checkQuestProgress(sleepCoreCtx.userId, 'voice_diary', 1);
 
-        // Award XP for voice entry
+        // Award XP for voice entry (in-memory)
         sonyaEvolutionService.addXP(sleepCoreCtx.userId, 15); // Voice = 15 XP
+
+        // Persist XP to database (ethical gamification)
+        // Note: Uses GamificationRepository from voice handler options
+        if (gamificationRepository && ctx.session.dbUserId) {
+          try {
+            // Award XP for voice diary (counts as sleep_diary entry)
+            const xpResult = await gamificationRepository.addXP(ctx.session.dbUserId, 15, 'sleep_diary');
+            if (xpResult.leveledUp) {
+              console.log(`[Gamification] User ${ctx.session.dbUserId} leveled up to ${xpResult.newLevel} via voice diary!`);
+            }
+          } catch (err) {
+            console.error('[Gamification] Voice XP persistence failed:', err);
+          }
+        }
       }
     } catch (error) {
       console.error('[Voice] Processing error:', error);
@@ -1870,22 +1947,90 @@ function setupVoiceHandlers(bot: Bot<MyContext>, api: SleepCoreAPI): void {
 // ============================================================================
 
 /**
- * Setup error handler
+ * Setup error handler with Sentry integration
+ * Research (2025): Centralized error handling improves observability
  */
 function setupErrors(bot: Bot<MyContext>): void {
   bot.catch((err) => {
-    const { ctx, error } = err;
-    console.error(`[Error] Update ${ctx.update.update_id}:`, error);
+    const { ctx, error: rawError } = err;
+    const updateId = ctx.update.update_id;
+    const userId = ctx.from?.id?.toString();
 
-    if (error instanceof GrammyError) {
-      if (error.error_code === 403) {
-        console.log(`User ${ctx.from?.id} blocked bot`);
-      } else if (error.error_code === 429) {
-        console.warn('Rate limit:', error.parameters?.retry_after);
+    // Normalize error to Error type for Sentry
+    const error: Error = rawError instanceof Error
+      ? rawError
+      : new Error(String(rawError));
+
+    console.error(`[Error] Update ${updateId}:`, error);
+
+    // Determine error category and severity for Sentry
+    let category: 'telegram_api' | 'external_api' | 'business_logic' | 'unknown' = 'unknown';
+    let severity: 'error' | 'warning' = 'error';
+
+    if (rawError instanceof GrammyError) {
+      category = 'telegram_api';
+
+      if (rawError.error_code === 403) {
+        // User blocked bot - not a real error
+        console.log(`User ${userId} blocked bot`);
+        severity = 'warning';
+      } else if (rawError.error_code === 429) {
+        // Rate limit - handled by auto-retry
+        console.warn('Rate limit:', rawError.parameters?.retry_after);
+        severity = 'warning';
       }
-    } else if (error instanceof HttpError) {
+    } else if (rawError instanceof HttpError) {
+      category = 'external_api';
       console.error('HTTP error:', error);
     }
+
+    // Report to Sentry with anonymized user context
+    sentryService.captureError(error, {
+      category,
+      tags: {
+        update_id: updateId.toString(),
+        error_type: error.name || 'UnknownError',
+        ...(rawError instanceof GrammyError && { grammy_error_code: rawError.error_code.toString() }),
+      },
+      user: userId
+        ? {
+            anonymousId: sentryService.anonymizeUserId(userId),
+          }
+        : undefined,
+      extra: {
+        // Don't include full context - may contain PHI
+        update_type: Object.keys(ctx.update).filter((k) => k !== 'update_id')[0],
+      },
+    }, severity);
+  });
+
+  // Global process error handlers for uncaught exceptions
+  // Research (2025): Allow crash but report first, use PM2/Forever for restart
+  process.on('uncaughtException', (error) => {
+    console.error('[Fatal] Uncaught exception:', error);
+    sentryService.captureError(error, {
+      category: 'unknown',
+      tags: { fatal: 'true', type: 'uncaughtException' },
+    }, 'fatal');
+
+    // Flush Sentry and exit
+    sentryService.flush(2000).finally(() => {
+      process.exit(1);
+    });
+  });
+
+  process.on('unhandledRejection', (reason: unknown) => {
+    console.error('[Fatal] Unhandled rejection:', reason);
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    sentryService.captureError(error, {
+      category: 'unknown',
+      tags: { fatal: 'true', type: 'unhandledRejection' },
+    }, 'fatal');
+
+    // Flush Sentry and exit
+    sentryService.flush(2000).finally(() => {
+      process.exit(1);
+    });
   });
 }
 
@@ -1965,12 +2110,14 @@ async function main(): Promise<void> {
   let sleepDiaryRepository: SleepDiaryRepository | undefined;
   let assessmentRepository: AssessmentRepository | undefined;
   let therapySessionRepository: TherapySessionRepository | undefined;
+  let gamificationRepository: GamificationRepository | undefined;
   if (db) {
     userRepository = new UserRepository(db);
     sleepDiaryRepository = new SleepDiaryRepository(db);
     assessmentRepository = new AssessmentRepository(db);
     therapySessionRepository = new TherapySessionRepository(db);
-    console.log("[DB] Repositories initialized: User, SleepDiary, Assessment, TherapySession");
+    gamificationRepository = new GamificationRepository(db);
+    console.log("[DB] Repositories initialized: User, SleepDiary, Assessment, TherapySession, Gamification");
   }
 
   // --- Create Bot ---
@@ -2001,15 +2148,48 @@ async function main(): Promise<void> {
 
   // Setup handlers
   setupCommands(bot, api, { userRepository });
-  setupCallbacks(bot, api, { sleepDiaryRepository, assessmentRepository, therapySessionRepository });
+  setupCallbacks(bot, api, { sleepDiaryRepository, assessmentRepository, therapySessionRepository, gamificationRepository });
   setupMessages(bot, api);
-  setupVoiceHandlers(bot, api); // Sprint 3: Voice diary
+  setupVoiceHandlers(bot, api, { gamificationRepository }); // Sprint 3: Voice diary
   setupErrors(bot);
 
-  // Production: Start proactive notifications
+  // Production: Start proactive notifications and automated backups
   if (process.env.NODE_ENV === 'production') {
     notificationService.start();
     console.log('[Notifications] Proactive notification service started');
+
+    // Start automated backup scheduler (2025 best practices: GFS retention)
+    if (db && process.env.BACKUP_ENABLED !== 'false') {
+      const backupScheduler = createAutomatedBackupScheduler({
+        backup: {
+          backupDir: process.env.BACKUP_DIR || './data/backups',
+          encrypt: process.env.BACKUP_ENCRYPT !== 'false',
+          encryptionKey: process.env.BACKUP_ENCRYPTION_KEY,
+        },
+        schedule: {
+          runOnStart: process.env.BACKUP_RUN_ON_START === 'true',
+        },
+        health: {
+          onBackupComplete: (result, type) => {
+            if (result.success) {
+              console.log(`[Backup] ${type} backup completed: ${result.metadata?.backupPath}`);
+            } else {
+              console.error(`[Backup] ${type} backup FAILED: ${result.error}`);
+            }
+          },
+          onHealthAlert: (alert) => {
+            console.warn(`[Backup] ALERT: ${alert.type} - ${alert.message}`);
+          },
+        },
+        verbose: process.env.BACKUP_VERBOSE === 'true',
+      });
+
+      backupScheduler.start(db).then(() => {
+        console.log('[Backup] Automated backup scheduler started (GFS retention)');
+      }).catch((err) => {
+        console.error('[Backup] Failed to start scheduler:', err);
+      });
+    }
   }
 
   // Health check
@@ -2035,6 +2215,8 @@ async function main(): Promise<void> {
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
+    console.log(`\n[Bot] ${signal} - shutting down...`);
+
     // Stop proactive notifications
     notificationService.stop();
     console.log("[Notifications] Service stopped");
@@ -2051,7 +2233,10 @@ async function main(): Promise<void> {
       console.log("[DB] Database closed");
     }
 
-    console.log(`\n[Bot] ${signal} - shutting down...`);
+    // Flush Sentry events before exit (2025 best practice)
+    await sentryService.flush(2000);
+    console.log("[Sentry] Events flushed");
+
     await bot.stop();
     process.exit(0);
   };
@@ -2066,6 +2251,7 @@ async function main(): Promise<void> {
     onStart: (info) => {
       console.log(`[Bot] @${info.username} ready`);
       console.log(`[Bot] Session storage: ${sessionAdapter ? "SQLite" : "Memory"}`);
+      console.log(`[Bot] Sentry monitoring: ${sentryService.isActive() ? "Active" : "Disabled"}`);
     },
   });
 }

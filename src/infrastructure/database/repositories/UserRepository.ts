@@ -18,6 +18,7 @@
 import type { IDatabaseConnection } from '../interfaces/IDatabaseConnection';
 import type { IUserRepository, IUserEntity } from '../interfaces/IRepository';
 import { BaseRepository, type IBaseRow } from './BaseRepository';
+import { getPHIEncryptionManager } from '../security/PHIEncryptionManager';
 
 /**
  * Database row for user entity
@@ -52,12 +53,15 @@ export class UserRepository
   }
 
   protected rowToEntity(row: IUserRow): IUserEntity {
+    const phiManager = getPHIEncryptionManager();
+
     return {
       id: row.id,
       externalId: row.external_id,
       email: row.email,
-      firstName: row.first_name,
-      lastName: row.last_name,
+      // PHI fields - decrypt on read
+      firstName: phiManager.decryptField(row.first_name) ?? undefined,
+      lastName: phiManager.decryptField(row.last_name) ?? undefined,
       chronotype: row.chronotype,
       prakriti: row.prakriti,
       tcmConstitution: row.tcm_constitution,
@@ -75,12 +79,14 @@ export class UserRepository
 
   protected entityToParams(entity: Partial<IUserEntity>): Record<string, unknown> {
     const params: Record<string, unknown> = {};
+    const phiManager = getPHIEncryptionManager();
 
     if (entity.id !== undefined) params.id = entity.id;
     if (entity.externalId !== undefined) params.external_id = entity.externalId;
     if (entity.email !== undefined) params.email = entity.email;
-    if (entity.firstName !== undefined) params.first_name = entity.firstName;
-    if (entity.lastName !== undefined) params.last_name = entity.lastName;
+    // PHI fields - encrypt on write
+    if (entity.firstName !== undefined) params.first_name = phiManager.encryptField(entity.firstName);
+    if (entity.lastName !== undefined) params.last_name = phiManager.encryptField(entity.lastName);
     if (entity.chronotype !== undefined) params.chronotype = entity.chronotype;
     if (entity.prakriti !== undefined) params.prakriti = entity.prakriti;
     if (entity.tcmConstitution !== undefined) params.tcm_constitution = entity.tcmConstitution;
@@ -230,18 +236,23 @@ export class UserRepository
    */
   async anonymizeUser(userId: number): Promise<boolean> {
     const anonymizedId = `anon_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const phiManager = getPHIEncryptionManager();
+
+    // Encrypt anonymized values for consistency
+    const encryptedFirstName = phiManager.encryptField('Anonymized');
+    const encryptedLastName = phiManager.encryptField('User');
 
     const result = await this.db.execute(
       `UPDATE ${this.tableName}
        SET
          external_id = ?,
          email = NULL,
-         first_name = 'Anonymized',
-         last_name = 'User',
+         first_name = ?,
+         last_name = ?,
          deleted_at = datetime('now'),
          updated_at = datetime('now')
        WHERE id = ?`,
-      [anonymizedId, userId]
+      [anonymizedId, encryptedFirstName, encryptedLastName, userId]
     );
 
     return result.changes > 0;
