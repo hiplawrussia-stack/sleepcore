@@ -18,6 +18,7 @@ import { Bot, Context } from 'grammy';
 import type { InlineKeyboardButton } from 'grammy/types';
 import type { ICommand, ICommandRegistry, ISleepCoreContext, IUserSession, IConversationCommand, IInlineButton } from './interfaces/ICommand';
 import { SleepCoreAPI } from '../../SleepCoreAPI';
+import { CrisisDetectionService, createCrisisDetectionService, ICrisisResponse } from '../services/CrisisDetectionService';
 
 // Import all commands
 import { startCommand } from './StartCommand';
@@ -35,6 +36,10 @@ import { badgeCommand } from './BadgeCommand';
 import { evolutionCommand } from './EvolutionCommand';
 // Phase 6.1: Content Library Integration
 import { smartTipsCommand } from './SmartTipsCommand';
+// Phase 1.3: Admin Dashboard for clinical pilot monitoring
+import { adminCommand } from './AdminCommand';
+// Phase 1.3: Adverse Event Reporting for clinical pilot
+import { aeReportCommand } from './AEReportCommand';
 
 /**
  * Command Handler implementation
@@ -44,10 +49,19 @@ export class CommandHandler implements ICommandRegistry {
   private aliases: Map<string, string> = new Map();
   private sessions: Map<string, IUserSession> = new Map();
   private sleepCore: SleepCoreAPI;
+  private crisisDetection: CrisisDetectionService;
 
-  constructor(sleepCore?: SleepCoreAPI) {
+  constructor(sleepCore?: SleepCoreAPI, crisisDetection?: CrisisDetectionService) {
     this.sleepCore = sleepCore || new SleepCoreAPI();
+    this.crisisDetection = crisisDetection || createCrisisDetectionService();
     this.registerDefaultCommands();
+  }
+
+  /**
+   * Get crisis detection service (for admin dashboard access)
+   */
+  getCrisisDetectionService(): CrisisDetectionService {
+    return this.crisisDetection;
   }
 
   // ==================== ICommandRegistry Implementation ====================
@@ -155,6 +169,18 @@ export class CommandHandler implements ICommandRegistry {
       // Build extended context
       const sleepCoreCtx = this.buildSleepCoreContext(ctx);
 
+      // SAFETY CHECK: Crisis detection BEFORE any processing
+      // This is critical for DTx safety per ICH E6(R3) and 2025 research
+      const messageText = ctx.message?.text || '';
+      if (messageText) {
+        const crisisResponse = await this.checkForCrisis(ctx, sleepCoreCtx, messageText);
+        if (crisisResponse?.shouldInterrupt) {
+          // Crisis detected - send crisis response and interrupt normal flow
+          await ctx.reply(crisisResponse.message, { parse_mode: 'HTML' });
+          return;
+        }
+      }
+
       // Check session requirement
       if (command.requiresSession) {
         const session = this.sleepCore.getSession(sleepCoreCtx.userId);
@@ -181,6 +207,40 @@ export class CommandHandler implements ICommandRegistry {
     } catch (error) {
       console.error(`Command ${command.name} failed:`, error);
       await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+  }
+
+  /**
+   * Check message for crisis indicators
+   * Called BEFORE any command processing
+   */
+  private async checkForCrisis(
+    ctx: Context,
+    sleepCoreCtx: ISleepCoreContext,
+    messageText: string
+  ): Promise<ICrisisResponse | null> {
+    try {
+      const response = this.crisisDetection.analyzeMessage(
+        messageText,
+        sleepCoreCtx.userId,
+        sleepCoreCtx.chatId.toString()
+      );
+
+      // Log high-severity events for admin dashboard
+      if (response.severity === 'high' || response.severity === 'critical') {
+        console.warn('[CommandHandler] Crisis detected:', {
+          userId: sleepCoreCtx.userId,
+          severity: response.severity,
+          action: response.action,
+        });
+      }
+
+      return response;
+    } catch (error) {
+      // Crisis detection failure should not block the user
+      // Log error but continue with normal flow
+      console.error('[CommandHandler] Crisis detection error:', error);
+      return null;
     }
   }
 
@@ -407,10 +467,19 @@ export class CommandHandler implements ICommandRegistry {
 
     // Phase 6.1: Content Library Integration
     this.register(smartTipsCommand);
+
+    // Phase 1.3: Admin Dashboard (clinical pilot monitoring)
+    this.register(adminCommand);
+
+    // Phase 1.3: Adverse Event Reporting (clinical pilot safety)
+    this.register(aeReportCommand);
   }
 }
 
 // Export factory function
-export function createCommandHandler(sleepCore?: SleepCoreAPI): CommandHandler {
-  return new CommandHandler(sleepCore);
+export function createCommandHandler(
+  sleepCore?: SleepCoreAPI,
+  crisisDetection?: CrisisDetectionService
+): CommandHandler {
+  return new CommandHandler(sleepCore, crisisDetection);
 }

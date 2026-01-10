@@ -211,5 +211,20 @@ export type {
   IExportAuditEntry,
 } from './AnonymizedDataExportService';
 
+// ==================== Crisis Detection (Phase 1.4 Safety) ====================
+export {
+  CrisisDetectionService,
+  createCrisisDetectionService,
+  crisisDetectionService,
+  DEFAULT_CRISIS_SERVICE_CONFIG,
+} from './CrisisDetectionService';
+
+export type {
+  CrisisAction,
+  ICrisisEvent,
+  ICrisisResponse,
+  ICrisisDetectionServiceConfig,
+} from './CrisisDetectionService';
+
 // ==================== Modules Re-export ====================
 export * from '../../modules';

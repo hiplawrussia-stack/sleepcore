@@ -362,3 +362,24 @@ export {
   createVoiceInputAdapter,
   DEFAULT_VOICE_CONFIG,
 } from './voice/VoiceInputAdapter';
+
+// =============================================================================
+// PHASE 1: CRISIS DETECTION (2025)
+// =============================================================================
+
+// Crisis Detector - Multi-layer crisis detection for mental health safety
+export {
+  CrisisDetector,
+  createCrisisDetector,
+  defaultCrisisDetector,
+  DEFAULT_CRISIS_CONFIG,
+} from './crisis';
+
+export type {
+  CrisisSeverity,
+  CrisisType,
+  LayerResult,
+  CrisisDetectionResult,
+  CrisisDetectorConfig,
+  StateRiskData,
+} from './crisis';

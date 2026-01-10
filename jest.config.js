@@ -35,7 +35,7 @@ module.exports = {
   testTimeout: 10000,
   moduleNameMapper: {
     '^@sleepcore/(.*)$': '<rootDir>/src/$1',
-    '^@cognicore/engine$': '<rootDir>/../cognicore-engine/dist/index.js',
+    '^@cognicore/engine$': '<rootDir>/packages/cognicore-engine/dist/index.js',
   },
   // Verbose output for debugging
   verbose: true,

@@ -1,9 +1,9 @@
 # SleepCore Production Launch Plan
 
-> **Version**: 1.13
+> **Version**: 1.14
 > **Created**: 2026-01-08
 > **Status**: Active
-> **Last Updated**: 2026-01-09
+> **Last Updated**: 2026-01-10
 
 ---
 
@@ -271,6 +271,7 @@ SleepCore is an AI-powered digital therapeutic (DTx) for chronic insomnia treatm
 - [x] Create admin dashboard for monitoring - AdminDashboardService + /admin command (ICH E6(R3), 21 CFR Part 11 audit trail, HIPAA RBAC)
 - [x] Implement adverse event reporting - AdverseEventService + /aereport command (ICH E6(R3), ICH E2A/E2B, CIOMS Form I, Roszdravnadzor Order 200n, DTx-specific "digitalovigilance")
 - [x] Set up anonymized data export - AnonymizedDataExportService.ts (GDPR Art. 89, HIPAA Safe Harbor 18 identifiers, 152-FZ depersonalization, ICMJE data sharing, k-anonymity validation, CSV/JSON/NDJSON formats, audit trail)
+- [x] Integrate crisis detection - CrisisDetectionService.ts wrapping CogniCore Engine's CrisisDetector (3-layer detection: keywords, patterns, state-based; bilingual RU/EN crisis resources; C-SSRS inspired severity levels; automatic session interruption for high/critical severity; ICH E6(R3) real-time safety monitoring)
 
 ### 1.4 Recruitment
 
@@ -558,6 +559,7 @@ PHASE 6: Continuous ──────────────┘ ← Ongoing
 | 2026-01-08 | 1.11 | Admin dashboard implemented - AdminDashboardService.ts + AdminCommand.ts (ICH E6(R3) centralized monitoring, 21 CFR Part 11 audit trail, HIPAA RBAC) |
 | 2026-01-08 | 1.12 | Adverse event reporting implemented - AdverseEventService.ts + AEReportCommand.ts (ICH E6(R3), ICH E2A/E2B 15/7 day deadlines, CIOMS Form I, Roszdravnadzor Order 200n, DTx-specific categories, auto-ISI-deterioration detection, safety alerts) |
 | 2026-01-09 | 1.13 | Anonymized data export implemented - AnonymizedDataExportService.ts + AdminCommand.ts integration (GDPR Art. 89, HIPAA Safe Harbor 18 identifiers, 152-FZ depersonalization, EMA Policy 0070, ICMJE data sharing statement, k-anonymity validation, CSV/JSON/NDJSON formats, 21 CFR Part 11 audit trail) |
+| 2026-01-10 | 1.14 | Crisis detection integrated - CrisisDetectionService.ts wrapping CogniCore Engine CrisisDetector (3-layer detection, bilingual RU/EN, C-SSRS severity levels, automatic session interruption, ICH E6(R3) real-time safety monitoring, 31 unit tests) |
 
 ---
 

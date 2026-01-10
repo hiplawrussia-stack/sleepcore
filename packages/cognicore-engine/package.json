@@ -75,6 +75,11 @@
       "import": "./dist/events/index.mjs",
       "require": "./dist/events/index.js",
       "types": "./dist/events/index.d.ts"
+    },
+    "./crisis": {
+      "import": "./dist/crisis/index.mjs",
+      "require": "./dist/crisis/index.js",
+      "types": "./dist/crisis/index.d.ts"
     }
   },
   "files": [
