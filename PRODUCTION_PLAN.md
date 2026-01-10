@@ -1,6 +1,6 @@
 # SleepCore Production Launch Plan
 
-> **Version**: 1.17
+> **Version**: 1.18
 > **Created**: 2026-01-08
 > **Status**: Active
 > **Last Updated**: 2026-01-10
@@ -586,6 +586,7 @@ PHASE 6: Continuous ──────────────┘ ← Ongoing
 | 2026-01-10 | 1.15 | Escalation protocol implemented - CrisisEscalationService.ts (SAMHSA 2025 Guidelines, admin Telegram notifications, auto-AE for CRITICAL, Stanley-Brown Safety Planning, bilingual RU/EN, Safety Plan keyboard, CommandHandler integration, 38 unit tests) |
 | 2026-01-10 | 1.16 | PLRNN-based sleep prediction integrated - SleepPredictionService.ts (npj Digital Medicine 2025 research: PLRNN outperforms linear models for EMA prediction; 5D state vector mapping: SE, SOL, WASO, TST, Quality; early warning signals for sleep deterioration; hybrid prediction with Kalman for short-term; causal network extraction; intervention simulation; online learning; bilingual RU/EN warnings and recommendations; 40 unit tests) |
 | 2026-01-10 | 1.17 | Adaptive Sleep Restriction personalization - AdaptiveSleepRestrictionService.ts (PLRNN-enhanced TIB adjustment with confidence-aware decisions; Sleep Need Questionnaire with MEQ-equivalent chronotype scoring; JITAI adaptive scheduling with tailoring variables; personalized initial prescription based on sleep profile; short/long sleeper classification; social jet lag estimation; optimal reminder timing; bilingual RU/EN; 35 unit tests) |
+| 2026-01-10 | 1.18 | Roszdravnadzor integration prepared - RoszdravnadzorAPIService.ts (Order 181n + Order 4472 compliance; automatic data transmission to АИС Росздравнадзора; version change notifications per PP RF 1684; cybersecurity incident reporting; error metrics tracking per 4 categories; GOST R 56939-2024 secure development; GOST IEC 62304-2022 lifecycle; CYBERSECURITY_RU.md documentation; VERSIONING_PROCEDURES_RU.md with change categories; 45 unit tests) |
 
 ---
 
