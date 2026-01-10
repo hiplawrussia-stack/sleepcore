@@ -1,6 +1,6 @@
 # SleepCore Production Launch Plan
 
-> **Version**: 1.16
+> **Version**: 1.17
 > **Created**: 2026-01-08
 > **Status**: Active
 > **Last Updated**: 2026-01-10
@@ -149,7 +149,18 @@ SleepCore is an AI-powered digital therapeutic (DTx) for chronic insomnia treatm
 | Early warning signals: autocorrelation, variance, connectivity | HIGH | Nature Reviews Psychology 2025 |
 | 5D state sufficient for sleep dynamics modeling | MEDIUM | CogniCore Engine 2.0 |
 
-### 8. Telegram Compliance
+### 8. JITAI Adaptive Interventions
+
+| Finding | Confidence | Source |
+|---------|------------|--------|
+| JITAI framework for personalized health interventions | HIGH | Nahum-Shani 2018 |
+| Digital phenotyping improves intervention timing | HIGH | Insel 2017 |
+| Chronotype-based scheduling improves adherence | HIGH | Munich Chronotype Questionnaire |
+| Social jet lag correlates with sleep debt | HIGH | Roenneberg 2003 |
+| Adaptive TIB adjustment outperforms fixed schedules | MEDIUM | CBT-I Meta-analyses |
+| Real-time tailoring variables improve outcomes | MEDIUM | mHealth research 2025 |
+
+### 9. Telegram Compliance
 
 | Finding | Confidence | Source |
 |---------|------------|--------|
@@ -574,6 +585,7 @@ PHASE 6: Continuous ──────────────┘ ← Ongoing
 | 2026-01-10 | 1.14 | Crisis detection integrated - CrisisDetectionService.ts wrapping CogniCore Engine CrisisDetector (3-layer detection, bilingual RU/EN, C-SSRS severity levels, automatic session interruption, ICH E6(R3) real-time safety monitoring, 31 unit tests) |
 | 2026-01-10 | 1.15 | Escalation protocol implemented - CrisisEscalationService.ts (SAMHSA 2025 Guidelines, admin Telegram notifications, auto-AE for CRITICAL, Stanley-Brown Safety Planning, bilingual RU/EN, Safety Plan keyboard, CommandHandler integration, 38 unit tests) |
 | 2026-01-10 | 1.16 | PLRNN-based sleep prediction integrated - SleepPredictionService.ts (npj Digital Medicine 2025 research: PLRNN outperforms linear models for EMA prediction; 5D state vector mapping: SE, SOL, WASO, TST, Quality; early warning signals for sleep deterioration; hybrid prediction with Kalman for short-term; causal network extraction; intervention simulation; online learning; bilingual RU/EN warnings and recommendations; 40 unit tests) |
+| 2026-01-10 | 1.17 | Adaptive Sleep Restriction personalization - AdaptiveSleepRestrictionService.ts (PLRNN-enhanced TIB adjustment with confidence-aware decisions; Sleep Need Questionnaire with MEQ-equivalent chronotype scoring; JITAI adaptive scheduling with tailoring variables; personalized initial prescription based on sleep profile; short/long sleeper classification; social jet lag estimation; optimal reminder timing; bilingual RU/EN; 35 unit tests) |
 
 ---
 
