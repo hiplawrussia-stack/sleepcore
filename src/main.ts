@@ -51,6 +51,8 @@ import {
   questCommand,
   badgeCommand,
   evolutionCommand,
+  // Phase 7: Structured CBT-I Sessions
+  therapyCommand,
   type ICommandResult,
   type ISleepCoreContext,
   type IConversationCommand,
@@ -73,6 +75,7 @@ import {
 import { createBotConfigFromEnv, type BotConfigOutput } from './bot/config/BotConfig';
 import {
   createProactiveNotificationService,
+  createISISchedulingService,
   replyKeyboard,
   streakService,
   progressVisualization,
@@ -81,6 +84,9 @@ import {
   onboardingTracker,
   dailyGreeting,
   yearInPixels,
+  // Phase 1.4 Safety: Crisis Detection & Escalation
+  crisisDetectionService,
+  crisisEscalationService,
   type IStreakData,
   type IMoodHistory,
   type MoodLevel,
@@ -97,7 +103,10 @@ import {
   AssessmentRepository,
   TherapySessionRepository,
   GamificationRepository,
+  VoiceDiaryRepository,
   createAutomatedBackupScheduler,
+  // ICH E6(R3) / 21 CFR Part 11 compliant audit logging
+  AuditService,
   type IDatabaseConnection,
   type GrammySessionAdapter,
   type ISleepDiaryEntryEntity,
@@ -146,11 +155,15 @@ interface SessionData {
     hasCompletedOnboarding?: boolean;
   };
 
-  /** ISI assessment data */
+  /** ISI assessment data (ePRO compliant with item-level timestamps) */
   isiData?: {
     answers: number[];
+    /** Timestamps for each answer (ISO 8601 format) - ePRO audit trail */
+    answeredAt: string[];
     currentQuestion: number;
     step: string;
+    /** Assessment start time */
+    startedAt?: string;
   };
 
   /** Streak and progress data (forgiveness-first design) */
@@ -431,6 +444,7 @@ async function initReplyKeyboard(ctx: MyContext): Promise<void> {
  */
 interface SetupCommandsOptions {
   userRepository?: UserRepository;
+  auditService?: AuditService;
 }
 
 /**
@@ -438,7 +452,7 @@ interface SetupCommandsOptions {
  */
 function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCommandsOptions = {}): void {
   const _commandHandler = createCommandHandler(api);
-  const { userRepository } = options;
+  const { userRepository, auditService } = options;
 
   // /start command - Welcome + ISI assessment
   bot.command('start', async (ctx) => {
@@ -457,20 +471,29 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCom
 
         if (!dbUser) {
           // Create new user in database
+          // Per GDPR/ФЗ-152/21 CFR Part 11: consent must be EXPLICIT after reading terms
           dbUser = await userRepository.insert({
             externalId: sleepCoreCtx.userId,
             firstName: ctx.from?.first_name,
             lastName: ctx.from?.last_name,
             timezone: 'Europe/Moscow', // Default timezone, can be updated later
             locale: ctx.from?.language_code || 'ru',
-            consentGiven: true, // Implicit consent by starting the bot
-            consentDate: new Date(),
+            consentGiven: false, // Explicit consent required via consent dialog
+            consentDate: undefined,
           });
-          console.log(`[Database] Created user: ${dbUser.id} (external: ${sleepCoreCtx.userId})`);
+          console.log(`[Database] Created user: ${dbUser.id} (external: ${sleepCoreCtx.userId}) - awaiting explicit consent`);
+          // ICH E6(R3) Audit: Log user creation
+          if (auditService && dbUser.id) {
+            await auditService.logCreate('user', dbUser.id, { externalId: sleepCoreCtx.userId });
+          }
         } else {
           // Update last activity
           await userRepository.updateLastActivity(dbUser.id!);
           console.log(`[Database] User exists: ${dbUser.id}, updated last activity`);
+          // ICH E6(R3) Audit: Log user login/session start
+          if (auditService && dbUser.id) {
+            await auditService.logAuth('LOGIN', dbUser.id);
+          }
         }
 
         // Store database user ID in session for linking
@@ -815,17 +838,19 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCom
  * Options for setting up callbacks
  */
 interface SetupCallbacksOptions {
+  userRepository?: UserRepository;
   sleepDiaryRepository?: SleepDiaryRepository;
   assessmentRepository?: AssessmentRepository;
   therapySessionRepository?: TherapySessionRepository;
   gamificationRepository?: GamificationRepository;
+  auditService?: AuditService;
 }
 
 /**
  * Setup callback query handlers
  */
 function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCallbacksOptions = {}): void {
-  const { sleepDiaryRepository, assessmentRepository, therapySessionRepository, gamificationRepository } = options;
+  const { userRepository, sleepDiaryRepository, assessmentRepository, therapySessionRepository, gamificationRepository, auditService } = options;
 
   // Helper: Ensure gamification session is active (ethical engagement tracking)
   // Creates or continues a session for wellbeing monitoring
@@ -926,6 +951,10 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
               sonyaEvolutionService.recordInteraction(sleepCoreCtx.userId, 'command');
               result = await evolutionCommand.execute(sleepCoreCtx as ISleepCoreContext);
               break;
+            // Phase 7: Structured CBT-I Sessions
+            case 'therapy':
+              result = await therapyCommand.execute(sleepCoreCtx as ISleepCoreContext);
+              break;
             default:
               await ctx.answerCallbackQuery({ text: 'OK' });
               return;
@@ -934,8 +963,14 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
 
         case 'start':
           if ('handleCallback' in startCommand) {
-            // Get ISI data from session or initialize
-            const isiData = ctx.session.isiData || { answers: [], currentQuestion: 0, step: 'welcome' };
+            // Get ISI data from session or initialize (ePRO compliant with timestamps)
+            const isiData = ctx.session.isiData || {
+              answers: [],
+              answeredAt: [],
+              currentQuestion: 0,
+              step: 'welcome',
+              startedAt: undefined,
+            };
 
             result = await (startCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {
               isiAnswers: isiData.answers,
@@ -945,10 +980,27 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
             // Update session with result metadata
             if (result?.metadata) {
               const meta = result.metadata as Record<string, unknown>;
+              const newAnswers = (meta.isiAnswers as number[]) || isiData.answers;
+              const newQuestion = (meta.currentQuestion as number) || isiData.currentQuestion;
+              const newStep = (meta.step as string) || isiData.step;
+
+              // Track timestamps for each answer (ePRO best practice)
+              const answeredAt = [...isiData.answeredAt];
+              if (newAnswers.length > isiData.answers.length) {
+                // New answer was recorded - add timestamp
+                answeredAt.push(new Date().toISOString());
+              }
+
+              // Track assessment start time
+              const startedAt = isiData.startedAt ||
+                (newStep.startsWith('isi_q') ? new Date().toISOString() : undefined);
+
               ctx.session.isiData = {
-                answers: (meta.isiAnswers as number[]) || isiData.answers,
-                currentQuestion: (meta.currentQuestion as number) || isiData.currentQuestion,
-                step: (meta.step as string) || isiData.step,
+                answers: newAnswers,
+                answeredAt,
+                currentQuestion: newQuestion,
+                step: newStep,
+                startedAt,
               };
 
               // === Database Persistence for ISI Assessment ===
@@ -957,7 +1009,7 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
                 try {
                   const isiScore = meta.isiScore as number;
                   const severity = meta.severity as string;
-                  const answers = meta.isiAnswers as number[] || ctx.session.isiData?.answers || [];
+                  const answers = newAnswers;
 
                   // Determine severity label for database
                   let severityLabel: string;
@@ -966,22 +1018,67 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
                   else if (isiScore <= 21) severityLabel = 'moderate';
                   else severityLabel = 'severe';
 
+                  // ePRO compliant response format with item-level timestamps
+                  const itemResponses = answers.map((value, index) => ({
+                    item: index + 1,
+                    value,
+                    answeredAt: ctx.session.isiData?.answeredAt[index] || null,
+                  }));
+
                   const assessmentEntity: Omit<IAssessmentEntity, 'id' | 'createdAt' | 'updatedAt'> = {
                     userId: sleepCoreCtx.userId,
                     type: 'isi',
                     score: isiScore,
                     severity: severityLabel,
                     category: severity,
-                    responsesJson: JSON.stringify(answers),
+                    // ePRO format: item-level responses with timestamps
+                    responsesJson: JSON.stringify({
+                      items: itemResponses,
+                      startedAt: ctx.session.isiData?.startedAt,
+                      completedAt: new Date().toISOString(),
+                      totalDurationMs: ctx.session.isiData?.startedAt
+                        ? Date.now() - new Date(ctx.session.isiData.startedAt).getTime()
+                        : null,
+                    }),
                     interpretation: `ISI Score: ${isiScore}/28 - ${severityLabel}`,
                     assessedAt: new Date(),
                     deletedAt: null,
                   };
 
-                  await assessmentRepository.insert(assessmentEntity);
+                  const savedAssessment = await assessmentRepository.insert(assessmentEntity);
                   console.log(`[Database] ISI assessment saved for user ${sleepCoreCtx.userId}, score: ${isiScore}`);
+                  // ICH E6(R3) Audit: Log assessment completion
+                  if (auditService && savedAssessment?.id) {
+                    await auditService.logCreate('assessment', savedAssessment.id, {
+                      type: 'isi',
+                      score: isiScore,
+                      severity: severityLabel,
+                    }, { userId: ctx.session.dbUserId });
+                  }
+
+                  // Clear ISI session data after successful save
+                  ctx.session.isiData = undefined;
                 } catch (error) {
                   console.error('[Database] Failed to save ISI assessment:', error);
+                }
+              }
+
+              // === Database Persistence for Explicit Consent ===
+              // Per GDPR/ФЗ-152/21 CFR Part 11: record explicit consent with audit trail
+              if (meta.consentGiven === true && meta.step === 'consent_accepted' && userRepository) {
+                try {
+                  if (ctx.session.dbUserId) {
+                    await userRepository.recordConsent(ctx.session.dbUserId);
+                    console.log(`[Consent] User ${ctx.session.dbUserId} explicit consent recorded at ${meta.consentTimestamp}`);
+                    // ICH E6(R3) Audit: Log consent event
+                    if (auditService) {
+                      await auditService.logConsent(ctx.session.dbUserId, true, {
+                        metadata: { timestamp: meta.consentTimestamp },
+                      });
+                    }
+                  }
+                } catch (error) {
+                  console.error('[Consent] Failed to record consent:', error);
                 }
               }
 
@@ -1075,6 +1172,13 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
 
                 await sleepDiaryRepository.upsert(diaryEntity);
                 console.log(`[Database] Diary entry saved for user ${sleepCoreCtx.userId}, date: ${diaryData.date}`);
+                // ICH E6(R3) Audit: Log sleep diary entry creation
+                if (auditService && ctx.session.dbUserId) {
+                  await auditService.logCreate('sleep_diary', ctx.session.dbUserId, {
+                    date: diaryData.date,
+                    sleepEfficiency,
+                  }, { userId: ctx.session.dbUserId });
+                }
 
                 // Update session cache
                 ctx.session.therapyState = {
@@ -1087,6 +1191,22 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
                 console.error('[Database] Failed to save diary entry:', error);
                 // Graceful degradation: don't fail the user's experience
               }
+            }
+          }
+          break;
+
+        // === Phase 7: Structured CBT-I Therapy Sessions ===
+        case 'therapy':
+          if ('handleCallback' in therapyCommand) {
+            result = await (therapyCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
+
+            // Update therapy progress in session state
+            if (result?.metadata?.weekNumber !== undefined) {
+              ctx.session.therapyState = {
+                ...ctx.session.therapyState,
+                hasActiveSession: true,
+                currentWeek: result.metadata.weekNumber as number,
+              };
             }
           }
           break;
@@ -1484,9 +1604,41 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
               await ctx.answerCallbackQuery();
               return;
             }
+            case 'therapy': {
+              const therapyResult = await therapyCommand.execute(sleepCoreCtx as ISleepCoreContext);
+              if (therapyResult.message) {
+                const kb = therapyResult.keyboard ? buildKeyboard(therapyResult.keyboard) : undefined;
+                await ctx.editMessageText(therapyResult.message, {
+                  parse_mode: 'Markdown',
+                  reply_markup: kb,
+                });
+              }
+              await ctx.answerCallbackQuery();
+              return;
+            }
             case 'challenges': {
-              // TODO: implement challenges command callback
-              await ctx.answerCallbackQuery({ text: 'Челленджи скоро!' });
+              // Challenges feature - planned for Phase 8
+              // Research (2025-2026): gamification shows small-moderate effect (Hedges g=-0.27)
+              // Most effective components: progress tracking (80%), points (56%), rewards (50%)
+              // Focus on CBT-I aligned challenges: sleep hygiene, consistency, relaxation
+              const challengesPreview = `🎯 *Челленджи (скоро)*
+
+Мы работаем над системой челленджей, которые помогут закрепить полезные привычки сна:
+
+*Планируемые челленджи:*
+• 🌙 "7 дней режима" — ложиться в одно время
+• 📵 "Цифровой детокс" — без экранов за час до сна
+• 🧘 "Неделя релаксации" — ежедневные практики
+• ☕ "Без кофеина после 14:00"
+
+_Следите за обновлениями!_`;
+
+              await ctx.editMessageText(challengesPreview, {
+                parse_mode: 'Markdown',
+                reply_markup: new InlineKeyboard()
+                  .text('◀️ Назад', 'menu:main'),
+              });
+              await ctx.answerCallbackQuery();
               return;
             }
           }
@@ -1710,6 +1862,37 @@ function setupMessages(bot: Bot<MyContext>, api: SleepCoreAPI): void {
     const text = ctx.message.text;
     ctx.session.lastActivityAt = new Date();
 
+    // =========================================================================
+    // SAFETY FIRST: Crisis Detection (Phase 1.4)
+    // Research: Woebot model - show resources, don't block user interaction
+    // NLP detection achieves 92-97% accuracy (JMIR 2025)
+    // =========================================================================
+    try {
+      const userId = ctx.from?.id.toString() || '';
+      const chatId = ctx.chat?.id.toString() || '';
+
+      const crisisResponse = crisisDetectionService.analyzeMessage(text, userId, chatId);
+
+      if (crisisResponse.shouldInterrupt) {
+        // Log crisis event for audit
+        console.log(`[CRISIS] Detected severity=${crisisResponse.severity} for user=${userId}`);
+
+        // Send crisis response with resources (Woebot pattern: empathetic + actionable)
+        await ctx.reply(crisisResponse.message, { parse_mode: 'HTML' });
+
+        // Escalate to admins for HIGH/CRITICAL severity
+        if (crisisResponse.event) {
+          await crisisEscalationService.escalate(crisisResponse.event);
+        }
+
+        // IMPORTANT: Don't return - allow user to continue using bot
+        // Research shows blocking increases distress (SAMHSA 2025)
+      }
+    } catch (crisisError) {
+      // Crisis detection should NEVER block normal operation
+      console.error('[CRISIS] Detection error (non-fatal):', crisisError);
+    }
+
     // Time format for settings
     if (/^\d{1,2}:\d{2}$/.test(text)) {
       ctx.session.preferences.notificationTime = text;
@@ -1825,6 +2008,7 @@ function setupMessages(bot: Bot<MyContext>, api: SleepCoreAPI): void {
  */
 interface SetupVoiceHandlersOptions {
   gamificationRepository?: GamificationRepository;
+  voiceDiaryRepository?: VoiceDiaryRepository;
 }
 
 /**
@@ -1832,7 +2016,7 @@ interface SetupVoiceHandlersOptions {
  * Research: Fabla App shows "speech carries information we don't always consciously recognize"
  */
 function setupVoiceHandlers(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupVoiceHandlersOptions = {}): void {
-  const { gamificationRepository } = options;
+  const { gamificationRepository, voiceDiaryRepository } = options;
   // Check if Whisper API is configured
   const openaiApiKey = process.env.OPENAI_API_KEY;
 
@@ -1905,11 +2089,35 @@ function setupVoiceHandlers(bot: Bot<MyContext>, api: SleepCoreAPI, options: Set
       });
 
       // Check for quest completion
-      if (result.success) {
+      if (result.success && result.entry) {
         await questService.checkQuestProgress(sleepCoreCtx.userId, 'voice_diary', 1);
 
         // Award XP for voice entry (in-memory)
         sonyaEvolutionService.addXP(sleepCoreCtx.userId, 15); // Voice = 15 XP
+
+        // Persist voice diary entry to database (HIPAA compliant)
+        // Research (2025): ePRO requires item-level timestamps and audit trails
+        if (voiceDiaryRepository && ctx.session.dbUserId) {
+          try {
+            await voiceDiaryRepository.insert({
+              userId: ctx.session.dbUserId,
+              transcriptionText: result.entry.text,
+              transcriptionConfidence: result.entry.transcriptionConfidence,
+              transcriptionLanguage: result.entry.metadata?.language || 'ru',
+              voiceDuration: result.entry.voiceDuration,
+              emotion: result.entry.emotion,
+              emotionIntensity: result.entry.emotionIntensity,
+              telegramFileId: result.entry.metadata?.fileId,
+              fileSize: result.entry.metadata?.fileSize,
+              recordedAt: result.entry.createdAt,
+              transcribedAt: new Date(),
+            });
+            console.log(`[Voice] Entry persisted for user ${ctx.session.dbUserId}`);
+          } catch (err) {
+            console.error('[Voice] Persistence failed:', err);
+            // Don't fail the user interaction - voice was processed successfully
+          }
+        }
 
         // Persist XP to database (ethical gamification)
         // Note: Uses GamificationRepository from voice handler options
@@ -2035,18 +2243,190 @@ function setupErrors(bot: Bot<MyContext>): void {
 }
 
 // ============================================================================
-// HEALTH CHECK
+// HEALTH CHECK (IEC 62304 / IEC 60601 Compliant)
 // ============================================================================
 
 /**
- * Start health check server
+ * Startup health check result
  */
-function startHealth(port: number): void {
+interface IStartupHealthCheck {
+  passed: boolean;
+  checks: Array<{
+    name: string;
+    status: 'pass' | 'fail' | 'warn';
+    message: string;
+    critical: boolean;
+    durationMs?: number;
+  }>;
+  totalDurationMs: number;
+}
+
+/**
+ * Global health state for runtime checks
+ */
+let healthState: {
+  startupAt: Date;
+  startupChecks: IStartupHealthCheck | null;
+  databaseHealthy: boolean;
+  lastDatabaseCheck: Date | null;
+} = {
+  startupAt: new Date(),
+  startupChecks: null,
+  databaseHealthy: false,
+  lastDatabaseCheck: null,
+};
+
+/**
+ * Perform startup health checks per IEC 62304/60601
+ * PEMS self-test requirements for medical device software
+ */
+async function performStartupHealthChecks(): Promise<IStartupHealthCheck> {
+  const startTime = Date.now();
+  const checks: IStartupHealthCheck['checks'] = [];
+
+  console.log('[Startup] Beginning IEC 62304 compliant health checks...');
+
+  // Check 1: Required environment variables (CRITICAL)
+  const checkEnvStart = Date.now();
+  const requiredEnvVars = ['BOT_TOKEN'];
+  const missingVars = requiredEnvVars.filter(v => !process.env[v]);
+
+  if (missingVars.length > 0) {
+    checks.push({
+      name: 'Environment Variables',
+      status: 'fail',
+      message: `Missing required: ${missingVars.join(', ')}`,
+      critical: true,
+      durationMs: Date.now() - checkEnvStart,
+    });
+  } else {
+    checks.push({
+      name: 'Environment Variables',
+      status: 'pass',
+      message: 'All required environment variables present',
+      critical: true,
+      durationMs: Date.now() - checkEnvStart,
+    });
+  }
+
+  // Check 2: OpenAI API key (CRITICAL for voice/LLM features)
+  const checkOpenAIStart = Date.now();
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
+  checks.push({
+    name: 'OpenAI API Key',
+    status: hasOpenAI ? 'pass' : 'warn',
+    message: hasOpenAI ? 'OpenAI API key configured' : 'OpenAI API key not configured - voice/LLM features disabled',
+    critical: false,
+    durationMs: Date.now() - checkOpenAIStart,
+  });
+
+  // Check 3: Admin configuration for crisis escalation (CRITICAL for safety)
+  const checkAdminStart = Date.now();
+  const adminIds = process.env.ADMIN_USER_IDS?.split(',').filter(Boolean) || [];
+  if (adminIds.length === 0) {
+    checks.push({
+      name: 'Crisis Escalation Admins',
+      status: 'warn',
+      message: 'No ADMIN_USER_IDS configured - crisis escalation notifications disabled',
+      critical: false,
+      durationMs: Date.now() - checkAdminStart,
+    });
+  } else {
+    checks.push({
+      name: 'Crisis Escalation Admins',
+      status: 'pass',
+      message: `${adminIds.length} admin(s) configured for crisis notifications`,
+      critical: false,
+      durationMs: Date.now() - checkAdminStart,
+    });
+  }
+
+  // Check 4: Data directory writability (CRITICAL)
+  const checkDataDirStart = Date.now();
+  const dataDir = process.env.DATABASE_PATH ? path.dirname(process.env.DATABASE_PATH) : './data';
+  try {
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const testFile = path.join(dataDir, '.write_test');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+    checks.push({
+      name: 'Data Directory',
+      status: 'pass',
+      message: `Data directory writable: ${dataDir}`,
+      critical: true,
+      durationMs: Date.now() - checkDataDirStart,
+    });
+  } catch (error) {
+    checks.push({
+      name: 'Data Directory',
+      status: 'fail',
+      message: `Data directory not writable: ${dataDir} - ${error}`,
+      critical: true,
+      durationMs: Date.now() - checkDataDirStart,
+    });
+  }
+
+  // Check 5: Crisis detector initialization (CRITICAL for safety)
+  const checkCrisisStart = Date.now();
+  try {
+    // Import and verify crisis detector is functional using dist (compiled) path
+    const { CrisisDetector } = await import('../packages/cognicore-engine/dist/index.js');
+    const testDetector = new CrisisDetector();
+    const testResult = testDetector.detect('test message');
+    if (testResult && typeof testResult.severity !== 'undefined') {
+      checks.push({
+        name: 'Crisis Detector',
+        status: 'pass',
+        message: 'Crisis detection module initialized and functional',
+        critical: true,
+        durationMs: Date.now() - checkCrisisStart,
+      });
+    } else {
+      throw new Error('Invalid response from crisis detector');
+    }
+  } catch (error) {
+    checks.push({
+      name: 'Crisis Detector',
+      status: 'fail',
+      message: `Crisis detector initialization failed: ${error}`,
+      critical: true,
+      durationMs: Date.now() - checkCrisisStart,
+    });
+  }
+
+  // Calculate results
+  const totalDurationMs = Date.now() - startTime;
+  const criticalFailures = checks.filter(c => c.critical && c.status === 'fail');
+  const passed = criticalFailures.length === 0;
+
+  // Log results
+  console.log('[Startup] Health check results:');
+  for (const check of checks) {
+    const icon = check.status === 'pass' ? '✓' : check.status === 'warn' ? '⚠' : '✗';
+    const level = check.critical ? 'CRITICAL' : 'optional';
+    console.log(`  ${icon} [${level}] ${check.name}: ${check.message} (${check.durationMs}ms)`);
+  }
+  console.log(`[Startup] Health checks completed in ${totalDurationMs}ms - ${passed ? 'PASSED' : 'FAILED'}`);
+
+  const result = { passed, checks, totalDurationMs };
+  healthState.startupChecks = result;
+
+  return result;
+}
+
+/**
+ * Start health check server with detailed status
+ * Per IEC 62304: Runtime monitoring and diagnostics
+ */
+function startHealth(port: number, db?: IDatabaseConnection | null): void {
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
   const http = require('http');
 
-  http.createServer((req: { url: string }, res: { writeHead: (code: number, headers?: object) => void; end: (data?: string) => void }) => {
+  http.createServer(async (req: { url: string }, res: { writeHead: (code: number, headers?: object) => void; end: (data?: string) => void }) => {
     if (req.url === '/health') {
+      // Basic health check
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         status: 'ok',
@@ -2054,11 +2434,56 @@ function startHealth(port: number): void {
         buildDate: BUILD_DATE,
         uptime: process.uptime(),
       }));
+    } else if (req.url === '/health/detailed') {
+      // Detailed health check (IEC 62304 compliant)
+      let dbStatus = 'unknown';
+      let dbLatencyMs: number | null = null;
+
+      if (db) {
+        try {
+          const healthResult = await db.healthCheck();
+          dbStatus = healthResult.connected ? 'connected' : 'disconnected';
+          dbLatencyMs = healthResult.latencyMs;
+          healthState.databaseHealthy = healthResult.connected;
+          healthState.lastDatabaseCheck = new Date();
+        } catch {
+          dbStatus = 'error';
+          healthState.databaseHealthy = false;
+        }
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: healthState.databaseHealthy ? 'healthy' : 'degraded',
+        version: VERSION,
+        buildDate: BUILD_DATE,
+        uptime: process.uptime(),
+        startupAt: healthState.startupAt.toISOString(),
+        startupChecks: healthState.startupChecks,
+        runtime: {
+          database: {
+            status: dbStatus,
+            latencyMs: dbLatencyMs,
+            lastCheck: healthState.lastDatabaseCheck?.toISOString(),
+          },
+          memory: process.memoryUsage(),
+          nodeVersion: process.version,
+        },
+      }));
+    } else if (req.url === '/health/ready') {
+      // Readiness probe for Kubernetes
+      const ready = healthState.startupChecks?.passed && healthState.databaseHealthy;
+      res.writeHead(ready ? 200 : 503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ready }));
+    } else if (req.url === '/health/live') {
+      // Liveness probe for Kubernetes
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ alive: true }));
     } else {
       res.writeHead(404);
       res.end();
     }
-  }).listen(port, () => console.log(`[Health] Port ${port}`));
+  }).listen(port, () => console.log(`[Health] Server listening on port ${port} (/health, /health/detailed, /health/ready, /health/live)`));
 }
 
 // ============================================================================
@@ -2075,6 +2500,15 @@ async function main(): Promise<void> {
 ║     Mode:    ${(process.env.NODE_ENV || 'development').padEnd(43)}║
 ╚═══════════════════════════════════════════════════════════╝
   `);
+
+  // --- IEC 62304 Startup Health Checks ---
+  // PEMS self-test per IEC 60601-1 for medical device software
+  const healthChecks = await performStartupHealthChecks();
+  if (!healthChecks.passed) {
+    console.error('[Startup] FATAL: Critical health checks failed - cannot start bot safely');
+    process.exit(1);
+  }
+  healthState.databaseHealthy = true; // Initial assumption, will be verified below
 
   // --- SQLite Database Initialization ---
   const dbPath = process.env.DATABASE_PATH || "./data/sleepcore.db";
@@ -2101,8 +2535,11 @@ async function main(): Promise<void> {
     });
     console.log("[DB] Grammy session adapter ready");
   } catch (error) {
-    console.warn("[DB] SQLite init failed, falling back to memory sessions:", error);
-    // Continue with in-memory sessions (sessionAdapter remains null)
+    // CRITICAL: Database is REQUIRED for healthcare data (HIPAA/152-FZ compliance)
+    // Fail-fast prevents silent data loss (consent, PHI, therapy progress)
+    console.error("[DB] FATAL: SQLite initialization failed:", error);
+    console.error("[DB] Cannot start bot without persistent storage - informed consent and PHI data would be lost");
+    process.exit(1);
   }
 
   // --- Initialize Repositories (Session Persistence) ---
@@ -2111,13 +2548,24 @@ async function main(): Promise<void> {
   let assessmentRepository: AssessmentRepository | undefined;
   let therapySessionRepository: TherapySessionRepository | undefined;
   let gamificationRepository: GamificationRepository | undefined;
+  let voiceDiaryRepository: VoiceDiaryRepository | undefined;
+  let auditService: AuditService | undefined;
   if (db) {
     userRepository = new UserRepository(db);
     sleepDiaryRepository = new SleepDiaryRepository(db);
     assessmentRepository = new AssessmentRepository(db);
     therapySessionRepository = new TherapySessionRepository(db);
     gamificationRepository = new GamificationRepository(db);
-    console.log("[DB] Repositories initialized: User, SleepDiary, Assessment, TherapySession, Gamification");
+    voiceDiaryRepository = new VoiceDiaryRepository(db);
+    // ICH E6(R3) / 21 CFR Part 11: Immutable audit trail for clinical compliance
+    auditService = new AuditService(db, {
+      enabled: true,
+      logPhiAccess: true,
+      captureOldValues: true,
+      captureNewValues: true,
+      retentionDays: 2190, // 6 years (HIPAA requirement)
+    });
+    console.log("[DB] Repositories initialized: User, SleepDiary, Assessment, TherapySession, Gamification, VoiceDiary, AuditService");
   }
 
   // --- Create Bot ---
@@ -2146,17 +2594,39 @@ async function main(): Promise<void> {
   // --- Initialize Proactive Notification Service ---
   const notificationService = createProactiveNotificationService(bot as unknown as Bot<Context>, menuService);
 
+  // --- Initialize ISI Scheduling Service (Phase 7: CBT-I Session Integration) ---
+  const isiSchedulingService = createISISchedulingService(bot as unknown as Bot<Context>);
+
+  // --- Initialize Crisis Escalation Service (Phase 1.4 Safety) ---
+  // CRITICAL: Must call setBot() to enable admin notifications
+  crisisEscalationService.setBot(bot as unknown as Bot<Context>);
+
+  // Configure admin user IDs from environment (comma-separated)
+  const adminUserIds = process.env.ADMIN_USER_IDS?.split(',').map(id => id.trim()).filter(Boolean) || [];
+  if (adminUserIds.length > 0) {
+    crisisEscalationService.updateConfig({ adminUserIds });
+    console.log(`[CrisisEscalation] Configured with ${adminUserIds.length} admin(s) for emergency notifications`);
+  } else {
+    console.warn('[CrisisEscalation] WARNING: No ADMIN_USER_IDS configured - crisis escalation will not notify anyone!');
+  }
+
   // Setup handlers
-  setupCommands(bot, api, { userRepository });
-  setupCallbacks(bot, api, { sleepDiaryRepository, assessmentRepository, therapySessionRepository, gamificationRepository });
+  setupCommands(bot, api, { userRepository, auditService });
+  setupCallbacks(bot, api, { userRepository, sleepDiaryRepository, assessmentRepository, therapySessionRepository, gamificationRepository, auditService });
   setupMessages(bot, api);
-  setupVoiceHandlers(bot, api, { gamificationRepository }); // Sprint 3: Voice diary
+  setupVoiceHandlers(bot, api, { gamificationRepository, voiceDiaryRepository }); // Sprint 3: Voice diary + persistence
   setupErrors(bot);
 
-  // Production: Start proactive notifications and automated backups
-  if (process.env.NODE_ENV === 'production') {
+  // Start notification and scheduling services
+  // NOTIFICATIONS_ENABLED env var allows testing in development
+  const enableNotifications = process.env.NODE_ENV === 'production' || process.env.NOTIFICATIONS_ENABLED === 'true';
+  if (enableNotifications) {
     notificationService.start();
     console.log('[Notifications] Proactive notification service started');
+
+    // Start ISI biweekly assessment scheduling (dCBT-I protocol)
+    isiSchedulingService.start();
+    console.log('[ISI Schedule] Biweekly assessment service started');
 
     // Start automated backup scheduler (2025 best practices: GFS retention)
     if (db && process.env.BACKUP_ENABLED !== 'false') {
@@ -2193,7 +2663,7 @@ async function main(): Promise<void> {
   }
 
   // Health check
-  startHealth(parseInt(process.env.HEALTH_PORT || '3001', 10));
+  startHealth(parseInt(process.env.HEALTH_PORT || '3001', 10), db);
 
   // Register commands with BotFather (Hub Model: 5-6 core commands only)
   // Research: 3-5 commands optimal (Miller's Law, Material Design, NN Group)
@@ -2203,7 +2673,7 @@ async function main(): Promise<void> {
       { command: 'start', description: '🚀 Начать работу с ботом' },
       { command: 'menu', description: '📱 Все функции (главное меню)' },
       { command: 'diary', description: '📓 Дневник сна' },
-      { command: 'mood', description: '💭 Проверка настроения' },
+      { command: 'therapy', description: '🧠 Терапевтические сессии КПТ-И' },
       { command: 'sos', description: '🆘 Экстренная помощь' },
       { command: 'help', description: '❓ Справка и все команды' },
     ];
@@ -2220,6 +2690,10 @@ async function main(): Promise<void> {
     // Stop proactive notifications
     notificationService.stop();
     console.log("[Notifications] Service stopped");
+
+    // Stop ISI scheduling service
+    isiSchedulingService.stop();
+    console.log("[ISI Schedule] Service stopped");
 
     // Stop session adapter cleanup timer
     if (sessionAdapter) {

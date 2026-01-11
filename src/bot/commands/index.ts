@@ -57,6 +57,9 @@ export { EvolutionCommand, evolutionCommand } from './EvolutionCommand';
 // Phase 6.1: Content Library Integration
 export { SmartTipsCommand, smartTipsCommand } from './SmartTipsCommand';
 
+// Phase 7: Structured CBT-I Sessions
+export { TherapyCommand, therapyCommand } from './TherapyCommand';
+
 // ==================== Handler ====================
 export { CommandHandler, createCommandHandler } from './CommandHandler';
 
@@ -97,6 +100,7 @@ import { questCommand } from './QuestCommand';
 import { badgeCommand } from './BadgeCommand';
 import { evolutionCommand } from './EvolutionCommand';
 import { smartTipsCommand } from './SmartTipsCommand';
+import { therapyCommand } from './TherapyCommand';
 
 /**
  * All registered commands
@@ -118,6 +122,8 @@ export const allCommands = [
   evolutionCommand,
   // Phase 6.1: Content Library Integration
   smartTipsCommand,
+  // Phase 7: Structured CBT-I Sessions
+  therapyCommand,
 ] as const;
 
 /**

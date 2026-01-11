@@ -350,3 +350,51 @@ export interface IUserRepository extends IRepository<IUserEntity, number> {
    */
   getInactiveUsers(days: number): Promise<IUserEntity[]>;
 }
+
+/**
+ * Voice diary entry entity
+ * Stores transcribed voice messages with emotion analysis
+ * HIPAA compliant with audit timestamps
+ */
+export interface IVoiceDiaryEntryEntity extends IEntity {
+  readonly userId: number;
+  readonly transcriptionText: string;
+  readonly transcriptionConfidence: number;
+  readonly transcriptionLanguage: string;
+  readonly voiceDuration: number;
+  readonly emotion?: string;
+  readonly emotionIntensity?: number;
+  readonly telegramFileId?: string;
+  readonly fileSize?: number;
+  readonly recordedAt: Date;
+  readonly transcribedAt: Date;
+}
+
+/**
+ * Voice diary repository interface
+ */
+export interface IVoiceDiaryRepository extends IRepository<IVoiceDiaryEntryEntity> {
+  /**
+   * Find voice entries by user
+   */
+  findByUserId(userId: number, limit?: number): Promise<IVoiceDiaryEntryEntity[]>;
+
+  /**
+   * Find voice entries by date range
+   */
+  findByDateRange(
+    userId: number,
+    startDate: Date,
+    endDate: Date
+  ): Promise<IVoiceDiaryEntryEntity[]>;
+
+  /**
+   * Get voice diary statistics for user
+   */
+  getStatistics(userId: number): Promise<{
+    totalEntries: number;
+    totalMinutes: number;
+    avgDuration: number;
+    emotionBreakdown: Record<string, number>;
+  }>;
+}

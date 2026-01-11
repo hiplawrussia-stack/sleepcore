@@ -55,6 +55,8 @@ export type {
   ITherapySessionRepository,
   IUserEntity,
   IUserRepository,
+  IVoiceDiaryEntryEntity,
+  IVoiceDiaryRepository,
 } from './interfaces/IRepository';
 
 export type {
@@ -125,6 +127,7 @@ export { UserRepository } from './repositories/UserRepository';
 export { AssessmentRepository } from './repositories/AssessmentRepository';
 export { TherapySessionRepository } from './repositories/TherapySessionRepository';
 export { GamificationRepository } from './repositories/GamificationRepository';
+export { VoiceDiaryRepository } from './repositories/VoiceDiaryRepository';
 
 // ============================================================================
 // Migrations
