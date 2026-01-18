@@ -60,11 +60,11 @@ RUN mkdir -p /app/data && chown -R node:node /app
 USER node
 
 # Expose port for health checks
-EXPOSE 3000
+EXPOSE 3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget --spider -q http://localhost:3000/health || exit 1
+  CMD wget --spider -q http://localhost:3001/health || exit 1
 
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
