@@ -377,22 +377,22 @@ export class ConstitutionalMiddleware {
   }> {
     // Use existing CrisisDetectionService
     try {
-      const crisisResult = await crisisDetectionService.detectCrisis(userId, text);
+      const crisisResult = crisisDetectionService.analyzeMessage(text, userId, '0');
 
-      if (crisisResult.detected) {
+      if (crisisResult.shouldInterrupt || crisisResult.action !== 'continue') {
         const severityMap: Record<CrisisAction, ViolationSeverity> = {
-          'immediate_intervention': 'critical',
-          'safety_plan': 'high',
-          'clinician_alert': 'high',
-          'enhanced_monitoring': 'medium',
-          'standard_response': 'low',
+          'continue': 'low',
+          'monitor': 'low',
+          'supportive': 'medium',
+          'interrupt': 'high',
+          'emergency': 'critical',
         };
 
         return {
           detected: true,
           severity: severityMap[crisisResult.action] || 'medium',
-          reason: `Crisis detected: ${crisisResult.type}`,
-          reasonRu: `Обнаружен кризис: ${this.getCrisisTypeRu(crisisResult.type)}`,
+          reason: `Crisis detected: ${crisisResult.severity}`,
+          reasonRu: `Обнаружен кризис: ${this.getCrisisSeverityRu(crisisResult.severity)}`,
           event: crisisResult.event,
         };
       }
@@ -433,6 +433,17 @@ export class ConstitutionalMiddleware {
       severe_distress: 'острый дистресс',
     };
     return translations[type] || type;
+  }
+
+  private getCrisisSeverityRu(severity: string): string {
+    const translations: Record<string, string> = {
+      none: 'нет',
+      low: 'низкий',
+      moderate: 'умеренный',
+      high: 'высокий',
+      critical: 'критический',
+    };
+    return translations[severity] || severity;
   }
 
   // ==================== Clinical Boundaries ====================

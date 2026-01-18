@@ -113,14 +113,17 @@ export type {
 // ============= Third-Wave Therapies (NEW) =============
 // MBT-I: Mindfulness-Based Therapy for Insomnia (Ong, 2014)
 // ACT-I: Acceptance and Commitment Therapy for Insomnia (Meadows, 2014)
+// MCT: Metacognitive Therapy for Insomnia (Wells, 2009) - Sprint 3
 export { MBTIEngine } from './third-wave/engines/MBTIEngine';
 export { ACTIEngine } from './third-wave/engines/ACTIEngine';
+export { MCTEngine, mctEngine } from './third-wave/engines/MCTEngine';
 export { ThirdWaveCoordinator, thirdWaveCoordinator } from './third-wave/engines/ThirdWaveCoordinator';
 
 export type {
   // Shared types
   MindfulnessPractice,
   ACTProcess,
+  MCTTechnique,
   SessionLevel,
   TherapyModality,
   ThirdWaveApproach,
@@ -142,6 +145,15 @@ export type {
   IACTISession,
   IACTIPlan,
   IACTIEngine,
+
+  // MCT types (Sprint 3)
+  IMetacognitiveBeliefs,
+  IWorryPattern,
+  IMCTSession,
+  IWorryPostponementRecord,
+  IATTSession,
+  IMCTPlan,
+  IMCTEngine,
 } from './third-wave/interfaces/IThirdWaveTherapies';
 
 // ============= Assessment Instruments (NEW) =============

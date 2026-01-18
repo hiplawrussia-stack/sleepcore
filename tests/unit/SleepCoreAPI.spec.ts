@@ -270,11 +270,11 @@ describe('SleepCoreAPI', () => {
           .toThrow('Need at least 7 days of baseline sleep data');
       });
 
-      it('should create treatment plan with 7 days of data', () => {
+      it('should create treatment plan with 7 days of data', async () => {
         api.startSession('user-123');
         const baselineData = createBaselineData('user-123', 7);
 
-        const plan = api.initializeTreatment('user-123', baselineData);
+        const plan = await api.initializeTreatment('user-123', baselineData);
 
         expect(plan).toBeDefined();
         expect(plan.userId).toBe('user-123');

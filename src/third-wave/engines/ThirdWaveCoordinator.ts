@@ -23,37 +23,44 @@ import type {
   ThirdWaveApproach,
   IMBTIEngine,
   IACTIEngine,
+  IMCTEngine,
 } from '../interfaces/IThirdWaveTherapies';
 import type { ISleepState } from '../../sleep/interfaces/ISleepState';
 
 import { MBTIEngine } from './MBTIEngine';
 import { ACTIEngine } from './ACTIEngine';
+import { MCTEngine } from './MCTEngine';
 
 /**
  * Third-Wave Therapy Coordinator
+ * Now includes MBT-I, ACT-I, and MCT (Sprint 3)
  */
 export class ThirdWaveCoordinator implements IThirdWaveCoordinator {
   private readonly mbtiEngine: MBTIEngine;
   private readonly actiEngine: ACTIEngine;
+  private readonly mctEngine: MCTEngine;
 
   constructor() {
     this.mbtiEngine = new MBTIEngine();
     this.actiEngine = new ACTIEngine();
+    this.mctEngine = new MCTEngine();
   }
 
   /**
    * Recommend approach based on patient profile
+   * Updated in Sprint 3 to include MCT consideration
    */
   recommendApproach(
     sleepState: ISleepState,
     treatmentHistory?: { failedCBTI: boolean; preferences: string[] }
   ): IThirdWaveRecommendation {
-    const _cognitions = sleepState.cognitions;
+    const cognitions = sleepState.cognitions;
     const insomnia = sleepState.insomnia;
 
-    // Calculate indicators
+    // Calculate indicators for all approaches
     const mbtiScore = this.calculateMBTIIndicators(sleepState);
     const actiScore = this.calculateACTIIndicators(sleepState);
+    const mctScore = this.calculateMCTIndicators(sleepState);
 
     // If failed CBT-I, strongly consider third-wave
     const failedCBTI = treatmentHistory?.failedCBTI ?? false;
@@ -72,7 +79,19 @@ export class ThirdWaveCoordinator implements IThirdWaveCoordinator {
     let rationale: string;
     const expectedBenefits: string[] = [];
 
-    if (mbtiScore > 0.7 && actiScore < 0.5) {
+    // MCT is indicated for high rumination/worry with metacognitive beliefs
+    if (mctScore > 0.7 && mctScore > mbtiScore && mctScore > actiScore) {
+      // High rumination/worry, clear MCT indication
+      recommendedApproach = 'mct';
+      rationale =
+        'Выраженная руминация и беспокойство о сне с метакогнитивными убеждениями. MCT поможет изменить отношение к мыслям через откладывание беспокойства и отстранённую осознанность.';
+      expectedBenefits.push(
+        'Снижение руминации и беспокойства',
+        'Контроль над процессом мышления',
+        'Развитие отстранённой осознанности',
+        'Изменение метакогнитивных убеждений'
+      );
+    } else if (mbtiScore > 0.7 && actiScore < 0.5) {
       // High arousal, clear MBT-I indication
       recommendedApproach = 'mbti';
       rationale =
@@ -103,17 +122,23 @@ export class ThirdWaveCoordinator implements IThirdWaveCoordinator {
         'Синергетический эффект практик'
       );
     } else if (failedCBTI) {
-      // CBT-I non-responder - try third-wave
-      recommendedApproach = mbtiScore > actiScore ? 'mbti' : 'acti';
-      rationale =
-        'После неэффективного CBT-I рекомендуется третья волна терапии как альтернативный механизм изменений.';
+      // CBT-I non-responder - try third-wave (prefer MCT for high rumination)
+      if (mctScore > 0.5 && cognitions.preSleepArousal > 0.6) {
+        recommendedApproach = 'mct';
+        rationale =
+          'После неэффективного CBT-I рекомендуется MCT для работы с руминацией и беспокойством на метакогнитивном уровне.';
+      } else {
+        recommendedApproach = mbtiScore > actiScore ? 'mbti' : 'acti';
+        rationale =
+          'После неэффективного CBT-I рекомендуется третья волна терапии как альтернативный механизм изменений.';
+      }
       expectedBenefits.push(
         'Другой подход к той же проблеме',
         'Работа с метакогнитивным уровнем',
         'Акцент на принятии вместо контроля'
       );
     } else {
-      // Low scores on both - CBT-I may be sufficient
+      // Low scores on all - CBT-I may be sufficient
       recommendedApproach = 'none';
       rationale =
         'Показатели не указывают на необходимость третьей волны. Стандартный CBT-I может быть достаточным.';
@@ -142,14 +167,22 @@ export class ThirdWaveCoordinator implements IThirdWaveCoordinator {
   }
 
   /**
+   * Get MCT engine (Sprint 3)
+   */
+  getMCTEngine(): IMCTEngine {
+    return this.mctEngine;
+  }
+
+  /**
    * Check if third-wave approach is indicated
    */
   isThirdWaveIndicated(sleepState: ISleepState): boolean {
     const mbtiScore = this.calculateMBTIIndicators(sleepState);
     const actiScore = this.calculateACTIIndicators(sleepState);
+    const mctScore = this.calculateMCTIndicators(sleepState);
 
-    // Indicated if either score is above threshold
-    return mbtiScore > 0.5 || actiScore > 0.5;
+    // Indicated if any score is above threshold
+    return mbtiScore > 0.5 || actiScore > 0.5 || mctScore > 0.5;
   }
 
   /**
@@ -237,6 +270,62 @@ export class ThirdWaveCoordinator implements IThirdWaveCoordinator {
 
     // Low self-efficacy → ACT-I
     score += 1 - cognitions.sleepSelfEfficacy;
+    factors++;
+
+    return score / factors;
+  }
+
+  /**
+   * Calculate MCT indicators (Sprint 3)
+   * High score = MCT recommended
+   * Based on: rumination, worry, metacognitive beliefs
+   */
+  private calculateMCTIndicators(sleepState: ISleepState): number {
+    const cognitions = sleepState.cognitions;
+    let score = 0;
+    let factors = 0;
+
+    // High pre-sleep arousal (worry/rumination) → MCT
+    score += cognitions.preSleepArousal;
+    factors++;
+
+    // High sleep anxiety → MCT
+    score += cognitions.sleepAnxiety;
+    factors++;
+
+    // Effortful sleep belief (trying to control) → MCT
+    // MCT targets the belief that thoughts must be controlled
+    if (cognitions.beliefs.effortfulSleep) {
+      score += 0.85;
+    } else {
+      score += 0.15;
+    }
+    factors++;
+
+    // Catastrophizing (metacognitive fusion) → MCT
+    if (cognitions.beliefs.catastrophizing) {
+      score += 0.9;
+    } else {
+      score += 0.1;
+    }
+    factors++;
+
+    // Health worries (worry about consequences) → MCT
+    if (cognitions.beliefs.healthWorries) {
+      score += 0.85;
+    } else {
+      score += 0.15;
+    }
+    factors++;
+
+    // Low self-efficacy (belief in uncontrollability) → MCT
+    score += 1 - cognitions.sleepSelfEfficacy;
+    factors++;
+
+    // High DBAS (dysfunctional beliefs) → MCT
+    // Particularly beliefs about thought control
+    const dbasNormalized = Math.min(cognitions.dbasScore / 10, 1);
+    score += dbasNormalized * 0.8;
     factors++;
 
     return score / factors;

@@ -53,6 +53,18 @@ export type ACTProcess =
   | 'committed_action';
 
 /**
+ * MCT technique types
+ * Based on Adrian Wells' Metacognitive Therapy (2009)
+ */
+export type MCTTechnique =
+  | 'worry_postponement'
+  | 'detached_mindfulness'
+  | 'attention_training'
+  | 'metacognitive_awareness'
+  | 'challenging_metacognitions'
+  | 'rumination_postponement';
+
+/**
  * Session difficulty level
  */
 export type SessionLevel = 'beginner' | 'intermediate' | 'advanced';
@@ -455,13 +467,250 @@ export interface IACTIEngine {
 }
 
 // =============================================================================
+// MCT (METACOGNITIVE THERAPY FOR INSOMNIA)
+// =============================================================================
+
+/**
+ * Metacognitive beliefs assessment
+ * Based on MCQ-30 (Metacognitions Questionnaire)
+ */
+export interface IMetacognitiveBeliefs {
+  /** Positive beliefs about worry ("Worrying helps me cope") */
+  readonly positiveWorryBeliefs: number; // 0-1
+
+  /** Negative beliefs about uncontrollability ("My worrying is dangerous") */
+  readonly uncontrollabilityDanger: number; // 0-1
+
+  /** Cognitive confidence ("My memory is poor") */
+  readonly cognitiveConfidence: number; // 0-1
+
+  /** Need to control thoughts ("I should be in control of my thoughts") */
+  readonly needToControl: number; // 0-1
+
+  /** Cognitive self-consciousness ("I monitor my thoughts") */
+  readonly cognitiveSelfConsciousness: number; // 0-1
+}
+
+/**
+ * Worry/Rumination pattern assessment
+ */
+export interface IWorryPattern {
+  /** Primary worry content */
+  readonly content: string;
+
+  /** Worry trigger context */
+  readonly context: 'pre_sleep' | 'during_night' | 'morning' | 'daytime';
+
+  /** Frequency (times per day/night) */
+  readonly frequency: number;
+
+  /** Duration (minutes) */
+  readonly duration: number;
+
+  /** Perceived controllability 0-1 */
+  readonly controllability: number;
+
+  /** Associated distress 0-1 */
+  readonly distress: number;
+
+  /** Is this worry or rumination */
+  readonly type: 'worry' | 'rumination';
+}
+
+/**
+ * MCT session structure
+ * Based on Wells' 6-8 session protocol
+ */
+export interface IMCTSession {
+  readonly sessionId: string;
+  readonly sessionNumber: number; // 1-8
+  readonly theme: string;
+  readonly objectives: string[];
+  readonly primaryTechnique: MCTTechnique;
+  readonly secondaryTechniques: MCTTechnique[];
+  readonly exercises: string[];
+  readonly homeExperiments: string[];
+  readonly duration: number;
+}
+
+/**
+ * Worry Postponement exercise record
+ */
+export interface IWorryPostponementRecord {
+  readonly date: Date;
+  readonly worryContent: string;
+  readonly triggerTime: Date;
+  readonly postponedTo: Date;
+  readonly actualWorryTime: Date | null;
+  readonly worryDuration: number; // minutes
+  readonly distressBefore: number; // 0-10
+  readonly distressAfter: number; // 0-10
+  readonly completed: boolean;
+  readonly notes?: string;
+}
+
+/**
+ * Attention Training Technique (ATT) session
+ */
+export interface IATTSession {
+  readonly date: Date;
+  readonly duration: number; // typically 12-15 minutes
+  readonly phase: 'selective' | 'switching' | 'divided';
+  readonly completedSuccessfully: boolean;
+  readonly attentionRating: number; // 0-10
+  readonly difficultyRating: number; // 0-10
+  readonly notes?: string;
+}
+
+/**
+ * MCT treatment plan
+ */
+export interface IMCTPlan {
+  readonly userId: string;
+  readonly startDate: string;
+  readonly currentSession: number;
+  readonly totalSessions: number; // typically 6-8
+
+  /** Current session details */
+  readonly sessionDetails: IMCTSession;
+
+  /** Completed sessions */
+  readonly completedSessions: IMCTSession[];
+
+  /** Metacognitive beliefs baseline and current */
+  readonly beliefsBaseline: IMetacognitiveBeliefs;
+  readonly beliefsCurrent: IMetacognitiveBeliefs;
+
+  /** Identified worry/rumination patterns */
+  readonly worryPatterns: IWorryPattern[];
+
+  /** Worry postponement practice log */
+  readonly worryPostponementLog: IWorryPostponementRecord[];
+
+  /** ATT practice log */
+  readonly attLog: IATTSession[];
+
+  /** Detached mindfulness skill level 0-1 */
+  readonly detachedMindfulnessLevel: number;
+
+  /** Progress metrics */
+  readonly progress: {
+    readonly metacognitiveAwarenessChange: number;
+    readonly worryReduction: number; // percentage
+    readonly ruminationReduction: number; // percentage
+    readonly isiChange: number;
+    readonly sleepEfficiencyChange: number;
+  };
+}
+
+/**
+ * MCT Engine Interface
+ */
+export interface IMCTEngine {
+  /**
+   * Initialize MCT treatment plan
+   */
+  initializePlan(
+    userId: string,
+    baselineAssessment: ISleepState[]
+  ): IMCTPlan;
+
+  /**
+   * Get current session
+   */
+  getCurrentSession(plan: IMCTPlan): IMCTSession;
+
+  /**
+   * Assess metacognitive beliefs
+   */
+  assessMetacognitiveBeliefs(sleepState: ISleepState): IMetacognitiveBeliefs;
+
+  /**
+   * Identify worry/rumination patterns
+   */
+  identifyWorryPatterns(
+    userText: string,
+    context: 'pre_sleep' | 'during_night' | 'morning' | 'daytime'
+  ): IWorryPattern[];
+
+  /**
+   * Get worry postponement exercise
+   */
+  getWorryPostponementExercise(
+    worryPattern: IWorryPattern
+  ): {
+    instructions: string[];
+    postponeToTime: string;
+    worryPeriodDuration: number;
+    tips: string[];
+  };
+
+  /**
+   * Get detached mindfulness exercise
+   */
+  getDetachedMindfulnessExercise(
+    trigger: 'racing_thoughts' | 'worry' | 'rumination' | 'sleep_anxiety'
+  ): {
+    instructions: string[];
+    metaphor: string;
+    duration: number;
+  };
+
+  /**
+   * Get ATT (Attention Training Technique) session
+   */
+  getATTSession(
+    phase: 'selective' | 'switching' | 'divided',
+    duration: number
+  ): {
+    instructions: string[];
+    audioUrl?: string;
+    tips: string[];
+  };
+
+  /**
+   * Record worry postponement practice
+   */
+  recordWorryPostponement(
+    plan: IMCTPlan,
+    record: IWorryPostponementRecord
+  ): IMCTPlan;
+
+  /**
+   * Record ATT practice
+   */
+  recordATTSession(
+    plan: IMCTPlan,
+    session: IATTSession
+  ): IMCTPlan;
+
+  /**
+   * Update plan based on progress
+   */
+  updatePlan(
+    plan: IMCTPlan,
+    recentStates: ISleepState[]
+  ): IMCTPlan;
+
+  /**
+   * Generate session summary
+   */
+  generateSessionSummary(plan: IMCTPlan): {
+    keyTakeaways: string[];
+    homeExperiments: string[];
+    nextSessionPreview: string;
+    progressHighlights: string[];
+  };
+}
+
+// =============================================================================
 // INTEGRATED THIRD-WAVE COORDINATOR
 // =============================================================================
 
 /**
  * Third-wave therapy selection
  */
-export type ThirdWaveApproach = 'mbti' | 'acti' | 'hybrid' | 'none';
+export type ThirdWaveApproach = 'mbti' | 'acti' | 'mct' | 'hybrid' | 'none';
 
 /**
  * Treatment recommendation
@@ -494,6 +743,11 @@ export interface IThirdWaveCoordinator {
    * Get ACT-I engine
    */
   getACTIEngine(): IACTIEngine;
+
+  /**
+   * Get MCT engine
+   */
+  getMCTEngine(): IMCTEngine;
 
   /**
    * Check if third-wave approach is indicated

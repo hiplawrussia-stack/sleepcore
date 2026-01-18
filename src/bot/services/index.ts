@@ -264,7 +264,6 @@ export {
   DigitalTwinService,
   createDigitalTwinService,
   digitalTwinService,
-  DEFAULT_DIGITAL_TWIN_CONFIG,
 } from './DigitalTwinService';
 
 export type {
@@ -274,7 +273,6 @@ export type {
   IScenario,
   ISimulationResult,
   IComparisonResult,
-  IDigitalTwinConfig,
 } from './DigitalTwinService';
 
 // ==================== Constitutional AI Middleware (Sprint 2) ====================
@@ -291,6 +289,23 @@ export type {
   IConstitutionalCheck,
   IConstitutionalConfig,
 } from '../middleware/ConstitutionalMiddleware';
+
+// ==================== Causal Insights (Sprint 3) ====================
+export {
+  CausalInsightsService,
+  createCausalInsightsService,
+  causalInsightsService,
+  DOMAIN_KNOWLEDGE_EDGES,
+} from './CausalInsightsService';
+
+export type {
+  ICausalFactor,
+  ICausalEdge,
+  ICausalGraph,
+  IPersonalizedInsight,
+  IInterventionTarget,
+  ICausalInsightsConfig,
+} from './CausalInsightsService';
 
 // ==================== Modules Re-export ====================
 export * from '../../modules';

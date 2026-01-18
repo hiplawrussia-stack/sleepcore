@@ -73,6 +73,9 @@ export { ProfileCommand, profileCommand } from './ProfileCommand';
 export { AdminCommand, adminCommand } from './AdminCommand';
 export { AEReportCommand, aeReportCommand } from './AEReportCommand';
 
+// Sprint 3: Explainability & Counterfactual Scenarios
+export { WhatIfCommand, whatIfCommand } from './WhatIfCommand';
+
 // ==================== Handler ====================
 export { CommandHandler, createCommandHandler } from './CommandHandler';
 
@@ -118,6 +121,7 @@ import { chronotypeCommand } from './ChronotypeCommand';
 import { profileCommand } from './ProfileCommand';
 import { adminCommand } from './AdminCommand';
 import { aeReportCommand } from './AEReportCommand';
+import { whatIfCommand } from './WhatIfCommand';
 
 /**
  * All registered commands
@@ -147,6 +151,8 @@ export const allCommands = [
   profileCommand,
   adminCommand,
   aeReportCommand,
+  // Sprint 3: Explainability & Counterfactual Scenarios
+  whatIfCommand,
 ] as const;
 
 /**
