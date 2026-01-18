@@ -307,5 +307,36 @@ export type {
   ICausalInsightsConfig,
 } from './CausalInsightsService';
 
+// ==================== Proactive Intelligence (Sprint 4) ====================
+export {
+  ProactiveIntelligenceService,
+  createProactiveIntelligenceService,
+  proactiveIntelligenceService,
+  DEFAULT_PROACTIVE_CONFIG,
+} from './ProactiveIntelligenceService';
+
+export type {
+  IProactiveInsight,
+  IDailyAnalysis,
+  IPatternAlert,
+  IRiskAlert,
+  IProactiveIntelligenceConfig,
+} from './ProactiveIntelligenceService';
+
+// ==================== Adaptive Persona (Sprint 4) ====================
+export {
+  AdaptivePersonaService,
+  createAdaptivePersonaService,
+  adaptivePersonaService,
+} from './AdaptivePersonaService';
+
+export type {
+  ChangeStage,
+  MIStrategy,
+  IEmotionalState,
+  IAdaptedMessage,
+  ICommunicationProfile,
+} from './AdaptivePersonaService';
+
 // ==================== Modules Re-export ====================
 export * from '../../modules';

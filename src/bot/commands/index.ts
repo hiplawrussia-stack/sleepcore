@@ -76,6 +76,13 @@ export { AEReportCommand, aeReportCommand } from './AEReportCommand';
 // Sprint 3: Explainability & Counterfactual Scenarios
 export { WhatIfCommand, whatIfCommand } from './WhatIfCommand';
 
+// Sprint 4: Advanced AI Commands
+export { PredictCommand, predictCommand } from './PredictCommand';
+export { InsightsCommand, insightsCommand } from './InsightsCommand';
+export { ExplainCommand, explainCommand } from './ExplainCommand';
+export { SafetyCommand, safetyCommand } from './SafetyCommand';
+export { TwinCommand, twinCommand } from './TwinCommand';
+
 // ==================== Handler ====================
 export { CommandHandler, createCommandHandler } from './CommandHandler';
 
@@ -122,6 +129,12 @@ import { profileCommand } from './ProfileCommand';
 import { adminCommand } from './AdminCommand';
 import { aeReportCommand } from './AEReportCommand';
 import { whatIfCommand } from './WhatIfCommand';
+// Sprint 4: Advanced AI Commands
+import { predictCommand } from './PredictCommand';
+import { insightsCommand } from './InsightsCommand';
+import { explainCommand } from './ExplainCommand';
+import { safetyCommand } from './SafetyCommand';
+import { twinCommand } from './TwinCommand';
 
 /**
  * All registered commands
@@ -153,6 +166,12 @@ export const allCommands = [
   aeReportCommand,
   // Sprint 3: Explainability & Counterfactual Scenarios
   whatIfCommand,
+  // Sprint 4: Advanced AI Commands
+  predictCommand,
+  insightsCommand,
+  explainCommand,
+  safetyCommand,
+  twinCommand,
 ] as const;
 
 /**
