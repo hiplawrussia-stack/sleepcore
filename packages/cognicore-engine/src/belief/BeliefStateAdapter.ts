@@ -6,13 +6,13 @@
  *
  * Scientific Foundation:
  * - ROADMAP task 1.1.3: "BeliefUpdateEngine.predictHybrid()"
- * - Converts BeliefState <-> IPLRNNState <-> IKalmanFormerState
+ * - Converts IFullBeliefState <-> IPLRNNState <-> IKalmanFormerState
  * - Enables nonlinear prediction while maintaining Bayesian uncertainty
  *
  * (c) BF "Drugoi Put", 2025
  */
 
-import type { BeliefState } from './IBeliefUpdate';
+import type { IFullBeliefState } from './IBeliefUpdate';
 import type {
   IPLRNNState,
   IPLRNNPrediction,
@@ -28,7 +28,7 @@ import type {
 import type { IKalmanFilterState } from '../twin/interfaces/IDigitalTwin';
 
 /**
- * Dimension mapping from BeliefState to 5D state vector
+ * Dimension mapping from IFullBeliefState to 5D state vector
  * S_t = (valence, arousal, dominance, risk, resources)
  */
 export const DIMENSION_MAPPING = {
@@ -91,10 +91,10 @@ export interface IHybridPrediction {
 }
 
 /**
- * Convert BeliefState to 5D observation vector
+ * Convert IFullBeliefState to 5D observation vector
  * Maps complex belief structure to simple [V, A, D, risk, resources] vector
  */
-export function beliefStateToObservation(belief: BeliefState): number[] {
+export function beliefStateToObservation(belief: IFullBeliefState): number[] {
   // Extract posterior means from belief dimensions
   const valence = belief.emotional.valence.posterior.mean;
   const arousal = belief.emotional.arousal.posterior.mean;
@@ -112,9 +112,9 @@ export function beliefStateToObservation(belief: BeliefState): number[] {
 }
 
 /**
- * Extract uncertainty vector from BeliefState
+ * Extract uncertainty vector from IFullBeliefState
  */
-export function beliefStateToUncertainty(belief: BeliefState): number[] {
+export function beliefStateToUncertainty(belief: IFullBeliefState): number[] {
   return [
     belief.emotional.valence.posterior.variance,
     belief.emotional.arousal.posterior.variance,
@@ -127,10 +127,10 @@ export function beliefStateToUncertainty(belief: BeliefState): number[] {
 }
 
 /**
- * Convert BeliefState to IPLRNNState
+ * Convert IFullBeliefState to IPLRNNState
  */
 export function beliefStateToPLRNNState(
-  belief: BeliefState,
+  belief: IFullBeliefState,
   hiddenUnits: number = 16
 ): IPLRNNState {
   const observation = beliefStateToObservation(belief);
@@ -147,7 +147,7 @@ export function beliefStateToPLRNNState(
 }
 
 /**
- * Convert IPLRNNState back to partial BeliefState update
+ * Convert IPLRNNState back to partial IFullBeliefState update
  * Returns the dimensions that should be updated
  */
 export function plrnnStateToBeliefUpdate(
@@ -166,10 +166,10 @@ export function plrnnStateToBeliefUpdate(
 }
 
 /**
- * Convert BeliefState to IKalmanFormerState
+ * Convert IFullBeliefState to IKalmanFormerState
  */
 export function beliefStateToKalmanFormerState(
-  belief: BeliefState,
+  belief: IFullBeliefState,
   _contextWindow: number = 24
 ): IKalmanFormerState {
   const observation = beliefStateToObservation(belief);
@@ -225,7 +225,7 @@ export function beliefStateToKalmanFormerState(
 }
 
 /**
- * Convert IKalmanFormerState back to partial BeliefState update
+ * Convert IKalmanFormerState back to partial IFullBeliefState update
  */
 export function kalmanFormerStateToBeliefUpdate(
   kfState: IKalmanFormerState
@@ -383,7 +383,7 @@ export class BeliefStateAdapter {
    * ROADMAP task 1.1.3 deliverable
    */
   predictHybrid(
-    belief: BeliefState,
+    belief: IFullBeliefState,
     horizon: 'short' | 'medium' | 'long' = 'medium'
   ): IHybridPrediction {
     // Convert belief to engine states
@@ -418,7 +418,7 @@ export class BeliefStateAdapter {
   /**
    * Extract causal network from current belief and PLRNN weights
    */
-  extractCausalNetwork(_belief: BeliefState): ICausalNetwork | null {
+  extractCausalNetwork(_belief: IFullBeliefState): ICausalNetwork | null {
     if (!this.plrnnEngine) {
       return null;
     }
@@ -430,7 +430,7 @@ export class BeliefStateAdapter {
    * Simulate intervention effect on belief state
    */
   simulateIntervention(
-    belief: BeliefState,
+    belief: IFullBeliefState,
     target: string,
     intervention: 'increase' | 'decrease' | 'stabilize',
     magnitude: number
@@ -451,7 +451,7 @@ export class BeliefStateAdapter {
   /**
    * Get attention explanation for current state
    */
-  explainPrediction(belief: BeliefState): IAttentionWeights | null {
+  explainPrediction(belief: IFullBeliefState): IAttentionWeights | null {
     if (!this.kalmanFormerEngine) {
       return null;
     }
@@ -463,21 +463,21 @@ export class BeliefStateAdapter {
   /**
    * Convert belief to observation vector
    */
-  toObservation(belief: BeliefState): number[] {
+  toObservation(belief: IFullBeliefState): number[] {
     return beliefStateToObservation(belief);
   }
 
   /**
    * Convert belief to PLRNN state
    */
-  toPLRNNState(belief: BeliefState, hiddenUnits?: number): IPLRNNState {
+  toPLRNNState(belief: IFullBeliefState, hiddenUnits?: number): IPLRNNState {
     return beliefStateToPLRNNState(belief, hiddenUnits);
   }
 
   /**
    * Convert belief to KalmanFormer state
    */
-  toKalmanFormerState(belief: BeliefState, contextWindow?: number): IKalmanFormerState {
+  toKalmanFormerState(belief: IFullBeliefState, contextWindow?: number): IKalmanFormerState {
     return beliefStateToKalmanFormerState(belief, contextWindow);
   }
 }

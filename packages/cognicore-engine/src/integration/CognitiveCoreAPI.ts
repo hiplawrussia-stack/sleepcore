@@ -103,6 +103,21 @@ import type {
   StateRiskData,
 } from '../crisis/CrisisDetector';
 
+// Phase 1 Engines: Nonlinear dynamics + Multimodal input (ROADMAP v1.5)
+import { PLRNNEngine, createPLRNNEngine } from '../temporal/engines/PLRNNEngine';
+import type { IPLRNNState, IPLRNNPrediction } from '../temporal/interfaces/IPLRNNEngine';
+import { KalmanFormerEngine, createKalmanFormerEngine } from '../temporal/engines/KalmanFormerEngine';
+import type { IKalmanFormerState, IKalmanFormerPrediction } from '../temporal/interfaces/IKalmanFormer';
+import { VoiceInputAdapter, createVoiceInputAdapter } from '../voice/VoiceInputAdapter';
+import type { IVoiceProcessingResult, IMultimodalFusion } from '../voice/interfaces/IVoiceAdapter';
+import {
+  beliefStateToPLRNNState,
+  beliefStateToKalmanFormerState,
+  beliefStateToObservation,
+  plrnnStateToBeliefUpdate,
+  type IHybridPrediction,
+} from '../belief/BeliefStateAdapter';
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -470,6 +485,16 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
   private interventionOptimizer: InterventionOptimizer;
   private crisisDetector: CrisisDetector;
 
+  // Phase 1 Engines: Nonlinear dynamics + Multimodal input
+  // Per ROADMAP v1.5: PLRNN for long-horizon, KalmanFormer for short-term
+  private plrnnEngine: PLRNNEngine;
+  private kalmanFormerEngine: KalmanFormerEngine;
+  private voiceAdapter: VoiceInputAdapter;
+
+  // Phase 1 state tracking (per-user PLRNN/KalmanFormer states)
+  private userPLRNNStates: Map<string, IPLRNNState> = new Map();
+  private userKalmanFormerStates: Map<string, IKalmanFormerState> = new Map();
+
   // Intervention library
   private interventions: IIntervention[] = [];
 
@@ -501,6 +526,39 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
       enableLayer3: true,
       sensitivityLevel: 'high',
       language: 'auto',
+    });
+
+    // Initialize Phase 1 engines: PLRNN + KalmanFormer + Voice
+    // Per medRxiv 2025: PLRNN for nonlinear EMA forecasting
+    // Per Frontiers Neurorobotics 2025: KalmanFormer for learned Kalman Gain
+    this.plrnnEngine = createPLRNNEngine({
+      latentDim: 5,           // 5D: valence, arousal, dominance, risk, resources
+      connectivity: 'sparse', // For interpretability
+      learningRate: 0.001,
+      regularization: 0.01,
+    });
+    this.plrnnEngine.initialize();
+
+    this.kalmanFormerEngine = createKalmanFormerEngine({
+      stateDim: 5,
+      obsDim: 5,
+      embedDim: 64,
+      numHeads: 4,
+      numLayers: 2,
+      contextWindow: 24,
+      learnedGain: true,       // Per KalmanFormer paper: learn optimal Kalman Gain
+      blendRatio: 0.3,         // Favor Kalman for short-term stability
+    });
+    this.kalmanFormerEngine.initialize();
+
+    // Voice adapter for multimodal input (prosody analysis)
+    // Per Voice of Mind 2025: AUC 0.71-0.93 for depression/anxiety detection
+    this.voiceAdapter = createVoiceInputAdapter({
+      sampleRate: 16000,
+      frameSizeMs: 25,
+      hopSizeMs: 10,
+      enableWhisper: false,    // External transcription required
+      fusionStrategy: 'late',  // Per PMC 2025: late fusion outperforms early
     });
 
     // Initialize default interventions
@@ -913,6 +971,26 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
         metadata: this.createMetadata(command.userId, command.sessionId, correlationId),
       });
 
+      // 4.5 Phase 1: Update nonlinear dynamics engines (PLRNN + KalmanFormer)
+      // Per ROADMAP v1.5: Bridge belief state to Phase 1 engines via BeliefStateAdapter
+      const observation5D = beliefStateToObservation(newBelief);
+
+      // Update KalmanFormer state (short-term estimation)
+      let kfState = this.userKalmanFormerStates.get(command.userId);
+      if (!kfState) {
+        kfState = beliefStateToKalmanFormerState(newBelief);
+      }
+      const updatedKFState = this.kalmanFormerEngine.update(kfState, observation5D, new Date());
+      this.userKalmanFormerStates.set(command.userId, updatedKFState);
+
+      // Update PLRNN state (nonlinear dynamics)
+      let plrnnState = this.userPLRNNStates.get(command.userId);
+      if (!plrnnState) {
+        plrnnState = beliefStateToPLRNNState(newBelief);
+      }
+      const updatedPLRNNState = this.plrnnEngine.forward(plrnnState, observation5D);
+      this.userPLRNNStates.set(command.userId, updatedPLRNNState);
+
       // 5. Multi-layer crisis detection (combines raw text + patterns + state)
       const stateRiskData: StateRiskData = {
         overallRiskLevel: newState.risk.overallRiskLevel,
@@ -1068,6 +1146,142 @@ export class CognitiveCoreAPI implements ICognitiveCoreAPI {
       return createResponse(false, undefined, {
         code: 'ANALYSIS_ERROR',
         message: error instanceof Error ? error.message : 'Failed to analyze text',
+      }, startTime);
+    }
+  }
+
+  // ============================================================================
+  // PHASE 1: VOICE PROCESSING & MULTIMODAL FUSION
+  // ============================================================================
+
+  /**
+   * Process voice input with optional transcription for multimodal fusion
+   * Per Voice of Mind 2025: AUC 0.71-0.93 for depression/anxiety detection
+   * Per PMC 2025: Multimodal F1=0.97 vs text-only 0.77
+   */
+  async processVoiceInput(
+    audioBuffer: Float32Array,
+    options?: {
+      transcript?: string;
+      sampleRate?: number;
+      userId?: string;
+    }
+  ): Promise<ICognitiveCoreResponse<IVoiceProcessingResult>> {
+    const startTime = Date.now();
+
+    try {
+      // Initialize voice adapter if needed
+      if (!this.voiceAdapter) {
+        return createResponse(false, undefined, {
+          code: 'VOICE_ADAPTER_NOT_INITIALIZED',
+          message: 'Voice adapter not available',
+        }, startTime);
+      }
+
+      // Process with transcription if available (enables multimodal fusion)
+      let result: IVoiceProcessingResult;
+      if (options?.transcript) {
+        result = await this.voiceAdapter.processWithTranscription(
+          audioBuffer,
+          options.transcript
+        );
+      } else {
+        result = await this.voiceAdapter.processAudio(
+          audioBuffer,
+          options?.sampleRate
+        );
+      }
+
+      return createResponse(true, result, undefined, startTime);
+    } catch (error) {
+      return createResponse(false, undefined, {
+        code: 'VOICE_PROCESSING_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to process voice input',
+      }, startTime);
+    }
+  }
+
+  /**
+   * Get hybrid prediction using Phase 1 engines
+   * Per ROADMAP v1.5: PLRNN for long-horizon, KalmanFormer for short-term
+   * Per medRxiv 2025: PLRNN outperforms VAR and Kalman for EMA forecasting
+   */
+  async getHybridPrediction(
+    userId: string,
+    hoursAhead: number = 24
+  ): Promise<ICognitiveCoreResponse<IHybridPrediction>> {
+    const startTime = Date.now();
+
+    try {
+      // Get current belief state
+      const currentBelief = await this.stateRepository.getBelief(userId);
+      if (!currentBelief) {
+        return createResponse(false, undefined, {
+          code: 'USER_NOT_FOUND',
+          message: 'User belief state not found',
+        }, startTime);
+      }
+
+      // Get or initialize engine states
+      let plrnnState = this.userPLRNNStates.get(userId);
+      let kfState = this.userKalmanFormerStates.get(userId);
+
+      if (!plrnnState) {
+        plrnnState = beliefStateToPLRNNState(currentBelief);
+      }
+      if (!kfState) {
+        kfState = beliefStateToKalmanFormerState(currentBelief);
+      }
+
+      // Determine horizon type
+      const horizon: 'short' | 'medium' | 'long' =
+        hoursAhead <= 6 ? 'short' : hoursAhead <= 24 ? 'medium' : 'long';
+
+      // Get predictions from both engines
+      const plrnnPrediction = this.plrnnEngine.predict(plrnnState, hoursAhead);
+      const kfPrediction = this.kalmanFormerEngine.predict(kfState, hoursAhead);
+
+      // Blend predictions based on horizon
+      // Per research: Kalman better for short-term, PLRNN for long-term
+      const kalmanWeight = horizon === 'short' ? 0.7 : horizon === 'medium' ? 0.5 : 0.3;
+      const plrnnWeight = 1 - kalmanWeight;
+
+      const blendedTrajectory: number[][] = [];
+      for (let h = 0; h < hoursAhead; h++) {
+        const plrnnPoint = plrnnPrediction.trajectory[h] || plrnnPrediction.trajectory[plrnnPrediction.trajectory.length - 1];
+        const kfPoint = kfPrediction.trajectory[h] || kfPrediction.trajectory[kfPrediction.trajectory.length - 1];
+
+        const blended = plrnnPoint.map((v, i) =>
+          v * plrnnWeight + (kfPoint[i] || 0) * kalmanWeight
+        );
+        blendedTrajectory.push(blended);
+      }
+
+      // Get early warning signals from PLRNN
+      const earlyWarningSignals = this.plrnnEngine.detectEarlyWarningSignals(plrnnState);
+
+      // Build hybrid result
+      const result: IHybridPrediction = {
+        plrnnPrediction,
+        kalmanFormerPrediction: kfPrediction,
+        blendedPrediction: {
+          trajectory: blendedTrajectory,
+          credibleIntervals: plrnnPrediction.credibleIntervals,
+          finalPrediction: blendedTrajectory[blendedTrajectory.length - 1] || beliefStateToObservation(currentBelief),
+        },
+        earlyWarningSignals,
+        attention: kfPrediction.attention,
+        horizon,
+        hoursAhead,
+        confidence: (plrnnPrediction.confidence * plrnnWeight + kfPrediction.confidence * kalmanWeight),
+        primaryEngine: horizon === 'short' ? 'kalmanformer' : 'plrnn',
+      };
+
+      return createResponse(true, result, undefined, startTime);
+    } catch (error) {
+      return createResponse(false, undefined, {
+        code: 'HYBRID_PREDICTION_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to generate hybrid prediction',
       }, startTime);
     }
   }

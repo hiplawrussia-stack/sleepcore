@@ -853,7 +853,7 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
     }
 
     // Select template based on context
-    const template = templates[Math.floor(Math.random() * templates.length)];
+    const template = templates[Math.floor(Math.random() * templates.length)]!;
     const text = context.language === 'ru' ? template.templateRu : template.template;
 
     return this.createResponse({
@@ -896,7 +896,7 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
       });
     }
 
-    const template = templates[Math.floor(Math.random() * templates.length)];
+    const template = templates[Math.floor(Math.random() * templates.length)]!;
     const text = context.language === 'ru' ? template.templateRu : template.template;
 
     return this.createResponse({
@@ -936,7 +936,7 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
       });
     }
 
-    const template = templates[0];
+    const template = templates[0]!;
     const isComplex = template.complexity === 'complex';
     const text = context.language === 'ru' ? template.patternRu : template.pattern;
 
@@ -976,7 +976,7 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
       });
     }
 
-    const template = templates[0];
+    const template = templates[0]!;
     const text = context.language === 'ru' ? template.structureRu : template.structure;
 
     return this.createResponse({
@@ -999,7 +999,7 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
   ): Promise<MIResponse> {
     const strategy = DISCORD_RESPONSE_STRATEGIES[discordType];
     const templates = context.language === 'ru' ? strategy.templatesRu : strategy.templates;
-    const text = templates[Math.floor(Math.random() * templates.length)];
+    const text = templates[Math.floor(Math.random() * templates.length)]!;
 
     return this.createResponse({
       text,
@@ -1015,7 +1015,7 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
    */
   calculateFidelity(
     sessionResponses: MIResponse[],
-    clientUtterances: ClientUtterance[]
+    _clientUtterances: ClientUtterance[]
   ): MIFidelityReport {
     // Count behaviors (mutable for counting)
     const mutableCounts = {
@@ -1224,7 +1224,7 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
         { type: 'need', count: profile.need }
       ];
       prep.sort((a, b) => a.count - b.count);
-      return prep[0].type;
+      return prep[0]!.type;
     }
 
     // If mobilizing present but weak, strengthen it

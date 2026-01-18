@@ -583,11 +583,12 @@ export interface ICBTIEngine {
 
   /**
    * Get next recommended intervention
+   * @returns Promise with intervention selection (async for CogniCore integration)
    */
   getNextIntervention(
     plan: ICBTIPlan,
     currentState: ISleepState
-  ): ICBTIIntervention;
+  ): Promise<ICBTIIntervention>;
 
   /**
    * Update plan based on progress

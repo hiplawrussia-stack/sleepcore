@@ -22,14 +22,12 @@
  * (c) BF "Drugoy Put", 2025
  */
 
-import { randomUUID } from 'crypto';
 import {
   INarrativeExplanation,
   INarrativeGenerator,
   IExplanationResponse,
   NarrativeStructure,
   CognitiveStyle,
-  READABILITY_TARGETS,
 } from '../interfaces/IExplainability';
 
 // ============================================================================
@@ -571,7 +569,7 @@ export class NarrativeGenerator implements INarrativeGenerator {
    */
   private extractVariables(
     explanation: IExplanationResponse,
-    structure: NarrativeStructure
+    _structure: NarrativeStructure
   ): Record<string, string> {
     const variables: Record<string, string> = {};
 
@@ -593,25 +591,32 @@ export class NarrativeGenerator implements INarrativeGenerator {
     // From counterfactual explanation
     if (explanation.counterfactualExplanation) {
       const easiest = explanation.counterfactualExplanation.easiestCounterfactual;
-      if (easiest && easiest.changes.length > 0) {
-        variables['action'] = easiest.changes[0].changeDescriptionRu || easiest.changes[0].changeDescription;
+      const firstChange = easiest?.changes?.[0];
+      if (firstChange) {
+        variables['action'] = firstChange.changeDescriptionRu || firstChange.changeDescription;
       }
     }
 
     // From causal explanation
     if (explanation.causalExplanation) {
       const primaryChain = explanation.causalExplanation.primaryChain;
-      if (primaryChain.nodes.length >= 2) {
-        variables['cause'] = primaryChain.nodes[0].variableRu || primaryChain.nodes[0].variable;
-        variables['effect'] = primaryChain.nodes[primaryChain.nodes.length - 1].variableRu ||
-          primaryChain.nodes[primaryChain.nodes.length - 1].variable;
+      if (primaryChain && primaryChain.nodes && primaryChain.nodes.length >= 2) {
+        const firstNode = primaryChain.nodes[0];
+        const lastNode = primaryChain.nodes[primaryChain.nodes.length - 1];
+        if (firstNode) {
+          variables['cause'] = firstNode.variableRu || firstNode.variable;
+        }
+        if (lastNode) {
+          variables['effect'] = lastNode.variableRu || lastNode.variable;
+        }
       }
 
-      if (primaryChain.edges.length > 0) {
-        variables['mechanism'] = primaryChain.edges[0].mechanismRu ||
-          primaryChain.edges[0].mechanism ||
+      const firstEdge = primaryChain?.edges?.[0];
+      if (firstEdge) {
+        variables['mechanism'] = firstEdge.mechanismRu ||
+          firstEdge.mechanism ||
           'прямое влияние';
-        variables['strength'] = `${Math.round(primaryChain.edges[0].strength * 100)}%`;
+        variables['strength'] = `${Math.round(firstEdge.strength * 100)}%`;
       }
     }
 
@@ -680,7 +685,7 @@ export class NarrativeGenerator implements INarrativeGenerator {
     templateIndex = Math.min(templateIndex, templates.length - 1);
     templateIndex = Math.max(templateIndex, 0);
 
-    let template = templates[templateIndex];
+    let template = templates[templateIndex] ?? '';
 
     // Fill variables
     for (const [key, value] of Object.entries(variables)) {
@@ -765,7 +770,7 @@ export class NarrativeGenerator implements INarrativeGenerator {
       },
     };
 
-    return titles[structure][language][ageGroup];
+    return titles[structure]?.[language]?.[ageGroup] ?? 'Analysis';
   }
 
   private translateTitle(title: string): string {

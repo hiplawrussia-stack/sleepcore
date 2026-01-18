@@ -41,6 +41,8 @@ import { smartTipsCommand } from './SmartTipsCommand';
 import { adminCommand } from './AdminCommand';
 // Phase 1.3: Adverse Event Reporting for clinical pilot
 import { aeReportCommand } from './AEReportCommand';
+// Phase 2.1: Circadian/Chronotype Assessment
+import { chronotypeCommand } from './ChronotypeCommand';
 
 /**
  * Command Handler implementation
@@ -568,6 +570,9 @@ export class CommandHandler implements ICommandRegistry {
 
     // Phase 1.3: Adverse Event Reporting (clinical pilot safety)
     this.register(aeReportCommand);
+
+    // Phase 2.1: Circadian/Chronotype Assessment
+    this.register(chronotypeCommand);
   }
 }
 

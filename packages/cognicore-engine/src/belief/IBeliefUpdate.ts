@@ -106,7 +106,7 @@ export interface DimensionBelief {
 /**
  * Full belief state over all dimensions
  */
-export interface BeliefState {
+export interface IFullBeliefState {
   readonly userId: string | number;
   readonly timestamp: Date;
 
@@ -173,8 +173,8 @@ export interface BeliefState {
  * Update result
  */
 export interface BeliefUpdateResult {
-  readonly previousBelief: BeliefState;
-  readonly newBelief: BeliefState;
+  readonly previousBelief: IFullBeliefState;
+  readonly newBelief: IFullBeliefState;
   readonly observation: Observation;
 
   /**
@@ -258,13 +258,13 @@ export interface IBeliefUpdateEngine {
   /**
    * Initialize belief state for new user
    */
-  initializeBelief(userId: string | number): BeliefState;
+  initializeBelief(userId: string | number): IFullBeliefState;
 
   /**
    * Update belief with new observation
    */
   updateBelief(
-    currentBelief: BeliefState,
+    currentBelief: IFullBeliefState,
     observation: Observation
   ): BeliefUpdateResult;
 
@@ -272,20 +272,20 @@ export interface IBeliefUpdateEngine {
    * Batch update with multiple observations
    */
   batchUpdateBelief(
-    currentBelief: BeliefState,
+    currentBelief: IFullBeliefState,
     observations: Observation[]
   ): BeliefUpdateResult;
 
   /**
    * Convert belief state to point estimate (StateVector)
    */
-  beliefToStateVector(belief: BeliefState): IStateVector;
+  beliefToStateVector(belief: IFullBeliefState): IStateVector;
 
   /**
    * Get uncertainty for specific dimension
    */
   getDimensionUncertainty(
-    belief: BeliefState,
+    belief: IFullBeliefState,
     dimension: string
   ): {
     uncertainty: number;
@@ -297,7 +297,7 @@ export interface IBeliefUpdateEngine {
    * Calculate expected information gain from potential observation
    */
   calculateExpectedInfoGain(
-    currentBelief: BeliefState,
+    currentBelief: IFullBeliefState,
     potentialObservationType: ObservationType
   ): number;
 
@@ -305,7 +305,7 @@ export interface IBeliefUpdateEngine {
    * Get most informative next observation type
    */
   getMostInformativeObservation(
-    currentBelief: BeliefState
+    currentBelief: IFullBeliefState
   ): {
     observationType: ObservationType;
     expectedInfoGain: number;
@@ -316,7 +316,7 @@ export interface IBeliefUpdateEngine {
   /**
    * Check for belief inconsistencies
    */
-  checkBeliefConsistency(belief: BeliefState): {
+  checkBeliefConsistency(belief: IFullBeliefState): {
     isConsistent: boolean;
     inconsistencies: Array<{
       dimension1: string;
@@ -330,9 +330,9 @@ export interface IBeliefUpdateEngine {
    * Decay beliefs over time (increase uncertainty)
    */
   applyBeliefDecay(
-    belief: BeliefState,
+    belief: IFullBeliefState,
     hoursSinceLastUpdate: number
-  ): BeliefState;
+  ): IFullBeliefState;
 
   /**
    * Get belief history for dimension

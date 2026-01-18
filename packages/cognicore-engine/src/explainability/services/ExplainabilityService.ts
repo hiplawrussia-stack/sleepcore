@@ -415,7 +415,7 @@ provide clinical diagnosis or treatment recommendations.
     // Create edges
     const edges = nodes.slice(0, -1).map((node, index) => ({
       from: node.variable,
-      to: nodes[index + 1].variable,
+      to: nodes[index + 1]?.variable ?? '',
       strength: 0.6 + Math.random() * 0.3,
       mechanism: 'Прямое влияние',
       mechanismRu: 'Прямое влияние',
@@ -748,7 +748,7 @@ provide clinical diagnosis or treatment recommendations.
     return JSON.stringify(explanation, null, 2);
   }
 
-  private formatForClinician(explanation: IExplanationResponse, level: ExplanationLevel): string {
+  private formatForClinician(explanation: IExplanationResponse, _level: ExplanationLevel): string {
     const clinician = explanation.clinicianExplanation;
     if (!clinician) return 'No clinician explanation available';
 
@@ -821,7 +821,7 @@ ${clinician.disclaimer}
     `.trim();
   }
 
-  private formatForAuditor(explanation: IExplanationResponse, level: ExplanationLevel): string {
+  private formatForAuditor(explanation: IExplanationResponse, _level: ExplanationLevel): string {
     return JSON.stringify({
       requestId: explanation.requestId,
       predictionId: explanation.predictionId,
@@ -986,7 +986,7 @@ ${clinician.disclaimer}
     return '';
   }
 
-  private calculateGlobalFeatureImportance(predictionType: string): IGlobalFeatureImportance[] {
+  private calculateGlobalFeatureImportance(_predictionType: string): IGlobalFeatureImportance[] {
     return Object.values(INTERVENTION_FEATURES).map(def => ({
       featureId: def.id,
       featureName: def.name,
@@ -1004,7 +1004,7 @@ ${clinician.disclaimer}
     })).sort((a, b) => b.meanAbsoluteSHAP - a.meanAbsoluteSHAP);
   }
 
-  private extractDecisionRules(predictionType: string): IDecisionRule[] {
+  private extractDecisionRules(_predictionType: string): IDecisionRule[] {
     return [
       {
         id: 'RULE-001',

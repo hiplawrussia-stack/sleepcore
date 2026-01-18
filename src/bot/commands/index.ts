@@ -60,6 +60,9 @@ export { SmartTipsCommand, smartTipsCommand } from './SmartTipsCommand';
 // Phase 7: Structured CBT-I Sessions
 export { TherapyCommand, therapyCommand } from './TherapyCommand';
 
+// Phase 2.1: Circadian/Chronotype Assessment
+export { ChronotypeCommand, chronotypeCommand } from './ChronotypeCommand';
+
 // ==================== Handler ====================
 export { CommandHandler, createCommandHandler } from './CommandHandler';
 
@@ -101,6 +104,7 @@ import { badgeCommand } from './BadgeCommand';
 import { evolutionCommand } from './EvolutionCommand';
 import { smartTipsCommand } from './SmartTipsCommand';
 import { therapyCommand } from './TherapyCommand';
+import { chronotypeCommand } from './ChronotypeCommand';
 
 /**
  * All registered commands

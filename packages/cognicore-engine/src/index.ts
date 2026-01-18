@@ -139,8 +139,11 @@ export {
 
 export type {
   Observation,
+  ObservationType,
   BeliefUpdateResult,
   IBeliefUpdateEngine,
+  DimensionBelief,
+  IFullBeliefState,
 } from './belief/IBeliefUpdate';
 
 // Phase 1 Integration: BeliefStateAdapter
@@ -194,6 +197,9 @@ export type {
   IContextualFeatures,
   IDecisionPoint,
   IInterventionOptimizer,
+  InterventionCategory,
+  InterventionIntensity,
+  IUserInterventionProfile,
 } from './intervention/IInterventionOptimizer';
 
 // =============================================================================
@@ -235,7 +241,19 @@ export type {
   IFeatureAttribution,
   INarrativeExplanation,
   IExplainabilityService,
+  IUserExplanation,
+  IUserFactor,
+  IExplanationRequest,
+  IExplanationResponse,
+  ExplanationAudience,
+  ExplanationLevel,
+  ExplanationType,
 } from './explainability/interfaces/IExplainability';
+
+export {
+  ExplainabilityService,
+  createExplainabilityService,
+} from './explainability/services/ExplainabilityService';
 
 // =============================================================================
 // METACOGNITION
@@ -249,9 +267,68 @@ export type {
 // MOTIVATION (MI)
 // =============================================================================
 
+// Motivational State Types
 export type {
   IMotivationalState,
+  IMotivationalStateBuilder,
+  IMotivationalStateFactory,
+  ClientUtterance,
+  ClientLanguageCategory,
+  ChangeTaskSubtype,
+  SustainTalkSubtype,
+  ReadinessRuler,
+  LanguageBalance,
+  DarnCatProfile,
+  AmbivalenceState,
+  AmbivalenceType,
+  DiscordIndicators,
+  DiscordType,
+  DiscordEvent,
+  MIStrategy,
 } from './motivation/interfaces/IMotivationalState';
+
+export {
+  CHANGE_TALK_PATTERNS,
+  SUSTAIN_TALK_PATTERNS,
+  DISCORD_PATTERNS,
+  STRATEGY_RECOMMENDATIONS,
+} from './motivation/interfaces/IMotivationalState';
+
+// Motivational Interviewing Types
+export type {
+  IMotivationalInterviewingEngine,
+  MIResponse,
+  MIResponseContext,
+  MITIBehaviorCode,
+  OARSTechnique,
+  ReflectionType,
+  SummaryType,
+  MIFidelityReport,
+  MITIGlobalScores,
+  MITIBehaviorCounts,
+  MITISummaryScores,
+  OpenQuestionTemplate,
+  AffirmationTemplate,
+  ReflectionTemplate,
+  SummaryTemplate,
+  MIGenerationConstraints,
+} from './motivation/interfaces/IMotivationalInterviewing';
+
+export {
+  OPEN_QUESTION_TEMPLATES,
+  AFFIRMATION_TEMPLATES,
+  REFLECTION_TEMPLATES,
+  SUMMARY_TEMPLATES,
+  DISCORD_RESPONSE_STRATEGIES,
+  MITI_THRESHOLDS,
+} from './motivation/interfaces/IMotivationalInterviewing';
+
+// Motivational Engine Implementation
+export {
+  MotivationalEngine,
+  MotivationalStateFactory,
+  MotivationalStateBuilder,
+} from './motivation/engines/MotivationalEngine';
 
 // =============================================================================
 // PIPELINE

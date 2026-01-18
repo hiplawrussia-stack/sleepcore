@@ -1,5 +1,3 @@
-export { CrisisDetectionResult, CrisisDetector, CrisisDetectorConfig, CrisisSeverity, CrisisType, DEFAULT_CRISIS_CONFIG, LayerResult, StateRiskData, createCrisisDetector, defaultCrisisDetector } from './crisis/index.js';
-
 /**
  * 🎭 EMOTIONAL STATE INTERFACE
  * ============================
@@ -1454,7 +1452,7 @@ interface StateQuality {
 /**
  * POMDP Belief state (uncertainty representation)
  */
-interface BeliefState$1 {
+interface BeliefState {
     /**
      * Probability distribution over possible states
      * (simplified as confidence intervals)
@@ -1590,7 +1588,7 @@ interface IStateVector {
     /**
      * Belief state (POMDP uncertainty)
      */
-    readonly belief: BeliefState$1;
+    readonly belief: BeliefState;
     /**
      * Data quality metrics
      */
@@ -1642,7 +1640,7 @@ interface IStateVectorBuilder {
     setNarrativeState(state: INarrativeState): this;
     setRiskState(state: IRiskState): this;
     setResourceState(state: IResourceState): this;
-    setBelief(belief: BeliefState$1): this;
+    setBelief(belief: BeliefState): this;
     addTransition(transition: StateTransition): this;
     addPrediction(prediction: TemporalPrediction): this;
     addRecommendation(recommendation: StateBasedRecommendation): this;
@@ -1913,7 +1911,7 @@ interface DimensionBelief {
 /**
  * Full belief state over all dimensions
  */
-interface BeliefState {
+interface IFullBeliefState {
     readonly userId: string | number;
     readonly timestamp: Date;
     /**
@@ -1974,8 +1972,8 @@ interface BeliefState {
  * Update result
  */
 interface BeliefUpdateResult {
-    readonly previousBelief: BeliefState;
-    readonly newBelief: BeliefState;
+    readonly previousBelief: IFullBeliefState;
+    readonly newBelief: IFullBeliefState;
     readonly observation: Observation;
     /**
      * Which dimensions were updated
@@ -2006,23 +2004,23 @@ interface IBeliefUpdateEngine {
     /**
      * Initialize belief state for new user
      */
-    initializeBelief(userId: string | number): BeliefState;
+    initializeBelief(userId: string | number): IFullBeliefState;
     /**
      * Update belief with new observation
      */
-    updateBelief(currentBelief: BeliefState, observation: Observation): BeliefUpdateResult;
+    updateBelief(currentBelief: IFullBeliefState, observation: Observation): BeliefUpdateResult;
     /**
      * Batch update with multiple observations
      */
-    batchUpdateBelief(currentBelief: BeliefState, observations: Observation[]): BeliefUpdateResult;
+    batchUpdateBelief(currentBelief: IFullBeliefState, observations: Observation[]): BeliefUpdateResult;
     /**
      * Convert belief state to point estimate (StateVector)
      */
-    beliefToStateVector(belief: BeliefState): IStateVector;
+    beliefToStateVector(belief: IFullBeliefState): IStateVector;
     /**
      * Get uncertainty for specific dimension
      */
-    getDimensionUncertainty(belief: BeliefState, dimension: string): {
+    getDimensionUncertainty(belief: IFullBeliefState, dimension: string): {
         uncertainty: number;
         sampleSizeNeeded: number;
         suggestedObservationType: ObservationType;
@@ -2030,11 +2028,11 @@ interface IBeliefUpdateEngine {
     /**
      * Calculate expected information gain from potential observation
      */
-    calculateExpectedInfoGain(currentBelief: BeliefState, potentialObservationType: ObservationType): number;
+    calculateExpectedInfoGain(currentBelief: IFullBeliefState, potentialObservationType: ObservationType): number;
     /**
      * Get most informative next observation type
      */
-    getMostInformativeObservation(currentBelief: BeliefState): {
+    getMostInformativeObservation(currentBelief: IFullBeliefState): {
         observationType: ObservationType;
         expectedInfoGain: number;
         targetDimension: string;
@@ -2043,7 +2041,7 @@ interface IBeliefUpdateEngine {
     /**
      * Check for belief inconsistencies
      */
-    checkBeliefConsistency(belief: BeliefState): {
+    checkBeliefConsistency(belief: IFullBeliefState): {
         isConsistent: boolean;
         inconsistencies: Array<{
             dimension1: string;
@@ -2055,7 +2053,7 @@ interface IBeliefUpdateEngine {
     /**
      * Decay beliefs over time (increase uncertainty)
      */
-    applyBeliefDecay(belief: BeliefState, hoursSinceLastUpdate: number): BeliefState;
+    applyBeliefDecay(belief: IFullBeliefState, hoursSinceLastUpdate: number): IFullBeliefState;
     /**
      * Get belief history for dimension
      */
@@ -3013,14 +3011,14 @@ type KalmanFormerEngineFactory = (config?: Partial<IKalmanFormerConfig>) => IKal
  *
  * Scientific Foundation:
  * - ROADMAP task 1.1.3: "BeliefUpdateEngine.predictHybrid()"
- * - Converts BeliefState <-> IPLRNNState <-> IKalmanFormerState
+ * - Converts IFullBeliefState <-> IPLRNNState <-> IKalmanFormerState
  * - Enables nonlinear prediction while maintaining Bayesian uncertainty
  *
  * (c) BF "Drugoi Put", 2025
  */
 
 /**
- * Dimension mapping from BeliefState to 5D state vector
+ * Dimension mapping from IFullBeliefState to 5D state vector
  * S_t = (valence, arousal, dominance, risk, resources)
  */
 declare const DIMENSION_MAPPING: {
@@ -3066,20 +3064,20 @@ interface IHybridPrediction {
     primaryEngine: 'plrnn' | 'kalmanformer' | 'bayesian';
 }
 /**
- * Convert BeliefState to 5D observation vector
+ * Convert IFullBeliefState to 5D observation vector
  * Maps complex belief structure to simple [V, A, D, risk, resources] vector
  */
-declare function beliefStateToObservation(belief: BeliefState): number[];
+declare function beliefStateToObservation(belief: IFullBeliefState): number[];
 /**
- * Extract uncertainty vector from BeliefState
+ * Extract uncertainty vector from IFullBeliefState
  */
-declare function beliefStateToUncertainty(belief: BeliefState): number[];
+declare function beliefStateToUncertainty(belief: IFullBeliefState): number[];
 /**
- * Convert BeliefState to IPLRNNState
+ * Convert IFullBeliefState to IPLRNNState
  */
-declare function beliefStateToPLRNNState(belief: BeliefState, hiddenUnits?: number): IPLRNNState;
+declare function beliefStateToPLRNNState(belief: IFullBeliefState, hiddenUnits?: number): IPLRNNState;
 /**
- * Convert IPLRNNState back to partial BeliefState update
+ * Convert IPLRNNState back to partial IFullBeliefState update
  * Returns the dimensions that should be updated
  */
 declare function plrnnStateToBeliefUpdate(plrnnState: IPLRNNState): Record<string, {
@@ -3087,11 +3085,11 @@ declare function plrnnStateToBeliefUpdate(plrnnState: IPLRNNState): Record<strin
     variance: number;
 }>;
 /**
- * Convert BeliefState to IKalmanFormerState
+ * Convert IFullBeliefState to IKalmanFormerState
  */
-declare function beliefStateToKalmanFormerState(belief: BeliefState, _contextWindow?: number): IKalmanFormerState;
+declare function beliefStateToKalmanFormerState(belief: IFullBeliefState, _contextWindow?: number): IKalmanFormerState;
 /**
- * Convert IKalmanFormerState back to partial BeliefState update
+ * Convert IKalmanFormerState back to partial IFullBeliefState update
  */
 declare function kalmanFormerStateToBeliefUpdate(kfState: IKalmanFormerState): Record<string, {
     mean: number;
@@ -3121,31 +3119,31 @@ declare class BeliefStateAdapter {
      * Hybrid prediction using Phase 1 engines
      * ROADMAP task 1.1.3 deliverable
      */
-    predictHybrid(belief: BeliefState, horizon?: 'short' | 'medium' | 'long'): IHybridPrediction;
+    predictHybrid(belief: IFullBeliefState, horizon?: 'short' | 'medium' | 'long'): IHybridPrediction;
     /**
      * Extract causal network from current belief and PLRNN weights
      */
-    extractCausalNetwork(_belief: BeliefState): ICausalNetwork | null;
+    extractCausalNetwork(_belief: IFullBeliefState): ICausalNetwork | null;
     /**
      * Simulate intervention effect on belief state
      */
-    simulateIntervention(belief: BeliefState, target: string, intervention: 'increase' | 'decrease' | 'stabilize', magnitude: number): IInterventionSimulation | null;
+    simulateIntervention(belief: IFullBeliefState, target: string, intervention: 'increase' | 'decrease' | 'stabilize', magnitude: number): IInterventionSimulation | null;
     /**
      * Get attention explanation for current state
      */
-    explainPrediction(belief: BeliefState): IAttentionWeights | null;
+    explainPrediction(belief: IFullBeliefState): IAttentionWeights | null;
     /**
      * Convert belief to observation vector
      */
-    toObservation(belief: BeliefState): number[];
+    toObservation(belief: IFullBeliefState): number[];
     /**
      * Convert belief to PLRNN state
      */
-    toPLRNNState(belief: BeliefState, hiddenUnits?: number): IPLRNNState;
+    toPLRNNState(belief: IFullBeliefState, hiddenUnits?: number): IPLRNNState;
     /**
      * Convert belief to KalmanFormer state
      */
-    toKalmanFormerState(belief: BeliefState, contextWindow?: number): IKalmanFormerState;
+    toKalmanFormerState(belief: IFullBeliefState, contextWindow?: number): IKalmanFormerState;
 }
 /**
  * Engine types for factory function
@@ -5162,6 +5160,31 @@ type EUAIActRiskLevel = 'minimal' | 'limited' | 'high' | 'unacceptable';
  */
 type FeatureCategory = 'emotional' | 'behavioral' | 'temporal' | 'contextual' | 'historical' | 'demographic' | 'engagement' | 'family' | 'causal';
 /**
+ * Feature metadata for mental health context (enhanced)
+ */
+interface IFeatureDefinition {
+    id: string;
+    name: string;
+    nameRu: string;
+    description: string;
+    descriptionRu: string;
+    category: FeatureCategory;
+    valueType: 'numeric' | 'categorical' | 'boolean' | 'text';
+    possibleValues?: string[];
+    minValue?: number;
+    maxValue?: number;
+    baselineValue: number | string;
+    defaultWeight: number;
+    isCausalFactor?: boolean;
+    causalParents?: string[];
+    causalChildren?: string[];
+    emoji: string;
+    colorPositive: string;
+    colorNegative: string;
+    layTermExplanation?: string;
+    clinicalTermExplanation?: string;
+}
+/**
  * Feature contribution to a decision (enhanced)
  */
 interface IFeatureAttribution {
@@ -5633,6 +5656,511 @@ interface IExplainabilityService {
     recordExplanationFeedback(feedback: Partial<IExplanationEffectiveness>): Promise<void>;
     getExplanationEffectiveness(explanationId: string): Promise<IExplanationEffectiveness | null>;
 }
+/**
+ * Feature Attribution Engine interface
+ */
+interface IFeatureAttributionEngine {
+    calculateAttributions(features: Record<string, unknown>, prediction: {
+        outcome: string;
+        value: number;
+        confidence: number;
+    }): ISHAPExplanation;
+    visualizeAttributions(explanation: ISHAPExplanation, format: 'text' | 'bars' | 'emoji'): string;
+    generateUserSummary(explanation: ISHAPExplanation, ageGroup: 'child' | 'teen' | 'adult'): string;
+    addFeature(definition: IFeatureDefinition): void;
+    getFeature(featureId: string): IFeatureDefinition | undefined;
+    getFeaturesByCategory(category: FeatureCategory): IFeatureDefinition[];
+}
+/**
+ * Counterfactual Explainer interface
+ */
+interface ICounterfactualExplainer {
+    generateCounterfactuals(currentFeatures: Record<string, unknown>, currentOutcome: string, desiredOutcome?: string, maxCounterfactuals?: number, options?: {
+        requireRobust?: boolean;
+        minRobustness?: number;
+        feasibilityThreshold?: CounterfactualFeasibility;
+    }): ICounterfactualExplanation;
+    formatForDisplay(explanation: ICounterfactualExplanation, ageGroup: 'child' | 'teen' | 'adult'): string;
+    calculateRobustness(scenario: ICounterfactualScenario): number;
+    calculatePlausibility(scenario: ICounterfactualScenario, contextFeatures: Record<string, unknown>): number;
+}
+/**
+ * Narrative Generator interface (NEW: HCXAI)
+ */
+interface INarrativeGenerator {
+    generateNarrative(explanation: IExplanationResponse, options: {
+        structure: NarrativeStructure;
+        ageGroup: 'child' | 'teen' | 'adult';
+        cognitiveStyle?: CognitiveStyle;
+        language: 'en' | 'ru';
+        maxWords?: number;
+    }): INarrativeExplanation;
+    getTemplates(structure: NarrativeStructure, language: 'en' | 'ru'): string[];
+    personalizeNarrative(narrative: INarrativeExplanation, userHistory: {
+        previousExplanations: string[];
+        preferredStyle?: CognitiveStyle;
+        comprehensionLevel?: number;
+    }): INarrativeExplanation;
+}
+
+/**
+ * Feature Attribution Engine
+ * ==========================
+ * Phase 5.2: SHAP-like feature attribution for explainability
+ *
+ * Provides attribution scores showing how each feature contributes
+ * to the AI's decision. Adapted for mental health context.
+ *
+ * Research basis:
+ * - SHAP (Lundberg & Lee, 2017) - Game-theoretic feature attribution
+ * - KernelSHAP for model-agnostic explanations
+ * - TreeSHAP for tree-based models
+ * - RiskPath (Utah, 2025) - Healthcare XAI
+ *
+ * Key features:
+ * - SHAP-like Shapley value computation
+ * - Uncertainty quantification
+ * - Causal annotation (Phase 5.1 integration)
+ * - Age-adaptive visualization
+ * - Russian language support
+ *
+ * (c) BF "Drugoy Put", 2025
+ */
+
+/**
+ * Feature Attribution Engine
+ *
+ * Calculates SHAP-like feature attributions for explainability
+ * with uncertainty quantification and causal annotations.
+ */
+declare class FeatureAttributionEngine implements IFeatureAttributionEngine {
+    private featureDefinitions;
+    private explanationVersion;
+    constructor(definitions?: Record<string, IFeatureDefinition>);
+    /**
+     * Calculate feature attributions for a prediction
+     */
+    calculateAttributions(features: Record<string, unknown>, prediction: {
+        outcome: string;
+        value: number;
+        confidence: number;
+    }): ISHAPExplanation;
+    /**
+     * Calculate attribution for single feature
+     */
+    private calculateSingleAttribution;
+    /**
+     * Calculate contribution for categorical feature
+     */
+    private calculateCategoricalContribution;
+    /**
+     * Calculate confidence interval for attribution
+     */
+    private calculateAttributionConfidenceInterval;
+    /**
+     * Get causal pathway for feature
+     */
+    private getCausalPathway;
+    /**
+     * Generate causal summary from attributions
+     */
+    private generateCausalSummary;
+    /**
+     * Calculate uncertainty quantification for the explanation
+     */
+    private calculateUncertainty;
+    /**
+     * Generate text visualization of attributions
+     */
+    visualizeAttributions(explanation: ISHAPExplanation, format?: 'text' | 'bars' | 'emoji'): string;
+    private visualizeWithEmoji;
+    private visualizeWithBars;
+    private visualizeAsText;
+    /**
+     * Generate user-friendly explanation of top factors
+     */
+    generateUserSummary(explanation: ISHAPExplanation, ageGroup?: 'child' | 'teen' | 'adult'): string;
+    private getConfidenceEmoji;
+    /**
+     * Add custom feature definition
+     */
+    addFeature(definition: IFeatureDefinition): void;
+    /**
+     * Get feature definition
+     */
+    getFeature(featureId: string): IFeatureDefinition | undefined;
+    /**
+     * Get all features by category
+     */
+    getFeaturesByCategory(category: FeatureCategory): IFeatureDefinition[];
+    /**
+     * Get all feature definitions
+     */
+    getAllFeatures(): IFeatureDefinition[];
+    /**
+     * Get causal features only
+     */
+    getCausalFeatures(): IFeatureDefinition[];
+}
+
+/**
+ * Counterfactual Explainer
+ * ========================
+ * Phase 5.2: Risk-Sensitive "What if" explanations
+ *
+ * Answers: "What would need to change to get a different outcome?"
+ *
+ * Research basis:
+ * - Wachter et al. (2017) - Counterfactual Explanations
+ * - Risk-Sensitive Counterfactuals (2024-2025) - Robust explanations
+ * - Actionable Recourse in ML
+ * - DiCE (Mothilal et al., 2020) - Diverse counterfactuals
+ * - FACE (Poyiadzi et al., 2020) - Feasible counterfactuals
+ *
+ * Key features:
+ * - Risk-sensitive robustness scoring
+ * - Plausibility assessment
+ * - Sparsity optimization (fewer changes = better)
+ * - Diversity in counterfactual scenarios
+ * - Age-adaptive formatting
+ * - Russian language support
+ *
+ * (c) BF "Drugoy Put", 2025
+ */
+
+/**
+ * Rule for generating counterfactuals
+ */
+interface CounterfactualRule {
+    id: string;
+    targetOutcome: string;
+    targetOutcomeRu: string;
+    requiredChanges: {
+        featureId: string;
+        condition: (currentValue: unknown) => boolean;
+        suggestedValue: unknown;
+        description: string;
+        descriptionRu: string;
+        feasibility: CounterfactualFeasibility;
+        riskLevel: 'low' | 'medium' | 'high';
+    }[];
+    priority: number;
+    category: 'intervention' | 'mood' | 'time' | 'trigger' | 'streak' | 'risk';
+}
+/**
+ * Risk-Sensitive Counterfactual Explainer
+ *
+ * Generates "what if" explanations with robustness scoring
+ * and actionability assessment.
+ */
+declare class CounterfactualExplainer implements ICounterfactualExplainer {
+    private featureDefinitions;
+    private rules;
+    constructor(definitions?: Record<string, IFeatureDefinition>, rules?: CounterfactualRule[]);
+    /**
+     * Generate counterfactual explanations with risk-sensitivity
+     */
+    generateCounterfactuals(currentFeatures: Record<string, unknown>, currentOutcome: string, desiredOutcome?: string, maxCounterfactuals?: number, options?: {
+        requireRobust?: boolean;
+        minRobustness?: number;
+        feasibilityThreshold?: CounterfactualFeasibility;
+    }): ICounterfactualExplanation;
+    /**
+     * Find rules applicable to current features
+     */
+    private findApplicableRules;
+    /**
+     * Generate scenario from rule with robustness scoring
+     */
+    private generateScenarioFromRule;
+    /**
+     * Generate proximity-based counterfactual (minimum change)
+     */
+    private generateProximityCounterfactual;
+    /**
+     * Calculate robustness of a counterfactual scenario
+     * Higher = more robust to perturbations
+     */
+    calculateRobustness(scenario: ICounterfactualScenario): number;
+    /**
+     * Calculate plausibility of a counterfactual scenario
+     * Higher = more realistic given the context
+     */
+    calculatePlausibility(scenario: ICounterfactualScenario, _contextFeatures: Record<string, unknown>): number;
+    /**
+     * Calculate sparsity (preference for fewer changes)
+     */
+    private calculateSparsity;
+    /**
+     * Calculate combined recourse score
+     */
+    private calculateRecourseScore;
+    /**
+     * Select diverse subset of counterfactuals
+     */
+    private selectDiverseScenarios;
+    /**
+     * Get category of a scenario based on changed features
+     */
+    private getScenarioCategory;
+    /**
+     * Calculate diversity score for selected scenarios
+     */
+    private calculateDiversityScore;
+    /**
+     * Calculate overall robustness of explanation
+     */
+    private calculateOverallRobustness;
+    /**
+     * Find closest counterfactual (easiest to achieve)
+     */
+    private findClosestCounterfactual;
+    /**
+     * Find most robust counterfactual
+     */
+    private findMostRobust;
+    /**
+     * Find easiest counterfactual
+     */
+    private findEasiest;
+    /**
+     * Generate summary of counterfactuals
+     */
+    private generateSummary;
+    /**
+     * Generate actionable advice from counterfactuals
+     */
+    private generateActionableAdvice;
+    /**
+     * Format counterfactuals for display
+     */
+    formatForDisplay(explanation: ICounterfactualExplanation, ageGroup?: 'child' | 'teen' | 'adult'): string;
+    private formatForChild;
+    private formatForTeen;
+    private formatForAdult;
+    private combineFeasibility;
+    private meetsFeasibilityThreshold;
+    private feasibilityToScore;
+    private riskOrder;
+    private getRiskExplanation;
+    private translateFeasibility;
+    private translateOutcome;
+    /**
+     * Add custom counterfactual rule
+     */
+    addRule(rule: CounterfactualRule): void;
+    /**
+     * Get all rules
+     */
+    getRules(): CounterfactualRule[];
+    /**
+     * Get rules by category
+     */
+    getRulesByCategory(category: string): CounterfactualRule[];
+}
+
+/**
+ * Narrative Generator
+ * ===================
+ * Phase 5.2: Human-Centered XAI Natural Language Explanations
+ *
+ * Generates narrative explanations that tell a story about the AI's decision,
+ * making complex explanations accessible to lay users.
+ *
+ * Research basis:
+ * - HCXAI Framework - Human-Centered Explainable AI
+ * - TIFU Framework - Transparency and Interpretability For Understandability
+ * - Miller (2019) - Explanation in Artificial Intelligence
+ * - Narrative psychology in health communication
+ *
+ * Key features:
+ * - Multiple narrative structures (journey, comparison, cause-effect, recommendation)
+ * - Age-adaptive language (child/teen/adult)
+ * - Cognitive style adaptation (visual/analytical/intuitive/sequential)
+ * - Readability optimization (Flesch-Kincaid)
+ * - Russian language support
+ *
+ * (c) BF "Drugoy Put", 2025
+ */
+
+/**
+ * Narrative Generator
+ *
+ * Creates human-friendly narrative explanations based on HCXAI principles.
+ */
+declare class NarrativeGenerator implements INarrativeGenerator {
+    /**
+     * Generate narrative explanation from explanation response
+     */
+    generateNarrative(explanation: IExplanationResponse, options: {
+        structure: NarrativeStructure;
+        ageGroup: 'child' | 'teen' | 'adult';
+        cognitiveStyle?: CognitiveStyle;
+        language: 'en' | 'ru';
+        maxWords?: number;
+    }): INarrativeExplanation;
+    /**
+     * Get templates for a structure
+     */
+    getTemplates(structure: NarrativeStructure, language: 'en' | 'ru'): string[];
+    /**
+     * Personalize narrative based on user history
+     */
+    personalizeNarrative(narrative: INarrativeExplanation, userHistory: {
+        previousExplanations: string[];
+        preferredStyle?: CognitiveStyle;
+        comprehensionLevel?: number;
+    }): INarrativeExplanation;
+    /**
+     * Extract variables from explanation for template filling
+     */
+    private extractVariables;
+    /**
+     * Select template and fill variables
+     */
+    private selectAndFill;
+    /**
+     * Extract key points from explanation
+     */
+    private extractKeyPoints;
+    /**
+     * Generate title for narrative
+     */
+    private generateTitle;
+    private translateTitle;
+    /**
+     * Calculate readability metrics
+     */
+    private calculateReadability;
+    /**
+     * Count syllables in text (simplified for Russian/English)
+     */
+    private countSyllables;
+    /**
+     * Apply word limit to narrative
+     */
+    private applyWordLimit;
+    /**
+     * Simplify text for lower comprehension
+     */
+    private simplifyText;
+}
+
+/**
+ * Explainability Service
+ * ======================
+ * Phase 5.2: Central service for generating AI explanations
+ *
+ * Integrates all XAI components:
+ * - Feature Attribution (SHAP-like)
+ * - Counterfactual Explanations (Risk-Sensitive)
+ * - Narrative Explanations (HCXAI)
+ * - Causal Explanations (Phase 5.1 integration)
+ * - User/Clinician-facing explanations
+ *
+ * Compliance:
+ * - EU AI Act transparency requirements
+ * - HCXAI principles
+ * - TIFU framework for mental health
+ *
+ * Research: Time2Stop +53.8% effectiveness with explanations
+ *
+ * (c) BF "Drugoy Put", 2025
+ */
+
+/**
+ * Explainability Service
+ *
+ * Central service for generating all types of AI explanations
+ * with EU AI Act compliance and HCXAI principles.
+ */
+declare class ExplainabilityService implements IExplainabilityService {
+    private featureEngine;
+    private counterfactualEngine;
+    private narrativeGenerator;
+    private globalExplanationCache;
+    private effectivenessStore;
+    private config;
+    constructor(featureEngine?: FeatureAttributionEngine, counterfactualEngine?: CounterfactualExplainer, narrativeGenerator?: NarrativeGenerator);
+    /**
+     * Generate comprehensive explanation
+     */
+    explain(request: IExplanationRequest): Promise<IExplanationResponse>;
+    /**
+     * Generate SHAP-like feature attribution
+     */
+    generateSHAPExplanation(features: Record<string, unknown>, prediction: unknown): Promise<ISHAPExplanation>;
+    /**
+     * Generate counterfactual explanations
+     */
+    generateCounterfactuals(features: Record<string, unknown>, currentOutcome: string, desiredOutcome?: string, options?: {
+        maxCounterfactuals?: number;
+        requireRobust?: boolean;
+        feasibilityThreshold?: CounterfactualFeasibility;
+    }): Promise<ICounterfactualExplanation>;
+    /**
+     * Generate global model explanation
+     */
+    generateGlobalExplanation(predictionType: string): Promise<IGlobalExplanation>;
+    /**
+     * Generate clinician-facing explanation
+     */
+    generateClinicianExplanation(sessionData: Record<string, unknown>): Promise<IClinicianExplanation>;
+    /**
+     * Generate causal explanation (Phase 5.1 integration)
+     */
+    generateCausalExplanation(features: Record<string, unknown>, outcome: string): Promise<ICausalExplanation>;
+    /**
+     * Generate narrative explanation (HCXAI)
+     */
+    generateNarrativeExplanation(explanation: IExplanationResponse, options: {
+        structure: NarrativeStructure;
+        ageGroup: 'child' | 'teen' | 'adult';
+        cognitiveStyle?: CognitiveStyle;
+        language: 'en' | 'ru';
+    }): Promise<INarrativeExplanation>;
+    /**
+     * Generate user-friendly explanation
+     */
+    private generateUserExplanation;
+    private generateUserSummaryAndReasoning;
+    private generateWhyThisMatters;
+    /**
+     * Format explanation for specific audience
+     */
+    formatForAudience(explanation: IExplanationResponse, audience: ExplanationAudience, level: ExplanationLevel): string;
+    private formatForUser;
+    private formatForClinician;
+    private formatForAuditor;
+    private formatForDeveloper;
+    /**
+     * Record explanation feedback
+     */
+    recordExplanationFeedback(feedback: Partial<IExplanationEffectiveness>): Promise<void>;
+    /**
+     * Get explanation effectiveness
+     */
+    getExplanationEffectiveness(explanationId: string): Promise<IExplanationEffectiveness | null>;
+    /**
+     * Get cached global explanation
+     */
+    getCachedGlobalExplanation(predictionType: string): IGlobalExplanation | null;
+    /**
+     * Invalidate cache
+     */
+    invalidateCache(predictionType?: string): void;
+    private normalizePrediction;
+    private getConfidenceLabel;
+    private getConfidenceDescription;
+    private getDisclaimer;
+    private calculateGlobalFeatureImportance;
+    private extractDecisionRules;
+    private generateRegulatoryInfo;
+}
+/**
+ * Create Explainability Service instance
+ */
+declare function createExplainabilityService(featureEngine?: FeatureAttributionEngine, counterfactualEngine?: CounterfactualExplainer, narrativeGenerator?: NarrativeGenerator): ExplainabilityService;
 
 /**
  * METACOGNITIVE STATE INTERFACE
@@ -6316,6 +6844,565 @@ interface IMotivationalState {
  * MI Strategy recommendations
  */
 type MIStrategy = 'build_rapport' | 'develop_discrepancy' | 'evoke_change_talk' | 'explore_ambivalence' | 'strengthen_commitment' | 'support_self_efficacy' | 'roll_with_resistance' | 'summarize_and_transition' | 'action_planning' | 'relapse_prevention';
+interface IMotivationalStateBuilder {
+    setUserId(userId: string | number): this;
+    setReadinessRuler(importance: number, confidence: number): this;
+    setLinkedStage(stage: ChangeStage): this;
+    addUtterance(utterance: ClientUtterance): this;
+    setLanguageBalance(balance: LanguageBalance): this;
+    setDarnCatProfile(profile: DarnCatProfile): this;
+    setAmbivalence(ambivalence: AmbivalenceState): this;
+    setDiscord(discord: DiscordIndicators): this;
+    setStrategy(strategy: MIStrategy): this;
+    build(): IMotivationalState;
+}
+interface IMotivationalStateFactory {
+    /**
+     * Create from conversation analysis
+     */
+    fromConversation(messages: Array<{
+        text: string;
+        timestamp: Date;
+        isUser: boolean;
+    }>, userId: string | number, previousState?: IMotivationalState): Promise<IMotivationalState>;
+    /**
+     * Create from explicit assessment (readiness ruler)
+     */
+    fromAssessment(userId: string | number, importance: number, confidence: number): IMotivationalState;
+    /**
+     * Create initial state for new user
+     */
+    createInitial(userId: string | number): IMotivationalState;
+    /**
+     * Update based on new utterance
+     */
+    updateWithUtterance(currentState: IMotivationalState, newUtterance: ClientUtterance): IMotivationalState;
+    /**
+     * Update readiness ruler
+     */
+    updateReadiness(currentState: IMotivationalState, importance: number, confidence: number): IMotivationalState;
+}
+/**
+ * Change Talk detection patterns
+ * Based on MISC 2.5 coding manual + Russian adaptations
+ */
+declare const CHANGE_TALK_PATTERNS: Record<ChangeTaskSubtype, {
+    readonly keywords: string[];
+    readonly keywordsRu: string[];
+    readonly patterns: RegExp[];
+    readonly patternsRu: RegExp[];
+    readonly strength: number;
+}>;
+/**
+ * Sustain Talk detection patterns
+ */
+declare const SUSTAIN_TALK_PATTERNS: Record<SustainTalkSubtype, {
+    readonly keywords: string[];
+    readonly keywordsRu: string[];
+    readonly patterns: RegExp[];
+    readonly patternsRu: RegExp[];
+    readonly strength: number;
+}>;
+/**
+ * Discord/Resistance patterns
+ */
+declare const DISCORD_PATTERNS: Record<DiscordType, {
+    readonly keywords: string[];
+    readonly keywordsRu: string[];
+    readonly patterns: RegExp[];
+}>;
+/**
+ * Strategy recommendations based on state
+ */
+declare const STRATEGY_RECOMMENDATIONS: Record<ChangeStage, {
+    readonly primaryStrategy: MIStrategy;
+    readonly secondaryStrategies: MIStrategy[];
+    readonly focus: string[];
+    readonly avoid: string[];
+}>;
+
+/**
+ * MOTIVATIONAL INTERVIEWING TECHNIQUES INTERFACE
+ * ================================================
+ * OARS + MITI 4.2 Behavior Codes for AI-MI System
+ *
+ * Scientific Foundation:
+ * - MITI 4.2 Coding Manual (Moyers et al., 2014)
+ * - OARS Framework (Miller & Rollnick, 2013)
+ * - AI-MI Best Practices (JMIR 2025 Scoping Review)
+ * - LLM Chain-of-Thought for MI (arXiv:2505.17380)
+ *
+ * Key Innovation:
+ * - Computational implementation of MI therapist behaviors
+ * - Real-time response generation following MI principles
+ * - Fidelity tracking using MITI 4.2 global scores
+ *
+ * BФ "Другой путь" | CogniCore Phase 4.1
+ */
+
+/**
+ * MITI 4.2 Behavior Codes
+ * Based on Moyers et al., 2014
+ */
+type MITIBehaviorCode = 'question_open' | 'question_closed' | 'reflection_simple' | 'reflection_complex' | 'affirm' | 'seek_collaboration' | 'emphasize_autonomy' | 'support' | 'persuade' | 'persuade_with_permission' | 'confront' | 'direct' | 'give_information' | 'structure';
+/**
+ * OARS Techniques (core MI skills)
+ */
+type OARSTechnique = 'open_question' | 'affirmation' | 'reflection' | 'summary';
+/**
+ * Reflection types (detailed classification)
+ */
+type ReflectionType = 'repeat' | 'rephrase' | 'paraphrase' | 'feeling' | 'meaning' | 'amplified' | 'double_sided' | 'reframe' | 'metaphor' | 'continuing' | 'summary_reflection';
+/**
+ * Summary types
+ */
+type SummaryType = 'collecting' | 'linking' | 'transitional';
+/**
+ * Structured MI response
+ */
+interface MIResponse {
+    /** Unique identifier */
+    readonly id: string;
+    /** Response text */
+    readonly text: string;
+    /** Russian version if different */
+    readonly textRu?: string;
+    /** Primary MITI behavior code */
+    readonly primaryBehavior: MITIBehaviorCode;
+    /** Secondary behaviors if applicable */
+    readonly secondaryBehaviors?: MITIBehaviorCode[];
+    /** OARS technique if applicable */
+    readonly oarsTechnique?: OARSTechnique;
+    /** Reflection type if reflection */
+    readonly reflectionType?: ReflectionType;
+    /** Summary type if summary */
+    readonly summaryType?: SummaryType;
+    /** Target: which CT subtype this aims to evoke */
+    readonly targetChangeTalk?: ChangeTaskSubtype;
+    /** Strategic intent */
+    readonly strategicIntent: MIStrategy;
+    /** Expected impact on CT/ST balance */
+    readonly expectedImpact: 'increase_ct' | 'decrease_st' | 'explore' | 'neutral';
+    /** MI-spirit alignment score (0-1) */
+    readonly spiritAlignment: number;
+    /** Timestamp */
+    readonly timestamp: Date;
+}
+/**
+ * Response generation context
+ */
+interface MIResponseContext {
+    /** Current motivational state */
+    readonly motivationalState: IMotivationalState;
+    /** Last client utterance */
+    readonly lastUtterance: ClientUtterance;
+    /** Conversation history (last N exchanges) */
+    readonly recentExchanges: Array<{
+        readonly clientText: string;
+        readonly therapistResponse: string;
+        readonly timestamp: Date;
+    }>;
+    /** Current therapeutic strategy */
+    readonly currentStrategy: MIStrategy;
+    /** Session goal */
+    readonly sessionGoal?: string;
+    /** Target behavior for change */
+    readonly targetBehavior: string;
+    /** User's values (for discrepancy development) */
+    readonly userValues?: string[];
+    /** User's expressed goals */
+    readonly userGoals?: string[];
+    /** Cultural/age context */
+    readonly ageGroup: 'child' | 'teen' | 'adult';
+    readonly language: 'ru' | 'en';
+}
+/**
+ * Open question template
+ */
+interface OpenQuestionTemplate {
+    readonly id: string;
+    readonly category: 'values' | 'goals' | 'obstacles' | 'resources' | 'importance' | 'confidence' | 'next_steps';
+    readonly template: string;
+    readonly templateRu: string;
+    readonly placeholders: string[];
+    readonly targetChangeTalk: ChangeTaskSubtype[];
+    readonly appropriateStages: MIStrategy[];
+    readonly examples: string[];
+    readonly examplesRu: string[];
+}
+/**
+ * Affirmation template
+ */
+interface AffirmationTemplate {
+    readonly id: string;
+    readonly type: 'strength' | 'effort' | 'progress' | 'value' | 'intention';
+    readonly template: string;
+    readonly templateRu: string;
+    readonly placeholders: string[];
+    readonly appropriateFor: {
+        readonly minChangeTalkRatio?: number;
+        readonly stages: MIStrategy[];
+        readonly afterDiscord?: boolean;
+    };
+}
+/**
+ * Reflection template
+ */
+interface ReflectionTemplate {
+    readonly id: string;
+    readonly type: ReflectionType;
+    readonly pattern: string;
+    readonly patternRu: string;
+    readonly complexity: 'simple' | 'complex';
+    readonly target: 'change_talk' | 'sustain_talk' | 'ambivalence' | 'feeling' | 'meaning';
+    readonly examples: Array<{
+        readonly input: string;
+        readonly output: string;
+        readonly outputRu: string;
+    }>;
+}
+/**
+ * Summary template
+ */
+interface SummaryTemplate {
+    readonly id: string;
+    readonly type: SummaryType;
+    readonly structure: string;
+    readonly structureRu: string;
+    readonly includeSections: Array<'change_talk' | 'sustain_talk' | 'values' | 'goals' | 'strengths' | 'next_steps'>;
+    readonly transitionPhrase?: string;
+    readonly transitionPhraseRu?: string;
+}
+/**
+ * MITI 4.2 Global Scores (1-5 scale)
+ */
+interface MITIGlobalScores {
+    /**
+     * Technical Global: Cultivating Change Talk
+     * How well therapist recognizes, reinforces, and evokes CT
+     */
+    readonly cultivatingChangeTalk: number;
+    /**
+     * Technical Global: Softening Sustain Talk
+     * How well therapist avoids reinforcing ST
+     */
+    readonly softeningSustainTalk: number;
+    /**
+     * Relational Global: Partnership
+     * Power sharing, collaboration, respect for expertise
+     */
+    readonly partnership: number;
+    /**
+     * Relational Global: Empathy
+     * Understanding client's perspective
+     */
+    readonly empathy: number;
+}
+/**
+ * MITI 4.2 Behavior Counts (per session/segment)
+ */
+interface MITIBehaviorCounts {
+    readonly openQuestions: number;
+    readonly closedQuestions: number;
+    readonly simpleReflections: number;
+    readonly complexReflections: number;
+    readonly affirm: number;
+    readonly seekCollaboration: number;
+    readonly emphasizeAutonomy: number;
+    readonly persuade: number;
+    readonly confront: number;
+    readonly direct: number;
+    readonly giveInformation: number;
+}
+/**
+ * MITI 4.2 Summary Scores (derived)
+ */
+interface MITISummaryScores {
+    /**
+     * Reflection to Question Ratio (R:Q)
+     * Competent: >= 1:1, Proficient: >= 2:1
+     */
+    readonly reflectionToQuestionRatio: number;
+    /**
+     * Percent Complex Reflections (%CR)
+     * Competent: >= 40%, Proficient: >= 50%
+     */
+    readonly percentComplexReflections: number;
+    /**
+     * Percent Open Questions (%OQ)
+     * Competent: >= 50%, Proficient: >= 70%
+     */
+    readonly percentOpenQuestions: number;
+    /**
+     * MI-Adherent / MI-Non-Adherent Ratio
+     * Higher = better fidelity
+     */
+    readonly adherentNonAdherentRatio: number;
+    /**
+     * Overall fidelity assessment
+     */
+    readonly fidelityLevel: 'below_threshold' | 'competent' | 'proficient';
+}
+/**
+ * Complete MI Fidelity Report
+ */
+interface MIFidelityReport {
+    readonly sessionId: string;
+    readonly timestamp: Date;
+    readonly duration: number;
+    readonly globalScores: MITIGlobalScores;
+    readonly behaviorCounts: MITIBehaviorCounts;
+    readonly summaryScores: MITISummaryScores;
+    /** Specific recommendations for improvement */
+    readonly recommendations: string[];
+    /** Highlights (good moments) */
+    readonly highlights: string[];
+    /** Areas for growth */
+    readonly growthAreas: string[];
+}
+/**
+ * Main MI Engine Interface
+ */
+interface IMotivationalInterviewingEngine {
+    /**
+     * Analyze client utterance and classify CT/ST
+     */
+    analyzeUtterance(text: string): Promise<ClientUtterance>;
+    /**
+     * Generate MI-consistent response
+     */
+    generateResponse(context: MIResponseContext): Promise<MIResponse>;
+    /**
+     * Generate open-ended question to evoke specific CT
+     */
+    generateOpenQuestion(targetChangeTalk: ChangeTaskSubtype, context: MIResponseContext): Promise<MIResponse>;
+    /**
+     * Generate affirmation
+     */
+    generateAffirmation(context: MIResponseContext): Promise<MIResponse>;
+    /**
+     * Generate reflection of client statement
+     */
+    generateReflection(utterance: ClientUtterance, type: ReflectionType, context: MIResponseContext): Promise<MIResponse>;
+    /**
+     * Generate summary
+     */
+    generateSummary(type: SummaryType, context: MIResponseContext): Promise<MIResponse>;
+    /**
+     * Respond to discord/resistance
+     */
+    respondToDiscord(discordType: DiscordType, context: MIResponseContext): Promise<MIResponse>;
+    /**
+     * Calculate MI fidelity for session
+     */
+    calculateFidelity(sessionResponses: MIResponse[], clientUtterances: ClientUtterance[]): MIFidelityReport;
+    /**
+     * Get strategy recommendation based on state
+     */
+    recommendStrategy(state: IMotivationalState): MIStrategy;
+    /**
+     * Determine if ready for action planning
+     */
+    assessReadinessForAction(state: IMotivationalState): {
+        readonly ready: boolean;
+        readonly reasons: string[];
+        readonly nextSteps: string[];
+    };
+}
+/**
+ * Constraints for LLM generation
+ */
+interface MIGenerationConstraints {
+    /** Allowed behavior codes */
+    readonly allowedBehaviors: MITIBehaviorCode[];
+    /** Forbidden behavior codes */
+    readonly forbiddenBehaviors: MITIBehaviorCode[];
+    /** Maximum response length */
+    readonly maxLength: number;
+    /** Must include reflection? */
+    readonly mustIncludeReflection: boolean;
+    /** Avoid MI-inconsistent phrases */
+    readonly avoidPhrases: string[];
+    /** Target CT subtype to evoke */
+    readonly targetChangeTalk?: ChangeTaskSubtype;
+    /** Language */
+    readonly language: 'ru' | 'en';
+}
+/**
+ * Open question templates for evoking change talk
+ */
+declare const OPEN_QUESTION_TEMPLATES: OpenQuestionTemplate[];
+/**
+ * Affirmation templates
+ */
+declare const AFFIRMATION_TEMPLATES: AffirmationTemplate[];
+/**
+ * Reflection pattern templates
+ */
+declare const REFLECTION_TEMPLATES: ReflectionTemplate[];
+/**
+ * Summary templates
+ */
+declare const SUMMARY_TEMPLATES: SummaryTemplate[];
+/**
+ * Discord response strategies
+ */
+declare const DISCORD_RESPONSE_STRATEGIES: Record<DiscordType, {
+    readonly primaryResponse: MITIBehaviorCode;
+    readonly templates: string[];
+    readonly templatesRu: string[];
+    readonly avoid: string[];
+}>;
+/**
+ * MITI 4.2 competency thresholds
+ */
+declare const MITI_THRESHOLDS: {
+    readonly global: {
+        readonly belowThreshold: {
+            readonly cultivatingChangeTalk: 2.5;
+            readonly softeningSustainTalk: 2.5;
+            readonly partnership: 3;
+            readonly empathy: 3;
+        };
+        readonly competent: {
+            readonly cultivatingChangeTalk: 3;
+            readonly softeningSustainTalk: 3;
+            readonly partnership: 3.5;
+            readonly empathy: 3.5;
+        };
+        readonly proficient: {
+            readonly cultivatingChangeTalk: 4;
+            readonly softeningSustainTalk: 4;
+            readonly partnership: 4;
+            readonly empathy: 4;
+        };
+    };
+    readonly summary: {
+        readonly competent: {
+            readonly reflectionToQuestionRatio: 1;
+            readonly percentComplexReflections: 40;
+            readonly percentOpenQuestions: 50;
+        };
+        readonly proficient: {
+            readonly reflectionToQuestionRatio: 2;
+            readonly percentComplexReflections: 50;
+            readonly percentOpenQuestions: 70;
+        };
+    };
+};
+
+/**
+ * MOTIVATIONAL INTERVIEWING ENGINE
+ * =================================
+ * Core implementation of MI techniques for CogniCore
+ *
+ * Scientific Foundation:
+ * - MITI 4.2 Coding System (Moyers et al., 2014)
+ * - MISC 2.5 Client Language Coding
+ * - DARN-CAT Framework for Change Talk
+ * - AI-MI Integration (arXiv:2505.17380, JMIR 2025)
+ *
+ * Key Features:
+ * - Real-time Change Talk / Sustain Talk detection
+ * - DARN-CAT classification
+ * - MI-consistent response generation
+ * - MITI 4.2 fidelity tracking
+ *
+ * БФ "Другой путь" | CogniCore Phase 4.1
+ */
+
+declare class MotivationalStateBuilder implements IMotivationalStateBuilder {
+    private state;
+    constructor();
+    private reset;
+    private generateId;
+    setUserId(userId: string | number): this;
+    setReadinessRuler(importance: number, confidence: number): this;
+    setLinkedStage(stage: ChangeStage): this;
+    addUtterance(utterance: ClientUtterance): this;
+    setLanguageBalance(balance: LanguageBalance): this;
+    setDarnCatProfile(profile: DarnCatProfile): this;
+    setAmbivalence(ambivalence: AmbivalenceState): this;
+    setDiscord(discord: DiscordIndicators): this;
+    setStrategy(strategy: MIStrategy): this;
+    build(): IMotivationalState;
+    private createDefaultReadiness;
+    private createDefaultLanguageBalance;
+    private createDefaultDarnCatProfile;
+    private createDefaultAmbivalence;
+    private createDefaultDiscord;
+}
+declare class MotivationalStateFactory implements IMotivationalStateFactory {
+    private readonly engine;
+    constructor(engine?: MotivationalEngine);
+    fromConversation(messages: Array<{
+        text: string;
+        timestamp: Date;
+        isUser: boolean;
+    }>, userId: string | number, previousState?: IMotivationalState): Promise<IMotivationalState>;
+    fromAssessment(userId: string | number, importance: number, confidence: number): IMotivationalState;
+    createInitial(userId: string | number): IMotivationalState;
+    updateWithUtterance(currentState: IMotivationalState, newUtterance: ClientUtterance): IMotivationalState;
+    updateReadiness(currentState: IMotivationalState, importance: number, confidence: number): IMotivationalState;
+    private calculateLanguageBalance;
+    private buildDarnCatProfile;
+    private inferReadiness;
+    private inferStage;
+    private assessAmbivalence;
+    private detectDiscord;
+}
+declare class MotivationalEngine implements IMotivationalInterviewingEngine {
+    private responseIdCounter;
+    /**
+     * Analyze client utterance for CT/ST classification
+     */
+    analyzeUtterance(text: string): Promise<ClientUtterance>;
+    /**
+     * Generate MI-consistent response
+     */
+    generateResponse(context: MIResponseContext): Promise<MIResponse>;
+    /**
+     * Generate open-ended question to evoke specific CT
+     */
+    generateOpenQuestion(targetChangeTalk: ChangeTaskSubtype, context: MIResponseContext): Promise<MIResponse>;
+    /**
+     * Generate affirmation
+     */
+    generateAffirmation(context: MIResponseContext): Promise<MIResponse>;
+    /**
+     * Generate reflection of client statement
+     */
+    generateReflection(utterance: ClientUtterance, type: ReflectionType, context: MIResponseContext): Promise<MIResponse>;
+    /**
+     * Generate summary
+     */
+    generateSummary(type: SummaryType, context: MIResponseContext): Promise<MIResponse>;
+    /**
+     * Respond to discord/resistance
+     */
+    respondToDiscord(discordType: DiscordType, context: MIResponseContext): Promise<MIResponse>;
+    /**
+     * Calculate MI fidelity for session
+     */
+    calculateFidelity(sessionResponses: MIResponse[], _clientUtterances: ClientUtterance[]): MIFidelityReport;
+    /**
+     * Get strategy recommendation based on state
+     */
+    recommendStrategy(state: IMotivationalState): MIStrategy;
+    /**
+     * Determine if ready for action planning
+     */
+    assessReadinessForAction(state: IMotivationalState): {
+        ready: boolean;
+        reasons: string[];
+        nextSteps: string[];
+    };
+    private calculateMatchConfidence;
+    private selectTargetCt;
+    private createResponse;
+    private calculateSpiritAlignment;
+    private determineFidelityLevel;
+}
 
 /**
  * 🔄 MESSAGE PROCESSING PIPELINE - INTERFACES
@@ -7434,6 +8521,130 @@ declare class VoiceInputAdapter implements IVoiceInputAdapter {
 declare function createVoiceInputAdapter(config?: Partial<IVoiceAdapterConfig>): IVoiceInputAdapter;
 
 /**
+ * 🚨 MULTI-LAYER CRISIS DETECTION ENGINE
+ * =======================================
+ * Real-time Crisis Detection for Mental Health Safety
+ *
+ * Scientific Foundation (2025 Research):
+ * - Multi-layer detection pattern (AI UX Design Guide, 2025)
+ * - C-SSRS inspired severity levels (Columbia Protocol)
+ * - Suicide Risk Lexicon methodology (ResearchGate, 2025)
+ * - Russian language support (Springer, 2020)
+ *
+ * Architecture:
+ * Layer 1: Raw text keyword scanning (IMMEDIATE, before any processing)
+ * Layer 2: Pattern & context analysis (linguistic patterns)
+ * Layer 3: State-based risk assessment (integration with StateVector)
+ *
+ * © БФ "Другой путь", 2025
+ */
+/**
+ * Crisis severity levels (C-SSRS inspired)
+ */
+type CrisisSeverity = 'none' | 'low' | 'moderate' | 'high' | 'critical';
+/**
+ * Crisis type classification
+ */
+type CrisisType = 'suicidal_ideation' | 'suicidal_intent' | 'self_harm' | 'acute_distress' | 'psychotic_features' | 'substance_crisis' | 'panic_attack' | 'unknown';
+/**
+ * Detection layer result
+ */
+interface LayerResult {
+    readonly triggered: boolean;
+    readonly confidence: number;
+    readonly indicators: string[];
+    readonly matchedPatterns: string[];
+}
+/**
+ * Complete crisis detection result
+ */
+interface CrisisDetectionResult {
+    readonly isCrisis: boolean;
+    readonly severity: CrisisSeverity;
+    readonly crisisType: CrisisType;
+    readonly confidence: number;
+    readonly layer1RawText: LayerResult;
+    readonly layer2Pattern: LayerResult;
+    readonly layer3State: LayerResult;
+    readonly allIndicators: string[];
+    readonly primaryIndicator: string | null;
+    readonly recommendedAction: 'none' | 'monitor' | 'supportive_response' | 'crisis_protocol' | 'emergency_escalation';
+    readonly urgency: 'routine' | 'soon' | 'urgent' | 'immediate';
+    readonly detectedAt: Date;
+    readonly processingTimeMs: number;
+}
+/**
+ * Crisis detector configuration
+ */
+interface CrisisDetectorConfig {
+    readonly enableLayer1: boolean;
+    readonly enableLayer2: boolean;
+    readonly enableLayer3: boolean;
+    readonly sensitivityLevel: 'low' | 'medium' | 'high';
+    readonly language: 'ru' | 'en' | 'auto';
+}
+/**
+ * State risk data for Layer 3
+ */
+interface StateRiskData {
+    readonly overallRiskLevel: number;
+    readonly suicidalIdeation: number;
+    readonly selfHarmRisk: number;
+    readonly emotionalValence: number;
+    readonly recentTrend: 'improving' | 'stable' | 'declining';
+}
+/**
+ * Default configuration
+ */
+declare const DEFAULT_CRISIS_CONFIG: CrisisDetectorConfig;
+/**
+ * Multi-layer Crisis Detector
+ */
+declare class CrisisDetector {
+    private readonly config;
+    constructor(config?: Partial<CrisisDetectorConfig>);
+    /**
+     * Main detection method - analyzes text for crisis indicators
+     * This should be called BEFORE any cognitive analysis
+     */
+    detect(rawText: string, stateRiskData?: StateRiskData): CrisisDetectionResult;
+    /**
+     * Quick check - returns true if ANY crisis indicator found
+     * Use for immediate bypass decisions
+     */
+    quickCheck(rawText: string): boolean;
+    private runLayer1RawTextScan;
+    private getKeywordSets;
+    private calculateLayer1Confidence;
+    private runLayer2PatternAnalysis;
+    private calculateLayer2Confidence;
+    private runLayer3StateAnalysis;
+    private calculateLayer3Confidence;
+    private checkProtectiveFactors;
+    private aggregateResults;
+    private calculateCombinedConfidence;
+    private determineSeverity;
+    private determineCrisisType;
+    private determineResponse;
+    private findPrimaryIndicator;
+    private normalizeText;
+    private detectLanguage;
+    private emptyLayerResult;
+    /**
+     * Get crisis resources for user
+     */
+    getCrisisResources(language?: 'ru' | 'en'): string[];
+}
+/**
+ * Create crisis detector with optional configuration
+ */
+declare function createCrisisDetector(config?: Partial<CrisisDetectorConfig>): CrisisDetector;
+/**
+ * Create default crisis detector instance
+ */
+declare const defaultCrisisDetector: CrisisDetector;
+
+/**
  * @cognicore/engine
  * =================
  * World's First Universal POMDP-based Cognitive State Engine
@@ -7462,4 +8673,4 @@ type SupportedLanguage = 'en' | 'ru';
  */
 type DomainVertical = 'addiction' | 'sleep' | 'pain' | 'anxiety' | 'depression' | 'custom';
 
-export { type ABCDChain, type AgeGroup$1 as AgeGroup, type AttentionalBias, type BeliefState$1 as BeliefState, BeliefStateAdapter, type BeliefUpdate, type BeliefUpdateResult, COGNICORE_VERSION, type ChangeStage, type CognitiveDistortion, type CognitiveDistortionType, type CognitiveLoad, type CognitiveTriad, type ComponentStatus, type CopingStrategy, type CopingStrategyType, type CoreBeliefPattern, DEFAULT_EMOTION_VAD, DEFAULT_KALMANFORMER_CONFIG, DEFAULT_PLRNN_CONFIG, DEFAULT_VOICE_CONFIG, DIMENSION_INDEX, DIMENSION_MAPPING, DISTORTION_INTERVENTIONS, DISTORTION_PATTERNS, type DetectedDistortion, type DomainVertical, EMOTION_THERAPY_MAPPING, type EmotionPattern, type EmotionTrend, type EmotionType$1 as EmotionType, type EnergyLevel, type IAcousticFeatures, type IAttentionWeights, type IBeliefUpdateEngine, type ICausalEdge, type ICausalGraph, type ICausalNetwork, type ICausalNode, type ICognitiveDistortionDetector, type ICognitiveState, type ICognitiveStateBuilder, type ICognitiveStateFactory, type IConstitutionalPrinciple, type IContextualFeatures, type ICounterfactualExplanation, type ICrisisDetectionResult, type IDecisionPoint, type IDeepCognitiveMirror, type IDigitalTwinService, type IDigitalTwinState, type IEarlyWarningSignal, type IEmotionalState$1 as IEmotionalState, type IEmotionalStateBuilder, type IEmotionalStateFactory, type IEscalationDecision, type IExplainabilityService, type IFeatureAttribution, type IGlobalFeatureImportance, type IHumanEscalationRequest, type IHybridPrediction, type IIncomingMessage, type IIntervention$1 as IIntervention, type IInterventionOptimizer, type IInterventionOutcome, type IInterventionSelection, type IInterventionSimulation, type IInterventionTarget, type IKalmanFormerConfig, type IKalmanFormerEngine, type IKalmanFormerPrediction, type IKalmanFormerState, type IKalmanFormerTrainingSample, type IKalmanFormerWeights, type IMessageAnalysis, type IMetacognitiveState, type IModelCard, type IMotivationalState, type IMultimodalFusion, INDEX_THRESHOLDS, type INarrativeExplanation, type INarrativeState, type INarrativeStateBuilder, type ICausalEdge$1 as IPLRNNCausalEdge, type ICausalNode$1 as IPLRNNCausalNode, type IPLRNNConfig, type IPLRNNEngine, type IPLRNNPrediction, type IPLRNNState, type IPLRNNTrainingResult, type IPLRNNTrainingSample, type IPLRNNWeights, type IPipelineResult, type IProsodyFeatures, type IResourceState, type IResourceStateBuilder, type IRiskState, type IRiskStateBuilder, type ISHAPExplanation, type ISafetyContext, type ISafetyInvariant, type ISafetyValidationResult, type IScenario, type IScenarioResult, type IStateTrajectory, type IStateVector, type IStateVectorBuilder, type IStateVectorFactory, type IStateVectorRepository, type IStateVectorService, type ITemporalEchoEngine, type ITextAnalysis, type ITippingPoint, type ITwinStateVariable, type IVADMapper, type IVoiceAdapterConfig, type IVoiceEmotionEstimate, type IVoiceInputAdapter, type IVoiceProcessingResult, KalmanFormerEngine, type KalmanFormerEngineFactory, type MessageIntent, type Metacognition, type NarrativeChapter, type NarrativeMoment, type NarrativeRole, type NarrativeTheme, type Observation, type ObservationSource, type PERMADimensions, PLRNNEngine, type PLRNNEngineFactory, type AgeGroup as PipelineAgeGroup, type ProtectiveFactor, type RegulationEffectiveness, type Resilience, type RiskFactor, type RiskLevel$2 as RiskLevel, type RiskTrajectory, type SafetyLevel, type SafetyPlan, type RiskLevel$1 as SafetyRiskLevel, type ScoredEmotion, type SocialResources, type SocraticQuestion, type StageTransition, type StateBasedRecommendation, type StateQuality, type StateSummary, type StateTransition, type SupportedLanguage, type TemporalPrediction, type TextAnalysisResult, type TherapeuticInsight, type ThinkingStyle, type VADDimensions, VoiceInputAdapter, type VoiceInputAdapterFactory, type VulnerabilityWindow, WELLBEING_WEIGHTS, beliefStateToKalmanFormerState, beliefStateToObservation, beliefStateToPLRNNState, beliefStateToUncertainty, createBeliefStateAdapter, createKalmanFormerEngine, createPLRNNEngine, createVoiceInputAdapter, getComponentStatus, kalmanFormerStateToBeliefUpdate, mergeHybridPredictions, plrnnStateToBeliefUpdate };
+export { type ABCDChain, AFFIRMATION_TEMPLATES, type AffirmationTemplate, type AgeGroup$1 as AgeGroup, type AmbivalenceState, type AmbivalenceType, type AttentionalBias, type BeliefState, BeliefStateAdapter, type BeliefUpdate, type BeliefUpdateResult, CHANGE_TALK_PATTERNS, COGNICORE_VERSION, type ChangeStage, type ChangeTaskSubtype, type ClientLanguageCategory, type ClientUtterance, type CognitiveDistortion, type CognitiveDistortionType, type CognitiveLoad, type CognitiveTriad, type ComponentStatus, type CopingStrategy, type CopingStrategyType, type CoreBeliefPattern, type CrisisDetectionResult, CrisisDetector, type CrisisDetectorConfig, type CrisisSeverity, type CrisisType, DEFAULT_CRISIS_CONFIG, DEFAULT_EMOTION_VAD, DEFAULT_KALMANFORMER_CONFIG, DEFAULT_PLRNN_CONFIG, DEFAULT_VOICE_CONFIG, DIMENSION_INDEX, DIMENSION_MAPPING, DISCORD_PATTERNS, DISCORD_RESPONSE_STRATEGIES, DISTORTION_INTERVENTIONS, DISTORTION_PATTERNS, type DarnCatProfile, type DetectedDistortion, type DimensionBelief, type DiscordEvent, type DiscordIndicators, type DiscordType, type DomainVertical, EMOTION_THERAPY_MAPPING, type EmotionPattern, type EmotionTrend, type EmotionType$1 as EmotionType, type EnergyLevel, ExplainabilityService, type ExplanationAudience, type ExplanationLevel, type ExplanationType, type IAcousticFeatures, type IAttentionWeights, type IBeliefUpdateEngine, type ICausalEdge, type ICausalGraph, type ICausalNetwork, type ICausalNode, type ICognitiveDistortionDetector, type ICognitiveState, type ICognitiveStateBuilder, type ICognitiveStateFactory, type IConstitutionalPrinciple, type IContextualFeatures, type ICounterfactualExplanation, type ICrisisDetectionResult, type IDecisionPoint, type IDeepCognitiveMirror, type IDigitalTwinService, type IDigitalTwinState, type IEarlyWarningSignal, type IEmotionalState$1 as IEmotionalState, type IEmotionalStateBuilder, type IEmotionalStateFactory, type IEscalationDecision, type IExplainabilityService, type IExplanationRequest, type IExplanationResponse, type IFeatureAttribution, type IFullBeliefState, type IGlobalFeatureImportance, type IHumanEscalationRequest, type IHybridPrediction, type IIncomingMessage, type IIntervention$1 as IIntervention, type IInterventionOptimizer, type IInterventionOutcome, type IInterventionSelection, type IInterventionSimulation, type IInterventionTarget, type IKalmanFormerConfig, type IKalmanFormerEngine, type IKalmanFormerPrediction, type IKalmanFormerState, type IKalmanFormerTrainingSample, type IKalmanFormerWeights, type IMessageAnalysis, type IMetacognitiveState, type IModelCard, type IMotivationalInterviewingEngine, type IMotivationalState, type IMotivationalStateBuilder, type IMotivationalStateFactory, type IMultimodalFusion, INDEX_THRESHOLDS, type INarrativeExplanation, type INarrativeState, type INarrativeStateBuilder, type ICausalEdge$1 as IPLRNNCausalEdge, type ICausalNode$1 as IPLRNNCausalNode, type IPLRNNConfig, type IPLRNNEngine, type IPLRNNPrediction, type IPLRNNState, type IPLRNNTrainingResult, type IPLRNNTrainingSample, type IPLRNNWeights, type IPipelineResult, type IProsodyFeatures, type IResourceState, type IResourceStateBuilder, type IRiskState, type IRiskStateBuilder, type ISHAPExplanation, type ISafetyContext, type ISafetyInvariant, type ISafetyValidationResult, type IScenario, type IScenarioResult, type IStateTrajectory, type IStateVector, type IStateVectorBuilder, type IStateVectorFactory, type IStateVectorRepository, type IStateVectorService, type ITemporalEchoEngine, type ITextAnalysis, type ITippingPoint, type ITwinStateVariable, type IUserExplanation, type IUserFactor, type IUserInterventionProfile, type IVADMapper, type IVoiceAdapterConfig, type IVoiceEmotionEstimate, type IVoiceInputAdapter, type IVoiceProcessingResult, type InterventionCategory, type InterventionIntensity, KalmanFormerEngine, type KalmanFormerEngineFactory, type LanguageBalance, type LayerResult, type MIFidelityReport, type MIGenerationConstraints, type MIResponse, type MIResponseContext, type MIStrategy, type MITIBehaviorCode, type MITIBehaviorCounts, type MITIGlobalScores, type MITISummaryScores, MITI_THRESHOLDS, type MessageIntent, type Metacognition, MotivationalEngine, MotivationalStateBuilder, MotivationalStateFactory, type NarrativeChapter, type NarrativeMoment, type NarrativeRole, type NarrativeTheme, type OARSTechnique, OPEN_QUESTION_TEMPLATES, type Observation, type ObservationSource, type ObservationType, type OpenQuestionTemplate, type PERMADimensions, PLRNNEngine, type PLRNNEngineFactory, type AgeGroup as PipelineAgeGroup, type ProtectiveFactor, REFLECTION_TEMPLATES, type ReadinessRuler, type ReflectionTemplate, type ReflectionType, type RegulationEffectiveness, type Resilience, type RiskFactor, type RiskLevel$2 as RiskLevel, type RiskTrajectory, STRATEGY_RECOMMENDATIONS, SUMMARY_TEMPLATES, SUSTAIN_TALK_PATTERNS, type SafetyLevel, type SafetyPlan, type RiskLevel$1 as SafetyRiskLevel, type ScoredEmotion, type SocialResources, type SocraticQuestion, type StageTransition, type StateBasedRecommendation, type StateQuality, type StateRiskData, type StateSummary, type StateTransition, type SummaryTemplate, type SummaryType, type SupportedLanguage, type SustainTalkSubtype, type TemporalPrediction, type TextAnalysisResult, type TherapeuticInsight, type ThinkingStyle, type VADDimensions, VoiceInputAdapter, type VoiceInputAdapterFactory, type VulnerabilityWindow, WELLBEING_WEIGHTS, beliefStateToKalmanFormerState, beliefStateToObservation, beliefStateToPLRNNState, beliefStateToUncertainty, createBeliefStateAdapter, createCrisisDetector, createExplainabilityService, createKalmanFormerEngine, createPLRNNEngine, createVoiceInputAdapter, defaultCrisisDetector, getComponentStatus, kalmanFormerStateToBeliefUpdate, mergeHybridPredictions, plrnnStateToBeliefUpdate };

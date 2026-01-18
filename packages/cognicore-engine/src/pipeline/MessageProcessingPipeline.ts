@@ -46,6 +46,17 @@ import {
   ResponseType,
 } from './IMessagePipeline';
 
+// Phase 1: Voice input integration for multimodal fusion
+// Per PMC 2025: Multimodal F1=0.97 vs text-only 0.77
+import {
+  VoiceInputAdapter,
+  createVoiceInputAdapter,
+} from '../voice/VoiceInputAdapter';
+import type {
+  IVoiceProcessingResult,
+  IMultimodalFusion,
+} from '../voice/interfaces/IVoiceAdapter';
+
 // Simple ID generator (avoids ESM uuid package issues with Jest)
 function generateId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`;
@@ -643,6 +654,9 @@ export class MessageProcessingPipeline implements IMessageProcessingPipeline {
   private stats: IPipelineStats;
   private startTime: Date;
 
+  // Phase 1: Voice adapter for multimodal input
+  private voiceAdapter: VoiceInputAdapter;
+
   constructor(config: Partial<IPipelineConfig> = {}) {
     this.config = { ...DEFAULT_PIPELINE_CONFIG, ...config };
     this.userStateStore = new UserStateStore();
@@ -651,6 +665,15 @@ export class MessageProcessingPipeline implements IMessageProcessingPipeline {
     this.responseGenerator = new ResponseGenerator();
     this.eventHandlers = new Map();
     this.startTime = new Date();
+
+    // Initialize Phase 1 voice adapter
+    this.voiceAdapter = createVoiceInputAdapter({
+      sampleRate: 16000,
+      frameSizeMs: 25,
+      hopSizeMs: 10,
+      enableWhisper: false,
+      fusionStrategy: 'late',
+    });
 
     this.stats = {
       messagesProcessed: 0,
@@ -836,6 +859,57 @@ export class MessageProcessingPipeline implements IMessageProcessingPipeline {
       ...this.stats,
       uptimeSeconds: Math.floor((Date.now() - this.startTime.getTime()) / 1000),
     };
+  }
+
+  // ============================================================================
+  // PHASE 1: VOICE PROCESSING (Multimodal Fusion)
+  // ============================================================================
+
+  /**
+   * Process voice input with optional transcription
+   * Per Voice of Mind 2025: AUC 0.71-0.93 for depression/anxiety
+   * Per PMC 2025: Multimodal F1=0.97 vs text-only 0.77
+   */
+  async processVoice(
+    audioBuffer: Float32Array,
+    options?: { transcript?: string; sampleRate?: number }
+  ): Promise<IVoiceProcessingResult> {
+    await this.voiceAdapter.initialize();
+
+    if (options?.transcript) {
+      return this.voiceAdapter.processWithTranscription(audioBuffer, options.transcript);
+    }
+    return this.voiceAdapter.processAudio(audioBuffer, options?.sampleRate);
+  }
+
+  /**
+   * Process message with optional voice input for multimodal analysis
+   * Combines text NLP with voice prosody for enhanced emotion detection
+   */
+  async processWithVoice(
+    message: IIncomingMessage,
+    audioBuffer: Float32Array,
+    sampleRate?: number
+  ): Promise<IPipelineResult & { voiceAnalysis?: IVoiceProcessingResult; fusion?: IMultimodalFusion }> {
+    // Process voice in parallel with text
+    const [textResult, voiceResult] = await Promise.all([
+      this.process(message),
+      this.processVoice(audioBuffer, { transcript: message.text, sampleRate }),
+    ]);
+
+    // Enhance result with voice analysis and fusion
+    return {
+      ...textResult,
+      voiceAnalysis: voiceResult,
+      fusion: voiceResult.fusion,
+    };
+  }
+
+  /**
+   * Get voice adapter for direct access (advanced use cases)
+   */
+  getVoiceAdapter(): VoiceInputAdapter {
+    return this.voiceAdapter;
   }
 
   // Private helpers

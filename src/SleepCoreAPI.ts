@@ -331,8 +331,9 @@ export class SleepCoreAPI {
 
   /**
    * Process daily check-in and get recommendations
+   * Now async due to CogniCore Thompson Sampling integration
    */
-  processDailyCheckIn(checkIn: IDailyCheckIn): IInterventionResult {
+  async processDailyCheckIn(checkIn: IDailyCheckIn): Promise<IInterventionResult> {
     // Add diary entry
     const metrics = this.addDiaryEntry(checkIn.diaryEntry);
 
@@ -363,10 +364,10 @@ export class SleepCoreAPI {
     userStates.push(currentState);
     this.sleepStates.set(checkIn.userId, userStates);
 
-    // Get CBT-I intervention
-    const intervention = this.cbtiEngine.getNextIntervention(session.plan, currentState);
+    // Get CBT-I intervention (now async with CogniCore integration)
+    const intervention = await this.cbtiEngine.getNextIntervention(session.plan, currentState);
 
-    // Use POMDP to select action
+    // Use POMDP to select action (kept for backwards compatibility, will be deprecated)
     const pomdpAction = this.pomdp.selectAction(
       this.pomdp.sleepStateToPomdpState(currentState)
     );
@@ -387,8 +388,9 @@ export class SleepCoreAPI {
 
   /**
    * Get next recommended intervention
+   * Now async due to CogniCore Thompson Sampling integration
    */
-  getNextIntervention(userId: string): ICBTIIntervention | null {
+  async getNextIntervention(userId: string): Promise<ICBTIIntervention | null> {
     const session = this.sessions.get(userId);
     if (!session?.plan) return null;
 

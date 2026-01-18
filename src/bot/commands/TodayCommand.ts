@@ -42,8 +42,8 @@ export class TodayCommand implements ICommand {
       return this.showNoSession(ctx);
     }
 
-    // Get next intervention
-    const intervention = ctx.sleepCore.getNextIntervention(ctx.userId);
+    // Get next intervention (now async with CogniCore Thompson Sampling)
+    const intervention = await ctx.sleepCore.getNextIntervention(ctx.userId);
     if (!intervention) {
       return this.showNoIntervention(ctx);
     }

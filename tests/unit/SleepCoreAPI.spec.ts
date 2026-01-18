@@ -293,20 +293,20 @@ describe('SleepCoreAPI', () => {
     });
 
     describe('processDailyCheckIn()', () => {
-      it('should require active treatment plan', () => {
+      it('should require active treatment plan', async () => {
         api.startSession('user-123');
         const checkIn = createDailyCheckIn({ userId: 'user-123' });
 
-        expect(() => api.processDailyCheckIn(checkIn))
-          .toThrow('No active treatment plan for user');
+        await expect(api.processDailyCheckIn(checkIn))
+          .rejects.toThrow('No active treatment plan for user');
       });
 
-      it('should return intervention result with plan', () => {
+      it('should return intervention result with plan', async () => {
         api.startSession('user-123');
         api.initializeTreatment('user-123', createBaselineData('user-123', 7));
 
         const checkIn = createDailyCheckIn({ userId: 'user-123' });
-        const result = api.processDailyCheckIn(checkIn);
+        const result = await api.processDailyCheckIn(checkIn);
 
         expect(result.intervention).toBeDefined();
         expect(result.confidence).toBeGreaterThanOrEqual(0);
@@ -316,20 +316,20 @@ describe('SleepCoreAPI', () => {
     });
 
     describe('getNextIntervention()', () => {
-      it('should return null without active plan', () => {
+      it('should return null without active plan', async () => {
         api.startSession('user-123');
 
-        const intervention = api.getNextIntervention('user-123');
+        const intervention = await api.getNextIntervention('user-123');
 
         expect(intervention).toBeNull();
       });
 
-      it('should return intervention with active plan and states', () => {
+      it('should return intervention with active plan and states', async () => {
         api.startSession('user-123');
         api.initializeTreatment('user-123', createBaselineData('user-123', 7));
-        api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
+        await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
 
-        const intervention = api.getNextIntervention('user-123');
+        const intervention = await api.getNextIntervention('user-123');
 
         expect(intervention).toBeDefined();
       });
@@ -344,13 +344,13 @@ describe('SleepCoreAPI', () => {
         expect(updated).toBeNull();
       });
 
-      it('should update plan with sufficient recent states', () => {
+      it('should update plan with sufficient recent states', async () => {
         api.startSession('user-123');
         api.initializeTreatment('user-123', createBaselineData('user-123', 7));
 
         // Add 5 daily check-ins
         for (let i = 0; i < 5; i++) {
-          api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
+          await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
         }
 
         const updated = api.updateTreatmentPlan('user-123');
@@ -445,12 +445,12 @@ describe('SleepCoreAPI', () => {
         expect(trend).toEqual([]);
       });
 
-      it('should return efficiency values with states', () => {
+      it('should return efficiency values with states', async () => {
         api.startSession('user-123');
         api.initializeTreatment('user-123', createBaselineData('user-123', 7));
 
         for (let i = 0; i < 3; i++) {
-          api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
+          await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
         }
 
         const trend = api.getSleepEfficiencyTrend('user-123', 3);
@@ -471,10 +471,10 @@ describe('SleepCoreAPI', () => {
         expect(recommendation).toBeNull();
       });
 
-      it('should return recommendation with states', () => {
+      it('should return recommendation with states', async () => {
         api.startSession('user-123');
         api.initializeTreatment('user-123', createBaselineData('user-123', 7));
-        api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
+        await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
 
         const recommendation = api.recommendThirdWaveApproach('user-123');
 
@@ -482,10 +482,10 @@ describe('SleepCoreAPI', () => {
         expect(recommendation!.recommendedApproach).toBeDefined();
       });
 
-      it('should consider treatment history', () => {
+      it('should consider treatment history', async () => {
         api.startSession('user-123');
         api.initializeTreatment('user-123', createBaselineData('user-123', 7));
-        api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
+        await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
 
         const recommendation = api.recommendThirdWaveApproach('user-123', {
           failedCBTI: true,
@@ -820,10 +820,10 @@ describe('SleepCoreAPI', () => {
         expect(assessment).toBeNull();
       });
 
-      it('should assess TCM profile with states', () => {
+      it('should assess TCM profile with states', async () => {
         api.startSession('user-123');
         api.initializeTreatment('user-123', createBaselineData('user-123', 7));
-        api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
+        await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
 
         const assessment = api.assessTCMProfile('user-123');
 
@@ -862,10 +862,10 @@ describe('SleepCoreAPI', () => {
         expect(assessment).toBeNull();
       });
 
-      it('should assess Ayurvedic profile with states', () => {
+      it('should assess Ayurvedic profile with states', async () => {
         api.startSession('user-123');
         api.initializeTreatment('user-123', createBaselineData('user-123', 7));
-        api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
+        await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
 
         const assessment = api.assessAyurvedicProfile('user-123');
 
@@ -1015,10 +1015,10 @@ describe('SleepCoreAPI', () => {
         expect(recommendation!.personalizationFactors.some(f => f.includes('Хронотип'))).toBe(true);
       });
 
-      it('should include TCM adaptations when assessed', () => {
+      it('should include TCM adaptations when assessed', async () => {
         api.startSession('user-123');
         api.initializeTreatment('user-123', createBaselineData('user-123', 7));
-        api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
+        await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
         api.assessTCMProfile('user-123');
 
         const recommendation = api.getIntegratedRecommendation('user-123');
@@ -1027,10 +1027,10 @@ describe('SleepCoreAPI', () => {
         expect(recommendation!.culturalAdaptations.some(a => a.includes('ТКМ'))).toBe(true);
       });
 
-      it('should include Ayurvedic adaptations when assessed', () => {
+      it('should include Ayurvedic adaptations when assessed', async () => {
         api.startSession('user-123');
         api.initializeTreatment('user-123', createBaselineData('user-123', 7));
-        api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
+        await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
         api.assessAyurvedicProfile('user-123');
 
         const recommendation = api.getIntegratedRecommendation('user-123');

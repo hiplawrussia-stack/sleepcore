@@ -7,79 +7,79 @@
   "module": "dist/index.mjs",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     },
     "./state": {
+      "types": "./dist/state/index.d.ts",
       "import": "./dist/state/index.mjs",
-      "require": "./dist/state/index.js",
-      "types": "./dist/state/index.d.ts"
+      "require": "./dist/state/index.js"
     },
     "./belief": {
+      "types": "./dist/belief/index.d.ts",
       "import": "./dist/belief/index.mjs",
-      "require": "./dist/belief/index.js",
-      "types": "./dist/belief/index.d.ts"
+      "require": "./dist/belief/index.js"
     },
     "./temporal": {
+      "types": "./dist/temporal/index.d.ts",
       "import": "./dist/temporal/index.mjs",
-      "require": "./dist/temporal/index.js",
-      "types": "./dist/temporal/index.d.ts"
+      "require": "./dist/temporal/index.js"
     },
     "./mirror": {
+      "types": "./dist/mirror/index.d.ts",
       "import": "./dist/mirror/index.mjs",
-      "require": "./dist/mirror/index.js",
-      "types": "./dist/mirror/index.d.ts"
+      "require": "./dist/mirror/index.js"
     },
     "./intervention": {
+      "types": "./dist/intervention/index.d.ts",
       "import": "./dist/intervention/index.mjs",
-      "require": "./dist/intervention/index.js",
-      "types": "./dist/intervention/index.d.ts"
+      "require": "./dist/intervention/index.js"
     },
     "./twin": {
+      "types": "./dist/twin/index.d.ts",
       "import": "./dist/twin/index.mjs",
-      "require": "./dist/twin/index.js",
-      "types": "./dist/twin/index.d.ts"
+      "require": "./dist/twin/index.js"
     },
     "./safety": {
+      "types": "./dist/safety/index.d.ts",
       "import": "./dist/safety/index.mjs",
-      "require": "./dist/safety/index.js",
-      "types": "./dist/safety/index.d.ts"
+      "require": "./dist/safety/index.js"
     },
     "./explainability": {
+      "types": "./dist/explainability/index.d.ts",
       "import": "./dist/explainability/index.mjs",
-      "require": "./dist/explainability/index.js",
-      "types": "./dist/explainability/index.d.ts"
+      "require": "./dist/explainability/index.js"
     },
     "./causal": {
+      "types": "./dist/causal/index.d.ts",
       "import": "./dist/causal/index.mjs",
-      "require": "./dist/causal/index.js",
-      "types": "./dist/causal/index.d.ts"
+      "require": "./dist/causal/index.js"
     },
     "./metacognition": {
+      "types": "./dist/metacognition/index.d.ts",
       "import": "./dist/metacognition/index.mjs",
-      "require": "./dist/metacognition/index.js",
-      "types": "./dist/metacognition/index.d.ts"
+      "require": "./dist/metacognition/index.js"
     },
     "./motivation": {
+      "types": "./dist/motivation/index.d.ts",
       "import": "./dist/motivation/index.mjs",
-      "require": "./dist/motivation/index.js",
-      "types": "./dist/motivation/index.d.ts"
+      "require": "./dist/motivation/index.js"
     },
     "./pipeline": {
+      "types": "./dist/pipeline/index.d.ts",
       "import": "./dist/pipeline/index.mjs",
-      "require": "./dist/pipeline/index.js",
-      "types": "./dist/pipeline/index.d.ts"
+      "require": "./dist/pipeline/index.js"
     },
     "./events": {
+      "types": "./dist/events/index.d.ts",
       "import": "./dist/events/index.mjs",
-      "require": "./dist/events/index.js",
-      "types": "./dist/events/index.d.ts"
+      "require": "./dist/events/index.js"
     },
     "./crisis": {
+      "types": "./dist/crisis/index.d.ts",
       "import": "./dist/crisis/index.mjs",
-      "require": "./dist/crisis/index.js",
-      "types": "./dist/crisis/index.d.ts"
+      "require": "./dist/crisis/index.js"
     }
   },
   "files": [
@@ -136,23 +136,27 @@
     "url": "https://github.com/drugoy-put/cognicore-engine/issues"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0 || >=20.0.0 || >=22.0.0"
   },
   "peerDependencies": {
     "typescript": ">=5.0.0"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.12",
-    "@types/node": "^20.11.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
-    "eslint": "^8.57.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
     "jest": "^29.7.0",
-    "ts-jest": "^29.1.2",
+    "ts-jest": "^29.4.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.9.0"
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "uuid": "^13.0.0"
   }
 }

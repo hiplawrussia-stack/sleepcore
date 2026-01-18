@@ -20,7 +20,7 @@
 
 import {
   type IBeliefUpdateEngine,
-  type BeliefState,
+  type IFullBeliefState,
   type BeliefUpdateResult,
   type Observation,
   type ObservationType,
@@ -213,7 +213,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
   // History storage for belief tracking
   private readonly beliefHistory: Map<string | number, Array<{
     timestamp: Date;
-    belief: BeliefState;
+    belief: IFullBeliefState;
   }>> = new Map();
 
   constructor(
@@ -237,7 +237,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
    * Initialize belief state for new user
    * Uses population priors as starting point
    */
-  initializeBelief(userId: string | number): BeliefState {
+  initializeBelief(userId: string | number): IFullBeliefState {
     const now = new Date();
     const defaultPrior: Prior = {
       mean: 0.5,
@@ -280,7 +280,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
       }
     }
 
-    const belief: BeliefState = {
+    const belief: IFullBeliefState = {
       userId,
       timestamp: now,
       emotional: {
@@ -353,7 +353,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
    * Implements Bayesian posterior update: P(state|obs) ∝ P(obs|state) × P(state)
    */
   updateBelief(
-    currentBelief: BeliefState,
+    currentBelief: IFullBeliefState,
     observation: Observation
   ): BeliefUpdateResult {
     const now = new Date();
@@ -438,7 +438,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
       predictionAccuracy: currentBelief.meta.predictionAccuracy, // Updated elsewhere
     };
 
-    const newBelief: BeliefState = {
+    const newBelief: IFullBeliefState = {
       userId: currentBelief.userId,
       timestamp: now,
       emotional: newEmotional,
@@ -466,7 +466,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
    * Batch update with multiple observations
    */
   batchUpdateBelief(
-    currentBelief: BeliefState,
+    currentBelief: IFullBeliefState,
     observations: Observation[]
   ): BeliefUpdateResult {
     // Sort observations by timestamp
@@ -513,7 +513,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
    * Convert belief state to point estimate (StateVector)
    * Uses posterior means as point estimates
    */
-  beliefToStateVector(belief: BeliefState): IStateVector {
+  beliefToStateVector(belief: IFullBeliefState): IStateVector {
     // Find most likely emotion from distribution
     let maxEmotion: EmotionType = 'neutral';
     let maxProb = 0;
@@ -816,7 +816,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
    * Get uncertainty for specific dimension
    */
   getDimensionUncertainty(
-    belief: BeliefState,
+    belief: IFullBeliefState,
     dimension: string
   ): {
     uncertainty: number;
@@ -868,7 +868,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
    * Based on information-theoretic expected utility
    */
   calculateExpectedInfoGain(
-    currentBelief: BeliefState,
+    currentBelief: IFullBeliefState,
     potentialObservationType: ObservationType
   ): number {
     // Which dimensions does this observation type inform?
@@ -901,7 +901,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
    * Active inference: minimize expected prediction error
    */
   getMostInformativeObservation(
-    currentBelief: BeliefState
+    currentBelief: IFullBeliefState
   ): {
     observationType: ObservationType;
     expectedInfoGain: number;
@@ -954,7 +954,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
    * Check for belief inconsistencies
    * Detects contradictions between related dimensions
    */
-  checkBeliefConsistency(belief: BeliefState): {
+  checkBeliefConsistency(belief: IFullBeliefState): {
     isConsistent: boolean;
     inconsistencies: Array<{
       dimension1: string;
@@ -1036,9 +1036,9 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
    * Epistemic uncertainty increases without new observations
    */
   applyBeliefDecay(
-    belief: BeliefState,
+    belief: IFullBeliefState,
     hoursSinceLastUpdate: number
-  ): BeliefState {
+  ): IFullBeliefState {
     const decayFactor = Math.pow(1 + this.config.beliefDecayRate, hoursSinceLastUpdate);
 
     const decayDimension = (dim: DimensionBelief): DimensionBelief => {
@@ -1078,9 +1078,9 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
       },
       risk: {
         overallRisk: decayDimension(belief.risk.overallRisk),
-        categoryRisks: new Map(
+        categoryRisks: new Map<string, DimensionBelief>(
           Array.from(belief.risk.categoryRisks.entries()).map(
-            ([k, v]) => [k, decayDimension(v)]
+            ([k, v]: [string, DimensionBelief]) => [k, decayDimension(v)] as [string, DimensionBelief]
           )
         ),
       },
@@ -1134,7 +1134,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
 
   // ============ Private Helper Methods ============
 
-  private storeBeliefHistory(userId: string | number, belief: BeliefState): void {
+  private storeBeliefHistory(userId: string | number, belief: IFullBeliefState): void {
     if (!this.beliefHistory.has(userId)) {
       this.beliefHistory.set(userId, []);
     }
@@ -1149,12 +1149,12 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
   }
 
   private updateEmotionalBeliefs(
-    current: BeliefState['emotional'],
+    current: IFullBeliefState['emotional'],
     observation: Observation,
     weight: number,
     updatedDimensions: string[],
     significantChanges: BeliefUpdateResult['significantChanges']
-  ): BeliefState['emotional'] {
+  ): IFullBeliefState['emotional'] {
     if (!observation.informsComponents.includes('emotional')) {
       return current;
     }
@@ -1233,17 +1233,17 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
   }
 
   private updateEmotionDistribution(
-    current: BeliefState['emotional']['primaryEmotion'],
+    current: IFullBeliefState['emotional']['primaryEmotion'],
     observedEmotion: EmotionType | undefined,
     weight: number
-  ): BeliefState['emotional']['primaryEmotion'] {
+  ): IFullBeliefState['emotional']['primaryEmotion'] {
     if (!observedEmotion) return current;
 
-    const newDistribution = new Map(current.distribution);
+    const newDistribution = new Map<EmotionType, number>(current.distribution);
 
     // Bayesian update for categorical distribution
     // Increase probability of observed emotion, decrease others
-    for (const [emotion, prob] of newDistribution) {
+    for (const [emotion, prob] of newDistribution.entries()) {
       if (emotion === observedEmotion) {
         // Increase observed emotion probability
         newDistribution.set(emotion, prob + weight * (1 - prob));
@@ -1254,8 +1254,8 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
     }
 
     // Normalize
-    const newTotal = Array.from(newDistribution.values()).reduce((a, b) => a + b, 0);
-    for (const [emotion, prob] of newDistribution) {
+    const newTotal = Array.from(newDistribution.values()).reduce((a: number, b: number) => a + b, 0);
+    for (const [emotion, prob] of newDistribution.entries()) {
       newDistribution.set(emotion, prob / newTotal);
     }
 
@@ -1274,12 +1274,12 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
   }
 
   private updateCognitiveBeliefs(
-    current: BeliefState['cognitive'],
+    current: IFullBeliefState['cognitive'],
     observation: Observation,
     _weight: number,
     _updatedDimensions: string[],
     _significantChanges: BeliefUpdateResult['significantChanges']
-  ): BeliefState['cognitive'] {
+  ): IFullBeliefState['cognitive'] {
     if (!observation.informsComponents.includes('cognitive')) {
       return current;
     }
@@ -1290,12 +1290,12 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
   }
 
   private updateRiskBeliefs(
-    current: BeliefState['risk'],
+    current: IFullBeliefState['risk'],
     observation: Observation,
     weight: number,
     updatedDimensions: string[],
     significantChanges: BeliefUpdateResult['significantChanges']
-  ): BeliefState['risk'] {
+  ): IFullBeliefState['risk'] {
     if (!observation.informsComponents.includes('risk')) {
       return current;
     }
@@ -1371,12 +1371,12 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
   }
 
   private updateResourceBeliefs(
-    current: BeliefState['resources'],
+    current: IFullBeliefState['resources'],
     observation: Observation,
     _weight: number,
     _updatedDimensions: string[],
     _significantChanges: BeliefUpdateResult['significantChanges']
-  ): BeliefState['resources'] {
+  ): IFullBeliefState['resources'] {
     if (!observation.informsComponents.includes('resources')) {
       return current;
     }
@@ -1387,11 +1387,11 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
   }
 
   private calculateTotalInfoGain(
-    _oldBelief: BeliefState,
-    newEmotional: BeliefState['emotional'],
-    _newCognitive: BeliefState['cognitive'],
-    newRisk: BeliefState['risk'],
-    _newResources: BeliefState['resources']
+    _oldBelief: IFullBeliefState,
+    newEmotional: IFullBeliefState['emotional'],
+    _newCognitive: IFullBeliefState['cognitive'],
+    newRisk: IFullBeliefState['risk'],
+    _newResources: IFullBeliefState['resources']
   ): number {
     let totalGain = 0;
 
@@ -1405,7 +1405,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
   }
 
   private calculateSurprise(
-    belief: BeliefState,
+    belief: IFullBeliefState,
     observation: Observation
   ): number {
     // Surprise = negative log likelihood of observation under current belief
@@ -1418,10 +1418,10 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
   }
 
   private calculateConsistency(
-    emotional: BeliefState['emotional'],
-    _cognitive: BeliefState['cognitive'],
-    risk: BeliefState['risk'],
-    resources: BeliefState['resources']
+    emotional: IFullBeliefState['emotional'],
+    _cognitive: IFullBeliefState['cognitive'],
+    risk: IFullBeliefState['risk'],
+    resources: IFullBeliefState['resources']
   ): number {
     // Check for inconsistent beliefs
     let consistencyScore = 1.0;
@@ -1445,7 +1445,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
   }
 
   private findDimensionBelief(
-    belief: BeliefState,
+    belief: IFullBeliefState,
     dimension: string
   ): DimensionBelief | null {
     // Search emotional
@@ -1492,7 +1492,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
   }
 
   private getHighestUncertaintyDimension(
-    belief: BeliefState,
+    belief: IFullBeliefState,
     obsType: ObservationType
   ): string {
     const dimensions = this.getDimensionsForObsType(obsType);
@@ -1510,7 +1510,7 @@ export class BeliefUpdateEngine implements IBeliefUpdateEngine {
     return maxDim ?? 'valence';
   }
 
-  private calculateWellbeingFromBelief(belief: BeliefState): number {
+  private calculateWellbeingFromBelief(belief: IFullBeliefState): number {
     const valence = (belief.emotional.valence.posterior.mean + 1) / 2; // Normalize to 0-1
     const energy = belief.resources.energy.posterior.mean;
     const coping = belief.resources.copingCapacity.posterior.mean;

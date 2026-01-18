@@ -468,7 +468,7 @@ export class FeatureAttributionEngine implements IFeatureAttributionEngine {
     featureId: string,
     value: unknown,
     definition: IFeatureDefinition,
-    predictionValue: number
+    _predictionValue: number
   ): IFeatureAttribution {
     let contribution: number;
     let comparisonToBaseline: string;
@@ -616,7 +616,7 @@ export class FeatureAttributionEngine implements IFeatureAttributionEngine {
    */
   private generateCausalSummary(
     attributions: IFeatureAttribution[],
-    features: Record<string, unknown>
+    _features: Record<string, unknown>
   ): ISHAPExplanation['causalSummary'] | undefined {
     const causalAttributions = attributions.filter(a => a.isCausallyRelevant);
 
@@ -650,7 +650,7 @@ export class FeatureAttributionEngine implements IFeatureAttributionEngine {
    */
   private calculateUncertainty(
     attributions: IFeatureAttribution[],
-    confidence: number
+    _confidence: number
   ): ISHAPExplanation['uncertaintyQuantification'] {
     // Calculate standard error from attribution confidence intervals
     const standardErrors = attributions.map(a => {

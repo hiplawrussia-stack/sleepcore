@@ -229,19 +229,21 @@ const CONTEXT_PATTERNS = {
  */
 const PROTECTIVE_FACTORS = [
   // Russian - more specific patterns to avoid false positives
+  // CRITICAL: Use negative lookbehind to avoid matching "не хочу жить" as protective
   /но\s+(?:хочу|буду|попробу|есть надежда)/i,
   /не\s+(?:хочу умирать|собираюсь|буду этого делать)/i,
   /помог(?:и|ите)/i,
   /нужна помощь/i,
-  /хочу\s+жить/i,            // must be "хочу жить" directly, not separated
+  /(?<!не\s)хочу\s+жить/i,   // "хочу жить" but NOT "не хочу жить"
   /хочу\s+(?:измени|помощ)/i,
 
   // English - more specific patterns
+  // CRITICAL: Use negative lookbehind to avoid "don't want to live" as protective
   /but\s+(?:i\s+)?(?:want to|will|trying|there's hope)/i,
   /(?:i\s+)?don'?t\s+(?:want to die|going to|actually)/i,
   /help me/i,
   /need help/i,
-  /want to\s+(?:live|change|get help)/i,
+  /(?<!don'?t\s)want to\s+(?:live|change|get help)/i,
 ];
 
 // ============================================================================

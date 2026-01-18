@@ -1,6 +1,32 @@
 /**
  * SleepCorePOMDP - Sleep-Specific POMDP Implementation
  * =====================================================
+ *
+ * @deprecated This class is deprecated in favor of SleepCoreAdapter + CogniCore Engine.
+ *
+ * SleepCoreAdapter provides:
+ * - Thompson Sampling via CogniCore's InterventionOptimizer
+ * - Bayesian belief tracking via CogniCore's BeliefUpdateEngine
+ * - Better personalization through contextual bandits
+ * - Outcome-based learning
+ *
+ * Migration:
+ * ```typescript
+ * // Before:
+ * const pomdp = new SleepCorePOMDP();
+ * const action = pomdp.selectAction(state);
+ *
+ * // After:
+ * const adapter = createSleepCoreAdapter();
+ * const selection = await adapter.selectIntervention(sleepState);
+ * ```
+ *
+ * This class is kept for backwards compatibility during migration.
+ * It will be removed in a future version.
+ *
+ * ---
+ *
+ * Original documentation:
  * Extends CogniCore's POMDP framework for sleep/insomnia domain.
  *
  * State Space: Sleep metrics, circadian state, insomnia severity

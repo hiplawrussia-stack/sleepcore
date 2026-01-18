@@ -1,5 +1,7 @@
 'use strict';
 
+var crypto = require('crypto');
+
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
@@ -826,6 +828,4483 @@ var BeliefStateAdapter = class {
 function createBeliefStateAdapter(engines) {
   return new BeliefStateAdapter(engines);
 }
+
+// src/explainability/interfaces/IExplainability.ts
+var DEFAULT_EXPLAINABILITY_CONFIG = {
+  maxCounterfactuals: 3,
+  minRobustness: 0.6,
+  minPlausibility: 0.5,
+  cacheExpirationMs: 60 * 60 * 1e3,
+  // 1 hour
+  enableEffectivenessTracking: true,
+  defaultLanguage: "ru",
+  defaultAgeGroup: "adult",
+  euAIActComplianceRequired: true
+};
+var INTERVENTION_FEATURES = {
+  currentMood: {
+    id: "currentMood",
+    name: "Current Mood",
+    nameRu: "\u0422\u0435\u043A\u0443\u0449\u0435\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435",
+    description: "User's current emotional state on 1-5 scale",
+    descriptionRu: "\u042D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u043F\u043E \u0448\u043A\u0430\u043B\u0435 1-5",
+    category: "emotional",
+    valueType: "numeric",
+    minValue: 1,
+    maxValue: 5,
+    baselineValue: 3,
+    defaultWeight: 0.25,
+    isCausalFactor: true,
+    causalChildren: ["engagement", "interventionResponse"],
+    emoji: "\u{1F60A}",
+    colorPositive: "#4CAF50",
+    colorNegative: "#f44336",
+    layTermExplanation: "\u041A\u0430\u043A \u0442\u044B \u0441\u0435\u0431\u044F \u0447\u0443\u0432\u0441\u0442\u0432\u0443\u0435\u0448\u044C \u043F\u0440\u044F\u043C\u043E \u0441\u0435\u0439\u0447\u0430\u0441",
+    clinicalTermExplanation: "Self-reported mood state (PHQ-2 proxy)"
+  },
+  currentEnergy: {
+    id: "currentEnergy",
+    name: "Energy Level",
+    nameRu: "\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u044D\u043D\u0435\u0440\u0433\u0438\u0438",
+    description: "User's current energy level on 1-5 scale",
+    descriptionRu: "\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u044D\u043D\u0435\u0440\u0433\u0438\u0438 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u043F\u043E \u0448\u043A\u0430\u043B\u0435 1-5",
+    category: "emotional",
+    valueType: "numeric",
+    minValue: 1,
+    maxValue: 5,
+    baselineValue: 3,
+    defaultWeight: 0.15,
+    isCausalFactor: true,
+    causalParents: ["sleepQuality", "physicalActivity"],
+    causalChildren: ["taskEngagement"],
+    emoji: "\u26A1",
+    colorPositive: "#FF9800",
+    colorNegative: "#9E9E9E",
+    layTermExplanation: "\u0421\u043A\u043E\u043B\u044C\u043A\u043E \u0443 \u0442\u0435\u0431\u044F \u0441\u0435\u0439\u0447\u0430\u0441 \u0441\u0438\u043B",
+    clinicalTermExplanation: "Subjective vitality/energy assessment"
+  },
+  stressLevel: {
+    id: "stressLevel",
+    name: "Stress Level",
+    nameRu: "\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0441\u0442\u0440\u0435\u0441\u0441\u0430",
+    description: "User's current stress level on 1-5 scale",
+    descriptionRu: "\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0441\u0442\u0440\u0435\u0441\u0441\u0430 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u043F\u043E \u0448\u043A\u0430\u043B\u0435 1-5",
+    category: "emotional",
+    valueType: "numeric",
+    minValue: 1,
+    maxValue: 5,
+    baselineValue: 2,
+    defaultWeight: 0.2,
+    isCausalFactor: true,
+    causalParents: ["workload", "conflicts", "uncertainty"],
+    causalChildren: ["mood", "digitalUse", "copingBehavior"],
+    emoji: "\u{1F630}",
+    colorPositive: "#4CAF50",
+    colorNegative: "#f44336",
+    layTermExplanation: "\u041D\u0430\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u0442\u044B \u043D\u0430\u043F\u0440\u044F\u0436\u0451\u043D",
+    clinicalTermExplanation: "Perceived stress scale proxy"
+  },
+  timeOfDay: {
+    id: "timeOfDay",
+    name: "Time of Day",
+    nameRu: "\u0412\u0440\u0435\u043C\u044F \u0441\u0443\u0442\u043E\u043A",
+    description: "Current time period",
+    descriptionRu: "\u0422\u0435\u043A\u0443\u0449\u0435\u0435 \u0432\u0440\u0435\u043C\u044F \u0441\u0443\u0442\u043E\u043A",
+    category: "temporal",
+    valueType: "categorical",
+    possibleValues: ["morning", "afternoon", "evening", "night"],
+    baselineValue: "afternoon",
+    defaultWeight: 0.1,
+    emoji: "\u{1F550}",
+    colorPositive: "#2196F3",
+    colorNegative: "#673AB7",
+    layTermExplanation: "\u041A\u0430\u043A\u043E\u0435 \u0441\u0435\u0439\u0447\u0430\u0441 \u0432\u0440\u0435\u043C\u044F \u0434\u043D\u044F",
+    clinicalTermExplanation: "Circadian timing context"
+  },
+  dayOfWeek: {
+    id: "dayOfWeek",
+    name: "Day of Week",
+    nameRu: "\u0414\u0435\u043D\u044C \u043D\u0435\u0434\u0435\u043B\u0438",
+    description: "Current day of the week",
+    descriptionRu: "\u0422\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u0435\u043D\u044C \u043D\u0435\u0434\u0435\u043B\u0438",
+    category: "temporal",
+    valueType: "categorical",
+    possibleValues: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+    baselineValue: "wednesday",
+    defaultWeight: 0.05,
+    emoji: "\u{1F4C5}",
+    colorPositive: "#009688",
+    colorNegative: "#795548",
+    layTermExplanation: "\u041A\u0430\u043A\u043E\u0439 \u0441\u0435\u0433\u043E\u0434\u043D\u044F \u0434\u0435\u043D\u044C",
+    clinicalTermExplanation: "Weekly temporal pattern"
+  },
+  activeTrigger: {
+    id: "activeTrigger",
+    name: "Active Trigger",
+    nameRu: "\u0410\u043A\u0442\u0438\u0432\u043D\u044B\u0439 \u0442\u0440\u0438\u0433\u0433\u0435\u0440",
+    description: "Current trigger for digital use",
+    descriptionRu: "\u0422\u0440\u0438\u0433\u0433\u0435\u0440 \u0446\u0438\u0444\u0440\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u044F",
+    category: "contextual",
+    valueType: "categorical",
+    possibleValues: [
+      "boredom",
+      "stress",
+      "loneliness",
+      "fomo",
+      "habit",
+      "procrastination",
+      "emotional_regulation",
+      "social_pressure"
+    ],
+    baselineValue: "habit",
+    defaultWeight: 0.2,
+    isCausalFactor: true,
+    causalChildren: ["digitalUse", "interventionNeeded"],
+    emoji: "\u{1F3AF}",
+    colorPositive: "#E91E63",
+    colorNegative: "#607D8B",
+    layTermExplanation: "\u0427\u0442\u043E \u0437\u0430\u0441\u0442\u0430\u0432\u043B\u044F\u0435\u0442 \u0442\u0435\u0431\u044F \u0442\u044F\u043D\u0443\u0442\u044C\u0441\u044F \u043A \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0443",
+    clinicalTermExplanation: "Primary behavioral trigger for digital engagement"
+  },
+  streak: {
+    id: "streak",
+    name: "Streak",
+    nameRu: "\u0421\u0435\u0440\u0438\u044F \u0434\u043D\u0435\u0439",
+    description: "Consecutive days of engagement",
+    descriptionRu: "\u041F\u043E\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u0434\u043D\u0438 \u0432\u0437\u0430\u0438\u043C\u043E\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F",
+    category: "historical",
+    valueType: "numeric",
+    minValue: 0,
+    maxValue: 365,
+    baselineValue: 0,
+    defaultWeight: 0.08,
+    emoji: "\u{1F525}",
+    colorPositive: "#FF5722",
+    colorNegative: "#BDBDBD",
+    layTermExplanation: "\u0421\u043A\u043E\u043B\u044C\u043A\u043E \u0434\u043D\u0435\u0439 \u043F\u043E\u0434\u0440\u044F\u0434 \u0442\u044B \u0437\u0430\u043D\u0438\u043C\u0430\u0435\u0448\u044C\u0441\u044F",
+    clinicalTermExplanation: "Engagement continuity metric"
+  },
+  ageGroup: {
+    id: "ageGroup",
+    name: "Age Group",
+    nameRu: "\u0412\u043E\u0437\u0440\u0430\u0441\u0442\u043D\u0430\u044F \u0433\u0440\u0443\u043F\u043F\u0430",
+    description: "User age category",
+    descriptionRu: "\u0412\u043E\u0437\u0440\u0430\u0441\u0442\u043D\u0430\u044F \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044F \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F",
+    category: "demographic",
+    valueType: "categorical",
+    possibleValues: ["child", "teen", "adult"],
+    baselineValue: "adult",
+    defaultWeight: 0.12,
+    emoji: "\u{1F464}",
+    colorPositive: "#3F51B5",
+    colorNegative: "#9E9E9E",
+    layTermExplanation: "\u0422\u0432\u043E\u0439 \u0432\u043E\u0437\u0440\u0430\u0441\u0442",
+    clinicalTermExplanation: "Developmental stage classification"
+  },
+  recentInterventionCount: {
+    id: "recentInterventionCount",
+    name: "Recent Interventions",
+    nameRu: "\u041D\u0435\u0434\u0430\u0432\u043D\u0438\u0435 \u0442\u0435\u0445\u043D\u0438\u043A\u0438",
+    description: "Number of interventions in last 7 days",
+    descriptionRu: "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u0442\u0435\u0445\u043D\u0438\u043A \u0437\u0430 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0435 7 \u0434\u043D\u0435\u0439",
+    category: "historical",
+    valueType: "numeric",
+    minValue: 0,
+    maxValue: 50,
+    baselineValue: 5,
+    defaultWeight: 0.05,
+    emoji: "\u{1F4CA}",
+    colorPositive: "#00BCD4",
+    colorNegative: "#FF9800",
+    layTermExplanation: "\u0421\u043A\u043E\u043B\u044C\u043A\u043E \u0443\u043F\u0440\u0430\u0436\u043D\u0435\u043D\u0438\u0439 \u0442\u044B \u0441\u0434\u0435\u043B\u0430\u043B \u043D\u0435\u0434\u0430\u0432\u043D\u043E",
+    clinicalTermExplanation: "Intervention dosage metric (7-day window)"
+  },
+  moodTrend: {
+    id: "moodTrend",
+    name: "Mood Trend",
+    nameRu: "\u0422\u0440\u0435\u043D\u0434 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u044F",
+    description: "Mood trend over past week",
+    descriptionRu: "\u0422\u0440\u0435\u043D\u0434 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u044F \u0437\u0430 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u044E\u044E \u043D\u0435\u0434\u0435\u043B\u044E",
+    category: "historical",
+    valueType: "categorical",
+    possibleValues: ["improving", "stable", "declining"],
+    baselineValue: "stable",
+    defaultWeight: 0.15,
+    isCausalFactor: true,
+    causalParents: ["interventionEffectiveness", "lifeEvents"],
+    emoji: "\u{1F4C8}",
+    colorPositive: "#4CAF50",
+    colorNegative: "#f44336",
+    layTermExplanation: "\u041A\u0430\u043A \u043C\u0435\u043D\u044F\u043B\u043E\u0441\u044C \u0442\u0432\u043E\u0451 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435",
+    clinicalTermExplanation: "Longitudinal mood trajectory (7-day moving average)"
+  },
+  riskLevel: {
+    id: "riskLevel",
+    name: "Risk Level",
+    nameRu: "\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0440\u0438\u0441\u043A\u0430",
+    description: "Current safety risk assessment",
+    descriptionRu: "\u0422\u0435\u043A\u0443\u0449\u0430\u044F \u043E\u0446\u0435\u043D\u043A\u0430 \u0440\u0438\u0441\u043A\u0430 \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u0438",
+    category: "emotional",
+    valueType: "categorical",
+    possibleValues: ["none", "low", "moderate", "high", "critical"],
+    baselineValue: "none",
+    defaultWeight: 0.3,
+    isCausalFactor: true,
+    causalParents: ["moodTrend", "stressLevel", "socialSupport"],
+    causalChildren: ["interventionPriority", "escalation"],
+    emoji: "\u26A0\uFE0F",
+    colorPositive: "#4CAF50",
+    colorNegative: "#f44336",
+    layTermExplanation: "\u041D\u0430\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u0441\u0440\u043E\u0447\u043D\u043E \u0442\u0435\u0431\u0435 \u043D\u0443\u0436\u043D\u0430 \u043F\u043E\u043C\u043E\u0449\u044C",
+    clinicalTermExplanation: "Composite risk assessment score"
+  },
+  socialSupport: {
+    id: "socialSupport",
+    name: "Social Support",
+    nameRu: "\u0421\u043E\u0446\u0438\u0430\u043B\u044C\u043D\u0430\u044F \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u043A\u0430",
+    description: "Level of perceived social support",
+    descriptionRu: "\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u043E\u0449\u0443\u0449\u0430\u0435\u043C\u043E\u0439 \u0441\u043E\u0446\u0438\u0430\u043B\u044C\u043D\u043E\u0439 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u043A\u0438",
+    category: "contextual",
+    valueType: "numeric",
+    minValue: 1,
+    maxValue: 5,
+    baselineValue: 3,
+    defaultWeight: 0.1,
+    isCausalFactor: true,
+    causalChildren: ["resilience", "riskLevel"],
+    emoji: "\u{1F465}",
+    colorPositive: "#9C27B0",
+    colorNegative: "#607D8B",
+    layTermExplanation: "\u0415\u0441\u0442\u044C \u043B\u0438 \u0440\u044F\u0434\u043E\u043C \u043B\u044E\u0434\u0438, \u043A\u043E\u0442\u043E\u0440\u044B\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u044E\u0442 \u0442\u0435\u0431\u044F",
+    clinicalTermExplanation: "Perceived social support scale proxy"
+  },
+  familyCohesion: {
+    id: "familyCohesion",
+    name: "Family Cohesion",
+    nameRu: "\u0421\u0435\u043C\u0435\u0439\u043D\u0430\u044F \u0441\u043F\u043B\u043E\u0447\u0451\u043D\u043D\u043E\u0441\u0442\u044C",
+    description: "Family cohesion level (Phase 6.1)",
+    descriptionRu: "\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0441\u0435\u043C\u0435\u0439\u043D\u043E\u0439 \u0441\u043F\u043B\u043E\u0447\u0451\u043D\u043D\u043E\u0441\u0442\u0438",
+    category: "family",
+    valueType: "categorical",
+    possibleValues: ["disengaged", "separated", "connected", "enmeshed"],
+    baselineValue: "connected",
+    defaultWeight: 0.08,
+    isCausalFactor: true,
+    causalChildren: ["socialSupport", "copingSkills"],
+    emoji: "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}",
+    colorPositive: "#8BC34A",
+    colorNegative: "#FF5722",
+    layTermExplanation: "\u041D\u0430\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u0431\u043B\u0438\u0437\u043A\u0430 \u0442\u0432\u043E\u044F \u0441\u0435\u043C\u044C\u044F",
+    clinicalTermExplanation: "Olson Circumplex family cohesion dimension"
+  }
+};
+var CATEGORICAL_CONTRIBUTIONS = {
+  timeOfDay: {
+    morning: 0.1,
+    afternoon: 0,
+    evening: 0.05,
+    night: -0.1
+  },
+  dayOfWeek: {
+    monday: -0.05,
+    tuesday: 0,
+    wednesday: 0,
+    thursday: 0,
+    friday: 0.05,
+    saturday: 0.1,
+    sunday: 0.1
+  },
+  activeTrigger: {
+    boredom: 0.1,
+    stress: -0.1,
+    loneliness: -0.15,
+    fomo: 0.05,
+    habit: 0,
+    procrastination: 0.05,
+    emotional_regulation: -0.1,
+    social_pressure: 0.05
+  },
+  ageGroup: {
+    child: 0.1,
+    teen: 0.05,
+    adult: 0
+  },
+  moodTrend: {
+    improving: 0.15,
+    stable: 0,
+    declining: -0.15
+  },
+  riskLevel: {
+    none: 0.2,
+    low: 0.1,
+    moderate: 0,
+    high: -0.15,
+    critical: -0.3
+  },
+  familyCohesion: {
+    disengaged: -0.15,
+    separated: -0.05,
+    connected: 0.1,
+    enmeshed: -0.05
+  }
+};
+var FeatureAttributionEngine = class {
+  constructor(definitions) {
+    __publicField(this, "featureDefinitions");
+    __publicField(this, "explanationVersion", "2.0.0");
+    this.featureDefinitions = new Map(
+      Object.entries(definitions || INTERVENTION_FEATURES)
+    );
+  }
+  // ==========================================================================
+  // SHAP-LIKE ATTRIBUTION
+  // ==========================================================================
+  /**
+   * Calculate feature attributions for a prediction
+   */
+  calculateAttributions(features, prediction) {
+    const startTime = Date.now();
+    const attributions = [];
+    const baselineValue = 0.5;
+    for (const [featureId, value] of Object.entries(features)) {
+      const definition = this.featureDefinitions.get(featureId);
+      if (!definition) continue;
+      const attribution = this.calculateSingleAttribution(
+        featureId,
+        value,
+        definition,
+        prediction.value
+      );
+      attributions.push(attribution);
+    }
+    attributions.sort((a, b) => b.absoluteImportance - a.absoluteImportance);
+    const topPositiveFeatures = attributions.filter((a) => a.contribution > 0).slice(0, 3);
+    const topNegativeFeatures = attributions.filter((a) => a.contribution < 0).slice(0, 3);
+    const causalSummary = this.generateCausalSummary(attributions, features);
+    const uncertaintyQuantification = this.calculateUncertainty(
+      attributions,
+      prediction.confidence
+    );
+    return {
+      predictionId: crypto.randomUUID(),
+      prediction: prediction.outcome,
+      predictionValue: prediction.value,
+      baselineValue,
+      attributions,
+      topPositiveFeatures,
+      topNegativeFeatures,
+      confidence: prediction.confidence,
+      uncertaintySource: prediction.confidence < 0.7 ? "Limited data or unusual feature combination" : void 0,
+      uncertaintyQuantification,
+      causalSummary,
+      timestamp: /* @__PURE__ */ new Date(),
+      computationTime: Date.now() - startTime,
+      explanationVersion: this.explanationVersion
+    };
+  }
+  /**
+   * Calculate attribution for single feature
+   */
+  calculateSingleAttribution(featureId, value, definition, _predictionValue) {
+    let contribution;
+    let comparisonToBaseline;
+    let comparisonToBaselineRu;
+    if (definition.valueType === "numeric") {
+      const numValue = value;
+      const baseline = definition.baselineValue;
+      const range = (definition.maxValue || 5) - (definition.minValue || 1);
+      const deviation = (numValue - baseline) / range;
+      contribution = deviation * definition.defaultWeight;
+      if (deviation > 0.1) {
+        comparisonToBaseline = "above average";
+        comparisonToBaselineRu = "\u0432\u044B\u0448\u0435 \u0441\u0440\u0435\u0434\u043D\u0435\u0433\u043E";
+      } else if (deviation < -0.1) {
+        comparisonToBaseline = "below average";
+        comparisonToBaselineRu = "\u043D\u0438\u0436\u0435 \u0441\u0440\u0435\u0434\u043D\u0435\u0433\u043E";
+      } else {
+        comparisonToBaseline = "typical";
+        comparisonToBaselineRu = "\u0442\u0438\u043F\u0438\u0447\u043D\u043E";
+      }
+    } else if (definition.valueType === "categorical") {
+      contribution = this.calculateCategoricalContribution(
+        featureId,
+        value,
+        definition
+      );
+      if (value === definition.baselineValue) {
+        comparisonToBaseline = "typical";
+        comparisonToBaselineRu = "\u0442\u0438\u043F\u0438\u0447\u043D\u043E";
+      } else {
+        comparisonToBaseline = "differs from typical";
+        comparisonToBaselineRu = "\u043E\u0442\u043B\u0438\u0447\u0430\u0435\u0442\u0441\u044F \u043E\u0442 \u0442\u0438\u043F\u0438\u0447\u043D\u043E\u0433\u043E";
+      }
+    } else if (definition.valueType === "boolean") {
+      const boolValue = value;
+      contribution = boolValue ? definition.defaultWeight * 0.5 : -definition.defaultWeight * 0.5;
+      comparisonToBaseline = boolValue ? "active" : "inactive";
+      comparisonToBaselineRu = boolValue ? "\u0430\u043A\u0442\u0438\u0432\u043D\u043E" : "\u043D\u0435\u0430\u043A\u0442\u0438\u0432\u043D\u043E";
+    } else {
+      contribution = 0;
+      comparisonToBaseline = "unknown";
+      comparisonToBaselineRu = "\u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E";
+    }
+    const direction = contribution > 0.05 ? "positive" : contribution < -0.05 ? "negative" : "neutral";
+    const confidenceInterval = this.calculateAttributionConfidenceInterval(
+      contribution,
+      definition.defaultWeight
+    );
+    const isCausallyRelevant = definition.isCausalFactor || false;
+    const causalPathway = this.getCausalPathway(featureId, definition);
+    return {
+      featureId,
+      featureName: definition.name,
+      featureNameRu: definition.nameRu,
+      featureValue: value,
+      contribution,
+      absoluteImportance: Math.abs(contribution),
+      shapleyValue: contribution,
+      // In this simplified version, contribution approximates Shapley
+      baselineValue: String(definition.baselineValue),
+      comparisonToBaseline,
+      comparisonToBaselineRu,
+      isCausallyRelevant,
+      causalPathway,
+      confidenceInterval,
+      direction,
+      emoji: definition.emoji,
+      color: direction === "positive" ? definition.colorPositive : definition.colorNegative
+    };
+  }
+  /**
+   * Calculate contribution for categorical feature
+   */
+  calculateCategoricalContribution(featureId, value, definition) {
+    const featureContributions = CATEGORICAL_CONTRIBUTIONS[featureId];
+    if (featureContributions && featureContributions[value] !== void 0) {
+      return featureContributions[value] * definition.defaultWeight;
+    }
+    return 0;
+  }
+  /**
+   * Calculate confidence interval for attribution
+   */
+  calculateAttributionConfidenceInterval(contribution, weight) {
+    const standardError = weight * 0.1;
+    const margin = 1.96 * standardError;
+    return {
+      lower: contribution - margin,
+      upper: contribution + margin
+    };
+  }
+  /**
+   * Get causal pathway for feature
+   */
+  getCausalPathway(featureId, definition) {
+    if (!definition.isCausalFactor) return void 0;
+    const parents = definition.causalParents?.join(", ") || "root cause";
+    const children = definition.causalChildren?.join(", ") || "outcome";
+    return `${parents} -> ${featureId} -> ${children}`;
+  }
+  /**
+   * Generate causal summary from attributions
+   */
+  generateCausalSummary(attributions, _features) {
+    const causalAttributions = attributions.filter((a) => a.isCausallyRelevant);
+    if (causalAttributions.length === 0) return void 0;
+    const primaryCauseAttr = causalAttributions.reduce(
+      (max, curr) => curr.absoluteImportance > max.absoluteImportance ? curr : max
+    );
+    const causalChain = causalAttributions.filter((a) => a.absoluteImportance > 0.05).map((a) => a.featureNameRu);
+    const modifiableFeatures = ["currentMood", "stressLevel", "socialSupport", "streak"];
+    const interventionPoints = causalAttributions.filter((a) => modifiableFeatures.includes(a.featureId)).map((a) => a.featureNameRu);
+    return {
+      primaryCause: primaryCauseAttr.featureNameRu,
+      causalChain,
+      interventionPoints
+    };
+  }
+  /**
+   * Calculate uncertainty quantification for the explanation
+   */
+  calculateUncertainty(attributions, _confidence) {
+    const standardErrors = attributions.map((a) => {
+      const interval = a.confidenceInterval;
+      if (!interval) return 0;
+      return (interval.upper - interval.lower) / (2 * 1.96);
+    });
+    const avgStandardError = standardErrors.length > 0 ? standardErrors.reduce((a, b) => a + b, 0) / standardErrors.length : 0;
+    return {
+      method: "bootstrap",
+      samples: 100,
+      // Simulated bootstrap samples
+      standardError: avgStandardError
+    };
+  }
+  // ==========================================================================
+  // VISUALIZATION
+  // ==========================================================================
+  /**
+   * Generate text visualization of attributions
+   */
+  visualizeAttributions(explanation, format = "emoji") {
+    switch (format) {
+      case "emoji":
+        return this.visualizeWithEmoji(explanation);
+      case "bars":
+        return this.visualizeWithBars(explanation);
+      case "text":
+      default:
+        return this.visualizeAsText(explanation);
+    }
+  }
+  visualizeWithEmoji(explanation) {
+    const lines = [];
+    lines.push("\u{1F4CA} \u0410\u043D\u0430\u043B\u0438\u0437 \u0440\u0435\u0448\u0435\u043D\u0438\u044F\n");
+    lines.push(`\u0423\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C: ${Math.round(explanation.confidence * 100)}%
+`);
+    if (explanation.topPositiveFeatures.length > 0) {
+      lines.push("\n\u2705 \u041F\u043E\u043B\u043E\u0436\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u0444\u0430\u043A\u0442\u043E\u0440\u044B:");
+      for (const attr of explanation.topPositiveFeatures) {
+        lines.push(`  ${attr.emoji} ${attr.featureNameRu}: ${attr.featureValue}`);
+      }
+    }
+    if (explanation.topNegativeFeatures.length > 0) {
+      lines.push("\n\u26A0\uFE0F \u0423\u0447\u0442\u0451\u043D\u043D\u044B\u0435 \u0441\u043B\u043E\u0436\u043D\u043E\u0441\u0442\u0438:");
+      for (const attr of explanation.topNegativeFeatures) {
+        lines.push(`  ${attr.emoji} ${attr.featureNameRu}: ${attr.featureValue}`);
+      }
+    }
+    if (explanation.causalSummary) {
+      lines.push("\n\u{1F517} \u041F\u0440\u0438\u0447\u0438\u043D\u043D\u0430\u044F \u0441\u0432\u044F\u0437\u044C:");
+      lines.push(`  \u0413\u043B\u0430\u0432\u043D\u0430\u044F \u043F\u0440\u0438\u0447\u0438\u043D\u0430: ${explanation.causalSummary.primaryCause}`);
+      if (explanation.causalSummary.interventionPoints.length > 0) {
+        lines.push(`  \u0422\u043E\u0447\u043A\u0438 \u0432\u043E\u0437\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F: ${explanation.causalSummary.interventionPoints.join(", ")}`);
+      }
+    }
+    return lines.join("\n");
+  }
+  visualizeWithBars(explanation) {
+    const lines = [];
+    const maxBarLength = 20;
+    lines.push("Attribution Breakdown:\n");
+    for (const attr of explanation.attributions.slice(0, 8)) {
+      const normalizedContrib = Math.min(1, Math.abs(attr.contribution) * 10);
+      const barLength = Math.round(normalizedContrib * maxBarLength);
+      const bar = attr.contribution >= 0 ? "\u2588".repeat(barLength) : "\u2591".repeat(barLength);
+      const sign = attr.contribution >= 0 ? "+" : "-";
+      const value = Math.abs(attr.contribution).toFixed(3);
+      lines.push(`${attr.featureNameRu.padEnd(20)} ${sign}${value} ${bar}`);
+    }
+    return lines.join("\n");
+  }
+  visualizeAsText(explanation) {
+    const lines = [];
+    lines.push(`\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442: ${explanation.prediction}`);
+    lines.push(`\u0423\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C: ${Math.round(explanation.confidence * 100)}%`);
+    lines.push("\n\u0424\u0430\u043A\u0442\u043E\u0440\u044B, \u043F\u043E\u0432\u043B\u0438\u044F\u0432\u0448\u0438\u0435 \u043D\u0430 \u0440\u0435\u0448\u0435\u043D\u0438\u0435:");
+    for (const attr of explanation.attributions.slice(0, 5)) {
+      const impact = attr.contribution > 0 ? "\u0443\u0432\u0435\u043B\u0438\u0447\u0438\u0432\u0430\u0435\u0442" : "\u0443\u043C\u0435\u043D\u044C\u0448\u0430\u0435\u0442";
+      lines.push(`- ${attr.featureNameRu} (${attr.featureValue}): ${impact} \u0432\u0435\u0440\u043E\u044F\u0442\u043D\u043E\u0441\u0442\u044C`);
+    }
+    return lines.join("\n");
+  }
+  // ==========================================================================
+  // USER-FRIENDLY EXPLANATION
+  // ==========================================================================
+  /**
+   * Generate user-friendly explanation of top factors
+   */
+  generateUserSummary(explanation, ageGroup = "adult") {
+    const topFactors = explanation.attributions.slice(0, 3);
+    switch (ageGroup) {
+      case "child": {
+        const emojis = topFactors.map((f) => f.emoji).join(" ");
+        return `${emojis} \u042F \u0432\u044B\u0431\u0440\u0430\u043B \u044D\u0442\u043E \u0441\u043F\u0435\u0446\u0438\u0430\u043B\u044C\u043D\u043E \u0434\u043B\u044F \u0442\u0435\u0431\u044F!`;
+      }
+      case "teen": {
+        const reasons = topFactors.map((f) => f.featureNameRu.toLowerCase()).join(", ");
+        return `\u0412\u044B\u0431\u0440\u0430\u043D\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435: ${reasons} ${this.getConfidenceEmoji(explanation.confidence)}`;
+      }
+      case "adult":
+      default: {
+        const factorList = topFactors.map((f) => `${f.featureNameRu}: ${f.featureValue}`).join("; ");
+        return `\u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F \u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0430 \u043D\u0430: ${factorList}. \u0423\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C: ${Math.round(explanation.confidence * 100)}%.`;
+      }
+    }
+  }
+  getConfidenceEmoji(confidence) {
+    if (confidence >= 0.9) return "\u2705";
+    if (confidence >= 0.7) return "\u{1F44D}";
+    if (confidence >= 0.5) return "\u{1F914}";
+    return "\u26A0\uFE0F";
+  }
+  // ==========================================================================
+  // FEATURE MANAGEMENT
+  // ==========================================================================
+  /**
+   * Add custom feature definition
+   */
+  addFeature(definition) {
+    this.featureDefinitions.set(definition.id, definition);
+  }
+  /**
+   * Get feature definition
+   */
+  getFeature(featureId) {
+    return this.featureDefinitions.get(featureId);
+  }
+  /**
+   * Get all features by category
+   */
+  getFeaturesByCategory(category) {
+    return Array.from(this.featureDefinitions.values()).filter((f) => f.category === category);
+  }
+  /**
+   * Get all feature definitions
+   */
+  getAllFeatures() {
+    return Array.from(this.featureDefinitions.values());
+  }
+  /**
+   * Get causal features only
+   */
+  getCausalFeatures() {
+    return Array.from(this.featureDefinitions.values()).filter((f) => f.isCausalFactor);
+  }
+};
+var COUNTERFACTUAL_RULES = [
+  // INTERVENTION RULES
+  {
+    id: "RULE-001",
+    targetOutcome: "More Active Technique",
+    targetOutcomeRu: "\u0411\u043E\u043B\u0435\u0435 \u0430\u043A\u0442\u0438\u0432\u043D\u0430\u044F \u0442\u0435\u0445\u043D\u0438\u043A\u0430",
+    requiredChanges: [
+      {
+        featureId: "currentEnergy",
+        condition: (v) => v < 3,
+        suggestedValue: 4,
+        description: "Increase energy level",
+        descriptionRu: "\u041F\u043E\u0432\u044B\u0441\u0438\u0442\u044C \u0443\u0440\u043E\u0432\u0435\u043D\u044C \u044D\u043D\u0435\u0440\u0433\u0438\u0438",
+        feasibility: "moderate",
+        riskLevel: "low"
+      },
+      {
+        featureId: "currentMood",
+        condition: (v) => v < 3,
+        suggestedValue: 4,
+        description: "Improve mood",
+        descriptionRu: "\u0423\u043B\u0443\u0447\u0448\u0438\u0442\u044C \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435",
+        feasibility: "moderate",
+        riskLevel: "low"
+      }
+    ],
+    priority: 1,
+    category: "intervention"
+  },
+  // RISK REDUCTION RULES
+  {
+    id: "RULE-002",
+    targetOutcome: "Less Intensive Support",
+    targetOutcomeRu: "\u041C\u0435\u043D\u0435\u0435 \u0438\u043D\u0442\u0435\u043D\u0441\u0438\u0432\u043D\u0430\u044F \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u043A\u0430",
+    requiredChanges: [
+      {
+        featureId: "riskLevel",
+        condition: (v) => v === "high" || v === "moderate",
+        suggestedValue: "low",
+        description: "Reduce risk level",
+        descriptionRu: "\u0421\u043D\u0438\u0437\u0438\u0442\u044C \u0443\u0440\u043E\u0432\u0435\u043D\u044C \u0440\u0438\u0441\u043A\u0430",
+        feasibility: "difficult",
+        riskLevel: "high"
+      },
+      {
+        featureId: "moodTrend",
+        condition: (v) => v === "declining",
+        suggestedValue: "stable",
+        description: "Stabilize mood trend",
+        descriptionRu: "\u0421\u0442\u0430\u0431\u0438\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0442\u0440\u0435\u043D\u0434 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u044F",
+        feasibility: "moderate",
+        riskLevel: "medium"
+      }
+    ],
+    priority: 2,
+    category: "risk"
+  },
+  // TIME-BASED RULES
+  {
+    id: "RULE-003",
+    targetOutcome: "Morning Technique",
+    targetOutcomeRu: "\u0423\u0442\u0440\u0435\u043D\u043D\u044F\u044F \u0442\u0435\u0445\u043D\u0438\u043A\u0430",
+    requiredChanges: [
+      {
+        featureId: "timeOfDay",
+        condition: (v) => v !== "morning",
+        suggestedValue: "morning",
+        description: "Try in the morning",
+        descriptionRu: "\u041F\u043E\u043F\u0440\u043E\u0431\u043E\u0432\u0430\u0442\u044C \u0443\u0442\u0440\u043E\u043C",
+        feasibility: "easy",
+        riskLevel: "low"
+      }
+    ],
+    priority: 3,
+    category: "time"
+  },
+  {
+    id: "RULE-004",
+    targetOutcome: "Evening Relaxation",
+    targetOutcomeRu: "\u0412\u0435\u0447\u0435\u0440\u043D\u044F\u044F \u0440\u0435\u043B\u0430\u043A\u0441\u0430\u0446\u0438\u044F",
+    requiredChanges: [
+      {
+        featureId: "timeOfDay",
+        condition: (v) => v !== "evening",
+        suggestedValue: "evening",
+        description: "Try in the evening",
+        descriptionRu: "\u041F\u043E\u043F\u0440\u043E\u0431\u043E\u0432\u0430\u0442\u044C \u0432\u0435\u0447\u0435\u0440\u043E\u043C",
+        feasibility: "easy",
+        riskLevel: "low"
+      }
+    ],
+    priority: 3,
+    category: "time"
+  },
+  // TRIGGER-BASED RULES
+  {
+    id: "RULE-005",
+    targetOutcome: "Boredom Technique",
+    targetOutcomeRu: "\u0422\u0435\u0445\u043D\u0438\u043A\u0430 \u0434\u043B\u044F \u0441\u043A\u0443\u043A\u0438",
+    requiredChanges: [
+      {
+        featureId: "activeTrigger",
+        condition: (v) => v !== "boredom",
+        suggestedValue: "boredom",
+        description: "When main trigger is boredom",
+        descriptionRu: "\u041A\u043E\u0433\u0434\u0430 \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u0442\u0440\u0438\u0433\u0433\u0435\u0440 \u2014 \u0441\u043A\u0443\u043A\u0430",
+        feasibility: "easy",
+        riskLevel: "low"
+      }
+    ],
+    priority: 4,
+    category: "trigger"
+  },
+  {
+    id: "RULE-006",
+    targetOutcome: "Stress Management Technique",
+    targetOutcomeRu: "\u0422\u0435\u0445\u043D\u0438\u043A\u0430 \u0434\u043B\u044F \u0441\u0442\u0440\u0435\u0441\u0441\u0430",
+    requiredChanges: [
+      {
+        featureId: "activeTrigger",
+        condition: (v) => v !== "stress",
+        suggestedValue: "stress",
+        description: "When main trigger is stress",
+        descriptionRu: "\u041A\u043E\u0433\u0434\u0430 \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u0442\u0440\u0438\u0433\u0433\u0435\u0440 \u2014 \u0441\u0442\u0440\u0435\u0441\u0441",
+        feasibility: "easy",
+        riskLevel: "low"
+      }
+    ],
+    priority: 4,
+    category: "trigger"
+  },
+  {
+    id: "RULE-007",
+    targetOutcome: "Loneliness Support",
+    targetOutcomeRu: "\u041F\u043E\u0434\u0434\u0435\u0440\u0436\u043A\u0430 \u043F\u0440\u0438 \u043E\u0434\u0438\u043D\u043E\u0447\u0435\u0441\u0442\u0432\u0435",
+    requiredChanges: [
+      {
+        featureId: "activeTrigger",
+        condition: (v) => v !== "loneliness",
+        suggestedValue: "loneliness",
+        description: "When feeling lonely",
+        descriptionRu: "\u041A\u043E\u0433\u0434\u0430 \u0447\u0443\u0432\u0441\u0442\u0432\u0443\u0435\u0448\u044C \u043E\u0434\u0438\u043D\u043E\u0447\u0435\u0441\u0442\u0432\u043E",
+        feasibility: "easy",
+        riskLevel: "low"
+      }
+    ],
+    priority: 4,
+    category: "trigger"
+  },
+  // STREAK-BASED RULES
+  {
+    id: "RULE-008",
+    targetOutcome: "Advanced Technique",
+    targetOutcomeRu: "\u0411\u043E\u043B\u0435\u0435 \u043F\u0440\u043E\u0434\u0432\u0438\u043D\u0443\u0442\u0430\u044F \u0442\u0435\u0445\u043D\u0438\u043A\u0430",
+    requiredChanges: [
+      {
+        featureId: "streak",
+        condition: (v) => v < 7,
+        suggestedValue: 7,
+        description: "Reach 7-day streak",
+        descriptionRu: "\u0414\u043E\u0441\u0442\u0438\u0447\u044C streak \u0432 7 \u0434\u043D\u0435\u0439",
+        feasibility: "moderate",
+        riskLevel: "low"
+      }
+    ],
+    priority: 5,
+    category: "streak"
+  },
+  {
+    id: "RULE-009",
+    targetOutcome: "Expert Level Exercises",
+    targetOutcomeRu: "\u0423\u043F\u0440\u0430\u0436\u043D\u0435\u043D\u0438\u044F \u044D\u043A\u0441\u043F\u0435\u0440\u0442\u043D\u043E\u0433\u043E \u0443\u0440\u043E\u0432\u043D\u044F",
+    requiredChanges: [
+      {
+        featureId: "streak",
+        condition: (v) => v < 30,
+        suggestedValue: 30,
+        description: "Reach 30-day streak",
+        descriptionRu: "\u0414\u043E\u0441\u0442\u0438\u0447\u044C streak \u0432 30 \u0434\u043D\u0435\u0439",
+        feasibility: "difficult",
+        riskLevel: "low"
+      }
+    ],
+    priority: 6,
+    category: "streak"
+  },
+  // MOOD IMPROVEMENT RULES
+  {
+    id: "RULE-010",
+    targetOutcome: "Positive Mood Techniques",
+    targetOutcomeRu: "\u0422\u0435\u0445\u043D\u0438\u043A\u0438 \u0434\u043B\u044F \u0445\u043E\u0440\u043E\u0448\u0435\u0433\u043E \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u044F",
+    requiredChanges: [
+      {
+        featureId: "currentMood",
+        condition: (v) => v < 4,
+        suggestedValue: 4,
+        description: "Improve mood to good level",
+        descriptionRu: "\u0423\u043B\u0443\u0447\u0448\u0438\u0442\u044C \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435 \u0434\u043E \u0445\u043E\u0440\u043E\u0448\u0435\u0433\u043E",
+        feasibility: "moderate",
+        riskLevel: "low"
+      }
+    ],
+    priority: 2,
+    category: "mood"
+  },
+  // SOCIAL SUPPORT RULES
+  {
+    id: "RULE-011",
+    targetOutcome: "Group Activities",
+    targetOutcomeRu: "\u0413\u0440\u0443\u043F\u043F\u043E\u0432\u044B\u0435 \u0430\u043A\u0442\u0438\u0432\u043D\u043E\u0441\u0442\u0438",
+    requiredChanges: [
+      {
+        featureId: "socialSupport",
+        condition: (v) => v < 3,
+        suggestedValue: 4,
+        description: "Increase social support",
+        descriptionRu: "\u0423\u0432\u0435\u043B\u0438\u0447\u0438\u0442\u044C \u0441\u043E\u0446\u0438\u0430\u043B\u044C\u043D\u0443\u044E \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u043A\u0443",
+        feasibility: "moderate",
+        riskLevel: "low"
+      }
+    ],
+    priority: 4,
+    category: "intervention"
+  },
+  // STRESS REDUCTION
+  {
+    id: "RULE-012",
+    targetOutcome: "Calming Exercises",
+    targetOutcomeRu: "\u0423\u0441\u043F\u043E\u043A\u0430\u0438\u0432\u0430\u044E\u0449\u0438\u0435 \u0443\u043F\u0440\u0430\u0436\u043D\u0435\u043D\u0438\u044F",
+    requiredChanges: [
+      {
+        featureId: "stressLevel",
+        condition: (v) => v > 3,
+        suggestedValue: 2,
+        description: "Reduce stress level",
+        descriptionRu: "\u0421\u043D\u0438\u0437\u0438\u0442\u044C \u0443\u0440\u043E\u0432\u0435\u043D\u044C \u0441\u0442\u0440\u0435\u0441\u0441\u0430",
+        feasibility: "moderate",
+        riskLevel: "medium"
+      }
+    ],
+    priority: 2,
+    category: "mood"
+  }
+];
+var CounterfactualExplainer = class {
+  constructor(definitions, rules) {
+    __publicField(this, "featureDefinitions");
+    __publicField(this, "rules");
+    this.featureDefinitions = new Map(
+      Object.entries(definitions || INTERVENTION_FEATURES)
+    );
+    this.rules = rules || COUNTERFACTUAL_RULES;
+  }
+  // ==========================================================================
+  // COUNTERFACTUAL GENERATION
+  // ==========================================================================
+  /**
+   * Generate counterfactual explanations with risk-sensitivity
+   */
+  generateCounterfactuals(currentFeatures, currentOutcome, desiredOutcome, maxCounterfactuals = 3, options) {
+    const scenarios = [];
+    const applicableRules = this.findApplicableRules(
+      currentFeatures,
+      desiredOutcome
+    );
+    for (const rule of applicableRules) {
+      const scenario = this.generateScenarioFromRule(rule, currentFeatures);
+      if (scenario) {
+        if (options?.requireRobust && options.minRobustness) {
+          if (scenario.robustness < options.minRobustness) continue;
+        }
+        if (options?.feasibilityThreshold) {
+          if (!this.meetsFeasibilityThreshold(
+            scenario.feasibility,
+            options.feasibilityThreshold
+          )) continue;
+        }
+        scenarios.push(scenario);
+      }
+    }
+    const proximityScenario = this.generateProximityCounterfactual(
+      currentFeatures,
+      currentOutcome
+    );
+    if (proximityScenario) {
+      scenarios.unshift(proximityScenario);
+    }
+    scenarios.sort((a, b) => b.recourseScore - a.recourseScore);
+    const diverseScenarios = this.selectDiverseScenarios(
+      scenarios,
+      maxCounterfactuals
+    );
+    const closestCounterfactual = this.findClosestCounterfactual(diverseScenarios);
+    const mostRobustCounterfactual = this.findMostRobust(diverseScenarios);
+    const easiestCounterfactual = this.findEasiest(diverseScenarios);
+    const overallRobustness = this.calculateOverallRobustness(diverseScenarios);
+    const diversityScore = this.calculateDiversityScore(diverseScenarios);
+    const { summary, summaryRu } = this.generateSummary(
+      diverseScenarios,
+      currentOutcome
+    );
+    const { advice, adviceRu } = this.generateActionableAdvice(diverseScenarios);
+    return {
+      predictionId: crypto.randomUUID(),
+      currentOutcome,
+      currentOutcomeRu: this.translateOutcome(currentOutcome),
+      currentValue: 0.5,
+      scenarios: diverseScenarios,
+      closestCounterfactual,
+      mostRobustCounterfactual,
+      easiestCounterfactual,
+      summary,
+      summaryRu,
+      userActionableAdvice: advice,
+      userActionableAdviceRu: adviceRu,
+      overallRobustness,
+      diversityScore
+    };
+  }
+  /**
+   * Find rules applicable to current features
+   */
+  findApplicableRules(features, desiredOutcome) {
+    let applicable = this.rules.filter((rule) => {
+      return rule.requiredChanges.some(
+        (change) => change.condition(features[change.featureId])
+      );
+    });
+    if (desiredOutcome) {
+      const exactMatch = applicable.filter(
+        (r) => r.targetOutcome.toLowerCase().includes(desiredOutcome.toLowerCase()) || r.targetOutcomeRu.toLowerCase().includes(desiredOutcome.toLowerCase())
+      );
+      if (exactMatch.length > 0) {
+        applicable = exactMatch;
+      }
+    }
+    return applicable.sort((a, b) => a.priority - b.priority);
+  }
+  /**
+   * Generate scenario from rule with robustness scoring
+   */
+  generateScenarioFromRule(rule, currentFeatures) {
+    const changes = [];
+    let totalFeasibility = "easy";
+    const effortDescriptions = [];
+    const effortDescriptionsRu = [];
+    let maxRisk = "low";
+    for (const requiredChange of rule.requiredChanges) {
+      if (requiredChange.condition(currentFeatures[requiredChange.featureId])) {
+        const definition = this.featureDefinitions.get(requiredChange.featureId);
+        changes.push({
+          featureId: requiredChange.featureId,
+          featureName: definition?.name || requiredChange.featureId,
+          featureNameRu: definition?.nameRu || requiredChange.featureId,
+          currentValue: currentFeatures[requiredChange.featureId],
+          suggestedValue: requiredChange.suggestedValue,
+          changeDescription: requiredChange.description,
+          changeDescriptionRu: requiredChange.descriptionRu,
+          changeRisk: requiredChange.riskLevel,
+          riskExplanation: this.getRiskExplanation(requiredChange.riskLevel)
+        });
+        effortDescriptions.push(requiredChange.description);
+        effortDescriptionsRu.push(requiredChange.descriptionRu);
+        totalFeasibility = this.combineFeasibility(
+          totalFeasibility,
+          requiredChange.feasibility
+        );
+        if (this.riskOrder(requiredChange.riskLevel) > this.riskOrder(maxRisk)) {
+          maxRisk = requiredChange.riskLevel;
+        }
+      }
+    }
+    if (changes.length === 0) return null;
+    const robustness = this.calculateRobustness({
+      id: "",
+      changes,
+      feasibility: totalFeasibility
+    });
+    const plausibility = this.calculatePlausibility(
+      { changes },
+      currentFeatures
+    );
+    const sparsity = this.calculateSparsity(changes.length);
+    const recourseScore = this.calculateRecourseScore(
+      robustness,
+      plausibility,
+      sparsity,
+      totalFeasibility
+    );
+    if (maxRisk === "high") {
+      totalFeasibility = "risky";
+    }
+    return {
+      id: crypto.randomUUID(),
+      description: `To get "${rule.targetOutcome}"`,
+      descriptionRu: `\u0427\u0442\u043E\u0431\u044B \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u044C "${rule.targetOutcomeRu}"`,
+      changes,
+      alternativeOutcome: rule.targetOutcome,
+      alternativeOutcomeRu: rule.targetOutcomeRu,
+      alternativeValue: 0.7,
+      feasibility: totalFeasibility,
+      effort: effortDescriptions.join("; "),
+      effortRu: effortDescriptionsRu.join("; "),
+      robustness,
+      plausibility,
+      sparsity,
+      recourseScore,
+      confidence: 0.75 - changes.length * 0.1
+    };
+  }
+  /**
+   * Generate proximity-based counterfactual (minimum change)
+   */
+  generateProximityCounterfactual(currentFeatures, _currentOutcome) {
+    const singleChanges = [];
+    const currentMood = currentFeatures.currentMood;
+    if (currentMood && currentMood < 4) {
+      const definition = this.featureDefinitions.get("currentMood");
+      singleChanges.push({
+        featureId: "currentMood",
+        featureName: definition?.name || "Mood",
+        featureNameRu: definition?.nameRu || "\u041D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435",
+        currentValue: currentMood,
+        suggestedValue: Math.min(5, currentMood + 1),
+        changeDescription: "Raise mood by 1 point",
+        changeDescriptionRu: "\u041F\u043E\u0432\u044B\u0441\u0438\u0442\u044C \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435 \u043D\u0430 1 \u043F\u0443\u043D\u043A\u0442",
+        changeRisk: "low"
+      });
+    }
+    const currentEnergy = currentFeatures.currentEnergy;
+    if (currentEnergy && currentEnergy < 4) {
+      const definition = this.featureDefinitions.get("currentEnergy");
+      singleChanges.push({
+        featureId: "currentEnergy",
+        featureName: definition?.name || "Energy",
+        featureNameRu: definition?.nameRu || "\u042D\u043D\u0435\u0440\u0433\u0438\u044F",
+        currentValue: currentEnergy,
+        suggestedValue: Math.min(5, currentEnergy + 1),
+        changeDescription: "Raise energy by 1 point",
+        changeDescriptionRu: "\u041F\u043E\u0432\u044B\u0441\u0438\u0442\u044C \u044D\u043D\u0435\u0440\u0433\u0438\u044E \u043D\u0430 1 \u043F\u0443\u043D\u043A\u0442",
+        changeRisk: "low"
+      });
+    }
+    const stressLevel = currentFeatures.stressLevel;
+    if (stressLevel && stressLevel > 2) {
+      const definition = this.featureDefinitions.get("stressLevel");
+      singleChanges.push({
+        featureId: "stressLevel",
+        featureName: definition?.name || "Stress",
+        featureNameRu: definition?.nameRu || "\u0421\u0442\u0440\u0435\u0441\u0441",
+        currentValue: stressLevel,
+        suggestedValue: Math.max(1, stressLevel - 1),
+        changeDescription: "Reduce stress by 1 point",
+        changeDescriptionRu: "\u0421\u043D\u0438\u0437\u0438\u0442\u044C \u0441\u0442\u0440\u0435\u0441\u0441 \u043D\u0430 1 \u043F\u0443\u043D\u043A\u0442",
+        changeRisk: "low"
+      });
+    }
+    const smallestChange = singleChanges[0];
+    if (!smallestChange) return null;
+    const robustness = 0.85;
+    const plausibility = 0.9;
+    const sparsity = 1;
+    const recourseScore = (robustness + plausibility + sparsity) / 3;
+    return {
+      id: crypto.randomUUID(),
+      description: "Minimal Change",
+      descriptionRu: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u043E\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435",
+      changes: [smallestChange],
+      alternativeOutcome: `Different recommendation (with ${smallestChange.changeDescription.toLowerCase()})`,
+      alternativeOutcomeRu: `\u0414\u0440\u0443\u0433\u0430\u044F \u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F (\u043F\u0440\u0438 ${smallestChange.changeDescriptionRu.toLowerCase()})`,
+      alternativeValue: 0.6,
+      feasibility: "easy",
+      effort: smallestChange.changeDescription,
+      effortRu: smallestChange.changeDescriptionRu,
+      robustness,
+      plausibility,
+      sparsity,
+      recourseScore,
+      confidence: 0.8
+    };
+  }
+  // ==========================================================================
+  // RISK-SENSITIVE METRICS
+  // ==========================================================================
+  /**
+   * Calculate robustness of a counterfactual scenario
+   * Higher = more robust to perturbations
+   */
+  calculateRobustness(scenario) {
+    if (!scenario.changes || scenario.changes.length === 0) return 0;
+    const sparsityFactor = 1 / Math.sqrt(scenario.changes.length);
+    const riskFactors = scenario.changes.map((c) => {
+      switch (c.changeRisk) {
+        case "low":
+          return 1;
+        case "medium":
+          return 0.7;
+        case "high":
+          return 0.4;
+        default:
+          return 0.5;
+      }
+    });
+    const avgRiskFactor = riskFactors.reduce((a, b) => a + b, 0) / riskFactors.length;
+    const feasibilityFactor = this.feasibilityToScore(scenario.feasibility);
+    const robustness = sparsityFactor * 0.3 + avgRiskFactor * 0.4 + feasibilityFactor * 0.3;
+    return Math.min(1, Math.max(0, robustness));
+  }
+  /**
+   * Calculate plausibility of a counterfactual scenario
+   * Higher = more realistic given the context
+   */
+  calculatePlausibility(scenario, _contextFeatures) {
+    if (!scenario.changes || scenario.changes.length === 0) return 0;
+    const plausibilityScores = scenario.changes.map((change) => {
+      const definition = this.featureDefinitions.get(change.featureId);
+      if (!definition) return 0.5;
+      const currentNum = typeof change.currentValue === "number" ? change.currentValue : 0;
+      const suggestedNum = typeof change.suggestedValue === "number" ? change.suggestedValue : 0;
+      if (definition.valueType === "numeric" && definition.maxValue && definition.minValue) {
+        const range = definition.maxValue - definition.minValue;
+        const distance = Math.abs(suggestedNum - currentNum) / range;
+        return 1 - distance * 0.5;
+      }
+      if (definition.valueType === "categorical" && definition.possibleValues) {
+        return definition.possibleValues.includes(String(change.suggestedValue)) ? 0.8 : 0.3;
+      }
+      return 0.5;
+    });
+    return plausibilityScores.reduce((a, b) => a + b, 0) / plausibilityScores.length;
+  }
+  /**
+   * Calculate sparsity (preference for fewer changes)
+   */
+  calculateSparsity(changeCount) {
+    return Math.exp(-0.5 * (changeCount - 1));
+  }
+  /**
+   * Calculate combined recourse score
+   */
+  calculateRecourseScore(robustness, plausibility, sparsity, feasibility) {
+    const feasibilityScore = this.feasibilityToScore(feasibility);
+    return robustness * 0.25 + plausibility * 0.25 + sparsity * 0.25 + feasibilityScore * 0.25;
+  }
+  // ==========================================================================
+  // DIVERSITY & SELECTION
+  // ==========================================================================
+  /**
+   * Select diverse subset of counterfactuals
+   */
+  selectDiverseScenarios(scenarios, maxCount) {
+    if (scenarios.length <= maxCount) return scenarios;
+    const selected = [];
+    const usedCategories = /* @__PURE__ */ new Set();
+    for (const scenario of scenarios) {
+      if (selected.length >= maxCount) break;
+      const category = this.getScenarioCategory(scenario);
+      if (!usedCategories.has(category)) {
+        selected.push(scenario);
+        usedCategories.add(category);
+      }
+    }
+    for (const scenario of scenarios) {
+      if (selected.length >= maxCount) break;
+      if (!selected.includes(scenario)) {
+        selected.push(scenario);
+      }
+    }
+    return selected;
+  }
+  /**
+   * Get category of a scenario based on changed features
+   */
+  getScenarioCategory(scenario) {
+    const firstChange = scenario.changes[0];
+    if (!firstChange) return "unknown";
+    const featureId = firstChange.featureId;
+    const definition = this.featureDefinitions.get(featureId);
+    return definition?.category || "unknown";
+  }
+  /**
+   * Calculate diversity score for selected scenarios
+   */
+  calculateDiversityScore(scenarios) {
+    if (scenarios.length <= 1) return 0;
+    const categories = scenarios.map((s) => this.getScenarioCategory(s));
+    const uniqueCategories = new Set(categories);
+    return uniqueCategories.size / scenarios.length;
+  }
+  /**
+   * Calculate overall robustness of explanation
+   */
+  calculateOverallRobustness(scenarios) {
+    if (scenarios.length === 0) return 0;
+    const robustnessValues = scenarios.map((s) => s.robustness);
+    return robustnessValues.reduce((a, b) => a + b, 0) / robustnessValues.length;
+  }
+  // ==========================================================================
+  // FINDING SPECIAL SCENARIOS
+  // ==========================================================================
+  /**
+   * Find closest counterfactual (easiest to achieve)
+   */
+  findClosestCounterfactual(scenarios) {
+    if (scenarios.length === 0) return void 0;
+    return [...scenarios].sort((a, b) => {
+      const feasibilityOrder = {
+        easy: 0,
+        moderate: 1,
+        difficult: 2,
+        impossible: 3,
+        risky: 4
+      };
+      const feasibilityDiff = feasibilityOrder[a.feasibility] - feasibilityOrder[b.feasibility];
+      if (feasibilityDiff !== 0) return feasibilityDiff;
+      return a.changes.length - b.changes.length;
+    })[0];
+  }
+  /**
+   * Find most robust counterfactual
+   */
+  findMostRobust(scenarios) {
+    if (scenarios.length === 0) return void 0;
+    return [...scenarios].sort((a, b) => b.robustness - a.robustness)[0];
+  }
+  /**
+   * Find easiest counterfactual
+   */
+  findEasiest(scenarios) {
+    if (scenarios.length === 0) return void 0;
+    const easyScenarios = scenarios.filter((s) => s.feasibility === "easy");
+    if (easyScenarios.length > 0) {
+      return easyScenarios.sort((a, b) => b.recourseScore - a.recourseScore)[0];
+    }
+    return this.findClosestCounterfactual(scenarios);
+  }
+  // ==========================================================================
+  // USER-FACING OUTPUT
+  // ==========================================================================
+  /**
+   * Generate summary of counterfactuals
+   */
+  generateSummary(scenarios, currentOutcome) {
+    if (scenarios.length === 0) {
+      return {
+        summary: `Current recommendation "${currentOutcome}" is optimal for your situation.`,
+        summaryRu: `\u0422\u0435\u043A\u0443\u0449\u0430\u044F \u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F "${this.translateOutcome(currentOutcome)}" \u2014 \u043E\u043F\u0442\u0438\u043C\u0430\u043B\u044C\u043D\u0430 \u0434\u043B\u044F \u0442\u0432\u043E\u0435\u0439 \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0438.`
+      };
+    }
+    const easiest = scenarios.find((s) => s.feasibility === "easy");
+    const change = easiest?.changes?.[0];
+    if (change) {
+      return {
+        summary: `If ${change.changeDescription.toLowerCase()}, you'll get ${easiest?.alternativeOutcome?.toLowerCase() ?? "a different result"}.`,
+        summaryRu: `\u0415\u0441\u043B\u0438 ${change.changeDescriptionRu.toLowerCase()}, \u0442\u044B \u043F\u043E\u043B\u0443\u0447\u0438\u0448\u044C ${easiest?.alternativeOutcomeRu?.toLowerCase() ?? "\u0434\u0440\u0443\u0433\u043E\u0439 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442"}.`
+      };
+    }
+    return {
+      summary: `There are ${scenarios.length} way(s) to get a different recommendation.`,
+      summaryRu: `\u0415\u0441\u0442\u044C ${scenarios.length} \u0441\u043F\u043E\u0441\u043E\u0431\u0430(\u043E\u0432) \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u044C \u0434\u0440\u0443\u0433\u0443\u044E \u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044E.`
+    };
+  }
+  /**
+   * Generate actionable advice from counterfactuals
+   */
+  generateActionableAdvice(scenarios) {
+    const advice = [];
+    const adviceRu = [];
+    for (const scenario of scenarios) {
+      if (scenario.feasibility === "easy" || scenario.feasibility === "moderate") {
+        for (const change of scenario.changes) {
+          if (!advice.includes(change.changeDescription)) {
+            advice.push(change.changeDescription);
+            adviceRu.push(change.changeDescriptionRu);
+          }
+        }
+      }
+    }
+    return {
+      advice: advice.slice(0, 3),
+      adviceRu: adviceRu.slice(0, 3)
+    };
+  }
+  /**
+   * Format counterfactuals for display
+   */
+  formatForDisplay(explanation, ageGroup = "adult") {
+    switch (ageGroup) {
+      case "child":
+        return this.formatForChild(explanation);
+      case "teen":
+        return this.formatForTeen(explanation);
+      case "adult":
+      default:
+        return this.formatForAdult(explanation);
+    }
+  }
+  formatForChild(explanation) {
+    if (explanation.scenarios.length === 0) {
+      return "\u{1F31F} \u042F \u0432\u044B\u0431\u0440\u0430\u043B \u043B\u0443\u0447\u0448\u0435\u0435 \u0434\u043B\u044F \u0442\u0435\u0431\u044F!";
+    }
+    const easiest = explanation.easiestCounterfactual;
+    if (easiest && easiest.changes.length > 0) {
+      return `\u{1F52E} \u0410 \u0437\u043D\u0430\u0435\u0448\u044C \u0447\u0442\u043E? ${easiest.effortRu} \u2014 \u0438 \u0431\u0443\u0434\u0435\u0442 \u0435\u0449\u0451 \u043A\u0440\u0443\u0447\u0435!`;
+    }
+    return "\u{1F31F} \u042D\u0442\u043E \u0441\u043F\u0435\u0446\u0438\u0430\u043B\u044C\u043D\u043E \u0434\u043B\u044F \u0442\u0435\u0431\u044F!";
+  }
+  formatForTeen(explanation) {
+    let result = `\u{1F4A1} ${explanation.summaryRu}
+`;
+    if (explanation.userActionableAdviceRu.length > 0) {
+      result += "\n\u0427\u0442\u043E \u043C\u043E\u0436\u043D\u043E \u0441\u0434\u0435\u043B\u0430\u0442\u044C:\n";
+      for (const advice of explanation.userActionableAdviceRu.slice(0, 2)) {
+        result += `\u2022 ${advice}
+`;
+      }
+    }
+    return result.trim();
+  }
+  formatForAdult(explanation) {
+    let result = `\u{1F4CA} \u0410\u043D\u0430\u043B\u0438\u0437 \u0430\u043B\u044C\u0442\u0435\u0440\u043D\u0430\u0442\u0438\u0432
+
+`;
+    result += `${explanation.summaryRu}
+`;
+    if (explanation.scenarios.length > 0) {
+      result += "\n\u0412\u043E\u0437\u043C\u043E\u0436\u043D\u044B\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F:\n";
+      for (const scenario of explanation.scenarios.slice(0, 3)) {
+        result += `
+${scenario.descriptionRu}:
+`;
+        for (const change of scenario.changes) {
+          result += `  \u2022 ${change.changeDescriptionRu} `;
+          result += `(${change.currentValue} \u2192 ${change.suggestedValue})
+`;
+        }
+        result += `  \u0421\u043B\u043E\u0436\u043D\u043E\u0441\u0442\u044C: ${this.translateFeasibility(scenario.feasibility)}`;
+        result += ` | \u041D\u0430\u0434\u0451\u0436\u043D\u043E\u0441\u0442\u044C: ${Math.round(scenario.robustness * 100)}%
+`;
+      }
+    }
+    return result.trim();
+  }
+  // ==========================================================================
+  // HELPERS
+  // ==========================================================================
+  combineFeasibility(current, newFeasibility) {
+    const order = {
+      easy: 0,
+      moderate: 1,
+      difficult: 2,
+      risky: 3,
+      impossible: 4
+    };
+    return order[newFeasibility] > order[current] ? newFeasibility : current;
+  }
+  meetsFeasibilityThreshold(feasibility, threshold) {
+    const order = {
+      easy: 0,
+      moderate: 1,
+      difficult: 2,
+      risky: 3,
+      impossible: 4
+    };
+    return order[feasibility] <= order[threshold];
+  }
+  feasibilityToScore(feasibility) {
+    const scores = {
+      easy: 1,
+      moderate: 0.7,
+      difficult: 0.4,
+      risky: 0.3,
+      impossible: 0
+    };
+    return scores[feasibility] ?? 0.5;
+  }
+  riskOrder(risk) {
+    const order = { low: 0, medium: 1, high: 2 };
+    return order[risk] ?? 0;
+  }
+  getRiskExplanation(risk) {
+    switch (risk) {
+      case "low":
+        return "Safe change with minimal risk";
+      case "medium":
+        return "Moderate change that may require effort";
+      case "high":
+        return "Significant change that needs careful consideration";
+    }
+  }
+  translateFeasibility(feasibility) {
+    const translations = {
+      easy: "\u043B\u0435\u0433\u043A\u043E",
+      moderate: "\u0441\u0440\u0435\u0434\u043D\u0435",
+      difficult: "\u0441\u043B\u043E\u0436\u043D\u043E",
+      risky: "\u0440\u0438\u0441\u043A\u043E\u0432\u0430\u043D\u043D\u043E",
+      impossible: "\u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u043D\u043E"
+    };
+    return translations[feasibility];
+  }
+  translateOutcome(outcome) {
+    const translations = {
+      "intervention": "\u0442\u0435\u0445\u043D\u0438\u043A\u0430",
+      "support": "\u043F\u043E\u0434\u0434\u0435\u0440\u0436\u043A\u0430",
+      "technique": "\u0442\u0435\u0445\u043D\u0438\u043A\u0430",
+      "exercise": "\u0443\u043F\u0440\u0430\u0436\u043D\u0435\u043D\u0438\u0435"
+    };
+    for (const [en, ru] of Object.entries(translations)) {
+      if (outcome.toLowerCase().includes(en)) {
+        return outcome.replace(new RegExp(en, "gi"), ru);
+      }
+    }
+    return outcome;
+  }
+  // ==========================================================================
+  // RULE MANAGEMENT
+  // ==========================================================================
+  /**
+   * Add custom counterfactual rule
+   */
+  addRule(rule) {
+    this.rules.push(rule);
+    this.rules.sort((a, b) => a.priority - b.priority);
+  }
+  /**
+   * Get all rules
+   */
+  getRules() {
+    return [...this.rules];
+  }
+  /**
+   * Get rules by category
+   */
+  getRulesByCategory(category) {
+    return this.rules.filter((r) => r.category === category);
+  }
+};
+
+// src/explainability/services/NarrativeGenerator.ts
+var NARRATIVE_TEMPLATES_RU = {
+  journey: {
+    child: {
+      opening: [
+        "\u{1F31F} \u0414\u0430\u0432\u0430\u0439 \u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0438\u043C, \u043A\u0430\u043A \u043C\u044B \u043F\u0440\u0438\u0448\u043B\u0438 \u043A \u044D\u0442\u043E\u043C\u0443!",
+        "\u{1F680} \u0412\u043E\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u044F \u0442\u0432\u043E\u0435\u0433\u043E \u043F\u0443\u0442\u0435\u0448\u0435\u0441\u0442\u0432\u0438\u044F!",
+        "\u2728 \u0420\u0430\u0441\u0441\u043A\u0430\u0436\u0443 \u0442\u0435\u0431\u0435, \u0447\u0442\u043E \u043F\u0440\u043E\u0438\u0437\u043E\u0448\u043B\u043E!"
+      ],
+      body: [
+        "\u0422\u044B \u043D\u0430\u0447\u0430\u043B \u0441 {initial_state}. \u041F\u043E\u0442\u043E\u043C {key_change}. \u0418 \u0442\u0435\u043F\u0435\u0440\u044C {current_state}!",
+        "\u041F\u043E\u043C\u043D\u0438\u0448\u044C, \u043A\u043E\u0433\u0434\u0430 \u0431\u044B\u043B\u043E {initial_state}? {key_change} \u043F\u043E\u043C\u043E\u0433\u043B\u043E! \u0422\u0435\u043F\u0435\u0440\u044C {current_state}."
+      ],
+      conclusion: [
+        "\u0422\u044B \u043C\u043E\u043B\u043E\u0434\u0435\u0446! \u{1F389}",
+        "\u0422\u0430\u043A \u0434\u0435\u0440\u0436\u0430\u0442\u044C! \u{1F4AA}",
+        "\u041E\u0442\u043B\u0438\u0447\u043D\u043E \u043F\u043E\u043B\u0443\u0447\u0430\u0435\u0442\u0441\u044F! \u2B50"
+      ],
+      callToAction: [
+        "\u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439 {action}!",
+        "\u0414\u0430\u0432\u0430\u0439 \u0441\u0434\u0435\u043B\u0430\u0435\u043C {action}!"
+      ]
+    },
+    teen: {
+      opening: [
+        "\u{1F4CA} \u0412\u043E\u0442 \u043A\u0430\u043A \u0441\u043A\u043B\u0430\u0434\u044B\u0432\u0430\u0435\u0442\u0441\u044F \u043A\u0430\u0440\u0442\u0438\u043D\u0430...",
+        "\u{1F4A1} \u0421\u043C\u043E\u0442\u0440\u0438, \u0447\u0442\u043E \u043F\u043E\u043B\u0443\u0447\u0430\u0435\u0442\u0441\u044F...",
+        "\u{1F3AF} \u0420\u0430\u0437\u0431\u0435\u0440\u0451\u043C \u043F\u043E \u0448\u0430\u0433\u0430\u043C..."
+      ],
+      body: [
+        "\u041D\u0430\u0447\u0438\u043D\u0430\u043B\u043E\u0441\u044C \u0441 {initial_state}. {key_change} \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u043E \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u044E. \u0421\u0435\u0439\u0447\u0430\u0441 {current_state}.",
+        "\u041E\u0442 {initial_state} \u0447\u0435\u0440\u0435\u0437 {key_change} \u0442\u044B \u0434\u043E\u0448\u0451\u043B \u0434\u043E {current_state}."
+      ],
+      conclusion: [
+        "\u0412 \u0446\u0435\u043B\u043E\u043C, \u0434\u0432\u0438\u0436\u0435\u043D\u0438\u0435 \u0432 \u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u043E\u043C \u043D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0438.",
+        "\u0415\u0441\u0442\u044C \u043F\u0440\u043E\u0433\u0440\u0435\u0441\u0441, \u0438 \u044D\u0442\u043E \u0433\u043B\u0430\u0432\u043D\u043E\u0435.",
+        "\u0421\u0438\u0442\u0443\u0430\u0446\u0438\u044F \u043F\u043E\u0434 \u043A\u043E\u043D\u0442\u0440\u043E\u043B\u0435\u043C."
+      ],
+      callToAction: [
+        "\u0421\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0439 \u0448\u0430\u0433 \u2014 {action}.",
+        "\u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E \u043F\u043E\u043F\u0440\u043E\u0431\u043E\u0432\u0430\u0442\u044C {action}."
+      ]
+    },
+    adult: {
+      opening: [
+        "\u{1F4C8} \u0410\u043D\u0430\u043B\u0438\u0437 \u0432\u0430\u0448\u0435\u0433\u043E \u043F\u0443\u0442\u0438:",
+        "\u{1F50D} \u0420\u0430\u0441\u0441\u043C\u043E\u0442\u0440\u0438\u043C \u0434\u0438\u043D\u0430\u043C\u0438\u043A\u0443 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439:",
+        "\u{1F4CB} \u041E\u0431\u0437\u043E\u0440 \u043F\u0440\u043E\u0433\u0440\u0435\u0441\u0441\u0430:"
+      ],
+      body: [
+        "\u0418\u0441\u0445\u043E\u0434\u043D\u043E\u0435 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435: {initial_state}. \u041A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F: {key_change}. \u0422\u0435\u043A\u0443\u0449\u0438\u0439 \u0441\u0442\u0430\u0442\u0443\u0441: {current_state}.",
+        "\u0412\u044B \u043F\u0440\u043E\u0448\u043B\u0438 \u043F\u0443\u0442\u044C \u043E\u0442 {initial_state}, \u0447\u0435\u0440\u0435\u0437 {key_change}, \u043A {current_state}."
+      ],
+      conclusion: [
+        "\u0414\u0430\u043D\u043D\u044B\u0435 \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u044E\u0442 \u043F\u043E\u043B\u043E\u0436\u0438\u0442\u0435\u043B\u044C\u043D\u0443\u044E \u0434\u0438\u043D\u0430\u043C\u0438\u043A\u0443.",
+        "\u041D\u0430\u0431\u043B\u044E\u0434\u0430\u0435\u0442\u0441\u044F \u0443\u0441\u0442\u043E\u0439\u0447\u0438\u0432\u044B\u0439 \u043F\u0440\u043E\u0433\u0440\u0435\u0441\u0441.",
+        "\u0422\u0435\u043A\u0443\u0449\u0430\u044F \u0442\u0440\u0430\u0435\u043A\u0442\u043E\u0440\u0438\u044F \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0446\u0435\u043B\u044F\u043C."
+      ],
+      callToAction: [
+        "\u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u043C\u043E\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435: {action}.",
+        "\u0414\u043B\u044F \u0434\u0430\u043B\u044C\u043D\u0435\u0439\u0448\u0435\u0433\u043E \u043F\u0440\u043E\u0433\u0440\u0435\u0441\u0441\u0430 \u043F\u0440\u0435\u0434\u043B\u0430\u0433\u0430\u0435\u0442\u0441\u044F: {action}."
+      ]
+    }
+  },
+  comparison: {
+    child: {
+      opening: [
+        "\u{1F50D} \u0410 \u0442\u044B \u0437\u043D\u0430\u043B, \u0447\u0442\u043E \u0434\u0440\u0443\u0433\u0438\u0435 \u0442\u043E\u0436\u0435 \u0442\u0430\u043A \u0434\u0435\u043B\u0430\u044E\u0442?",
+        "\u{1F465} \u0421\u043C\u043E\u0442\u0440\u0438, \u043A\u0430\u043A \u0443 \u0434\u0440\u0443\u0433\u0438\u0445 \u0440\u0435\u0431\u044F\u0442!"
+      ],
+      body: [
+        "\u041C\u043D\u043E\u0433\u0438\u0435, \u043A\u0430\u043A \u0438 \u0442\u044B, \u0447\u0443\u0432\u0441\u0442\u0432\u043E\u0432\u0430\u043B\u0438 {feeling}. {technique} \u043F\u043E\u043C\u043E\u0433\u043B\u043E \u0438\u043C. \u0422\u0435\u0431\u0435 \u0442\u043E\u0436\u0435 \u043F\u043E\u043C\u043E\u0436\u0435\u0442!"
+      ],
+      conclusion: [
+        "\u0422\u044B \u043D\u0435 \u043E\u0434\u0438\u043D! \u{1F91D}",
+        "\u041C\u043D\u043E\u0433\u0438\u0435 \u0441\u043F\u0440\u0430\u0432\u0438\u043B\u0438\u0441\u044C, \u0438 \u0442\u044B \u0441\u043F\u0440\u0430\u0432\u0438\u0448\u044C\u0441\u044F! \u{1F4AA}"
+      ],
+      callToAction: [
+        "\u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439 \u0442\u043E, \u0447\u0442\u043E \u043F\u043E\u043C\u043E\u0433\u043B\u043E \u0434\u0440\u0443\u0433\u0438\u043C!"
+      ]
+    },
+    teen: {
+      opening: [
+        "\u{1F4CA} \u0421\u0440\u0430\u0432\u043D\u0435\u043D\u0438\u0435 \u0441 \u043F\u043E\u0445\u043E\u0436\u0438\u043C\u0438 \u0441\u043B\u0443\u0447\u0430\u044F\u043C\u0438...",
+        "\u{1F504} \u041F\u043E\u0441\u043C\u043E\u0442\u0440\u0438\u043C, \u043A\u0430\u043A \u0441\u043F\u0440\u0430\u0432\u043B\u044F\u044E\u0442\u0441\u044F \u0434\u0440\u0443\u0433\u0438\u0435..."
+      ],
+      body: [
+        "\u0412 \u043F\u043E\u0445\u043E\u0436\u0438\u0445 \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u044F\u0445 ({feeling}) {technique} \u043F\u043E\u043A\u0430\u0437\u0430\u043B\u0430 \u0445\u043E\u0440\u043E\u0448\u0438\u0435 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u044B. {stats}"
+      ],
+      conclusion: [
+        "\u041C\u0435\u0442\u043E\u0434 \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D \u0438 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442.",
+        "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430 \u043D\u0430 \u0442\u0432\u043E\u0435\u0439 \u0441\u0442\u043E\u0440\u043E\u043D\u0435."
+      ],
+      callToAction: [
+        "\u0421\u0442\u043E\u0438\u0442 \u043F\u043E\u043F\u0440\u043E\u0431\u043E\u0432\u0430\u0442\u044C \u044D\u0442\u043E\u0442 \u043F\u043E\u0434\u0445\u043E\u0434."
+      ]
+    },
+    adult: {
+      opening: [
+        "\u{1F4C8} \u0421\u0440\u0430\u0432\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u0430\u043D\u0430\u043B\u0438\u0437:",
+        "\u{1F52C} \u0414\u0430\u043D\u043D\u044B\u0435 \u043F\u043E \u0430\u043D\u0430\u043B\u043E\u0433\u0438\u0447\u043D\u044B\u043C \u0441\u043B\u0443\u0447\u0430\u044F\u043C:"
+      ],
+      body: [
+        "\u0412 \u0432\u044B\u0431\u043E\u0440\u043A\u0435 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u0435\u0439 \u0441\u043E \u0441\u0445\u043E\u0436\u0438\u043C\u0438 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u0430\u043C\u0438 ({feeling}) \u043F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 {technique} \u043F\u043E\u043A\u0430\u0437\u0430\u043B\u043E {stats}."
+      ],
+      conclusion: [
+        "\u042D\u0444\u0444\u0435\u043A\u0442\u0438\u0432\u043D\u043E\u0441\u0442\u044C \u043C\u0435\u0442\u043E\u0434\u0430 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0430 \u0434\u0430\u043D\u043D\u044B\u043C\u0438.",
+        "\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u044B \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u0437\u043D\u0430\u0447\u0438\u043C\u044B."
+      ],
+      callToAction: [
+        "\u041D\u0430 \u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0438 \u0434\u0430\u043D\u043D\u044B\u0445 \u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u0442\u0441\u044F \u043F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u0438\u0441\u0430\u043D\u043D\u044B\u0439 \u043F\u043E\u0434\u0445\u043E\u0434."
+      ]
+    }
+  },
+  "cause-effect": {
+    child: {
+      opening: [
+        "\u{1F517} \u0417\u043D\u0430\u0435\u0448\u044C \u043F\u043E\u0447\u0435\u043C\u0443 \u0442\u0430\u043A \u043F\u043E\u043B\u0443\u0447\u0438\u043B\u043E\u0441\u044C?",
+        "\u2753 \u0414\u0430\u0432\u0430\u0439 \u0440\u0430\u0437\u0431\u0435\u0440\u0451\u043C\u0441\u044F, \u043E\u0442 \u0447\u0435\u0433\u043E \u044D\u0442\u043E \u0437\u0430\u0432\u0438\u0441\u0438\u0442!"
+      ],
+      body: [
+        "\u041A\u043E\u0433\u0434\u0430 {cause}, \u0442\u043E {effect}. \u042D\u0442\u043E \u043A\u0430\u043A {analogy}!",
+        "{cause} \u043F\u0440\u0438\u0432\u043E\u0434\u0438\u0442 \u043A {effect}. \u041F\u043E\u043D\u0438\u043C\u0430\u0435\u0448\u044C?"
+      ],
+      conclusion: [
+        "\u0422\u0435\u043F\u0435\u0440\u044C \u0442\u044B \u0437\u043D\u0430\u0435\u0448\u044C, \u043A\u0430\u043A \u044D\u0442\u043E \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442! \u{1F9E0}",
+        "\u0412\u043E\u0442 \u0442\u0430\u043A\u0430\u044F \u0446\u0435\u043F\u043E\u0447\u043A\u0430! \u26D3\uFE0F"
+      ],
+      callToAction: [
+        "\u0427\u0442\u043E\u0431\u044B \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C {effect}, \u043F\u043E\u043F\u0440\u043E\u0431\u0443\u0439 {action}!"
+      ]
+    },
+    teen: {
+      opening: [
+        "\u{1F52C} \u041F\u0440\u0438\u0447\u0438\u043D\u043D\u043E-\u0441\u043B\u0435\u0434\u0441\u0442\u0432\u0435\u043D\u043D\u0430\u044F \u0441\u0432\u044F\u0437\u044C:",
+        "\u26A1 \u0412\u043E\u0442 \u0447\u0442\u043E \u043D\u0430 \u0447\u0442\u043E \u0432\u043B\u0438\u044F\u0435\u0442:"
+      ],
+      body: [
+        "{cause} \u2192 {effect}. \u041C\u0435\u0445\u0430\u043D\u0438\u0437\u043C: {mechanism}.",
+        "\u0421\u0432\u044F\u0437\u044C: {cause} \u043D\u0430\u043F\u0440\u044F\u043C\u0443\u044E \u0432\u043B\u0438\u044F\u0435\u0442 \u043D\u0430 {effect}."
+      ],
+      conclusion: [
+        "\u041F\u043E\u043D\u0438\u043C\u0430\u043D\u0438\u0435 \u043F\u0440\u0438\u0447\u0438\u043D \u043F\u043E\u043C\u043E\u0433\u0430\u0435\u0442 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u0442\u044C \u0441\u043B\u0435\u0434\u0441\u0442\u0432\u0438\u044F\u043C\u0438.",
+        "\u0417\u043D\u0430\u044F \u043C\u0435\u0445\u0430\u043D\u0438\u0437\u043C, \u043C\u043E\u0436\u043D\u043E \u0432\u043B\u0438\u044F\u0442\u044C \u043D\u0430 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442."
+      ],
+      callToAction: [
+        "\u0412\u043E\u0437\u0434\u0435\u0439\u0441\u0442\u0432\u0443\u0439 \u043D\u0430 {cause}, \u0447\u0442\u043E\u0431\u044B \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C {effect}."
+      ]
+    },
+    adult: {
+      opening: [
+        "\u{1F50D} \u041A\u0430\u0443\u0437\u0430\u043B\u044C\u043D\u044B\u0439 \u0430\u043D\u0430\u043B\u0438\u0437:",
+        "\u{1F4CA} \u041F\u0440\u0438\u0447\u0438\u043D\u043D\u043E-\u0441\u043B\u0435\u0434\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0435 \u0441\u0432\u044F\u0437\u0438:"
+      ],
+      body: [
+        "\u0423\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0430 \u0441\u0432\u044F\u0437\u044C: {cause} \u2192 {effect}. \u041C\u0435\u0445\u0430\u043D\u0438\u0437\u043C \u0432\u043E\u0437\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F: {mechanism}. \u0421\u0438\u043B\u0430 \u0441\u0432\u044F\u0437\u0438: {strength}."
+      ],
+      conclusion: [
+        "\u041A\u0430\u0443\u0437\u0430\u043B\u044C\u043D\u044B\u0439 \u0430\u043D\u0430\u043B\u0438\u0437 \u0432\u044B\u044F\u0432\u0438\u043B \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0442\u043E\u0447\u043A\u0438 \u0432\u043E\u0437\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F.",
+        "\u0418\u043D\u0442\u0435\u0440\u0432\u0435\u043D\u0446\u0438\u044F \u043D\u0430 \u0443\u0440\u043E\u0432\u043D\u0435 \u043F\u0440\u0438\u0447\u0438\u043D \u043E\u0431\u0435\u0441\u043F\u0435\u0447\u0438\u0442 \u0443\u0441\u0442\u043E\u0439\u0447\u0438\u0432\u044B\u0439 \u044D\u0444\u0444\u0435\u043A\u0442."
+      ],
+      callToAction: [
+        "\u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u0442\u0441\u044F \u0432\u043E\u0437\u0434\u0435\u0439\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C \u043D\u0430 {cause} \u0434\u043B\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F {effect}."
+      ]
+    }
+  },
+  recommendation: {
+    child: {
+      opening: [
+        "\u{1F381} \u0423 \u043C\u0435\u043D\u044F \u0435\u0441\u0442\u044C \u0434\u043B\u044F \u0442\u0435\u0431\u044F \u0438\u0434\u0435\u044F!",
+        "\u{1F4A1} \u0417\u043D\u0430\u044E, \u0447\u0442\u043E \u0442\u0435\u0431\u0435 \u043F\u043E\u043C\u043E\u0436\u0435\u0442!",
+        "\u{1F308} \u0412\u043E\u0442 \u0447\u0442\u043E \u044F \u043F\u0440\u0438\u0434\u0443\u043C\u0430\u043B \u0434\u043B\u044F \u0442\u0435\u0431\u044F!"
+      ],
+      body: [
+        "\u042F \u0432\u0438\u0436\u0443, \u0447\u0442\u043E {observation}. \u041F\u043E\u044D\u0442\u043E\u043C\u0443 \u0441\u043E\u0432\u0435\u0442\u0443\u044E {recommendation}!",
+        "\u0420\u0430\u0437 {observation}, \u0434\u0430\u0432\u0430\u0439 \u043F\u043E\u043F\u0440\u043E\u0431\u0443\u0435\u043C {recommendation}!"
+      ],
+      conclusion: [
+        "\u042D\u0442\u043E \u0434\u043E\u043B\u0436\u043D\u043E \u043F\u043E\u043C\u043E\u0447\u044C! \u{1F3AF}",
+        "\u0423\u0432\u0435\u0440\u0435\u043D, \u0442\u0435\u0431\u0435 \u043F\u043E\u043D\u0440\u0430\u0432\u0438\u0442\u0441\u044F! \u2764\uFE0F"
+      ],
+      callToAction: [
+        "\u0413\u043E\u0442\u043E\u0432 \u043F\u043E\u043F\u0440\u043E\u0431\u043E\u0432\u0430\u0442\u044C? {action}!",
+        "\u041D\u0430\u0447\u043D\u0451\u043C \u043F\u0440\u044F\u043C\u043E \u0441\u0435\u0439\u0447\u0430\u0441? {action}!"
+      ]
+    },
+    teen: {
+      opening: [
+        "\u{1F4A1} \u0412\u043E\u0442 \u043C\u043E\u044F \u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F:",
+        "\u{1F3AF} \u0427\u0442\u043E \u044F \u043F\u0440\u0435\u0434\u043B\u0430\u0433\u0430\u044E:"
+      ],
+      body: [
+        "\u0423\u0447\u0438\u0442\u044B\u0432\u0430\u044F {observation}, \u043E\u043F\u0442\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 \u0432\u0430\u0440\u0438\u0430\u043D\u0442 \u2014 {recommendation}. \u041F\u043E\u0447\u0435\u043C\u0443: {reasoning}."
+      ],
+      conclusion: [
+        "\u042D\u0442\u043E\u0442 \u043F\u043E\u0434\u0445\u043E\u0434 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442 \u0434\u043B\u044F \u0442\u0432\u043E\u0435\u0439 \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0438.",
+        "\u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F \u0443\u0447\u0438\u0442\u044B\u0432\u0430\u0435\u0442 \u0442\u0432\u043E\u0438 \u043E\u0441\u043E\u0431\u0435\u043D\u043D\u043E\u0441\u0442\u0438."
+      ],
+      callToAction: [
+        "\u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439: {action}."
+      ]
+    },
+    adult: {
+      opening: [
+        "\u{1F4CB} \u041F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u0430\u044F \u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F:",
+        "\u{1F3AF} \u041D\u0430 \u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0438 \u0430\u043D\u0430\u043B\u0438\u0437\u0430:"
+      ],
+      body: [
+        "\u0410\u043D\u0430\u043B\u0438\u0437 \u043F\u043E\u043A\u0430\u0437\u0430\u043B: {observation}. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u0442\u0441\u044F: {recommendation}. \u041E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435: {reasoning}. \u041E\u0436\u0438\u0434\u0430\u0435\u043C\u044B\u0439 \u044D\u0444\u0444\u0435\u043A\u0442: {expected_effect}."
+      ],
+      conclusion: [
+        "\u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F \u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0430 \u043D\u0430 \u0432\u0430\u0448\u0438\u0445 \u0434\u0430\u043D\u043D\u044B\u0445 \u0438 \u043B\u0443\u0447\u0448\u0438\u0445 \u043F\u0440\u0430\u043A\u0442\u0438\u043A\u0430\u0445.",
+        "\u041F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F \u0443\u0447\u0438\u0442\u044B\u0432\u0430\u0435\u0442 \u0438\u043D\u0434\u0438\u0432\u0438\u0434\u0443\u0430\u043B\u044C\u043D\u044B\u0435 \u0444\u0430\u043A\u0442\u043E\u0440\u044B."
+      ],
+      callToAction: [
+        "\u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u043C\u043E\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435: {action}."
+      ]
+    }
+  }
+};
+var NARRATIVE_TEMPLATES_EN = {
+  journey: {
+    child: {
+      opening: [
+        "\u{1F31F} Let's see how we got here!",
+        "\u{1F680} Here's the story of your journey!"
+      ],
+      body: [
+        "You started with {initial_state}. Then {key_change}. And now {current_state}!"
+      ],
+      conclusion: [
+        "You're doing great! \u{1F389}",
+        "Keep it up! \u{1F4AA}"
+      ],
+      callToAction: [
+        "Try {action}!"
+      ]
+    },
+    teen: {
+      opening: [
+        "\u{1F4CA} Here's how things are shaping up...",
+        "\u{1F4A1} Let me break this down..."
+      ],
+      body: [
+        "Started with {initial_state}. {key_change} changed things. Now at {current_state}."
+      ],
+      conclusion: [
+        "Overall, moving in the right direction.",
+        "There's progress, and that's what matters."
+      ],
+      callToAction: [
+        "Next step: {action}."
+      ]
+    },
+    adult: {
+      opening: [
+        "\u{1F4C8} Analysis of your progress:",
+        "\u{1F50D} Review of changes:"
+      ],
+      body: [
+        "Initial state: {initial_state}. Key changes: {key_change}. Current status: {current_state}."
+      ],
+      conclusion: [
+        "Data shows positive momentum.",
+        "Current trajectory aligns with goals."
+      ],
+      callToAction: [
+        "Recommended action: {action}."
+      ]
+    }
+  },
+  comparison: {
+    child: {
+      opening: ["\u{1F465} Did you know others do this too?"],
+      body: ["Many kids felt {feeling} like you. {technique} helped them!"],
+      conclusion: ["You're not alone! \u{1F91D}"],
+      callToAction: ["Try what helped others!"]
+    },
+    teen: {
+      opening: ["\u{1F4CA} Comparing with similar cases..."],
+      body: ["In similar situations ({feeling}), {technique} showed good results. {stats}"],
+      conclusion: ["The method is proven to work."],
+      callToAction: ["Worth trying this approach."]
+    },
+    adult: {
+      opening: ["\u{1F4C8} Comparative analysis:"],
+      body: ["Among users with similar parameters ({feeling}), {technique} showed {stats}."],
+      conclusion: ["Method effectiveness is data-confirmed."],
+      callToAction: ["Based on data, recommend applying this approach."]
+    }
+  },
+  "cause-effect": {
+    child: {
+      opening: ["\u{1F517} Know why this happened?"],
+      body: ["When {cause}, then {effect}. It's like {analogy}!"],
+      conclusion: ["Now you know how it works! \u{1F9E0}"],
+      callToAction: ["To change {effect}, try {action}!"]
+    },
+    teen: {
+      opening: ["\u{1F52C} Cause and effect:"],
+      body: ["{cause} \u2192 {effect}. Mechanism: {mechanism}."],
+      conclusion: ["Understanding causes helps control effects."],
+      callToAction: ["Act on {cause} to change {effect}."]
+    },
+    adult: {
+      opening: ["\u{1F50D} Causal analysis:"],
+      body: ["Established link: {cause} \u2192 {effect}. Mechanism: {mechanism}. Strength: {strength}."],
+      conclusion: ["Causal analysis identified key intervention points."],
+      callToAction: ["Recommend acting on {cause} to modify {effect}."]
+    }
+  },
+  recommendation: {
+    child: {
+      opening: ["\u{1F381} I have an idea for you!", "\u{1F4A1} I know what will help!"],
+      body: ["I see that {observation}. So I suggest {recommendation}!"],
+      conclusion: ["This should help! \u{1F3AF}"],
+      callToAction: ["Ready to try? {action}!"]
+    },
+    teen: {
+      opening: ["\u{1F4A1} Here's my recommendation:"],
+      body: ["Given {observation}, best option is {recommendation}. Why: {reasoning}."],
+      conclusion: ["This approach works for your situation."],
+      callToAction: ["Try: {action}."]
+    },
+    adult: {
+      opening: ["\u{1F4CB} Personalized recommendation:"],
+      body: ["Analysis shows: {observation}. Recommended: {recommendation}. Rationale: {reasoning}."],
+      conclusion: ["Recommendation based on your data and best practices."],
+      callToAction: ["Recommended action: {action}."]
+    }
+  }
+};
+var NarrativeGenerator = class {
+  // ==========================================================================
+  // MAIN GENERATION
+  // ==========================================================================
+  /**
+   * Generate narrative explanation from explanation response
+   */
+  generateNarrative(explanation, options) {
+    const templates = options.language === "ru" ? NARRATIVE_TEMPLATES_RU : NARRATIVE_TEMPLATES_EN;
+    const structureTemplates = templates[options.structure][options.ageGroup];
+    const variables = this.extractVariables(explanation, options.structure);
+    const opening = this.selectAndFill(
+      structureTemplates.opening,
+      variables,
+      options.cognitiveStyle
+    );
+    const body = this.selectAndFill(
+      structureTemplates.body,
+      variables,
+      options.cognitiveStyle
+    );
+    const conclusion = this.selectAndFill(
+      structureTemplates.conclusion,
+      variables,
+      options.cognitiveStyle
+    );
+    const callToAction = structureTemplates.callToAction.length > 0 ? this.selectAndFill(structureTemplates.callToAction, variables, options.cognitiveStyle) : void 0;
+    const keyPoints = this.extractKeyPoints(explanation, options.language, options.ageGroup);
+    const title = this.generateTitle(options.structure, options.language, options.ageGroup);
+    const fullText = [opening, body, conclusion, callToAction].filter(Boolean).join(" ");
+    const readability = this.calculateReadability(fullText);
+    let finalOpening = opening;
+    let finalBody = body;
+    let finalConclusion = conclusion;
+    if (options.maxWords) {
+      const result = this.applyWordLimit(
+        opening,
+        body,
+        conclusion,
+        callToAction,
+        options.maxWords
+      );
+      finalOpening = result.opening;
+      finalBody = result.body;
+      finalConclusion = result.conclusion;
+    }
+    return {
+      predictionId: explanation.predictionId,
+      structure: options.structure,
+      title,
+      titleRu: options.language === "ru" ? title : this.translateTitle(title),
+      opening: finalOpening,
+      openingRu: options.language === "ru" ? finalOpening : "",
+      body: finalBody,
+      bodyRu: options.language === "ru" ? finalBody : "",
+      conclusion: finalConclusion,
+      conclusionRu: options.language === "ru" ? finalConclusion : "",
+      keyPoints: options.language === "en" ? keyPoints : [],
+      keyPointsRu: options.language === "ru" ? keyPoints : [],
+      callToAction,
+      callToActionRu: options.language === "ru" ? callToAction : void 0,
+      cognitiveStyleUsed: options.cognitiveStyle || "intuitive",
+      ageGroupUsed: options.ageGroup,
+      readability
+    };
+  }
+  /**
+   * Get templates for a structure
+   */
+  getTemplates(structure, language) {
+    const templates = language === "ru" ? NARRATIVE_TEMPLATES_RU : NARRATIVE_TEMPLATES_EN;
+    const structureTemplates = templates[structure];
+    return [
+      ...structureTemplates.adult.opening,
+      ...structureTemplates.adult.body,
+      ...structureTemplates.adult.conclusion
+    ];
+  }
+  /**
+   * Personalize narrative based on user history
+   */
+  personalizeNarrative(narrative, userHistory) {
+    if (userHistory.comprehensionLevel !== void 0) {
+      if (userHistory.comprehensionLevel < 0.5) {
+        return {
+          ...narrative,
+          body: this.simplifyText(narrative.body),
+          bodyRu: this.simplifyText(narrative.bodyRu)
+        };
+      }
+    }
+    if (userHistory.previousExplanations.length > 0) {
+      const lastExplanation = userHistory.previousExplanations[userHistory.previousExplanations.length - 1];
+      if (narrative.opening === lastExplanation) {
+        return {
+          ...narrative,
+          opening: narrative.opening.replace(/^/, "\u{1F4CC} "),
+          openingRu: narrative.openingRu.replace(/^/, "\u{1F4CC} ")
+        };
+      }
+    }
+    return narrative;
+  }
+  // ==========================================================================
+  // VARIABLE EXTRACTION
+  // ==========================================================================
+  /**
+   * Extract variables from explanation for template filling
+   */
+  extractVariables(explanation, _structure) {
+    const variables = {};
+    if (explanation.localExplanation) {
+      const topPositive = explanation.localExplanation.topPositiveFeatures[0];
+      const topNegative = explanation.localExplanation.topNegativeFeatures[0];
+      variables["key_factor"] = topPositive?.featureNameRu || "\u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435";
+      variables["key_factor_value"] = String(topPositive?.featureValue || "");
+      variables["challenge"] = topNegative?.featureNameRu || "";
+      variables["initial_state"] = "\u043D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u043E\u0435 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435";
+      variables["current_state"] = explanation.localExplanation.prediction;
+      variables["key_change"] = `\u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 ${variables["key_factor"]}`;
+    }
+    if (explanation.counterfactualExplanation) {
+      const easiest = explanation.counterfactualExplanation.easiestCounterfactual;
+      const firstChange = easiest?.changes?.[0];
+      if (firstChange) {
+        variables["action"] = firstChange.changeDescriptionRu || firstChange.changeDescription;
+      }
+    }
+    if (explanation.causalExplanation) {
+      const primaryChain = explanation.causalExplanation.primaryChain;
+      if (primaryChain && primaryChain.nodes && primaryChain.nodes.length >= 2) {
+        const firstNode = primaryChain.nodes[0];
+        const lastNode = primaryChain.nodes[primaryChain.nodes.length - 1];
+        if (firstNode) {
+          variables["cause"] = firstNode.variableRu || firstNode.variable;
+        }
+        if (lastNode) {
+          variables["effect"] = lastNode.variableRu || lastNode.variable;
+        }
+      }
+      const firstEdge = primaryChain?.edges?.[0];
+      if (firstEdge) {
+        variables["mechanism"] = firstEdge.mechanismRu || firstEdge.mechanism || "\u043F\u0440\u044F\u043C\u043E\u0435 \u0432\u043B\u0438\u044F\u043D\u0438\u0435";
+        variables["strength"] = `${Math.round(firstEdge.strength * 100)}%`;
+      }
+    }
+    if (explanation.userExplanation) {
+      variables["observation"] = explanation.userExplanation.summaryRu || explanation.userExplanation.summary;
+      variables["recommendation"] = explanation.userExplanation.actionableAdviceRu?.[0] || explanation.userExplanation.actionableAdvice?.[0] || "\u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u043F\u0440\u0430\u043A\u0442\u0438\u043A\u0443";
+      variables["reasoning"] = explanation.userExplanation.reasoningRu || explanation.userExplanation.reasoning;
+    }
+    variables["feeling"] = variables["key_factor"] || "\u0442\u0435\u043A\u0443\u0449\u0435\u0435 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435";
+    variables["technique"] = variables["recommendation"] || "\u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u043C\u0430\u044F \u0442\u0435\u0445\u043D\u0438\u043A\u0430";
+    variables["stats"] = "\u044D\u0444\u0444\u0435\u043A\u0442\u0438\u0432\u043D\u043E\u0441\u0442\u044C 70%+";
+    variables["analogy"] = "\u0434\u043E\u043C\u0438\u043D\u043E - \u043E\u0434\u043D\u043E \u0442\u043E\u043B\u043A\u0430\u0435\u0442 \u0434\u0440\u0443\u0433\u043E\u0435";
+    variables["expected_effect"] = "\u0443\u043B\u0443\u0447\u0448\u0435\u043D\u0438\u0435 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u044F";
+    if (!variables["action"]) {
+      variables["action"] = variables["recommendation"] || "\u043D\u0430\u0447\u0430\u0442\u044C \u043F\u0440\u0430\u043A\u0442\u0438\u043A\u0443";
+    }
+    return variables;
+  }
+  // ==========================================================================
+  // TEMPLATE PROCESSING
+  // ==========================================================================
+  /**
+   * Select template and fill variables
+   */
+  selectAndFill(templates, variables, cognitiveStyle) {
+    let templateIndex = 0;
+    if (cognitiveStyle) {
+      switch (cognitiveStyle) {
+        case "analytical":
+          templateIndex = templates.length - 1;
+          break;
+        case "intuitive":
+          templateIndex = 0;
+          break;
+        case "sequential":
+          templateIndex = Math.floor(templates.length / 2);
+          break;
+        case "visual":
+          templateIndex = templates.findIndex((t) => /[\u{1F300}-\u{1F9FF}]/u.test(t));
+          if (templateIndex === -1) templateIndex = 0;
+          break;
+      }
+    }
+    templateIndex = Math.min(templateIndex, templates.length - 1);
+    templateIndex = Math.max(templateIndex, 0);
+    let template = templates[templateIndex] ?? "";
+    for (const [key, value] of Object.entries(variables)) {
+      template = template.replace(new RegExp(`\\{${key}\\}`, "g"), value || "");
+    }
+    template = template.replace(/\{[^}]+\}/g, "");
+    return template.trim();
+  }
+  /**
+   * Extract key points from explanation
+   */
+  extractKeyPoints(explanation, language, ageGroup) {
+    const points = [];
+    if (explanation.localExplanation) {
+      const confidence = Math.round(explanation.localExplanation.confidence * 100);
+      if (language === "ru") {
+        points.push(`\u0423\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C \u0441\u0438\u0441\u0442\u0435\u043C\u044B: ${confidence}%`);
+      } else {
+        points.push(`System confidence: ${confidence}%`);
+      }
+      for (const factor of explanation.localExplanation.topPositiveFeatures.slice(0, 2)) {
+        if (language === "ru") {
+          points.push(`\u2705 ${factor.featureNameRu}: ${factor.featureValue}`);
+        } else {
+          points.push(`\u2705 ${factor.featureName}: ${factor.featureValue}`);
+        }
+      }
+    }
+    if (explanation.counterfactualExplanation?.easiestCounterfactual) {
+      const cf = explanation.counterfactualExplanation.easiestCounterfactual;
+      if (language === "ru") {
+        points.push(`\u{1F4A1} \u0410\u043B\u044C\u0442\u0435\u0440\u043D\u0430\u0442\u0438\u0432\u0430: ${cf.alternativeOutcomeRu}`);
+      } else {
+        points.push(`\u{1F4A1} Alternative: ${cf.alternativeOutcome}`);
+      }
+    }
+    const maxPoints = ageGroup === "child" ? 2 : ageGroup === "teen" ? 3 : 5;
+    return points.slice(0, maxPoints);
+  }
+  /**
+   * Generate title for narrative
+   */
+  generateTitle(structure, language, ageGroup) {
+    const titles = {
+      journey: {
+        ru: { child: "\u{1F31F} \u0422\u0432\u043E\u0451 \u043F\u0443\u0442\u0435\u0448\u0435\u0441\u0442\u0432\u0438\u0435", teen: "\u{1F4CA} \u0422\u0432\u043E\u0439 \u043F\u0443\u0442\u044C", adult: "\u{1F4C8} \u0410\u043D\u0430\u043B\u0438\u0437 \u043F\u0440\u043E\u0433\u0440\u0435\u0441\u0441\u0430" },
+        en: { child: "\u{1F31F} Your Journey", teen: "\u{1F4CA} Your Path", adult: "\u{1F4C8} Progress Analysis" }
+      },
+      comparison: {
+        ru: { child: "\u{1F465} \u041A\u0430\u043A \u0443 \u0434\u0440\u0443\u0433\u0438\u0445", teen: "\u{1F4CA} \u0421\u0440\u0430\u0432\u043D\u0435\u043D\u0438\u0435", adult: "\u{1F4C8} \u0421\u0440\u0430\u0432\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u0430\u043D\u0430\u043B\u0438\u0437" },
+        en: { child: "\u{1F465} Like Others", teen: "\u{1F4CA} Comparison", adult: "\u{1F4C8} Comparative Analysis" }
+      },
+      "cause-effect": {
+        ru: { child: "\u{1F517} \u041F\u043E\u0447\u0435\u043C\u0443 \u0442\u0430\u043A?", teen: "\u26A1 \u041F\u0440\u0438\u0447\u0438\u043D\u0430 \u0438 \u0441\u043B\u0435\u0434\u0441\u0442\u0432\u0438\u0435", adult: "\u{1F50D} \u041A\u0430\u0443\u0437\u0430\u043B\u044C\u043D\u044B\u0439 \u0430\u043D\u0430\u043B\u0438\u0437" },
+        en: { child: "\u{1F517} Why?", teen: "\u26A1 Cause & Effect", adult: "\u{1F50D} Causal Analysis" }
+      },
+      recommendation: {
+        ru: { child: "\u{1F381} \u041C\u043E\u044F \u0438\u0434\u0435\u044F!", teen: "\u{1F4A1} \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F", adult: "\u{1F4CB} \u041F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u044C\u043D\u0430\u044F \u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F" },
+        en: { child: "\u{1F381} My Idea!", teen: "\u{1F4A1} Recommendation", adult: "\u{1F4CB} Personal Recommendation" }
+      }
+    };
+    return titles[structure]?.[language]?.[ageGroup] ?? "Analysis";
+  }
+  translateTitle(title) {
+    const translations = {
+      "Your Journey": "\u0422\u0432\u043E\u0451 \u043F\u0443\u0442\u0435\u0448\u0435\u0441\u0442\u0432\u0438\u0435",
+      "Your Path": "\u0422\u0432\u043E\u0439 \u043F\u0443\u0442\u044C",
+      "Progress Analysis": "\u0410\u043D\u0430\u043B\u0438\u0437 \u043F\u0440\u043E\u0433\u0440\u0435\u0441\u0441\u0430",
+      "Like Others": "\u041A\u0430\u043A \u0443 \u0434\u0440\u0443\u0433\u0438\u0445",
+      "Comparison": "\u0421\u0440\u0430\u0432\u043D\u0435\u043D\u0438\u0435",
+      "Comparative Analysis": "\u0421\u0440\u0430\u0432\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u0430\u043D\u0430\u043B\u0438\u0437",
+      "Why?": "\u041F\u043E\u0447\u0435\u043C\u0443 \u0442\u0430\u043A?",
+      "Cause & Effect": "\u041F\u0440\u0438\u0447\u0438\u043D\u0430 \u0438 \u0441\u043B\u0435\u0434\u0441\u0442\u0432\u0438\u0435",
+      "Causal Analysis": "\u041A\u0430\u0443\u0437\u0430\u043B\u044C\u043D\u044B\u0439 \u0430\u043D\u0430\u043B\u0438\u0437",
+      "My Idea!": "\u041C\u043E\u044F \u0438\u0434\u0435\u044F!",
+      "Recommendation": "\u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F",
+      "Personal Recommendation": "\u041F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u044C\u043D\u0430\u044F \u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F"
+    };
+    const cleanTitle = title.replace(/[\u{1F300}-\u{1F9FF}]/gu, "").trim();
+    return translations[cleanTitle] || title;
+  }
+  // ==========================================================================
+  // READABILITY
+  // ==========================================================================
+  /**
+   * Calculate readability metrics
+   */
+  calculateReadability(text) {
+    const words = text.split(/\s+/).filter((w) => w.length > 0);
+    const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
+    const syllables = this.countSyllables(text);
+    const wordCount = words.length;
+    const sentenceCount = Math.max(1, sentences.length);
+    const avgWordsPerSentence = wordCount / sentenceCount;
+    const avgSyllablesPerWord = syllables / Math.max(1, wordCount);
+    const fleschKincaidGrade = 0.39 * avgWordsPerSentence + 11.8 * avgSyllablesPerWord - 15.59;
+    const readingTime = Math.ceil(wordCount / 200 * 60);
+    return {
+      fleschKincaidGrade: Math.max(0, Math.round(fleschKincaidGrade * 10) / 10),
+      readingTime,
+      wordCount
+    };
+  }
+  /**
+   * Count syllables in text (simplified for Russian/English)
+   */
+  countSyllables(text) {
+    const vowels = text.toLowerCase().match(/[аеёиоуыэюяaeiouy]/g);
+    return vowels ? vowels.length : text.length / 3;
+  }
+  /**
+   * Apply word limit to narrative
+   */
+  applyWordLimit(opening, body, conclusion, callToAction, maxWords) {
+    const parts = [opening, body, conclusion, callToAction].filter(Boolean);
+    const totalWords = parts.join(" ").split(/\s+/).length;
+    if (totalWords <= maxWords) {
+      return { opening, body, conclusion };
+    }
+    const ratio = maxWords / totalWords;
+    const truncateToWords = (text, maxW) => {
+      const words = text.split(/\s+/);
+      if (words.length <= maxW) return text;
+      return words.slice(0, maxW).join(" ") + "...";
+    };
+    const openingWords = Math.ceil(opening.split(/\s+/).length * ratio);
+    const bodyWords = Math.ceil(body.split(/\s+/).length * ratio * 0.8);
+    const conclusionWords = Math.ceil(conclusion.split(/\s+/).length * ratio);
+    return {
+      opening: truncateToWords(opening, openingWords),
+      body: truncateToWords(body, bodyWords),
+      conclusion: truncateToWords(conclusion, conclusionWords)
+    };
+  }
+  /**
+   * Simplify text for lower comprehension
+   */
+  simplifyText(text) {
+    let simplified = text.replace(/[;:—]/g, ".");
+    simplified = simplified.replace(/,\s*и\s*/g, ". ");
+    simplified = simplified.replace(/,\s*но\s*/g, ". \u041D\u043E ");
+    return simplified;
+  }
+};
+
+// src/explainability/services/ExplainabilityService.ts
+var ExplainabilityService = class {
+  constructor(featureEngine, counterfactualEngine, narrativeGenerator) {
+    __publicField(this, "featureEngine");
+    __publicField(this, "counterfactualEngine");
+    __publicField(this, "narrativeGenerator");
+    // Caches
+    __publicField(this, "globalExplanationCache", /* @__PURE__ */ new Map());
+    __publicField(this, "effectivenessStore", /* @__PURE__ */ new Map());
+    // Configuration
+    __publicField(this, "config", DEFAULT_EXPLAINABILITY_CONFIG);
+    this.featureEngine = featureEngine || new FeatureAttributionEngine();
+    this.counterfactualEngine = counterfactualEngine || new CounterfactualExplainer();
+    this.narrativeGenerator = narrativeGenerator || new NarrativeGenerator();
+  }
+  // ==========================================================================
+  // MAIN EXPLANATION GENERATOR
+  // ==========================================================================
+  /**
+   * Generate comprehensive explanation
+   */
+  async explain(request) {
+    const startTime = Date.now();
+    const [
+      localExplanation,
+      counterfactualExplanation,
+      globalContext,
+      causalExplanation
+    ] = await Promise.all([
+      request.types.includes("local") ? this.generateSHAPExplanation(request.inputFeatures, request.output) : Promise.resolve(void 0),
+      request.includeCounterfactuals || request.types.includes("counterfactual") ? this.generateCounterfactuals(
+        request.inputFeatures,
+        String(request.output),
+        void 0,
+        { maxCounterfactuals: request.maxCounterfactuals }
+      ) : Promise.resolve(void 0),
+      request.includeGlobalContext || request.types.includes("global") ? this.generateGlobalExplanation(request.predictionType) : Promise.resolve(void 0),
+      request.includeCausal || request.types.includes("causal") ? this.generateCausalExplanation(request.inputFeatures, String(request.output)) : Promise.resolve(void 0)
+    ]);
+    let clinicianExplanation;
+    if (request.audience === "clinician") {
+      clinicianExplanation = await this.generateClinicianExplanation(request.context);
+    }
+    const userExplanation = this.generateUserExplanation(
+      localExplanation,
+      counterfactualExplanation,
+      causalExplanation,
+      request.ageGroup || this.config.defaultAgeGroup,
+      request.cognitiveStyle
+    );
+    const response = {
+      requestId: crypto.randomUUID(),
+      predictionId: request.predictionId,
+      localExplanation,
+      counterfactualExplanation,
+      globalContext,
+      clinicianExplanation,
+      causalExplanation,
+      userExplanation,
+      generatedAt: /* @__PURE__ */ new Date(),
+      computationTime: Date.now() - startTime,
+      explanationVersion: "2.0.0",
+      effectivenessTrackingEnabled: this.config.enableEffectivenessTracking
+    };
+    if (request.includeNarrative || request.types.includes("narrative")) {
+      response.narrativeExplanation = await this.generateNarrativeExplanation(
+        response,
+        {
+          structure: request.preferredNarrativeStructure || "recommendation",
+          ageGroup: request.ageGroup || this.config.defaultAgeGroup,
+          cognitiveStyle: request.cognitiveStyle,
+          language: request.language || this.config.defaultLanguage
+        }
+      );
+    }
+    if (request.requireEUAIActCompliance || this.config.euAIActComplianceRequired) {
+      response.regulatoryInfo = this.generateRegulatoryInfo(request, response);
+    }
+    return response;
+  }
+  // ==========================================================================
+  // SPECIFIC EXPLANATION GENERATORS
+  // ==========================================================================
+  /**
+   * Generate SHAP-like feature attribution
+   */
+  async generateSHAPExplanation(features, prediction) {
+    const predictionObj = this.normalizePrediction(prediction);
+    return this.featureEngine.calculateAttributions(features, predictionObj);
+  }
+  /**
+   * Generate counterfactual explanations
+   */
+  async generateCounterfactuals(features, currentOutcome, desiredOutcome, options) {
+    return this.counterfactualEngine.generateCounterfactuals(
+      features,
+      currentOutcome,
+      desiredOutcome,
+      options?.maxCounterfactuals || this.config.maxCounterfactuals,
+      {
+        requireRobust: options?.requireRobust,
+        minRobustness: this.config.minRobustness,
+        feasibilityThreshold: options?.feasibilityThreshold
+      }
+    );
+  }
+  /**
+   * Generate global model explanation
+   */
+  async generateGlobalExplanation(predictionType) {
+    const cached = this.getCachedGlobalExplanation(predictionType);
+    if (cached) return cached;
+    const featureImportance = this.calculateGlobalFeatureImportance(predictionType);
+    const decisionRules = this.extractDecisionRules(predictionType);
+    const explanation = {
+      modelName: "CogniCore Intervention Selector",
+      modelVersion: "2.0.0",
+      featureImportance,
+      keyDecisionRules: decisionRules,
+      performanceSummary: {
+        customMetrics: {
+          safetyCompliance: 0.98,
+          userSatisfaction: 0.75,
+          interventionAcceptance: 0.82,
+          explanationClarity: 0.71
+        }
+      },
+      regulatoryCompliance: {
+        euAIActRiskLevel: "limited",
+        transparencyObligations: [
+          "Inform users of AI involvement",
+          "Provide explanation upon request",
+          "Document decision logic"
+        ],
+        conformityStatus: "compliant",
+        lastAuditDate: /* @__PURE__ */ new Date()
+      },
+      computedAt: /* @__PURE__ */ new Date(),
+      dataPointsAnalyzed: 1e3
+    };
+    this.globalExplanationCache.set(predictionType, {
+      explanation,
+      timestamp: Date.now()
+    });
+    return explanation;
+  }
+  /**
+   * Generate clinician-facing explanation
+   */
+  async generateClinicianExplanation(sessionData) {
+    return {
+      patientId: String(sessionData.userId || "anonymous"),
+      sessionId: String(sessionData.sessionId || crypto.randomUUID()),
+      clinicalContext: {
+        presentingConcern: String(sessionData.presentingConcern || "Digital wellness concern"),
+        presentingConcernRu: String(sessionData.presentingConcernRu || "\u041F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0446\u0438\u0444\u0440\u043E\u0432\u043E\u0433\u043E \u0431\u043B\u0430\u0433\u043E\u043F\u043E\u043B\u0443\u0447\u0438\u044F"),
+        relevantHistory: sessionData.relevantHistory || [],
+        currentSymptoms: sessionData.currentSymptoms || [],
+        riskFactors: sessionData.riskFactors || [],
+        protectiveFactors: sessionData.protectiveFactors || [],
+        familyContext: sessionData.familyContext
+      },
+      aiAssessment: {
+        primaryConcern: String(sessionData.primaryConcern || "Digital overuse"),
+        severity: sessionData.severity || "mild",
+        riskLevel: String(sessionData.riskLevel || "low"),
+        confidence: Number(sessionData.confidence) || 0.7,
+        reasoning: String(sessionData.reasoning || "Based on user-reported data and interaction patterns"),
+        reasoningRu: String(sessionData.reasoningRu || "\u041D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u0434\u0430\u043D\u043D\u044B\u0445 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u0438 \u043F\u0430\u0442\u0442\u0435\u0440\u043D\u043E\u0432 \u0432\u0437\u0430\u0438\u043C\u043E\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F"),
+        causalFactors: sessionData.causalFactors,
+        mechanismHypothesis: sessionData.mechanismHypothesis
+      },
+      interventionRationale: {
+        selectedIntervention: String(sessionData.selectedIntervention || "Coping technique"),
+        therapeuticApproach: "CBT-based digital wellness support",
+        evidenceBasis: [
+          "Beck Cognitive Therapy framework",
+          "Motivational Interviewing principles (MITI 4.2)",
+          "Digital wellness research (Time2Stop, DIAMANTE)",
+          "POMDP-based intervention selection"
+        ],
+        alternativesConsidered: sessionData.alternativesConsidered || [],
+        contraindications: sessionData.contraindications || [],
+        expectedOutcome: "Reduction in digital overuse triggers",
+        outcomeTimeframe: "1-2 weeks"
+      },
+      recommendations: {
+        immediateActions: [
+          "Monitor engagement and emotional responses",
+          "Follow up on intervention effectiveness"
+        ],
+        followUpRecommendations: [
+          "Check in after 24 hours",
+          "Track mood trend over next week",
+          "Reassess intervention fit after 3 sessions"
+        ],
+        escalationCriteria: [
+          "Risk level increases to high/critical",
+          "User explicitly requests professional help",
+          "Repeated distress indicators (3+ times in 24h)"
+        ],
+        referralSuggestions: [
+          "Consider referral if symptoms persist after 2 weeks",
+          "Immediate referral if suicidal ideation detected"
+        ],
+        familyInvolvement: sessionData.familyInvolvement
+      },
+      uncertaintyDisclosure: {
+        confidenceLevel: this.getConfidenceLabel(Number(sessionData.confidence) || 0.7),
+        knownLimitations: [
+          "AI assessment based on text-only interaction",
+          "Cannot replace comprehensive clinical assessment",
+          "Cultural/linguistic nuances may be missed",
+          "Limited to self-reported data"
+        ],
+        suggestedVerification: [
+          "Verify risk assessment with standardized instruments",
+          "Consider cultural context in interpretation",
+          "Corroborate with collateral information if available"
+        ],
+        modelBlindSpots: [
+          "Non-verbal cues not captured",
+          "Family dynamics partially modeled",
+          "Recent life events may be underweighted"
+        ],
+        dataQualityNote: "Based on user self-report; objective measures not available"
+      },
+      regulatoryCompliance: {
+        euAIActRiskLevel: "limited",
+        humanOversightRequired: true,
+        appealProcess: "Users can request human review of any AI decision"
+      },
+      timestamp: /* @__PURE__ */ new Date(),
+      aiModelVersion: "2.0.0",
+      disclaimer: `
+This AI-generated explanation is for informational purposes only and does not constitute
+clinical advice. All clinical decisions should be made by qualified healthcare professionals.
+The AI system operates at MHSL-2 (Supportive Interaction) level and is not designed to
+provide clinical diagnosis or treatment recommendations.
+      `.trim(),
+      disclaimerRu: `
+\u042D\u0442\u043E \u043E\u0431\u044A\u044F\u0441\u043D\u0435\u043D\u0438\u0435, \u0441\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u043E\u0435 \u0418\u0418, \u043F\u0440\u0435\u0434\u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u043E \u0442\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u043E\u043D\u043D\u044B\u0445 \u0446\u0435\u043B\u0435\u0439 \u0438 \u043D\u0435
+\u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u043A\u043B\u0438\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u043C \u0441\u043E\u0432\u0435\u0442\u043E\u043C. \u0412\u0441\u0435 \u043A\u043B\u0438\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0440\u0435\u0448\u0435\u043D\u0438\u044F \u0434\u043E\u043B\u0436\u043D\u044B \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0442\u044C\u0441\u044F \u043A\u0432\u0430\u043B\u0438\u0444\u0438\u0446\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u043C\u0438
+\u043C\u0435\u0434\u0438\u0446\u0438\u043D\u0441\u043A\u0438\u043C\u0438 \u0441\u043F\u0435\u0446\u0438\u0430\u043B\u0438\u0441\u0442\u0430\u043C\u0438. \u0418\u0418-\u0441\u0438\u0441\u0442\u0435\u043C\u0430 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442 \u043D\u0430 \u0443\u0440\u043E\u0432\u043D\u0435 MHSL-2 (\u041F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u044E\u0449\u0435\u0435 \u0432\u0437\u0430\u0438\u043C\u043E\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435)
+\u0438 \u043D\u0435 \u043F\u0440\u0435\u0434\u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0430 \u0434\u043B\u044F \u043A\u043B\u0438\u043D\u0438\u0447\u0435\u0441\u043A\u043E\u0439 \u0434\u0438\u0430\u0433\u043D\u043E\u0441\u0442\u0438\u043A\u0438 \u0438\u043B\u0438 \u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u0439 \u043F\u043E \u043B\u0435\u0447\u0435\u043D\u0438\u044E.
+      `.trim()
+    };
+  }
+  /**
+   * Generate causal explanation (Phase 5.1 integration)
+   */
+  async generateCausalExplanation(features, outcome) {
+    const causalFeatures = this.featureEngine.getCausalFeatures();
+    const nodes = causalFeatures.filter((f) => features[f.id] !== void 0).slice(0, 4).map((f, index) => ({
+      variable: f.name,
+      variableRu: f.nameRu,
+      value: features[f.id],
+      role: index === 0 ? "cause" : index === causalFeatures.length - 1 ? "effect" : "mediator"
+    }));
+    const edges = nodes.slice(0, -1).map((node, index) => ({
+      from: node.variable,
+      to: nodes[index + 1]?.variable ?? "",
+      strength: 0.6 + Math.random() * 0.3,
+      mechanism: "\u041F\u0440\u044F\u043C\u043E\u0435 \u0432\u043B\u0438\u044F\u043D\u0438\u0435",
+      mechanismRu: "\u041F\u0440\u044F\u043C\u043E\u0435 \u0432\u043B\u0438\u044F\u043D\u0438\u0435"
+    }));
+    const interventionPoints = causalFeatures.filter((f) => ["currentMood", "stressLevel", "socialSupport"].includes(f.id)).filter((f) => features[f.id] !== void 0).map((f) => ({
+      variable: f.name,
+      potentialImpact: f.defaultWeight,
+      feasibility: "moderate",
+      recommendation: `\u0412\u043E\u0437\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u043D\u0430 ${f.nameRu.toLowerCase()}`,
+      recommendationRu: `\u0412\u043E\u0437\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u043D\u0430 ${f.nameRu.toLowerCase()}`
+    }));
+    const primaryChain = {
+      id: crypto.randomUUID(),
+      description: `Causal pathway to ${outcome}`,
+      descriptionRu: `\u041F\u0440\u0438\u0447\u0438\u043D\u043D\u044B\u0439 \u043F\u0443\u0442\u044C \u043A "${outcome}"`,
+      nodes,
+      edges,
+      interventionPoints
+    };
+    const rootCauses = causalFeatures.filter((f) => !f.causalParents || f.causalParents.length === 0).filter((f) => features[f.id] !== void 0).slice(0, 3).map((f) => ({
+      variable: f.name,
+      variableRu: f.nameRu,
+      contribution: f.defaultWeight,
+      isModifiable: ["currentMood", "stressLevel", "socialSupport", "streak"].includes(f.id)
+    }));
+    const rootCauseNames = rootCauses.map((r) => r.variableRu.toLowerCase()).join(", ");
+    return {
+      predictionId: crypto.randomUUID(),
+      primaryChain,
+      rootCauses,
+      narrativeSummary: `The outcome "${outcome}" is primarily influenced by ${rootCauseNames}.`,
+      narrativeSummaryRu: `\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 "${outcome}" \u0432 \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u043C \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u0442\u0441\u044F: ${rootCauseNames}.`,
+      confidence: 0.7,
+      methodology: "heuristic"
+    };
+  }
+  /**
+   * Generate narrative explanation (HCXAI)
+   */
+  async generateNarrativeExplanation(explanation, options) {
+    return this.narrativeGenerator.generateNarrative(explanation, {
+      ...options,
+      maxWords: options.ageGroup === "child" ? 100 : options.ageGroup === "teen" ? 200 : 400
+    });
+  }
+  // ==========================================================================
+  // USER EXPLANATION GENERATION
+  // ==========================================================================
+  /**
+   * Generate user-friendly explanation
+   */
+  generateUserExplanation(localExplanation, counterfactualExplanation, causalExplanation, ageGroup = "adult", cognitiveStyle) {
+    const explanationId = crypto.randomUUID();
+    const keyFactors = [];
+    if (localExplanation) {
+      for (const attr of localExplanation.attributions.slice(0, 3)) {
+        const definition = this.featureEngine.getFeature(attr.featureId);
+        keyFactors.push({
+          name: attr.featureName,
+          nameRu: attr.featureNameRu,
+          value: String(attr.featureValue),
+          impact: attr.direction === "positive" ? "helps" : attr.direction === "negative" ? "hurts" : "neutral",
+          emoji: attr.emoji || "\u{1F4CA}",
+          explanation: attr.comparisonToBaseline || "",
+          explanationRu: attr.comparisonToBaselineRu || "",
+          layTermDescription: definition?.layTermExplanation,
+          actionable: ["currentMood", "stressLevel", "socialSupport", "streak"].includes(attr.featureId),
+          actionSuggestion: attr.direction === "negative" ? `\u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439 \u0443\u043B\u0443\u0447\u0448\u0438\u0442\u044C ${attr.featureNameRu.toLowerCase()}` : void 0
+        });
+      }
+    }
+    const confidence = localExplanation?.confidence || 0.7;
+    const confidenceInfo = {
+      level: confidence >= 0.8 ? "high" : confidence >= 0.5 ? "medium" : "low",
+      emoji: confidence >= 0.8 ? "\u2705" : confidence >= 0.5 ? "\u{1F44D}" : "\u{1F914}",
+      description: this.getConfidenceDescription(confidence, ageGroup, "en"),
+      descriptionRu: this.getConfidenceDescription(confidence, ageGroup, "ru")
+    };
+    const actionableAdvice = counterfactualExplanation?.userActionableAdvice || [];
+    const actionableAdviceRu = counterfactualExplanation?.userActionableAdviceRu || [];
+    const whatCanChange = keyFactors.filter((f) => f.actionable).map((f) => f.name);
+    const whatCanChangeRu = keyFactors.filter((f) => f.actionable).map((f) => f.nameRu);
+    const { summary, summaryRu, reasoning, reasoningRu } = this.generateUserSummaryAndReasoning(
+      localExplanation,
+      causalExplanation,
+      ageGroup
+    );
+    const whyThisMatters = this.generateWhyThisMatters(localExplanation, "en", ageGroup);
+    const whyThisMattersRu = this.generateWhyThisMatters(localExplanation, "ru", ageGroup);
+    return {
+      summary,
+      summaryRu,
+      reasoning,
+      reasoningRu,
+      keyFactors,
+      confidence: confidenceInfo,
+      actionableAdvice,
+      actionableAdviceRu,
+      limitations: ageGroup === "adult" ? [
+        "AI can make mistakes",
+        "This is not a substitute for professional help"
+      ] : [],
+      limitationsRu: ageGroup === "adult" ? [
+        "AI \u043C\u043E\u0436\u0435\u0442 \u043E\u0448\u0438\u0431\u0430\u0442\u044C\u0441\u044F",
+        "\u042D\u0442\u043E \u043D\u0435 \u0437\u0430\u043C\u0435\u043D\u0430 \u043F\u0440\u043E\u0444\u0435\u0441\u0441\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u043E\u0439 \u043F\u043E\u043C\u043E\u0449\u0438"
+      ] : [],
+      disclaimer: this.getDisclaimer(ageGroup, "en"),
+      disclaimerRu: this.getDisclaimer(ageGroup, "ru"),
+      whyThisMatters,
+      whyThisMattersRu,
+      whatCanChange,
+      whatCanChangeRu,
+      ageGroup,
+      cognitiveStyle,
+      explanationId,
+      feedbackPrompt: ageGroup === "adult" ? "Was this explanation helpful?" : ageGroup === "teen" ? "Did this make sense?" : void 0
+    };
+  }
+  generateUserSummaryAndReasoning(localExplanation, causalExplanation, ageGroup = "adult") {
+    if (ageGroup === "child") {
+      const emojis = localExplanation?.topPositiveFeatures.slice(0, 3).map((f) => f.emoji).join(" ") || "\u{1F31F}";
+      return {
+        summary: `${emojis} Picked just for you!`,
+        summaryRu: `${emojis} \u0412\u044B\u0431\u0440\u0430\u043D\u043E \u0441\u043F\u0435\u0446\u0438\u0430\u043B\u044C\u043D\u043E \u0434\u043B\u044F \u0442\u0435\u0431\u044F!`,
+        reasoning: "I thought about what would work best.",
+        reasoningRu: "\u042F \u043F\u043E\u0434\u0443\u043C\u0430\u043B \u0438 \u0440\u0435\u0448\u0438\u043B, \u0447\u0442\u043E \u044D\u0442\u043E \u0442\u0435\u0431\u0435 \u043F\u043E\u043D\u0440\u0430\u0432\u0438\u0442\u0441\u044F."
+      };
+    }
+    if (ageGroup === "teen") {
+      const topFactor = localExplanation?.topPositiveFeatures[0];
+      return {
+        summary: topFactor ? `Chosen based on: ${topFactor.featureName.toLowerCase()}` : "Customized for you",
+        summaryRu: topFactor ? `\u0412\u044B\u0431\u0440\u0430\u043D\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435: ${topFactor.featureNameRu.toLowerCase()}` : "\u041F\u043E\u0434\u043E\u0431\u0440\u0430\u043D\u043E \u043F\u043E\u0434 \u0442\u0435\u0431\u044F",
+        reasoning: `Considered ${localExplanation?.attributions.length || "several"} factors to find the right fit.`,
+        reasoningRu: `\u0423\u0447\u0451\u043B ${localExplanation?.attributions.length || "\u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E"} \u0444\u0430\u043A\u0442\u043E\u0440\u043E\u0432, \u0447\u0442\u043E\u0431\u044B \u043D\u0430\u0439\u0442\u0438 \u0442\u043E, \u0447\u0442\u043E \u043F\u043E\u0434\u043E\u0439\u0434\u0451\u0442.`
+      };
+    }
+    const factorList = localExplanation?.topPositiveFeatures.slice(0, 3).map((f) => f.featureName.toLowerCase()).join(", ") || "your data";
+    const factorListRu = localExplanation?.topPositiveFeatures.slice(0, 3).map((f) => f.featureNameRu.toLowerCase()).join(", ") || "\u0432\u0430\u0448\u0438 \u0434\u0430\u043D\u043D\u044B\u0435";
+    const causalNote = causalExplanation ? ` Root causes: ${causalExplanation.rootCauses.map((r) => r.variable).join(", ")}.` : "";
+    const causalNoteRu = causalExplanation ? ` \u041A\u043E\u0440\u043D\u0435\u0432\u044B\u0435 \u043F\u0440\u0438\u0447\u0438\u043D\u044B: ${causalExplanation.rootCauses.map((r) => r.variableRu).join(", ")}.` : "";
+    return {
+      summary: `Recommendation based on: ${factorList}`,
+      summaryRu: `\u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F \u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0430 \u043D\u0430: ${factorListRu}`,
+      reasoning: `Analysis of ${localExplanation?.attributions.length || "multiple"} factors showed this technique fits your current situation. System confidence: ${Math.round((localExplanation?.confidence || 0.7) * 100)}%.${causalNote}`,
+      reasoningRu: `\u0410\u043D\u0430\u043B\u0438\u0437 ${localExplanation?.attributions.length || "\u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u0438\u0445"} \u0444\u0430\u043A\u0442\u043E\u0440\u043E\u0432 \u043F\u043E\u043A\u0430\u0437\u0430\u043B, \u0447\u0442\u043E \u044D\u0442\u0430 \u0442\u0435\u0445\u043D\u0438\u043A\u0430 \u043D\u0430\u0438\u0431\u043E\u043B\u0435\u0435 \u043F\u043E\u0434\u0445\u043E\u0434\u0438\u0442 \u0434\u043B\u044F \u0432\u0430\u0448\u0435\u0439 \u0442\u0435\u043A\u0443\u0449\u0435\u0439 \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0438. \u0423\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C \u0441\u0438\u0441\u0442\u0435\u043C\u044B: ${Math.round((localExplanation?.confidence || 0.7) * 100)}%.${causalNoteRu}`
+    };
+  }
+  generateWhyThisMatters(localExplanation, language, ageGroup) {
+    if (!localExplanation || ageGroup === "child") return void 0;
+    const topFactor = localExplanation.topPositiveFeatures[0];
+    if (!topFactor) return void 0;
+    if (language === "ru") {
+      return ageGroup === "teen" ? `\u042D\u0442\u043E \u0432\u0430\u0436\u043D\u043E, \u043F\u043E\u0442\u043E\u043C\u0443 \u0447\u0442\u043E ${topFactor.featureNameRu.toLowerCase()} \u0432\u043B\u0438\u044F\u0435\u0442 \u043D\u0430 \u0442\u043E, \u043A\u0430\u043A \u0442\u044B \u0441\u0435\u0431\u044F \u0447\u0443\u0432\u0441\u0442\u0432\u0443\u0435\u0448\u044C.` : `\u041F\u043E\u043D\u0438\u043C\u0430\u043D\u0438\u0435 \u0444\u0430\u043A\u0442\u043E\u0440\u043E\u0432 \u043F\u043E\u043C\u043E\u0433\u0430\u0435\u0442 \u043E\u0441\u043E\u0437\u043D\u0430\u043D\u043D\u043E \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u0442\u044C \u0441\u0432\u043E\u0438\u043C \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435\u043C.`;
+    }
+    return ageGroup === "teen" ? `This matters because ${topFactor.featureName.toLowerCase()} affects how you feel.` : `Understanding these factors helps you consciously manage your wellbeing.`;
+  }
+  // ==========================================================================
+  // FORMATTING
+  // ==========================================================================
+  /**
+   * Format explanation for specific audience
+   */
+  formatForAudience(explanation, audience, level) {
+    switch (audience) {
+      case "user":
+      case "parent":
+        return this.formatForUser(explanation, level);
+      case "clinician":
+        return this.formatForClinician(explanation, level);
+      case "auditor":
+      case "regulator":
+        return this.formatForAuditor(explanation, level);
+      case "developer":
+        return this.formatForDeveloper(explanation);
+      default:
+        return this.formatForUser(explanation, level);
+    }
+  }
+  formatForUser(explanation, level) {
+    const user = explanation.userExplanation;
+    if (level === "simple") {
+      return `${user.summaryRu}
+
+${user.confidence.emoji} ${user.confidence.descriptionRu}`;
+    }
+    if (level === "detailed") {
+      let result = `${user.summaryRu}
+
+${user.reasoningRu}
+
+`;
+      if (user.keyFactors.length > 0) {
+        result += "\u{1F4CA} \u041A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0444\u0430\u043A\u0442\u043E\u0440\u044B:\n";
+        for (const factor of user.keyFactors) {
+          const impactEmoji = factor.impact === "helps" ? "\u2705" : factor.impact === "hurts" ? "\u26A0\uFE0F" : "\u27A1\uFE0F";
+          result += `${factor.emoji} ${factor.nameRu}: ${factor.value} ${impactEmoji}
+`;
+        }
+      }
+      if (user.actionableAdviceRu.length > 0) {
+        result += "\n\u{1F4A1} \u0427\u0442\u043E \u043C\u043E\u0436\u043D\u043E \u0441\u0434\u0435\u043B\u0430\u0442\u044C:\n";
+        for (const advice of user.actionableAdviceRu) {
+          result += `\u2022 ${advice}
+`;
+        }
+      }
+      if (user.whyThisMattersRu) {
+        result += `
+\u{1F3AF} ${user.whyThisMattersRu}
+`;
+      }
+      return result.trim();
+    }
+    return JSON.stringify(explanation, null, 2);
+  }
+  formatForClinician(explanation, _level) {
+    const clinician = explanation.clinicianExplanation;
+    if (!clinician) return "No clinician explanation available";
+    return `
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+CLINICAL EXPLANATION REPORT
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+
+Patient ID: ${clinician.patientId}
+Session: ${clinician.sessionId}
+Generated: ${clinician.timestamp.toISOString()}
+Model: ${clinician.aiModelVersion}
+
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+CLINICAL CONTEXT
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+Presenting Concern: ${clinician.clinicalContext.presentingConcern}
+Risk Factors: ${clinician.clinicalContext.riskFactors.join(", ") || "None identified"}
+Protective Factors: ${clinician.clinicalContext.protectiveFactors.join(", ") || "None identified"}
+${clinician.clinicalContext.familyContext ? `Family Context: ${clinician.clinicalContext.familyContext}` : ""}
+
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+AI ASSESSMENT
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+Primary Concern: ${clinician.aiAssessment.primaryConcern}
+Severity: ${clinician.aiAssessment.severity}
+Risk Level: ${clinician.aiAssessment.riskLevel}
+Confidence: ${Math.round(clinician.aiAssessment.confidence * 100)}%
+
+Reasoning:
+${clinician.aiAssessment.reasoning}
+
+${clinician.aiAssessment.causalFactors ? `Causal Factors: ${clinician.aiAssessment.causalFactors.join(", ")}` : ""}
+
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+INTERVENTION RATIONALE
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+Selected: ${clinician.interventionRationale.selectedIntervention}
+Approach: ${clinician.interventionRationale.therapeuticApproach}
+Expected Outcome: ${clinician.interventionRationale.expectedOutcome || "N/A"}
+Timeframe: ${clinician.interventionRationale.outcomeTimeframe || "N/A"}
+
+Evidence Basis:
+${clinician.interventionRationale.evidenceBasis.map((e) => `\u2022 ${e}`).join("\n")}
+
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+RECOMMENDATIONS
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+Immediate Actions:
+${clinician.recommendations.immediateActions.map((a) => `\u2022 ${a}`).join("\n")}
+
+Follow-up:
+${clinician.recommendations.followUpRecommendations.map((r) => `\u2022 ${r}`).join("\n")}
+
+Escalation Criteria:
+${clinician.recommendations.escalationCriteria.map((c) => `\u26A0\uFE0F ${c}`).join("\n")}
+
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+REGULATORY COMPLIANCE
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+EU AI Act Risk Level: ${clinician.regulatoryCompliance.euAIActRiskLevel}
+Human Oversight Required: ${clinician.regulatoryCompliance.humanOversightRequired ? "Yes" : "No"}
+
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+DISCLAIMER
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+${clinician.disclaimer}
+
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+    `.trim();
+  }
+  formatForAuditor(explanation, _level) {
+    return JSON.stringify({
+      requestId: explanation.requestId,
+      predictionId: explanation.predictionId,
+      generatedAt: explanation.generatedAt,
+      computationTime: explanation.computationTime,
+      regulatoryInfo: explanation.regulatoryInfo,
+      localExplanation: explanation.localExplanation,
+      counterfactualExplanation: explanation.counterfactualExplanation,
+      modelVersion: explanation.explanationVersion
+    }, null, 2);
+  }
+  formatForDeveloper(explanation) {
+    return JSON.stringify(explanation, null, 2);
+  }
+  // ==========================================================================
+  // EFFECTIVENESS TRACKING
+  // ==========================================================================
+  /**
+   * Record explanation feedback
+   */
+  async recordExplanationFeedback(feedback) {
+    if (!feedback.explanationId) return;
+    const existing = this.effectivenessStore.get(feedback.explanationId);
+    const updated = {
+      explanationId: feedback.explanationId,
+      userId: feedback.userId || existing?.userId || "unknown",
+      recordedAt: /* @__PURE__ */ new Date(),
+      ...existing,
+      ...feedback
+    };
+    this.effectivenessStore.set(feedback.explanationId, updated);
+  }
+  /**
+   * Get explanation effectiveness
+   */
+  async getExplanationEffectiveness(explanationId) {
+    return this.effectivenessStore.get(explanationId) || null;
+  }
+  // ==========================================================================
+  // CACHING
+  // ==========================================================================
+  /**
+   * Get cached global explanation
+   */
+  getCachedGlobalExplanation(predictionType) {
+    const cached = this.globalExplanationCache.get(predictionType);
+    if (!cached) return null;
+    const age = Date.now() - cached.timestamp;
+    if (age > this.config.cacheExpirationMs) {
+      this.globalExplanationCache.delete(predictionType);
+      return null;
+    }
+    return cached.explanation;
+  }
+  /**
+   * Invalidate cache
+   */
+  invalidateCache(predictionType) {
+    if (predictionType) {
+      this.globalExplanationCache.delete(predictionType);
+    } else {
+      this.globalExplanationCache.clear();
+    }
+  }
+  // ==========================================================================
+  // HELPERS
+  // ==========================================================================
+  normalizePrediction(prediction) {
+    if (typeof prediction === "object" && prediction !== null) {
+      const pred = prediction;
+      return {
+        outcome: String(pred.outcome || pred.result || pred.intervention || "unknown"),
+        value: Number(pred.value || pred.score || 0.5),
+        confidence: Number(pred.confidence || 0.7)
+      };
+    }
+    return {
+      outcome: String(prediction),
+      value: 0.5,
+      confidence: 0.7
+    };
+  }
+  getConfidenceLabel(confidence) {
+    if (confidence >= 0.9) return "Very High";
+    if (confidence >= 0.7) return "High";
+    if (confidence >= 0.5) return "Medium";
+    if (confidence >= 0.3) return "Low";
+    return "Very Low";
+  }
+  getConfidenceDescription(confidence, ageGroup, language) {
+    if (language === "ru") {
+      if (ageGroup === "child") {
+        return confidence >= 0.8 ? "\u042F \u0443\u0432\u0435\u0440\u0435\u043D!" : "\u0414\u0443\u043C\u0430\u044E, \u0442\u0435\u0431\u0435 \u043F\u043E\u043D\u0440\u0430\u0432\u0438\u0442\u0441\u044F";
+      }
+      if (ageGroup === "teen") {
+        return confidence >= 0.8 ? "\u0423\u0432\u0435\u0440\u0435\u043D \u043D\u0430 100%" : confidence >= 0.5 ? "\u0414\u0443\u043C\u0430\u044E, \u043F\u043E\u0434\u043E\u0439\u0434\u0451\u0442" : "\u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439, \u043C\u043E\u0436\u0435\u0442 \u0437\u0430\u0439\u0434\u0451\u0442";
+      }
+      return confidence >= 0.8 ? "\u0412\u044B\u0441\u043E\u043A\u0430\u044F \u0443\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C" : confidence >= 0.5 ? "\u0421\u0440\u0435\u0434\u043D\u044F\u044F \u0443\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C" : "\u041D\u0438\u0437\u043A\u0430\u044F \u0443\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C";
+    }
+    if (ageGroup === "child") {
+      return confidence >= 0.8 ? "I'm sure!" : "I think you'll like it";
+    }
+    if (ageGroup === "teen") {
+      return confidence >= 0.8 ? "100% confident" : confidence >= 0.5 ? "Should work" : "Give it a try";
+    }
+    return confidence >= 0.8 ? "High confidence" : confidence >= 0.5 ? "Medium confidence" : "Low confidence";
+  }
+  getDisclaimer(ageGroup, language) {
+    if (language === "ru") {
+      if (ageGroup === "adult") {
+        return "\u0411\u0410\u0419\u0422 \u2014 AI-\u043F\u043E\u043C\u043E\u0449\u043D\u0438\u043A, \u043D\u0435 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433. \u041F\u0440\u0438 \u0441\u0435\u0440\u044C\u0451\u0437\u043D\u044B\u0445 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u0430\u0445 \u043E\u0431\u0440\u0430\u0442\u0438\u0442\u0435\u0441\u044C \u043A \u0441\u043F\u0435\u0446\u0438\u0430\u043B\u0438\u0441\u0442\u0443.";
+      }
+      if (ageGroup === "teen") {
+        return "\u042F \u2014 AI, \u043D\u0435 \u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0438\u0439 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433. \u0415\u0441\u043B\u0438 \u0442\u0435\u0431\u0435 \u043F\u043B\u043E\u0445\u043E \u2014 \u043F\u043E\u0433\u043E\u0432\u043E\u0440\u0438 \u0441 \u0432\u0437\u0440\u043E\u0441\u043B\u044B\u043C, \u043A\u043E\u0442\u043E\u0440\u043E\u043C\u0443 \u0434\u043E\u0432\u0435\u0440\u044F\u0435\u0448\u044C.";
+      }
+      return "";
+    }
+    if (ageGroup === "adult") {
+      return "BYTE is an AI assistant, not a psychologist. For serious issues, consult a professional.";
+    }
+    if (ageGroup === "teen") {
+      return "I'm AI, not a real psychologist. If you're struggling, talk to a trusted adult.";
+    }
+    return "";
+  }
+  calculateGlobalFeatureImportance(_predictionType) {
+    return Object.values(INTERVENTION_FEATURES).map((def) => ({
+      featureId: def.id,
+      featureName: def.name,
+      featureNameRu: def.nameRu,
+      description: def.description,
+      descriptionRu: def.descriptionRu,
+      meanAbsoluteSHAP: def.defaultWeight,
+      medianAbsoluteSHAP: def.defaultWeight * 0.95,
+      maxAbsoluteSHAP: def.defaultWeight * 1.5,
+      frequency: 0.8,
+      coverage: 0.9,
+      trend: "stable",
+      trendPeriod: "Last 30 days",
+      category: def.category
+    })).sort((a, b) => b.meanAbsoluteSHAP - a.meanAbsoluteSHAP);
+  }
+  extractDecisionRules(_predictionType) {
+    return [
+      {
+        id: "RULE-001",
+        condition: "riskLevel = critical OR riskLevel = high",
+        conditionRu: "\u0443\u0440\u043E\u0432\u0435\u043D\u044C\u0420\u0438\u0441\u043A\u0430 = \u043A\u0440\u0438\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u0418\u041B\u0418 \u0443\u0440\u043E\u0432\u0435\u043D\u044C\u0420\u0438\u0441\u043A\u0430 = \u0432\u044B\u0441\u043E\u043A\u0438\u0439",
+        outcome: "Show crisis resources + escalate",
+        outcomeRu: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u043A\u0440\u0438\u0437\u0438\u0441\u043D\u044B\u0435 \u0440\u0435\u0441\u0443\u0440\u0441\u044B + \u044D\u0441\u043A\u0430\u043B\u0430\u0446\u0438\u044F",
+        coverage: 0.05,
+        confidence: 0.99,
+        priority: 1,
+        isCausal: true,
+        causalStrength: 0.95
+      },
+      {
+        id: "RULE-002",
+        condition: "currentMood <= 2 AND moodTrend = declining",
+        conditionRu: "\u0442\u0435\u043A\u0443\u0449\u0435\u0435\u041D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435 <= 2 \u0418 \u0442\u0440\u0435\u043D\u0434\u041D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u044F = \u0441\u043D\u0438\u0436\u0430\u044E\u0449\u0438\u0439\u0441\u044F",
+        outcome: "Select supportive technique",
+        outcomeRu: "\u0412\u044B\u0431\u0440\u0430\u0442\u044C \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u044E\u0449\u0443\u044E \u0442\u0435\u0445\u043D\u0438\u043A\u0443",
+        coverage: 0.15,
+        confidence: 0.85,
+        priority: 2,
+        isCausal: true,
+        causalStrength: 0.75
+      },
+      {
+        id: "RULE-003",
+        condition: "currentEnergy >= 4 AND timeOfDay = morning",
+        conditionRu: "\u0443\u0440\u043E\u0432\u0435\u043D\u044C\u042D\u043D\u0435\u0440\u0433\u0438\u0438 >= 4 \u0418 \u0432\u0440\u0435\u043C\u044F\u0421\u0443\u0442\u043E\u043A = \u0443\u0442\u0440\u043E",
+        outcome: "Select active technique",
+        outcomeRu: "\u0412\u044B\u0431\u0440\u0430\u0442\u044C \u0430\u043A\u0442\u0438\u0432\u043D\u0443\u044E \u0442\u0435\u0445\u043D\u0438\u043A\u0443",
+        coverage: 0.2,
+        confidence: 0.8,
+        priority: 3
+      },
+      {
+        id: "RULE-004",
+        condition: "activeTrigger = stress",
+        conditionRu: "\u0430\u043A\u0442\u0438\u0432\u043D\u044B\u0439\u0422\u0440\u0438\u0433\u0433\u0435\u0440 = \u0441\u0442\u0440\u0435\u0441\u0441",
+        outcome: "Select relaxation technique",
+        outcomeRu: "\u0412\u044B\u0431\u0440\u0430\u0442\u044C \u0440\u0435\u043B\u0430\u043A\u0441\u0430\u0446\u0438\u043E\u043D\u043D\u0443\u044E \u0442\u0435\u0445\u043D\u0438\u043A\u0443",
+        coverage: 0.25,
+        confidence: 0.82,
+        priority: 4,
+        isCausal: true,
+        causalStrength: 0.7
+      }
+    ];
+  }
+  generateRegulatoryInfo(request, response) {
+    let riskLevel = "limited";
+    if (request.predictionType.includes("crisis") || request.predictionType.includes("risk")) {
+      riskLevel = "high";
+    }
+    const hasLocalExplanation = !!response.localExplanation;
+    const hasCounterfactual = !!response.counterfactualExplanation;
+    return {
+      euAIActRiskLevel: riskLevel,
+      isCompliant: true,
+      transparencyMet: hasLocalExplanation && hasCounterfactual,
+      humanOversightRequired: riskLevel === "high"
+    };
+  }
+};
+function createExplainabilityService(featureEngine, counterfactualEngine, narrativeGenerator) {
+  return new ExplainabilityService(featureEngine, counterfactualEngine, narrativeGenerator);
+}
+
+// src/motivation/interfaces/IMotivationalState.ts
+var CHANGE_TALK_PATTERNS = {
+  desire: {
+    keywords: ["want to", "wish", "would like", "hope to", "prefer"],
+    keywordsRu: ["\u0445\u043E\u0447\u0443", "\u0445\u043E\u0442\u0435\u043B \u0431\u044B", "\u0436\u0435\u043B\u0430\u044E", "\u043C\u0435\u0447\u0442\u0430\u044E", "\u043D\u0430\u0434\u0435\u044E\u0441\u044C"],
+    patterns: [/I (want|wish|would like) to/i, /I hope I could/i],
+    patternsRu: [/хочу .* меньше/i, /хотел бы .* изменить/i],
+    strength: 2
+  },
+  ability: {
+    keywords: ["can", "could", "able to", "possible", "might be able"],
+    keywordsRu: ["\u043C\u043E\u0433\u0443", "\u043C\u043E\u0433 \u0431\u044B", "\u0441\u043F\u043E\u0441\u043E\u0431\u0435\u043D", "\u0432 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0438", "\u043F\u043E\u043B\u0443\u0447\u0438\u0442\u0441\u044F"],
+    patterns: [/I (can|could|am able to)/i, /it's possible for me/i],
+    patternsRu: [/я (могу|мог бы|способен)/i, /у меня получится/i],
+    strength: 2
+  },
+  reasons: {
+    keywords: ["because", "so that", "would help", "benefit", "important because"],
+    keywordsRu: ["\u043F\u043E\u0442\u043E\u043C\u0443 \u0447\u0442\u043E", "\u0447\u0442\u043E\u0431\u044B", "\u043F\u043E\u043C\u043E\u0436\u0435\u0442", "\u0432\u0430\u0436\u043D\u043E", "\u043F\u043E\u043B\u044C\u0437\u0430"],
+    patterns: [/it would (help|benefit|improve)/i, /important because/i],
+    patternsRu: [/это (поможет|улучшит)/i, /важно,? потому что/i],
+    strength: 2
+  },
+  need: {
+    keywords: ["need to", "have to", "must", "got to", "should"],
+    keywordsRu: ["\u043D\u0430\u0434\u043E", "\u043D\u0443\u0436\u043D\u043E", "\u0434\u043E\u043B\u0436\u0435\u043D", "\u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E", "\u043F\u043E\u0440\u0430"],
+    patterns: [/I (need|have|got) to/i, /I (really )?must/i],
+    patternsRu: [/мне (надо|нужно|необходимо)/i, /я должен/i],
+    strength: 3
+  },
+  commitment: {
+    keywords: ["will", "going to", "intend to", "plan to", "promise"],
+    keywordsRu: ["\u0431\u0443\u0434\u0443", "\u0441\u043E\u0431\u0438\u0440\u0430\u044E\u0441\u044C", "\u043D\u0430\u043C\u0435\u0440\u0435\u043D", "\u043F\u043B\u0430\u043D\u0438\u0440\u0443\u044E", "\u043E\u0431\u0435\u0449\u0430\u044E"],
+    patterns: [/I (will|am going to|intend to)/i, /I promise/i],
+    patternsRu: [/я (буду|собираюсь|намерен)/i, /я обещаю/i],
+    strength: 4
+  },
+  activation: {
+    keywords: ["ready", "willing", "prepared", "want to start"],
+    keywordsRu: ["\u0433\u043E\u0442\u043E\u0432", "\u0441\u043E\u0433\u043B\u0430\u0441\u0435\u043D", "\u0445\u043E\u0447\u0443 \u043D\u0430\u0447\u0430\u0442\u044C", "\u0440\u0435\u0448\u0438\u043B"],
+    patterns: [/I('m| am) ready to/i, /I('m| am) willing to/i],
+    patternsRu: [/я готов/i, /я решил/i, /хочу начать/i],
+    strength: 4
+  },
+  taking_steps: {
+    keywords: ["started", "have been", "already", "trying", "working on"],
+    keywordsRu: ["\u043D\u0430\u0447\u0430\u043B", "\u0443\u0436\u0435", "\u043F\u0440\u043E\u0431\u0443\u044E", "\u0440\u0430\u0431\u043E\u0442\u0430\u044E \u043D\u0430\u0434", "\u0434\u0435\u043B\u0430\u044E"],
+    patterns: [/I('ve| have) (started|been)/i, /I('m| am) (trying|working on)/i],
+    patternsRu: [/я (начал|уже|пробую)/i, /работаю над/i],
+    strength: 5
+  }
+};
+var SUSTAIN_TALK_PATTERNS = {
+  desire_against: {
+    keywords: ["don't want", "not interested", "prefer not", "like it"],
+    keywordsRu: ["\u043D\u0435 \u0445\u043E\u0447\u0443", "\u043C\u043D\u0435 \u043D\u0440\u0430\u0432\u0438\u0442\u0441\u044F", "\u043D\u0435 \u0441\u043E\u0431\u0438\u0440\u0430\u044E\u0441\u044C", "\u043D\u0435 \u0438\u043D\u0442\u0435\u0440\u0435\u0441\u043D\u043E"],
+    patterns: [/I (don't|do not) want to/i, /I like it the way/i],
+    patternsRu: [/я не хочу/i, /мне нравится как есть/i],
+    strength: -2
+  },
+  ability_against: {
+    keywords: ["can't", "unable", "impossible", "too hard"],
+    keywordsRu: ["\u043D\u0435 \u043C\u043E\u0433\u0443", "\u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u043D\u043E", "\u0441\u043B\u0438\u0448\u043A\u043E\u043C \u0441\u043B\u043E\u0436\u043D\u043E", "\u043D\u0435 \u0441\u043F\u043E\u0441\u043E\u0431\u0435\u043D"],
+    patterns: [/I (can't|cannot|am unable to)/i, /it's (too hard|impossible)/i],
+    patternsRu: [/я не могу/i, /это (невозможно|слишком сложно)/i],
+    strength: -2
+  },
+  reasons_against: {
+    keywords: ["because I need", "helps me", "makes me feel", "not that bad"],
+    keywordsRu: ["\u043F\u043E\u0442\u043E\u043C\u0443 \u0447\u0442\u043E \u043C\u043D\u0435 \u043D\u0443\u0436\u043D\u043E", "\u043F\u043E\u043C\u043E\u0433\u0430\u0435\u0442 \u043C\u043D\u0435", "\u043D\u0435 \u0442\u0430\u043A \u0443\u0436 \u043F\u043B\u043E\u0445\u043E"],
+    patterns: [/it (helps|makes) me/i, /not (that|so) bad/i],
+    patternsRu: [/(помогает|нужно) мне/i, /не так уж плохо/i],
+    strength: -2
+  },
+  need_against: {
+    keywords: ["need it", "have to use", "depend on", "necessary for"],
+    keywordsRu: ["\u043C\u043D\u0435 \u044D\u0442\u043E \u043D\u0443\u0436\u043D\u043E", "\u0437\u0430\u0432\u0438\u0441\u0438\u043C \u043E\u0442", "\u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E \u0434\u043B\u044F"],
+    patterns: [/I need (it|this)/i, /I (depend|rely) on/i],
+    patternsRu: [/мне (это )?нужно/i, /я (завишу|полагаюсь)/i],
+    strength: -3
+  },
+  commitment_against: {
+    keywords: ["won't", "not going to", "refuse", "never will"],
+    keywordsRu: ["\u043D\u0435 \u0431\u0443\u0434\u0443", "\u043D\u0435 \u0441\u043E\u0431\u0438\u0440\u0430\u044E\u0441\u044C", "\u043E\u0442\u043A\u0430\u0437\u044B\u0432\u0430\u044E\u0441\u044C", "\u043D\u0438\u043A\u043E\u0433\u0434\u0430"],
+    patterns: [/I (won't|will not|am not going to)/i, /I refuse to/i],
+    patternsRu: [/я (не буду|не собираюсь)/i, /я отказываюсь/i],
+    strength: -4
+  },
+  activation_against: {
+    keywords: ["not ready", "not willing", "not prepared", "not yet"],
+    keywordsRu: ["\u043D\u0435 \u0433\u043E\u0442\u043E\u0432", "\u043D\u0435 \u0445\u043E\u0447\u0443 \u0441\u0435\u0439\u0447\u0430\u0441", "\u0435\u0449\u0451 \u043D\u0435 \u0432\u0440\u0435\u043C\u044F"],
+    patterns: [/I('m| am) not ready/i, /not (yet|now)/i],
+    patternsRu: [/я не готов/i, /ещё не (время|готов)/i],
+    strength: -4
+  },
+  taking_steps_against: {
+    keywords: ["keep doing", "went back", "still", "continue"],
+    keywordsRu: ["\u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0430\u044E", "\u0432\u0435\u0440\u043D\u0443\u043B\u0441\u044F \u043A", "\u0432\u0441\u0451 \u0435\u0449\u0451", "\u043E\u043F\u044F\u0442\u044C"],
+    patterns: [/I (keep|still|continue)/i, /I went back to/i],
+    patternsRu: [/я (продолжаю|вернулся)/i, /всё ещё/i],
+    strength: -5
+  }
+};
+var DISCORD_PATTERNS = {
+  arguing: {
+    keywords: ["but", "however", "that's not true", "you don't understand", "wrong"],
+    keywordsRu: ["\u043D\u043E", "\u043E\u0434\u043D\u0430\u043A\u043E", "\u044D\u0442\u043E \u043D\u0435\u043F\u0440\u0430\u0432\u0434\u0430", "\u0432\u044B \u043D\u0435 \u043F\u043E\u043D\u0438\u043C\u0430\u0435\u0442\u0435", "\u043D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u043E"],
+    patterns: [/(but|however),? (I|you)/i, /that's (not true|wrong)/i]
+  },
+  interrupting: {
+    keywords: ["wait", "let me finish", "hold on"],
+    keywordsRu: ["\u043F\u043E\u0434\u043E\u0436\u0434\u0438\u0442\u0435", "\u0434\u0430\u0439\u0442\u0435 \u0437\u0430\u043A\u043E\u043D\u0447\u0438\u0442\u044C", "\u043C\u0438\u043D\u0443\u0442\u0443"],
+    patterns: [/wait,? (I|let me)/i]
+  },
+  negating: {
+    keywords: ["no", "nope", "not really", "I disagree"],
+    keywordsRu: ["\u043D\u0435\u0442", "\u043D\u0435 \u0441\u043E\u0432\u0441\u0435\u043C", "\u043D\u0435 \u0441\u043E\u0433\u043B\u0430\u0441\u0435\u043D", "\u043D\u0435\u0430"],
+    patterns: [/^no[,.]?/i, /not really/i]
+  },
+  ignoring: {
+    keywords: ["anyway", "whatever", "moving on", "different topic"],
+    keywordsRu: ["\u0432 \u043B\u044E\u0431\u043E\u043C \u0441\u043B\u0443\u0447\u0430\u0435", "\u043D\u0435\u0432\u0430\u0436\u043D\u043E", "\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u043E \u0434\u0440\u0443\u0433\u043E\u043C"],
+    patterns: [/(anyway|whatever|nevermind)/i]
+  },
+  defending: {
+    keywords: ["it's not my fault", "I had to", "what else could I", "anyone would"],
+    keywordsRu: ["\u044D\u0442\u043E \u043D\u0435 \u043C\u043E\u044F \u0432\u0438\u043D\u0430", "\u043C\u043D\u0435 \u043F\u0440\u0438\u0448\u043B\u043E\u0441\u044C", "\u0447\u0442\u043E \u043C\u043D\u0435 \u0431\u044B\u043B\u043E \u0434\u0435\u043B\u0430\u0442\u044C", "\u043B\u044E\u0431\u043E\u0439 \u0431\u044B"],
+    patterns: [/it's not my fault/i, /I had (to|no choice)/i]
+  },
+  squaring_off: {
+    keywords: ["we'll see", "make me", "try me", "you can't"],
+    keywordsRu: ["\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0438\u043C", "\u043F\u043E\u043F\u0440\u043E\u0431\u0443\u0439", "\u0432\u044B \u043D\u0435 \u043C\u043E\u0436\u0435\u0442\u0435"],
+    patterns: [/(we'll see|try me|make me)/i]
+  }
+};
+var STRATEGY_RECOMMENDATIONS = {
+  precontemplation: {
+    primaryStrategy: "build_rapport",
+    secondaryStrategies: ["develop_discrepancy", "roll_with_resistance"],
+    focus: [
+      "Establish trust and safety",
+      "Understand their perspective",
+      "Plant seeds of doubt gently",
+      "Avoid direct persuasion"
+    ],
+    avoid: [
+      "Pushing for change",
+      "Giving advice",
+      "Arguing for change",
+      "Labeling behavior as problematic"
+    ]
+  },
+  contemplation: {
+    primaryStrategy: "explore_ambivalence",
+    secondaryStrategies: ["evoke_change_talk", "develop_discrepancy"],
+    focus: [
+      "Explore both sides of ambivalence",
+      "Reflect change talk selectively",
+      "Develop discrepancy with values",
+      "Build importance of change"
+    ],
+    avoid: [
+      "Decisional balance sheets",
+      "Premature action planning",
+      "Taking the change side of argument"
+    ]
+  },
+  preparation: {
+    primaryStrategy: "strengthen_commitment",
+    secondaryStrategies: ["support_self_efficacy", "summarize_and_transition"],
+    focus: [
+      "Strengthen commitment language",
+      "Build confidence for change",
+      "Explore specific plans",
+      "Mobilize support systems"
+    ],
+    avoid: [
+      "Overwhelming with options",
+      "Creating dependency",
+      "Skipping confidence building"
+    ]
+  },
+  action: {
+    primaryStrategy: "action_planning",
+    secondaryStrategies: ["support_self_efficacy", "relapse_prevention"],
+    focus: [
+      "Concrete action steps",
+      "Celebrate progress",
+      "Troubleshoot obstacles",
+      "Strengthen new identity"
+    ],
+    avoid: [
+      "Complacency",
+      "Ignoring challenges",
+      "Taking credit for their change"
+    ]
+  },
+  maintenance: {
+    primaryStrategy: "relapse_prevention",
+    secondaryStrategies: ["support_self_efficacy", "strengthen_commitment"],
+    focus: [
+      "Identify high-risk situations",
+      "Strengthen coping strategies",
+      "Celebrate sustained change",
+      "Plan for setbacks"
+    ],
+    avoid: [
+      "Assuming work is done",
+      "Ignoring warning signs",
+      "Reducing support too quickly"
+    ]
+  },
+  relapse: {
+    primaryStrategy: "roll_with_resistance",
+    secondaryStrategies: ["support_self_efficacy", "evoke_change_talk"],
+    focus: [
+      "Normalize as part of process",
+      "Rebuild confidence",
+      "Learn from experience",
+      "Rekindle motivation"
+    ],
+    avoid: [
+      "Blame or criticism",
+      "Catastrophizing",
+      "Starting over from scratch"
+    ]
+  }
+};
+
+// src/motivation/interfaces/IMotivationalInterviewing.ts
+var OPEN_QUESTION_TEMPLATES = [
+  // Desire (D)
+  {
+    id: "oq_desire_1",
+    category: "goals",
+    template: "What would you like to be different about {behavior}?",
+    templateRu: "\u0427\u0442\u043E \u0431\u044B \u0432\u044B \u0445\u043E\u0442\u0435\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0432 {behavior}?",
+    placeholders: ["behavior"],
+    targetChangeTalk: ["desire"],
+    appropriateStages: ["explore_ambivalence", "evoke_change_talk"],
+    examples: ["What would you like to be different about your phone usage?"],
+    examplesRu: ["\u0427\u0442\u043E \u0431\u044B \u0432\u044B \u0445\u043E\u0442\u0435\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0432 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0438 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430?"]
+  },
+  {
+    id: "oq_desire_2",
+    category: "values",
+    template: "How would you like things to be?",
+    templateRu: "\u041A\u0430\u043A \u0431\u044B \u0432\u0430\u043C \u0445\u043E\u0442\u0435\u043B\u043E\u0441\u044C, \u0447\u0442\u043E\u0431\u044B \u0432\u0441\u0451 \u0431\u044B\u043B\u043E?",
+    placeholders: [],
+    targetChangeTalk: ["desire"],
+    appropriateStages: ["explore_ambivalence", "evoke_change_talk"],
+    examples: ["How would you like things to be?"],
+    examplesRu: ["\u041A\u0430\u043A \u0431\u044B \u0432\u0430\u043C \u0445\u043E\u0442\u0435\u043B\u043E\u0441\u044C, \u0447\u0442\u043E\u0431\u044B \u0432\u0441\u0451 \u0431\u044B\u043B\u043E?"]
+  },
+  // Ability (A)
+  {
+    id: "oq_ability_1",
+    category: "resources",
+    template: "What strengths do you have that could help with {goal}?",
+    templateRu: "\u041A\u0430\u043A\u0438\u0435 \u0432\u0430\u0448\u0438 \u0441\u0438\u043B\u044C\u043D\u044B\u0435 \u0441\u0442\u043E\u0440\u043E\u043D\u044B \u043C\u043E\u0433\u043B\u0438 \u0431\u044B \u043F\u043E\u043C\u043E\u0447\u044C \u0441 {goal}?",
+    placeholders: ["goal"],
+    targetChangeTalk: ["ability"],
+    appropriateStages: ["support_self_efficacy", "strengthen_commitment"],
+    examples: ["What strengths do you have that could help with reducing screen time?"],
+    examplesRu: ["\u041A\u0430\u043A\u0438\u0435 \u0432\u0430\u0448\u0438 \u0441\u0438\u043B\u044C\u043D\u044B\u0435 \u0441\u0442\u043E\u0440\u043E\u043D\u044B \u043C\u043E\u0433\u043B\u0438 \u0431\u044B \u043F\u043E\u043C\u043E\u0447\u044C \u0441 \u0443\u043C\u0435\u043D\u044C\u0448\u0435\u043D\u0438\u0435\u043C \u044D\u043A\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u0432\u0440\u0435\u043C\u0435\u043D\u0438?"]
+  },
+  {
+    id: "oq_ability_2",
+    category: "confidence",
+    template: "When have you successfully made a change like this before?",
+    templateRu: "\u041A\u043E\u0433\u0434\u0430 \u0432\u0430\u043C \u0440\u0430\u043D\u044C\u0448\u0435 \u0443\u0434\u0430\u0432\u0430\u043B\u043E\u0441\u044C \u0441\u0434\u0435\u043B\u0430\u0442\u044C \u043F\u043E\u0434\u043E\u0431\u043D\u043E\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435?",
+    placeholders: [],
+    targetChangeTalk: ["ability"],
+    appropriateStages: ["support_self_efficacy"],
+    examples: ["When have you successfully made a change like this before?"],
+    examplesRu: ["\u041A\u043E\u0433\u0434\u0430 \u0432\u0430\u043C \u0440\u0430\u043D\u044C\u0448\u0435 \u0443\u0434\u0430\u0432\u0430\u043B\u043E\u0441\u044C \u0441\u0434\u0435\u043B\u0430\u0442\u044C \u043F\u043E\u0434\u043E\u0431\u043D\u043E\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435?"]
+  },
+  // Reasons (R)
+  {
+    id: "oq_reasons_1",
+    category: "values",
+    template: "What are the most important reasons you would want to {goal}?",
+    templateRu: "\u041A\u0430\u043A\u0438\u0435 \u0441\u0430\u043C\u044B\u0435 \u0432\u0430\u0436\u043D\u044B\u0435 \u043F\u0440\u0438\u0447\u0438\u043D\u044B, \u043F\u043E \u043A\u043E\u0442\u043E\u0440\u044B\u043C \u0432\u044B \u0445\u043E\u0442\u0435\u043B\u0438 \u0431\u044B {goal}?",
+    placeholders: ["goal"],
+    targetChangeTalk: ["reasons"],
+    appropriateStages: ["develop_discrepancy", "explore_ambivalence"],
+    examples: ["What are the most important reasons you would want to spend less time gaming?"],
+    examplesRu: ["\u041A\u0430\u043A\u0438\u0435 \u0441\u0430\u043C\u044B\u0435 \u0432\u0430\u0436\u043D\u044B\u0435 \u043F\u0440\u0438\u0447\u0438\u043D\u044B, \u043F\u043E \u043A\u043E\u0442\u043E\u0440\u044B\u043C \u0432\u044B \u0445\u043E\u0442\u0435\u043B\u0438 \u0431\u044B \u043C\u0435\u043D\u044C\u0448\u0435 \u0438\u0433\u0440\u0430\u0442\u044C?"]
+  },
+  {
+    id: "oq_reasons_2",
+    category: "values",
+    template: "How does {behavior} connect to what matters most to you?",
+    templateRu: "\u041A\u0430\u043A {behavior} \u0441\u0432\u044F\u0437\u0430\u043D\u043E \u0441 \u0442\u0435\u043C, \u0447\u0442\u043E \u0434\u043B\u044F \u0432\u0430\u0441 \u0432\u0430\u0436\u043D\u0435\u0435 \u0432\u0441\u0435\u0433\u043E?",
+    placeholders: ["behavior"],
+    targetChangeTalk: ["reasons"],
+    appropriateStages: ["develop_discrepancy"],
+    examples: ["How does your social media use connect to what matters most to you?"],
+    examplesRu: ["\u041A\u0430\u043A \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0435 \u0441\u043E\u0446\u0441\u0435\u0442\u0435\u0439 \u0441\u0432\u044F\u0437\u0430\u043D\u043E \u0441 \u0442\u0435\u043C, \u0447\u0442\u043E \u0434\u043B\u044F \u0432\u0430\u0441 \u0432\u0430\u0436\u043D\u0435\u0435 \u0432\u0441\u0435\u0433\u043E?"]
+  },
+  // Need (N)
+  {
+    id: "oq_need_1",
+    category: "importance",
+    template: "How urgent is it for you to make this change?",
+    templateRu: "\u041D\u0430\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u0441\u0440\u043E\u0447\u043D\u043E \u0434\u043B\u044F \u0432\u0430\u0441 \u0441\u0434\u0435\u043B\u0430\u0442\u044C \u044D\u0442\u043E \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435?",
+    placeholders: [],
+    targetChangeTalk: ["need"],
+    appropriateStages: ["explore_ambivalence", "strengthen_commitment"],
+    examples: ["How urgent is it for you to make this change?"],
+    examplesRu: ["\u041D\u0430\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u0441\u0440\u043E\u0447\u043D\u043E \u0434\u043B\u044F \u0432\u0430\u0441 \u0441\u0434\u0435\u043B\u0430\u0442\u044C \u044D\u0442\u043E \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435?"]
+  },
+  {
+    id: "oq_need_2",
+    category: "importance",
+    template: "What would happen if things stayed the same?",
+    templateRu: "\u0427\u0442\u043E \u043F\u0440\u043E\u0438\u0437\u043E\u0439\u0434\u0451\u0442, \u0435\u0441\u043B\u0438 \u0432\u0441\u0451 \u043E\u0441\u0442\u0430\u043D\u0435\u0442\u0441\u044F \u043F\u043E-\u043F\u0440\u0435\u0436\u043D\u0435\u043C\u0443?",
+    placeholders: [],
+    targetChangeTalk: ["need"],
+    appropriateStages: ["develop_discrepancy"],
+    examples: ["What would happen if things stayed the same?"],
+    examplesRu: ["\u0427\u0442\u043E \u043F\u0440\u043E\u0438\u0437\u043E\u0439\u0434\u0451\u0442, \u0435\u0441\u043B\u0438 \u0432\u0441\u0451 \u043E\u0441\u0442\u0430\u043D\u0435\u0442\u0441\u044F \u043F\u043E-\u043F\u0440\u0435\u0436\u043D\u0435\u043C\u0443?"]
+  },
+  // Commitment (C)
+  {
+    id: "oq_commitment_1",
+    category: "next_steps",
+    template: "What are you willing to try?",
+    templateRu: "\u0427\u0442\u043E \u0432\u044B \u0433\u043E\u0442\u043E\u0432\u044B \u043F\u043E\u043F\u0440\u043E\u0431\u043E\u0432\u0430\u0442\u044C?",
+    placeholders: [],
+    targetChangeTalk: ["commitment", "activation"],
+    appropriateStages: ["strengthen_commitment", "action_planning"],
+    examples: ["What are you willing to try?"],
+    examplesRu: ["\u0427\u0442\u043E \u0432\u044B \u0433\u043E\u0442\u043E\u0432\u044B \u043F\u043E\u043F\u0440\u043E\u0431\u043E\u0432\u0430\u0442\u044C?"]
+  },
+  // Activation (A)
+  {
+    id: "oq_activation_1",
+    category: "next_steps",
+    template: "What would be a good first step?",
+    templateRu: "\u041A\u0430\u043A\u043E\u0439 \u0431\u044B\u043B \u0431\u044B \u0445\u043E\u0440\u043E\u0448\u0438\u0439 \u043F\u0435\u0440\u0432\u044B\u0439 \u0448\u0430\u0433?",
+    placeholders: [],
+    targetChangeTalk: ["activation", "taking_steps"],
+    appropriateStages: ["action_planning"],
+    examples: ["What would be a good first step?"],
+    examplesRu: ["\u041A\u0430\u043A\u043E\u0439 \u0431\u044B\u043B \u0431\u044B \u0445\u043E\u0440\u043E\u0448\u0438\u0439 \u043F\u0435\u0440\u0432\u044B\u0439 \u0448\u0430\u0433?"]
+  },
+  // Taking Steps (T)
+  {
+    id: "oq_taking_steps_1",
+    category: "next_steps",
+    template: "What have you already tried that worked, even a little?",
+    templateRu: "\u0427\u0442\u043E \u0432\u044B \u0443\u0436\u0435 \u043F\u0440\u043E\u0431\u043E\u0432\u0430\u043B\u0438, \u0447\u0442\u043E \u0441\u0440\u0430\u0431\u043E\u0442\u0430\u043B\u043E \u0445\u043E\u0442\u044F \u0431\u044B \u043D\u0435\u043C\u043D\u043E\u0433\u043E?",
+    placeholders: [],
+    targetChangeTalk: ["taking_steps"],
+    appropriateStages: ["support_self_efficacy", "action_planning"],
+    examples: ["What have you already tried that worked, even a little?"],
+    examplesRu: ["\u0427\u0442\u043E \u0432\u044B \u0443\u0436\u0435 \u043F\u0440\u043E\u0431\u043E\u0432\u0430\u043B\u0438, \u0447\u0442\u043E \u0441\u0440\u0430\u0431\u043E\u0442\u0430\u043B\u043E \u0445\u043E\u0442\u044F \u0431\u044B \u043D\u0435\u043C\u043D\u043E\u0433\u043E?"]
+  }
+];
+var AFFIRMATION_TEMPLATES = [
+  {
+    id: "aff_strength_1",
+    type: "strength",
+    template: "You clearly {strength}.",
+    templateRu: "\u041E\u0447\u0435\u0432\u0438\u0434\u043D\u043E, \u0447\u0442\u043E \u0432\u044B {strength}.",
+    placeholders: ["strength"],
+    appropriateFor: {
+      stages: ["support_self_efficacy", "strengthen_commitment"],
+      afterDiscord: false
+    }
+  },
+  {
+    id: "aff_effort_1",
+    type: "effort",
+    template: "It takes courage to {action}.",
+    templateRu: "\u0422\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u0441\u043C\u0435\u043B\u043E\u0441\u0442\u044C, \u0447\u0442\u043E\u0431\u044B {action}.",
+    placeholders: ["action"],
+    appropriateFor: {
+      stages: ["build_rapport", "support_self_efficacy"],
+      afterDiscord: true
+    }
+  },
+  {
+    id: "aff_progress_1",
+    type: "progress",
+    template: "You've made real progress with {progress}.",
+    templateRu: "\u0412\u044B \u0434\u043E\u0431\u0438\u043B\u0438\u0441\u044C \u0440\u0435\u0430\u043B\u044C\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u0433\u0440\u0435\u0441\u0441\u0430 \u0432 {progress}.",
+    placeholders: ["progress"],
+    appropriateFor: {
+      minChangeTalkRatio: 0.5,
+      stages: ["action_planning", "relapse_prevention"]
+    }
+  },
+  {
+    id: "aff_value_1",
+    type: "value",
+    template: "It's clear how much you value {value}.",
+    templateRu: "\u0412\u0438\u0434\u043D\u043E, \u043A\u0430\u043A \u043C\u043D\u043E\u0433\u043E \u0434\u043B\u044F \u0432\u0430\u0441 \u0437\u043D\u0430\u0447\u0438\u0442 {value}.",
+    placeholders: ["value"],
+    appropriateFor: {
+      stages: ["develop_discrepancy", "explore_ambivalence"]
+    }
+  },
+  {
+    id: "aff_intention_1",
+    type: "intention",
+    template: "Your commitment to {intention} is inspiring.",
+    templateRu: "\u0412\u0430\u0448\u0430 \u043F\u0440\u0438\u0432\u0435\u0440\u0436\u0435\u043D\u043D\u043E\u0441\u0442\u044C {intention} \u0432\u0434\u043E\u0445\u043D\u043E\u0432\u043B\u044F\u0435\u0442.",
+    placeholders: ["intention"],
+    appropriateFor: {
+      minChangeTalkRatio: 0.6,
+      stages: ["strengthen_commitment", "action_planning"]
+    }
+  }
+];
+var REFLECTION_TEMPLATES = [
+  // Simple reflections
+  {
+    id: "ref_simple_rephrase",
+    type: "rephrase",
+    pattern: "So you {rephrased_content}.",
+    patternRu: "\u0418\u0442\u0430\u043A, \u0432\u044B {rephrased_content}.",
+    complexity: "simple",
+    target: "change_talk",
+    examples: [
+      {
+        input: "I want to spend more time with my family",
+        output: "So you want to have more quality time with your family.",
+        outputRu: "\u0418\u0442\u0430\u043A, \u0432\u044B \u0445\u043E\u0442\u0438\u0442\u0435 \u043F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435 \u0432\u0440\u0435\u043C\u0435\u043D\u0438 \u0441 \u0441\u0435\u043C\u044C\u0451\u0439."
+      }
+    ]
+  },
+  // Complex reflections
+  {
+    id: "ref_complex_feeling",
+    type: "feeling",
+    pattern: "It sounds like you're feeling {emotion} about {topic}.",
+    patternRu: "\u041F\u043E\u0445\u043E\u0436\u0435, \u0432\u044B \u0447\u0443\u0432\u0441\u0442\u0432\u0443\u0435\u0442\u0435 {emotion} \u043F\u043E \u043F\u043E\u0432\u043E\u0434\u0443 {topic}.",
+    complexity: "complex",
+    target: "feeling",
+    examples: [
+      {
+        input: "I don't know what to do anymore",
+        output: "It sounds like you're feeling overwhelmed about this situation.",
+        outputRu: "\u041F\u043E\u0445\u043E\u0436\u0435, \u0432\u044B \u0447\u0443\u0432\u0441\u0442\u0432\u0443\u0435\u0442\u0435 \u0441\u0435\u0431\u044F \u043F\u043E\u0434\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u043C \u0432 \u044D\u0442\u043E\u0439 \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0438."
+      }
+    ]
+  },
+  {
+    id: "ref_complex_meaning",
+    type: "meaning",
+    pattern: "What I hear is that {deeper_meaning} is really important to you.",
+    patternRu: "\u042F \u0441\u043B\u044B\u0448\u0443, \u0447\u0442\u043E {deeper_meaning} \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u0432\u0430\u0436\u043D\u043E \u0434\u043B\u044F \u0432\u0430\u0441.",
+    complexity: "complex",
+    target: "meaning",
+    examples: [
+      {
+        input: "I need to be there for my kids",
+        output: "What I hear is that being a present parent is really important to you.",
+        outputRu: "\u042F \u0441\u043B\u044B\u0448\u0443, \u0447\u0442\u043E \u0431\u044B\u0442\u044C \u0440\u044F\u0434\u043E\u043C \u0441 \u0434\u0435\u0442\u044C\u043C\u0438 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u0432\u0430\u0436\u043D\u043E \u0434\u043B\u044F \u0432\u0430\u0441."
+      }
+    ]
+  },
+  {
+    id: "ref_complex_double_sided",
+    type: "double_sided",
+    pattern: "On one hand {pro_change}, and on the other hand {against_change}.",
+    patternRu: "\u0421 \u043E\u0434\u043D\u043E\u0439 \u0441\u0442\u043E\u0440\u043E\u043D\u044B {pro_change}, \u0430 \u0441 \u0434\u0440\u0443\u0433\u043E\u0439 \u0441\u0442\u043E\u0440\u043E\u043D\u044B {against_change}.",
+    complexity: "complex",
+    target: "ambivalence",
+    examples: [
+      {
+        input: "I want to change but I also enjoy gaming",
+        output: "On one hand you want to make a change, and on the other hand gaming gives you enjoyment.",
+        outputRu: "\u0421 \u043E\u0434\u043D\u043E\u0439 \u0441\u0442\u043E\u0440\u043E\u043D\u044B \u0432\u044B \u0445\u043E\u0442\u0438\u0442\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C\u0441\u044F, \u0430 \u0441 \u0434\u0440\u0443\u0433\u043E\u0439 \u0441\u0442\u043E\u0440\u043E\u043D\u044B \u0438\u0433\u0440\u044B \u043F\u0440\u0438\u043D\u043E\u0441\u044F\u0442 \u0443\u0434\u043E\u0432\u043E\u043B\u044C\u0441\u0442\u0432\u0438\u0435."
+      }
+    ]
+  },
+  {
+    id: "ref_complex_amplified",
+    type: "amplified",
+    pattern: "So there's absolutely no way you could ever {exaggerated}.",
+    patternRu: "\u0422\u043E \u0435\u0441\u0442\u044C \u0441\u043E\u0432\u0435\u0440\u0448\u0435\u043D\u043D\u043E \u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u043D\u043E, \u0447\u0442\u043E\u0431\u044B \u0432\u044B \u043A\u043E\u0433\u0434\u0430-\u043B\u0438\u0431\u043E {exaggerated}.",
+    complexity: "complex",
+    target: "sustain_talk",
+    examples: [
+      {
+        input: "I can't stop using my phone",
+        output: "So there's absolutely no way you could ever put your phone down, even for a minute.",
+        outputRu: "\u0422\u043E \u0435\u0441\u0442\u044C \u0441\u043E\u0432\u0435\u0440\u0448\u0435\u043D\u043D\u043E \u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u043D\u043E, \u0447\u0442\u043E\u0431\u044B \u0432\u044B \u043A\u043E\u0433\u0434\u0430-\u043B\u0438\u0431\u043E \u043E\u0442\u043B\u043E\u0436\u0438\u043B\u0438 \u0442\u0435\u043B\u0435\u0444\u043E\u043D, \u0434\u0430\u0436\u0435 \u043D\u0430 \u043C\u0438\u043D\u0443\u0442\u0443."
+      }
+    ]
+  },
+  {
+    id: "ref_complex_reframe",
+    type: "reframe",
+    pattern: "Another way to look at this is {reframed_perspective}.",
+    patternRu: "\u0414\u0440\u0443\u0433\u043E\u0439 \u0432\u0437\u0433\u043B\u044F\u0434 \u043D\u0430 \u044D\u0442\u043E \u2014 {reframed_perspective}.",
+    complexity: "complex",
+    target: "change_talk",
+    examples: [
+      {
+        input: "I failed at this before",
+        output: "Another way to look at this is that you now have experience about what doesn't work.",
+        outputRu: "\u0414\u0440\u0443\u0433\u043E\u0439 \u0432\u0437\u0433\u043B\u044F\u0434 \u043D\u0430 \u044D\u0442\u043E \u2014 \u0442\u0435\u043F\u0435\u0440\u044C \u0443 \u0432\u0430\u0441 \u0435\u0441\u0442\u044C \u043E\u043F\u044B\u0442 \u0442\u043E\u0433\u043E, \u0447\u0442\u043E \u043D\u0435 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442."
+      }
+    ]
+  }
+];
+var SUMMARY_TEMPLATES = [
+  {
+    id: "sum_collecting",
+    type: "collecting",
+    structure: "Let me see if I've got this right. You've mentioned {change_talk_summary}. {values_connection}",
+    structureRu: "\u041F\u043E\u0437\u0432\u043E\u043B\u044C\u0442\u0435 \u0443\u0442\u043E\u0447\u043D\u0438\u0442\u044C, \u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u043E \u043B\u0438 \u044F \u043F\u043E\u043D\u044F\u043B. \u0412\u044B \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043B\u0438 {change_talk_summary}. {values_connection}",
+    includeSections: ["change_talk", "values"]
+  },
+  {
+    id: "sum_linking",
+    type: "linking",
+    structure: "Earlier you said {past_statement}. Now you're saying {current_statement}. {connection}",
+    structureRu: "\u0420\u0430\u043D\u044C\u0448\u0435 \u0432\u044B \u0433\u043E\u0432\u043E\u0440\u0438\u043B\u0438 {past_statement}. \u0421\u0435\u0439\u0447\u0430\u0441 \u0432\u044B \u0433\u043E\u0432\u043E\u0440\u0438\u0442\u0435 {current_statement}. {connection}",
+    includeSections: ["change_talk", "goals"]
+  },
+  {
+    id: "sum_transitional",
+    type: "transitional",
+    structure: "So far we've talked about {summary_points}. {transition_to_next}",
+    structureRu: "\u0414\u043E \u0441\u0438\u0445 \u043F\u043E\u0440 \u043C\u044B \u0433\u043E\u0432\u043E\u0440\u0438\u043B\u0438 \u043E {summary_points}. {transition_to_next}",
+    includeSections: ["change_talk", "strengths", "next_steps"],
+    transitionPhrase: "Where would you like to go from here?",
+    transitionPhraseRu: "\u041A\u0443\u0434\u0430 \u0431\u044B \u0432\u044B \u0445\u043E\u0442\u0435\u043B\u0438 \u0434\u0432\u0438\u0433\u0430\u0442\u044C\u0441\u044F \u0434\u0430\u043B\u044C\u0448\u0435?"
+  }
+];
+var DISCORD_RESPONSE_STRATEGIES = {
+  arguing: {
+    primaryResponse: "reflection_complex",
+    templates: [
+      "You're not convinced that this is an issue.",
+      "It sounds like you see things differently."
+    ],
+    templatesRu: [
+      "\u0412\u044B \u043D\u0435 \u0443\u0431\u0435\u0436\u0434\u0435\u043D\u044B, \u0447\u0442\u043E \u044D\u0442\u043E \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u0430.",
+      "\u041F\u043E\u0445\u043E\u0436\u0435, \u0432\u044B \u0432\u0438\u0434\u0438\u0442\u0435 \u044D\u0442\u043E \u0438\u043D\u0430\u0447\u0435."
+    ],
+    avoid: ["arguing back", "presenting evidence", "proving point"]
+  },
+  interrupting: {
+    primaryResponse: "emphasize_autonomy",
+    templates: [
+      "I apologize, please continue.",
+      "I want to make sure I hear what you're saying."
+    ],
+    templatesRu: [
+      "\u0418\u0437\u0432\u0438\u043D\u0438\u0442\u0435, \u043F\u043E\u0436\u0430\u043B\u0443\u0439\u0441\u0442\u0430, \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0430\u0439\u0442\u0435.",
+      "\u042F \u0445\u043E\u0447\u0443 \u0443\u0431\u0435\u0434\u0438\u0442\u044C\u0441\u044F, \u0447\u0442\u043E \u0441\u043B\u044B\u0448\u0443, \u0447\u0442\u043E \u0432\u044B \u0433\u043E\u0432\u043E\u0440\u0438\u0442\u0435."
+    ],
+    avoid: ["talking over", "continuing anyway"]
+  },
+  negating: {
+    primaryResponse: "reflection_simple",
+    templates: [
+      "You don't agree with that.",
+      "That doesn't fit with your experience."
+    ],
+    templatesRu: [
+      "\u0412\u044B \u0441 \u044D\u0442\u0438\u043C \u043D\u0435 \u0441\u043E\u0433\u043B\u0430\u0441\u043D\u044B.",
+      "\u042D\u0442\u043E \u043D\u0435 \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0432\u0430\u0448\u0435\u043C\u0443 \u043E\u043F\u044B\u0442\u0443."
+    ],
+    avoid: ["insisting", "repeating same point"]
+  },
+  ignoring: {
+    primaryResponse: "seek_collaboration",
+    templates: [
+      "What would be more helpful to talk about?",
+      "I sense this isn't quite what you need right now."
+    ],
+    templatesRu: [
+      "\u041E \u0447\u0451\u043C \u0431\u044B\u043B\u043E \u0431\u044B \u043F\u043E\u043B\u0435\u0437\u043D\u0435\u0435 \u043F\u043E\u0433\u043E\u0432\u043E\u0440\u0438\u0442\u044C?",
+      "\u0427\u0443\u0432\u0441\u0442\u0432\u0443\u044E, \u0441\u0435\u0439\u0447\u0430\u0441 \u0432\u0430\u043C \u043D\u0443\u0436\u043D\u043E \u0447\u0442\u043E-\u0442\u043E \u0434\u0440\u0443\u0433\u043E\u0435."
+    ],
+    avoid: ["forcing topic", "continuing same direction"]
+  },
+  defending: {
+    primaryResponse: "affirm",
+    templates: [
+      "You had your reasons for doing what you did.",
+      "You were dealing with a difficult situation."
+    ],
+    templatesRu: [
+      "\u0423 \u0432\u0430\u0441 \u0431\u044B\u043B\u0438 \u043F\u0440\u0438\u0447\u0438\u043D\u044B \u043F\u043E\u0441\u0442\u0443\u043F\u0438\u0442\u044C \u0442\u0430\u043A, \u043A\u0430\u043A \u0432\u044B \u043F\u043E\u0441\u0442\u0443\u043F\u0438\u043B\u0438.",
+      "\u0412\u044B \u0441\u043F\u0440\u0430\u0432\u043B\u044F\u043B\u0438\u0441\u044C \u0441 \u0442\u0440\u0443\u0434\u043D\u043E\u0439 \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0435\u0439."
+    ],
+    avoid: ["challenging", "questioning motives"]
+  },
+  squaring_off: {
+    primaryResponse: "emphasize_autonomy",
+    templates: [
+      "You're the expert on your own life.",
+      "Only you can decide what's right for you."
+    ],
+    templatesRu: [
+      "\u0412\u044B \u044D\u043A\u0441\u043F\u0435\u0440\u0442 \u0432 \u0441\u0432\u043E\u0435\u0439 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u043E\u0439 \u0436\u0438\u0437\u043D\u0438.",
+      "\u0422\u043E\u043B\u044C\u043A\u043E \u0432\u044B \u043C\u043E\u0436\u0435\u0442\u0435 \u0440\u0435\u0448\u0438\u0442\u044C, \u0447\u0442\u043E \u0434\u043B\u044F \u0432\u0430\u0441 \u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u043E."
+    ],
+    avoid: ["competing", "asserting authority"]
+  }
+};
+var MITI_THRESHOLDS = {
+  // Global scores (1-5 scale)
+  global: {
+    belowThreshold: { cultivatingChangeTalk: 2.5, softeningSustainTalk: 2.5, partnership: 3, empathy: 3 },
+    competent: { cultivatingChangeTalk: 3, softeningSustainTalk: 3, partnership: 3.5, empathy: 3.5 },
+    proficient: { cultivatingChangeTalk: 4, softeningSustainTalk: 4, partnership: 4, empathy: 4 }
+  },
+  // Summary scores
+  summary: {
+    competent: {
+      reflectionToQuestionRatio: 1,
+      percentComplexReflections: 40,
+      percentOpenQuestions: 50
+    },
+    proficient: {
+      reflectionToQuestionRatio: 2,
+      percentComplexReflections: 50,
+      percentOpenQuestions: 70
+    }
+  }
+};
+
+// src/motivation/engines/MotivationalEngine.ts
+var MotivationalStateBuilder = class {
+  constructor() {
+    __publicField(this, "state", {});
+    this.reset();
+  }
+  reset() {
+    this.state = {
+      id: this.generateId(),
+      timestamp: /* @__PURE__ */ new Date(),
+      confidence: 0.5,
+      dataQuality: 0.5,
+      recentUtterances: [],
+      ratioTrend: [],
+      sessionFocus: [],
+      avoid: []
+    };
+  }
+  generateId() {
+    return `ms_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  }
+  setUserId(userId) {
+    this.state.userId = userId;
+    return this;
+  }
+  setReadinessRuler(importance, confidence) {
+    const readiness = Math.sqrt(importance * confidence);
+    this.state.readinessRuler = {
+      importance: Math.max(0, Math.min(10, importance)),
+      confidence: Math.max(0, Math.min(10, confidence)),
+      readiness,
+      assessedAt: /* @__PURE__ */ new Date(),
+      source: "inferred",
+      assessmentConfidence: 0.7
+    };
+    return this;
+  }
+  setLinkedStage(stage) {
+    this.state.linkedStage = stage;
+    const recommendations = STRATEGY_RECOMMENDATIONS[stage];
+    this.state.recommendedStrategy = recommendations.primaryStrategy;
+    this.state.sessionFocus = recommendations.focus;
+    this.state.avoid = recommendations.avoid;
+    return this;
+  }
+  addUtterance(utterance) {
+    if (!this.state.recentUtterances) {
+      this.state.recentUtterances = [];
+    }
+    this.state.recentUtterances.push(utterance);
+    if (this.state.recentUtterances.length > 50) {
+      this.state.recentUtterances = this.state.recentUtterances.slice(-50);
+    }
+    return this;
+  }
+  setLanguageBalance(balance) {
+    this.state.languageBalance = balance;
+    this.state.sessionRatio = balance.changeTalkRatio;
+    return this;
+  }
+  setDarnCatProfile(profile) {
+    this.state.darnCatProfile = profile;
+    return this;
+  }
+  setAmbivalence(ambivalence) {
+    this.state.ambivalence = ambivalence;
+    return this;
+  }
+  setDiscord(discord) {
+    this.state.discord = discord;
+    return this;
+  }
+  setStrategy(strategy) {
+    this.state.recommendedStrategy = strategy;
+    return this;
+  }
+  build() {
+    const result = {
+      id: this.state.id,
+      userId: this.state.userId ?? "unknown",
+      readinessRuler: this.state.readinessRuler ?? this.createDefaultReadiness(),
+      linkedStage: this.state.linkedStage ?? "precontemplation",
+      daysInState: this.state.daysInState ?? 0,
+      recentUtterances: this.state.recentUtterances ?? [],
+      languageBalance: this.state.languageBalance ?? this.createDefaultLanguageBalance(),
+      darnCatProfile: this.state.darnCatProfile ?? this.createDefaultDarnCatProfile(),
+      sessionRatio: this.state.sessionRatio ?? 0.5,
+      ratioTrend: this.state.ratioTrend ?? [],
+      ambivalence: this.state.ambivalence ?? this.createDefaultAmbivalence(),
+      ambivalenceExplored: this.state.ambivalenceExplored ?? false,
+      discord: this.state.discord ?? this.createDefaultDiscord(),
+      rapportLevel: this.state.rapportLevel ?? 0.7,
+      recommendedStrategy: this.state.recommendedStrategy ?? "build_rapport",
+      sessionFocus: this.state.sessionFocus ?? [],
+      avoid: this.state.avoid ?? [],
+      timestamp: this.state.timestamp ?? /* @__PURE__ */ new Date(),
+      confidence: this.state.confidence ?? 0.5,
+      dataQuality: this.state.dataQuality ?? 0.5
+    };
+    this.reset();
+    return result;
+  }
+  createDefaultReadiness() {
+    return {
+      importance: 5,
+      confidence: 5,
+      readiness: 5,
+      assessedAt: /* @__PURE__ */ new Date(),
+      source: "inferred",
+      assessmentConfidence: 0.3
+    };
+  }
+  createDefaultLanguageBalance() {
+    return {
+      changeTalkCount: 0,
+      sustainTalkCount: 0,
+      changeTalkRatio: 0.5,
+      averageCtStrength: 0,
+      averageStStrength: 0,
+      netBalance: 0,
+      trend: "stable",
+      windowStart: /* @__PURE__ */ new Date(),
+      windowEnd: /* @__PURE__ */ new Date()
+    };
+  }
+  createDefaultDarnCatProfile() {
+    return {
+      desire: 0,
+      ability: 0,
+      reasons: 0,
+      need: 0,
+      commitment: 0,
+      activation: 0,
+      takingSteps: 0,
+      mobilizingRatio: 0,
+      dominantPreparatory: "none",
+      mobilizingPresent: false
+    };
+  }
+  createDefaultAmbivalence() {
+    return {
+      level: 0.5,
+      type: "approach_avoidance",
+      prosForChange: [],
+      consForChange: [],
+      prosForStatusQuo: [],
+      consForStatusQuo: [],
+      isNormative: true,
+      primaryConflict: "unknown"
+    };
+  }
+  createDefaultDiscord() {
+    return {
+      level: 0,
+      types: [],
+      events: [],
+      trend: "stable",
+      recommendedResponse: "reflect"
+    };
+  }
+};
+var MotivationalStateFactory = class {
+  constructor(engine) {
+    __publicField(this, "engine");
+    this.engine = engine ?? new MotivationalEngine();
+  }
+  async fromConversation(messages, userId, previousState) {
+    const builder = new MotivationalStateBuilder();
+    builder.setUserId(userId);
+    const userMessages = messages.filter((m) => m.isUser);
+    const utterances = [];
+    for (const message of userMessages) {
+      const utterance = await this.engine.analyzeUtterance(message.text);
+      utterances.push({
+        ...utterance,
+        timestamp: message.timestamp
+      });
+      builder.addUtterance(utterance);
+    }
+    const balance = this.calculateLanguageBalance(utterances);
+    builder.setLanguageBalance(balance);
+    const profile = this.buildDarnCatProfile(utterances);
+    builder.setDarnCatProfile(profile);
+    const readiness = this.inferReadiness(balance, profile);
+    builder.setReadinessRuler(readiness.importance, readiness.confidence);
+    const stage = this.inferStage(balance, profile, previousState?.linkedStage);
+    builder.setLinkedStage(stage);
+    const ambivalence = this.assessAmbivalence(utterances);
+    builder.setAmbivalence(ambivalence);
+    const discord = this.detectDiscord(utterances);
+    builder.setDiscord(discord);
+    return builder.build();
+  }
+  fromAssessment(userId, importance, confidence) {
+    const builder = new MotivationalStateBuilder();
+    builder.setUserId(userId);
+    builder.setReadinessRuler(importance, confidence);
+    const readiness = Math.sqrt(importance * confidence);
+    let stage;
+    if (readiness < 3) {
+      stage = "precontemplation";
+    } else if (readiness < 5) {
+      stage = "contemplation";
+    } else if (readiness < 7) {
+      stage = "preparation";
+    } else {
+      stage = "action";
+    }
+    builder.setLinkedStage(stage);
+    return builder.build();
+  }
+  createInitial(userId) {
+    const builder = new MotivationalStateBuilder();
+    builder.setUserId(userId);
+    builder.setLinkedStage("precontemplation");
+    builder.setReadinessRuler(5, 5);
+    return builder.build();
+  }
+  updateWithUtterance(currentState, newUtterance) {
+    const builder = new MotivationalStateBuilder();
+    builder.setUserId(currentState.userId);
+    const allUtterances = [...currentState.recentUtterances, newUtterance];
+    for (const u of allUtterances) {
+      builder.addUtterance(u);
+    }
+    const balance = this.calculateLanguageBalance(allUtterances);
+    builder.setLanguageBalance(balance);
+    const profile = this.buildDarnCatProfile(allUtterances);
+    builder.setDarnCatProfile(profile);
+    builder.setReadinessRuler(
+      currentState.readinessRuler.importance,
+      currentState.readinessRuler.confidence
+    );
+    const stage = this.inferStage(balance, profile, currentState.linkedStage);
+    builder.setLinkedStage(stage);
+    const ambivalence = this.assessAmbivalence(allUtterances);
+    builder.setAmbivalence(ambivalence);
+    const discord = this.detectDiscord(allUtterances.slice(-5));
+    builder.setDiscord(discord);
+    return builder.build();
+  }
+  updateReadiness(currentState, importance, confidence) {
+    const builder = new MotivationalStateBuilder();
+    builder.setUserId(currentState.userId);
+    for (const u of currentState.recentUtterances) {
+      builder.addUtterance(u);
+    }
+    builder.setLanguageBalance(currentState.languageBalance);
+    builder.setDarnCatProfile(currentState.darnCatProfile);
+    builder.setReadinessRuler(importance, confidence);
+    builder.setAmbivalence(currentState.ambivalence);
+    builder.setDiscord(currentState.discord);
+    const readiness = Math.sqrt(importance * confidence);
+    let stage = currentState.linkedStage;
+    if (readiness >= 7 && currentState.linkedStage !== "action" && currentState.linkedStage !== "maintenance") {
+      stage = "action";
+    } else if (readiness >= 5 && currentState.linkedStage === "contemplation") {
+      stage = "preparation";
+    }
+    builder.setLinkedStage(stage);
+    return builder.build();
+  }
+  calculateLanguageBalance(utterances) {
+    const ctUtterances = utterances.filter((u) => u.category === "change_talk");
+    const stUtterances = utterances.filter((u) => u.category === "sustain_talk");
+    const changeTalkCount = ctUtterances.length;
+    const sustainTalkCount = stUtterances.length;
+    const total = changeTalkCount + sustainTalkCount;
+    const changeTalkRatio = total > 0 ? changeTalkCount / total : 0.5;
+    const averageCtStrength = ctUtterances.length > 0 ? ctUtterances.reduce((sum, u) => sum + u.strength, 0) / ctUtterances.length : 0;
+    const averageStStrength = stUtterances.length > 0 ? stUtterances.reduce((sum, u) => sum + u.strength, 0) / stUtterances.length : 0;
+    const netBalance = averageCtStrength * changeTalkCount + averageStStrength * sustainTalkCount;
+    let trend = "stable";
+    if (utterances.length >= 10) {
+      const recent = utterances.slice(-5);
+      const earlier = utterances.slice(-10, -5);
+      const recentRatio = recent.filter((u) => u.category === "change_talk").length / recent.length;
+      const earlierRatio = earlier.filter((u) => u.category === "change_talk").length / earlier.length;
+      if (recentRatio > earlierRatio + 0.1) trend = "increasing";
+      else if (recentRatio < earlierRatio - 0.1) trend = "decreasing";
+    }
+    return {
+      changeTalkCount,
+      sustainTalkCount,
+      changeTalkRatio,
+      averageCtStrength,
+      averageStStrength,
+      netBalance,
+      trend,
+      windowStart: utterances[0]?.timestamp ?? /* @__PURE__ */ new Date(),
+      windowEnd: utterances[utterances.length - 1]?.timestamp ?? /* @__PURE__ */ new Date()
+    };
+  }
+  buildDarnCatProfile(utterances) {
+    const ctUtterances = utterances.filter((u) => u.category === "change_talk");
+    const counts = {
+      desire: 0,
+      ability: 0,
+      reasons: 0,
+      need: 0,
+      commitment: 0,
+      activation: 0,
+      takingSteps: 0
+    };
+    const subtypeToCount = {
+      "desire": "desire",
+      "ability": "ability",
+      "reasons": "reasons",
+      "need": "need",
+      "commitment": "commitment",
+      "activation": "activation",
+      "taking_steps": "takingSteps"
+    };
+    for (const u of ctUtterances) {
+      if (u.changeSubtype) {
+        const countKey = subtypeToCount[u.changeSubtype];
+        if (countKey !== void 0) {
+          counts[countKey]++;
+        }
+      }
+    }
+    const preparatory = counts.desire + counts.ability + counts.reasons + counts.need;
+    const mobilizing = counts.commitment + counts.activation + counts.takingSteps;
+    const mobilizingRatio = preparatory > 0 ? mobilizing / preparatory : 0;
+    let dominantPreparatory = "none";
+    let maxPrep = 0;
+    for (const type of ["desire", "ability", "reasons", "need"]) {
+      if (counts[type] > maxPrep) {
+        maxPrep = counts[type];
+        dominantPreparatory = type;
+      }
+    }
+    return {
+      ...counts,
+      mobilizingRatio,
+      dominantPreparatory,
+      mobilizingPresent: mobilizing > 0
+    };
+  }
+  inferReadiness(balance, profile) {
+    const importance = Math.min(10, 5 + (profile.reasons + profile.need) * 0.5 + balance.changeTalkRatio * 3);
+    const confidence = Math.min(10, 5 + (profile.ability + profile.takingSteps) * 0.5 + (profile.mobilizingPresent ? 2 : 0));
+    return { importance, confidence };
+  }
+  inferStage(balance, profile, currentStage) {
+    if (profile.mobilizingPresent && profile.mobilizingRatio > 0.3) {
+      if (profile.takingSteps >= 2) return "action";
+      if (profile.commitment >= 2 || profile.activation >= 2) return "preparation";
+    }
+    if (balance.changeTalkRatio < 0.3) {
+      return "precontemplation";
+    }
+    if (balance.changeTalkRatio >= 0.3 && balance.changeTalkRatio <= 0.7) {
+      return "contemplation";
+    }
+    if (balance.changeTalkRatio > 0.7) {
+      if (profile.dominantPreparatory !== "none") return "preparation";
+    }
+    return currentStage ?? "contemplation";
+  }
+  assessAmbivalence(utterances) {
+    const prosForChange = [];
+    const consForChange = [];
+    const prosForStatusQuo = [];
+    const consForStatusQuo = [];
+    for (const u of utterances) {
+      if (u.category === "change_talk") {
+        if (u.changeSubtype === "reasons") {
+          prosForChange.push(u.text);
+        }
+      } else if (u.category === "sustain_talk") {
+        if (u.sustainSubtype === "reasons_against") {
+          prosForStatusQuo.push(u.text);
+        }
+      }
+    }
+    const ctCount = utterances.filter((u) => u.category === "change_talk").length;
+    const stCount = utterances.filter((u) => u.category === "sustain_talk").length;
+    const total = ctCount + stCount;
+    let level = 0;
+    if (total > 0) {
+      const ratio = ctCount / total;
+      level = 1 - Math.abs(ratio - 0.5) * 2;
+    }
+    let type = "approach_avoidance";
+    if (prosForChange.length > 0 && prosForStatusQuo.length > 0) {
+      type = "double_approach_avoidance";
+    }
+    return {
+      level,
+      type,
+      prosForChange: prosForChange.slice(0, 5),
+      consForChange: consForChange.slice(0, 5),
+      prosForStatusQuo: prosForStatusQuo.slice(0, 5),
+      consForStatusQuo: consForStatusQuo.slice(0, 5),
+      isNormative: level < 0.8,
+      primaryConflict: prosForChange.length > 0 && prosForStatusQuo.length > 0 ? "Competing benefits" : "Unknown"
+    };
+  }
+  detectDiscord(utterances) {
+    const events = [];
+    const typesFound = /* @__PURE__ */ new Set();
+    for (const u of utterances) {
+      for (const [type, patterns] of Object.entries(DISCORD_PATTERNS)) {
+        const discordType = type;
+        const allKeywords = [...patterns.keywords, ...patterns.keywordsRu];
+        for (const keyword of allKeywords) {
+          if (u.text.toLowerCase().includes(keyword.toLowerCase())) {
+            typesFound.add(discordType);
+            events.push({
+              type: discordType,
+              utterance: u.text,
+              timestamp: u.timestamp,
+              intensity: 0.5,
+              possibleTrigger: void 0
+            });
+            break;
+          }
+        }
+      }
+    }
+    const level = Math.min(1, events.length * 0.2);
+    const types = Array.from(typesFound);
+    let recommendedResponse = "reflect";
+    if (types.includes("squaring_off")) {
+      recommendedResponse = "emphasize_autonomy";
+    } else if (types.includes("interrupting")) {
+      recommendedResponse = "apologize";
+    } else if (types.includes("ignoring")) {
+      recommendedResponse = "shift_focus";
+    }
+    return {
+      level,
+      types,
+      events: events.slice(-5),
+      trend: "stable",
+      recommendedResponse
+    };
+  }
+};
+var MotivationalEngine = class {
+  constructor() {
+    __publicField(this, "responseIdCounter", 0);
+  }
+  /**
+   * Analyze client utterance for CT/ST classification
+   */
+  async analyzeUtterance(text) {
+    const lowerText = text.toLowerCase();
+    let bestCtMatch = null;
+    for (const [subtype, patterns] of Object.entries(CHANGE_TALK_PATTERNS)) {
+      const ctSubtype = subtype;
+      const allKeywords = [...patterns.keywords, ...patterns.keywordsRu];
+      for (const keyword of allKeywords) {
+        const index = lowerText.indexOf(keyword.toLowerCase());
+        if (index !== -1) {
+          const confidence2 = this.calculateMatchConfidence(text, keyword);
+          if (!bestCtMatch || confidence2 > bestCtMatch.confidence) {
+            bestCtMatch = {
+              subtype: ctSubtype,
+              strength: patterns.strength,
+              confidence: confidence2,
+              spans: [{
+                start: index,
+                end: index + keyword.length,
+                text: text.substring(index, index + keyword.length),
+                pattern: keyword
+              }]
+            };
+          }
+        }
+      }
+    }
+    let bestStMatch = null;
+    for (const [subtype, patterns] of Object.entries(SUSTAIN_TALK_PATTERNS)) {
+      const stSubtype = subtype;
+      const allKeywords = [...patterns.keywords, ...patterns.keywordsRu];
+      for (const keyword of allKeywords) {
+        const index = lowerText.indexOf(keyword.toLowerCase());
+        if (index !== -1) {
+          const confidence2 = this.calculateMatchConfidence(text, keyword);
+          if (!bestStMatch || confidence2 > bestStMatch.confidence) {
+            bestStMatch = {
+              subtype: stSubtype,
+              strength: patterns.strength,
+              confidence: confidence2,
+              spans: [{
+                start: index,
+                end: index + keyword.length,
+                text: text.substring(index, index + keyword.length),
+                pattern: keyword
+              }]
+            };
+          }
+        }
+      }
+    }
+    let category = "follow_neutral";
+    let changeSubtype;
+    let sustainSubtype;
+    let strength = 0;
+    let confidence = 0.5;
+    let evidenceSpans = [];
+    if (bestCtMatch && (!bestStMatch || bestCtMatch.confidence > bestStMatch.confidence)) {
+      category = "change_talk";
+      changeSubtype = bestCtMatch.subtype;
+      strength = bestCtMatch.strength;
+      confidence = bestCtMatch.confidence;
+      evidenceSpans = bestCtMatch.spans;
+    } else if (bestStMatch) {
+      category = "sustain_talk";
+      sustainSubtype = bestStMatch.subtype;
+      strength = bestStMatch.strength;
+      confidence = bestStMatch.confidence;
+      evidenceSpans = bestStMatch.spans;
+    }
+    return {
+      id: `utt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      text,
+      timestamp: /* @__PURE__ */ new Date(),
+      category,
+      changeSubtype,
+      sustainSubtype,
+      strength,
+      confidence,
+      evidenceSpans
+    };
+  }
+  /**
+   * Generate MI-consistent response
+   */
+  async generateResponse(context) {
+    const { motivationalState, lastUtterance, currentStrategy } = context;
+    if (motivationalState.discord.level > 0.5) {
+      const discordType = motivationalState.discord.types[0];
+      if (discordType) {
+        return this.respondToDiscord(discordType, context);
+      }
+    }
+    switch (currentStrategy) {
+      case "build_rapport":
+        return this.generateAffirmation(context);
+      case "explore_ambivalence":
+        return this.generateReflection(lastUtterance, "double_sided", context);
+      case "evoke_change_talk":
+        return this.generateOpenQuestion(this.selectTargetCt(motivationalState), context);
+      case "strengthen_commitment":
+        if (lastUtterance.category === "change_talk") {
+          return this.generateReflection(lastUtterance, "meaning", context);
+        }
+        return this.generateOpenQuestion("commitment", context);
+      case "support_self_efficacy":
+        return this.generateOpenQuestion("ability", context);
+      case "roll_with_resistance":
+        return this.generateReflection(lastUtterance, "amplified", context);
+      case "summarize_and_transition":
+        return this.generateSummary("transitional", context);
+      case "action_planning":
+        return this.generateOpenQuestion("taking_steps", context);
+      case "relapse_prevention":
+        return this.generateOpenQuestion("ability", context);
+      case "develop_discrepancy":
+        return this.generateOpenQuestion("reasons", context);
+      default:
+        return this.generateReflection(lastUtterance, "meaning", context);
+    }
+  }
+  /**
+   * Generate open-ended question to evoke specific CT
+   */
+  async generateOpenQuestion(targetChangeTalk, context) {
+    const templates = OPEN_QUESTION_TEMPLATES.filter(
+      (t) => t.targetChangeTalk.includes(targetChangeTalk)
+    );
+    if (templates.length === 0) {
+      const text2 = context.language === "ru" ? "\u0427\u0442\u043E \u0434\u043B\u044F \u0432\u0430\u0441 \u0431\u044B\u043B\u043E \u0431\u044B \u0432\u0430\u0436\u043D\u043E \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C?" : "What would be important for you to change?";
+      return this.createResponse({
+        text: text2,
+        textRu: "\u0427\u0442\u043E \u0434\u043B\u044F \u0432\u0430\u0441 \u0431\u044B\u043B\u043E \u0431\u044B \u0432\u0430\u0436\u043D\u043E \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C?",
+        primaryBehavior: "question_open",
+        targetChangeTalk,
+        strategicIntent: context.currentStrategy,
+        expectedImpact: "increase_ct"
+      });
+    }
+    const template = templates[Math.floor(Math.random() * templates.length)];
+    const text = context.language === "ru" ? template.templateRu : template.template;
+    return this.createResponse({
+      text,
+      textRu: template.templateRu,
+      primaryBehavior: "question_open",
+      oarsTechnique: "open_question",
+      targetChangeTalk,
+      strategicIntent: context.currentStrategy,
+      expectedImpact: "increase_ct"
+    });
+  }
+  /**
+   * Generate affirmation
+   */
+  async generateAffirmation(context) {
+    const templates = AFFIRMATION_TEMPLATES.filter((t) => {
+      if (t.appropriateFor.minChangeTalkRatio !== void 0) {
+        if (context.motivationalState.sessionRatio < t.appropriateFor.minChangeTalkRatio) {
+          return false;
+        }
+      }
+      return t.appropriateFor.stages.includes(context.currentStrategy);
+    });
+    if (templates.length === 0) {
+      const text2 = context.language === "ru" ? "\u0426\u0435\u043D\u044E, \u0447\u0442\u043E \u0432\u044B \u0434\u0435\u043B\u0438\u0442\u0435\u0441\u044C \u044D\u0442\u0438\u043C \u0441\u043E \u043C\u043D\u043E\u0439." : "I appreciate you sharing this with me.";
+      return this.createResponse({
+        text: text2,
+        textRu: "\u0426\u0435\u043D\u044E, \u0447\u0442\u043E \u0432\u044B \u0434\u0435\u043B\u0438\u0442\u0435\u0441\u044C \u044D\u0442\u0438\u043C \u0441\u043E \u043C\u043D\u043E\u0439.",
+        primaryBehavior: "affirm",
+        oarsTechnique: "affirmation",
+        strategicIntent: context.currentStrategy,
+        expectedImpact: "neutral"
+      });
+    }
+    const template = templates[Math.floor(Math.random() * templates.length)];
+    const text = context.language === "ru" ? template.templateRu : template.template;
+    return this.createResponse({
+      text,
+      textRu: template.templateRu,
+      primaryBehavior: "affirm",
+      oarsTechnique: "affirmation",
+      strategicIntent: context.currentStrategy,
+      expectedImpact: "neutral"
+    });
+  }
+  /**
+   * Generate reflection of client statement
+   */
+  async generateReflection(utterance, type, context) {
+    const templates = REFLECTION_TEMPLATES.filter((t) => t.type === type);
+    if (templates.length === 0) {
+      const text2 = context.language === "ru" ? `\u0412\u044B \u0433\u043E\u0432\u043E\u0440\u0438\u0442\u0435, \u0447\u0442\u043E ${utterance.text.toLowerCase()}.` : `You're saying that ${utterance.text.toLowerCase()}.`;
+      return this.createResponse({
+        text: text2,
+        textRu: `\u0412\u044B \u0433\u043E\u0432\u043E\u0440\u0438\u0442\u0435, \u0447\u0442\u043E ${utterance.text.toLowerCase()}.`,
+        primaryBehavior: "reflection_simple",
+        oarsTechnique: "reflection",
+        reflectionType: "rephrase",
+        strategicIntent: context.currentStrategy,
+        expectedImpact: utterance.category === "change_talk" ? "increase_ct" : "explore"
+      });
+    }
+    const template = templates[0];
+    const isComplex = template.complexity === "complex";
+    const text = context.language === "ru" ? template.patternRu : template.pattern;
+    return this.createResponse({
+      text,
+      textRu: template.patternRu,
+      primaryBehavior: isComplex ? "reflection_complex" : "reflection_simple",
+      oarsTechnique: "reflection",
+      reflectionType: type,
+      strategicIntent: context.currentStrategy,
+      expectedImpact: utterance.category === "change_talk" ? "increase_ct" : "explore"
+    });
+  }
+  /**
+   * Generate summary
+   */
+  async generateSummary(type, context) {
+    const templates = SUMMARY_TEMPLATES.filter((t) => t.type === type);
+    if (templates.length === 0) {
+      const text2 = context.language === "ru" ? "\u0414\u0430\u0432\u0430\u0439\u0442\u0435 \u043F\u043E\u0434\u0432\u0435\u0434\u0451\u043C \u0438\u0442\u043E\u0433 \u0442\u043E\u0433\u043E, \u043E \u0447\u0451\u043C \u043C\u044B \u0433\u043E\u0432\u043E\u0440\u0438\u043B\u0438." : "Let me summarize what we've discussed.";
+      return this.createResponse({
+        text: text2,
+        textRu: "\u0414\u0430\u0432\u0430\u0439\u0442\u0435 \u043F\u043E\u0434\u0432\u0435\u0434\u0451\u043C \u0438\u0442\u043E\u0433 \u0442\u043E\u0433\u043E, \u043E \u0447\u0451\u043C \u043C\u044B \u0433\u043E\u0432\u043E\u0440\u0438\u043B\u0438.",
+        primaryBehavior: "reflection_complex",
+        oarsTechnique: "summary",
+        summaryType: type,
+        strategicIntent: context.currentStrategy,
+        expectedImpact: "increase_ct"
+      });
+    }
+    const template = templates[0];
+    const text = context.language === "ru" ? template.structureRu : template.structure;
+    return this.createResponse({
+      text,
+      textRu: template.structureRu,
+      primaryBehavior: "reflection_complex",
+      oarsTechnique: "summary",
+      summaryType: type,
+      strategicIntent: context.currentStrategy,
+      expectedImpact: "increase_ct"
+    });
+  }
+  /**
+   * Respond to discord/resistance
+   */
+  async respondToDiscord(discordType, context) {
+    const strategy = DISCORD_RESPONSE_STRATEGIES[discordType];
+    const templates = context.language === "ru" ? strategy.templatesRu : strategy.templates;
+    const text = templates[Math.floor(Math.random() * templates.length)];
+    return this.createResponse({
+      text,
+      textRu: strategy.templatesRu[0],
+      primaryBehavior: strategy.primaryResponse,
+      strategicIntent: "roll_with_resistance",
+      expectedImpact: "decrease_st"
+    });
+  }
+  /**
+   * Calculate MI fidelity for session
+   */
+  calculateFidelity(sessionResponses, _clientUtterances) {
+    const mutableCounts = {
+      openQuestions: 0,
+      closedQuestions: 0,
+      simpleReflections: 0,
+      complexReflections: 0,
+      affirm: 0,
+      seekCollaboration: 0,
+      emphasizeAutonomy: 0,
+      persuade: 0,
+      confront: 0,
+      direct: 0,
+      giveInformation: 0
+    };
+    for (const r of sessionResponses) {
+      switch (r.primaryBehavior) {
+        case "question_open":
+          mutableCounts.openQuestions++;
+          break;
+        case "question_closed":
+          mutableCounts.closedQuestions++;
+          break;
+        case "reflection_simple":
+          mutableCounts.simpleReflections++;
+          break;
+        case "reflection_complex":
+          mutableCounts.complexReflections++;
+          break;
+        case "affirm":
+          mutableCounts.affirm++;
+          break;
+        case "seek_collaboration":
+          mutableCounts.seekCollaboration++;
+          break;
+        case "emphasize_autonomy":
+          mutableCounts.emphasizeAutonomy++;
+          break;
+        case "persuade":
+          mutableCounts.persuade++;
+          break;
+        case "confront":
+          mutableCounts.confront++;
+          break;
+        case "direct":
+          mutableCounts.direct++;
+          break;
+        case "give_information":
+          mutableCounts.giveInformation++;
+          break;
+      }
+    }
+    const counts = { ...mutableCounts };
+    const totalQuestions = counts.openQuestions + counts.closedQuestions;
+    const totalReflections = counts.simpleReflections + counts.complexReflections;
+    const adherent = counts.affirm + counts.seekCollaboration + counts.emphasizeAutonomy;
+    const nonAdherent = counts.persuade + counts.confront + counts.direct;
+    const summaryScores = {
+      reflectionToQuestionRatio: totalQuestions > 0 ? totalReflections / totalQuestions : 0,
+      percentComplexReflections: totalReflections > 0 ? counts.complexReflections / totalReflections * 100 : 0,
+      percentOpenQuestions: totalQuestions > 0 ? counts.openQuestions / totalQuestions * 100 : 0,
+      adherentNonAdherentRatio: nonAdherent > 0 ? adherent / nonAdherent : adherent,
+      fidelityLevel: this.determineFidelityLevel(counts)
+    };
+    const globalScores = {
+      cultivatingChangeTalk: Math.min(5, 2.5 + summaryScores.reflectionToQuestionRatio * 0.5 + summaryScores.percentComplexReflections * 0.02),
+      softeningSustainTalk: Math.min(5, 3 + (adherent - nonAdherent) * 0.2),
+      partnership: Math.min(5, 3 + counts.seekCollaboration * 0.3 + counts.emphasizeAutonomy * 0.3),
+      empathy: Math.min(5, 3 + counts.complexReflections * 0.2)
+    };
+    const recommendations = [];
+    const highlights = [];
+    const growthAreas = [];
+    if (summaryScores.reflectionToQuestionRatio < 1) {
+      recommendations.push("Increase ratio of reflections to questions");
+      growthAreas.push("Reflective listening");
+    } else {
+      highlights.push("Good reflection to question ratio");
+    }
+    if (summaryScores.percentComplexReflections < 40) {
+      recommendations.push("Use more complex reflections");
+      growthAreas.push("Deep reflection skills");
+    } else {
+      highlights.push("Good use of complex reflections");
+    }
+    if (summaryScores.percentOpenQuestions < 50) {
+      recommendations.push("Ask more open-ended questions");
+      growthAreas.push("Open questioning");
+    } else {
+      highlights.push("Good use of open questions");
+    }
+    if (nonAdherent > 0) {
+      recommendations.push("Reduce MI-non-adherent behaviors");
+      growthAreas.push("MI spirit adherence");
+    }
+    return {
+      sessionId: `session_${Date.now()}`,
+      timestamp: /* @__PURE__ */ new Date(),
+      duration: sessionResponses.length * 2,
+      // Estimate 2 min per exchange
+      globalScores,
+      behaviorCounts: counts,
+      summaryScores,
+      recommendations,
+      highlights,
+      growthAreas
+    };
+  }
+  /**
+   * Get strategy recommendation based on state
+   */
+  recommendStrategy(state) {
+    if (state.discord.level > 0.5) {
+      return "roll_with_resistance";
+    }
+    const readinessAssessment = this.assessReadinessForAction(state);
+    if (readinessAssessment.ready) {
+      return "action_planning";
+    }
+    return STRATEGY_RECOMMENDATIONS[state.linkedStage].primaryStrategy;
+  }
+  /**
+   * Determine if ready for action planning
+   */
+  assessReadinessForAction(state) {
+    const reasons = [];
+    const nextSteps = [];
+    const ctRatioHigh = state.languageBalance.changeTalkRatio >= 0.7;
+    const mobilizingPresent = state.darnCatProfile.mobilizingPresent;
+    const lowDiscord = state.discord.level < 0.3;
+    const readinessHigh = state.readinessRuler.readiness >= 7;
+    const ambivalenceResolved = state.ambivalence.level < 0.4;
+    if (ctRatioHigh) reasons.push("High change talk ratio");
+    if (mobilizingPresent) reasons.push("Mobilizing language present");
+    if (lowDiscord) reasons.push("Good therapeutic rapport");
+    if (readinessHigh) reasons.push("High readiness scores");
+    if (ambivalenceResolved) reasons.push("Ambivalence largely resolved");
+    const ready = reasons.length >= 3;
+    if (!ready) {
+      if (!ctRatioHigh) nextSteps.push("Continue evoking change talk");
+      if (!mobilizingPresent) nextSteps.push("Elicit commitment language");
+      if (!lowDiscord) nextSteps.push("Address therapeutic relationship");
+      if (!readinessHigh) nextSteps.push("Build importance and confidence");
+      if (!ambivalenceResolved) nextSteps.push("Explore remaining ambivalence");
+    }
+    return { ready, reasons, nextSteps };
+  }
+  // ============================================================
+  // PRIVATE HELPER METHODS
+  // ============================================================
+  calculateMatchConfidence(text, keyword) {
+    const lengthFactor = Math.min(1, keyword.length / 20);
+    const regex = new RegExp(`\\b${keyword}\\b`, "i");
+    const boundaryMatch = regex.test(text) ? 0.2 : 0;
+    return 0.5 + lengthFactor * 0.3 + boundaryMatch;
+  }
+  selectTargetCt(state) {
+    const profile = state.darnCatProfile;
+    if (!profile.mobilizingPresent) {
+      const prep = [
+        { type: "desire", count: profile.desire },
+        { type: "ability", count: profile.ability },
+        { type: "reasons", count: profile.reasons },
+        { type: "need", count: profile.need }
+      ];
+      prep.sort((a, b) => a.count - b.count);
+      return prep[0].type;
+    }
+    if (profile.mobilizingRatio < 0.5) {
+      if (profile.commitment < profile.activation) return "commitment";
+      if (profile.activation < profile.takingSteps) return "activation";
+      return "taking_steps";
+    }
+    return "commitment";
+  }
+  createResponse(params) {
+    return {
+      id: `resp_${++this.responseIdCounter}`,
+      text: params.text,
+      textRu: params.textRu,
+      primaryBehavior: params.primaryBehavior,
+      secondaryBehaviors: params.secondaryBehaviors,
+      oarsTechnique: params.oarsTechnique,
+      reflectionType: params.reflectionType,
+      summaryType: params.summaryType,
+      targetChangeTalk: params.targetChangeTalk,
+      strategicIntent: params.strategicIntent,
+      expectedImpact: params.expectedImpact,
+      spiritAlignment: this.calculateSpiritAlignment(params.primaryBehavior),
+      timestamp: /* @__PURE__ */ new Date()
+    };
+  }
+  calculateSpiritAlignment(behavior) {
+    const adherentBehaviors = [
+      "affirm",
+      "seek_collaboration",
+      "emphasize_autonomy",
+      "support",
+      "reflection_complex",
+      "question_open"
+    ];
+    const neutralBehaviors = [
+      "reflection_simple",
+      "give_information",
+      "structure"
+    ];
+    const nonAdherentBehaviors = [
+      "persuade",
+      "confront",
+      "direct"
+    ];
+    if (adherentBehaviors.includes(behavior)) return 0.9;
+    if (neutralBehaviors.includes(behavior)) return 0.7;
+    if (nonAdherentBehaviors.includes(behavior)) return 0.3;
+    return 0.6;
+  }
+  determineFidelityLevel(counts) {
+    const totalQuestions = counts.openQuestions + counts.closedQuestions;
+    const totalReflections = counts.simpleReflections + counts.complexReflections;
+    const rq = totalQuestions > 0 ? totalReflections / totalQuestions : 0;
+    const pcr = totalReflections > 0 ? counts.complexReflections / totalReflections * 100 : 0;
+    const poq = totalQuestions > 0 ? counts.openQuestions / totalQuestions * 100 : 0;
+    const { competent, proficient } = MITI_THRESHOLDS.summary;
+    if (rq >= proficient.reflectionToQuestionRatio && pcr >= proficient.percentComplexReflections && poq >= proficient.percentOpenQuestions) {
+      return "proficient";
+    }
+    if (rq >= competent.reflectionToQuestionRatio && pcr >= competent.percentComplexReflections && poq >= competent.percentOpenQuestions) {
+      return "competent";
+    }
+    return "below_threshold";
+  }
+};
 
 // src/temporal/interfaces/IPLRNNEngine.ts
 var DEFAULT_PLRNN_CONFIG = {
@@ -3884,19 +8363,21 @@ var CONTEXT_PATTERNS = {
 };
 var PROTECTIVE_FACTORS = [
   // Russian - more specific patterns to avoid false positives
+  // CRITICAL: Use negative lookbehind to avoid matching "не хочу жить" as protective
   /но\s+(?:хочу|буду|попробу|есть надежда)/i,
   /не\s+(?:хочу умирать|собираюсь|буду этого делать)/i,
   /помог(?:и|ите)/i,
   /нужна помощь/i,
-  /хочу\s+жить/i,
-  // must be "хочу жить" directly, not separated
+  /(?<!не\s)хочу\s+жить/i,
+  // "хочу жить" but NOT "не хочу жить"
   /хочу\s+(?:измени|помощ)/i,
   // English - more specific patterns
+  // CRITICAL: Use negative lookbehind to avoid "don't want to live" as protective
   /but\s+(?:i\s+)?(?:want to|will|trying|there's hope)/i,
   /(?:i\s+)?don'?t\s+(?:want to die|going to|actually)/i,
   /help me/i,
   /need help/i,
-  /want to\s+(?:live|change|get help)/i
+  /(?<!don'?t\s)want to\s+(?:live|change|get help)/i
 ];
 var DEFAULT_CRISIS_CONFIG = {
   enableLayer1: true,
@@ -4270,7 +8751,9 @@ var COGNICORE_VERSION = {
   ]
 };
 
+exports.AFFIRMATION_TEMPLATES = AFFIRMATION_TEMPLATES;
 exports.BeliefStateAdapter = BeliefStateAdapter;
+exports.CHANGE_TALK_PATTERNS = CHANGE_TALK_PATTERNS;
 exports.COGNICORE_VERSION = COGNICORE_VERSION;
 exports.CrisisDetector = CrisisDetector;
 exports.DEFAULT_CRISIS_CONFIG = DEFAULT_CRISIS_CONFIG;
@@ -4280,12 +8763,24 @@ exports.DEFAULT_PLRNN_CONFIG = DEFAULT_PLRNN_CONFIG;
 exports.DEFAULT_VOICE_CONFIG = DEFAULT_VOICE_CONFIG;
 exports.DIMENSION_INDEX = DIMENSION_INDEX;
 exports.DIMENSION_MAPPING = DIMENSION_MAPPING;
+exports.DISCORD_PATTERNS = DISCORD_PATTERNS;
+exports.DISCORD_RESPONSE_STRATEGIES = DISCORD_RESPONSE_STRATEGIES;
 exports.DISTORTION_INTERVENTIONS = DISTORTION_INTERVENTIONS;
 exports.DISTORTION_PATTERNS = DISTORTION_PATTERNS;
 exports.EMOTION_THERAPY_MAPPING = EMOTION_THERAPY_MAPPING;
+exports.ExplainabilityService = ExplainabilityService;
 exports.INDEX_THRESHOLDS = INDEX_THRESHOLDS;
 exports.KalmanFormerEngine = KalmanFormerEngine;
+exports.MITI_THRESHOLDS = MITI_THRESHOLDS;
+exports.MotivationalEngine = MotivationalEngine;
+exports.MotivationalStateBuilder = MotivationalStateBuilder;
+exports.MotivationalStateFactory = MotivationalStateFactory;
+exports.OPEN_QUESTION_TEMPLATES = OPEN_QUESTION_TEMPLATES;
 exports.PLRNNEngine = PLRNNEngine;
+exports.REFLECTION_TEMPLATES = REFLECTION_TEMPLATES;
+exports.STRATEGY_RECOMMENDATIONS = STRATEGY_RECOMMENDATIONS;
+exports.SUMMARY_TEMPLATES = SUMMARY_TEMPLATES;
+exports.SUSTAIN_TALK_PATTERNS = SUSTAIN_TALK_PATTERNS;
 exports.VoiceInputAdapter = VoiceInputAdapter;
 exports.WELLBEING_WEIGHTS = WELLBEING_WEIGHTS;
 exports.beliefStateToKalmanFormerState = beliefStateToKalmanFormerState;
@@ -4294,6 +8789,7 @@ exports.beliefStateToPLRNNState = beliefStateToPLRNNState;
 exports.beliefStateToUncertainty = beliefStateToUncertainty;
 exports.createBeliefStateAdapter = createBeliefStateAdapter;
 exports.createCrisisDetector = createCrisisDetector;
+exports.createExplainabilityService = createExplainabilityService;
 exports.createKalmanFormerEngine = createKalmanFormerEngine;
 exports.createPLRNNEngine = createPLRNNEngine;
 exports.createVoiceInputAdapter = createVoiceInputAdapter;

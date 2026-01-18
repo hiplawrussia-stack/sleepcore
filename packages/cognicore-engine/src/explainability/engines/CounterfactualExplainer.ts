@@ -575,7 +575,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
    */
   private generateProximityCounterfactual(
     currentFeatures: Record<string, unknown>,
-    currentOutcome: string
+    _currentOutcome: string
   ): ICounterfactualScenario | null {
     const singleChanges: ICounterfactualChange[] = [];
 
@@ -627,10 +627,9 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
       });
     }
 
-    if (singleChanges.length === 0) return null;
-
     // Take the smallest change (first one found)
     const smallestChange = singleChanges[0];
+    if (!smallestChange) return null;
 
     const robustness = 0.85; // High robustness for minimal changes
     const plausibility = 0.90;
@@ -709,7 +708,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
    */
   calculatePlausibility(
     scenario: ICounterfactualScenario,
-    contextFeatures: Record<string, unknown>
+    _contextFeatures: Record<string, unknown>
   ): number {
     if (!scenario.changes || scenario.changes.length === 0) return 0;
 
@@ -813,9 +812,10 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
    * Get category of a scenario based on changed features
    */
   private getScenarioCategory(scenario: ICounterfactualScenario): string {
-    if (scenario.changes.length === 0) return 'unknown';
+    const firstChange = scenario.changes[0];
+    if (!firstChange) return 'unknown';
 
-    const featureId = scenario.changes[0].featureId;
+    const featureId = firstChange.featureId;
     const definition = this.featureDefinitions.get(featureId);
 
     return definition?.category || 'unknown';
@@ -914,12 +914,12 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
     }
 
     const easiest = scenarios.find(s => s.feasibility === 'easy');
+    const change = easiest?.changes?.[0];
 
-    if (easiest && easiest.changes.length > 0) {
-      const change = easiest.changes[0];
+    if (change) {
       return {
-        summary: `If ${change.changeDescription.toLowerCase()}, you'll get ${easiest.alternativeOutcome.toLowerCase()}.`,
-        summaryRu: `Если ${change.changeDescriptionRu.toLowerCase()}, ты получишь ${easiest.alternativeOutcomeRu.toLowerCase()}.`,
+        summary: `If ${change.changeDescription.toLowerCase()}, you'll get ${easiest?.alternativeOutcome?.toLowerCase() ?? 'a different result'}.`,
+        summaryRu: `Если ${change.changeDescriptionRu.toLowerCase()}, ты получишь ${easiest?.alternativeOutcomeRu?.toLowerCase() ?? 'другой результат'}.`,
       };
     }
 

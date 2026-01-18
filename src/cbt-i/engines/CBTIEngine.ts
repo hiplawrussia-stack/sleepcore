@@ -11,6 +11,11 @@
  * Implements evidence-based CBT-I protocol following
  * Morin & Espie clinical guidelines.
  *
+ * Now integrates with CogniCore Engine via SleepCoreAdapter for:
+ * - Thompson Sampling based intervention selection
+ * - Bayesian belief state tracking
+ * - Personalized learning from outcomes
+ *
  * Treatment phases:
  * - Assessment (Week 1)
  * - Education (Week 1-2)
@@ -36,6 +41,11 @@ import { StimulusControlEngine } from './StimulusControlEngine';
 import { CognitiveRestructuringEngine } from './CognitiveRestructuringEngine';
 import { SleepHygieneEngine } from './SleepHygieneEngine';
 import { RelaxationEngine } from './RelaxationEngine';
+import {
+  SleepCoreAdapter,
+  createSleepCoreAdapter,
+  type ISleepInterventionSelection,
+} from '../../platform/SleepCoreAdapter';
 
 /**
  * Intervention priority weights by phase
@@ -79,7 +89,20 @@ const PHASE_PRIORITIES: Record<CBTIPhase, Record<CBTIComponent, number>> = {
 };
 
 /**
+ * CBT-I Engine configuration
+ */
+export interface ICBTIEngineConfig {
+  /** Use CogniCore adapter for intervention selection (default: true) */
+  useCogniCore?: boolean;
+  /** Language for explanations */
+  language?: 'en' | 'ru';
+  /** Enable exploration in Thompson Sampling */
+  enableExploration?: boolean;
+}
+
+/**
  * Main CBT-I Engine
+ * Now integrates with CogniCore for adaptive intervention selection
  */
 export class CBTIEngine implements ICBTIEngine {
   private readonly sleepRestriction: SleepRestrictionEngine;
@@ -88,12 +111,37 @@ export class CBTIEngine implements ICBTIEngine {
   private readonly sleepHygiene: SleepHygieneEngine;
   private readonly relaxation: RelaxationEngine;
 
-  constructor() {
+  /** CogniCore adapter for Thompson Sampling based selection */
+  private readonly adapter: SleepCoreAdapter | null;
+  private readonly config: ICBTIEngineConfig;
+
+  /** Track last state for outcome recording */
+  private lastState: ISleepState | null = null;
+  private lastSelection: ISleepInterventionSelection | null = null;
+
+  constructor(config: ICBTIEngineConfig = {}) {
+    this.config = {
+      useCogniCore: true,
+      language: 'ru',
+      enableExploration: true,
+      ...config,
+    };
+
     this.sleepRestriction = new SleepRestrictionEngine();
     this.stimulusControl = new StimulusControlEngine();
     this.cognitiveRestructuring = new CognitiveRestructuringEngine();
     this.sleepHygiene = new SleepHygieneEngine();
     this.relaxation = new RelaxationEngine();
+
+    // Initialize CogniCore adapter
+    if (this.config.useCogniCore) {
+      this.adapter = createSleepCoreAdapter({
+        language: this.config.language,
+        enableExploration: this.config.enableExploration,
+      });
+    } else {
+      this.adapter = null;
+    }
   }
 
   /**
@@ -168,8 +216,53 @@ export class CBTIEngine implements ICBTIEngine {
 
   /**
    * Get next recommended intervention
+   * Uses CogniCore Thompson Sampling when adapter is available
    */
-  getNextIntervention(plan: ICBTIPlan, currentState: ISleepState): ICBTIIntervention {
+  async getNextIntervention(plan: ICBTIPlan, currentState: ISleepState): Promise<ICBTIIntervention> {
+    // Record outcome for previous intervention if applicable
+    if (this.lastState && this.lastSelection && this.adapter) {
+      await this.adapter.recordOutcome(
+        this.lastSelection.action,
+        this.lastState,
+        currentState
+      );
+    }
+
+    // Use CogniCore adapter for adaptive selection
+    if (this.adapter) {
+      const selection = await this.adapter.selectIntervention(currentState, plan.userId);
+
+      // Store for outcome tracking
+      this.lastState = currentState;
+      this.lastSelection = selection;
+
+      // Get detailed content for the selected component
+      const content = this.getInterventionContent(
+        selection.component,
+        selection.action,
+        currentState,
+        plan
+      );
+
+      return {
+        component: selection.component,
+        action: content.action,
+        rationale: selection.explanation,
+        priority: Math.round(selection.confidence * 5), // Scale 0-1 to 1-5
+        timing: this.determineTiming(selection.action, currentState),
+        personalizationScore: selection.confidence,
+      };
+    }
+
+    // Fallback to static priorities when CogniCore is disabled
+    return this.getNextInterventionStatic(plan, currentState);
+  }
+
+  /**
+   * Static intervention selection (fallback when CogniCore disabled)
+   * @deprecated Use CogniCore-based selection via getNextIntervention
+   */
+  private getNextInterventionStatic(plan: ICBTIPlan, currentState: ISleepState): ICBTIIntervention {
     const interventions: ICBTIIntervention[] = [];
     const priorities = PHASE_PRIORITIES[plan.currentPhase];
 
@@ -269,6 +362,115 @@ export class CBTIEngine implements ICBTIEngine {
       timing: 'this_week',
       personalizationScore: 0.5,
     };
+  }
+
+  /**
+   * Get detailed content for an intervention
+   */
+  private getInterventionContent(
+    component: CBTIComponent,
+    action: string,
+    state: ISleepState,
+    plan: ICBTIPlan
+  ): { action: string } {
+    const isRu = this.config.language === 'ru';
+
+    switch (component) {
+      case 'sleep_restriction':
+        if (plan.activeComponents.sleepRestriction) {
+          const sr = plan.activeComponents.sleepRestriction;
+          return {
+            action: isRu
+              ? `Придерживайтесь окна сна: ${sr.prescribedBedtime} — ${sr.prescribedWakeTime}`
+              : `Follow your sleep window: ${sr.prescribedBedtime} — ${sr.prescribedWakeTime}`,
+          };
+        }
+        return {
+          action: isRu
+            ? 'Начните с определения вашего оптимального окна сна'
+            : 'Start by determining your optimal sleep window',
+        };
+
+      case 'stimulus_control':
+        if (state.metrics.sleepOnsetLatency > 15) {
+          return {
+            action: isRu
+              ? `Если не заснули за 15 минут — встаньте и займитесь спокойным делом`
+              : `If not asleep within 15 minutes — get up and do something calm`,
+          };
+        }
+        return {
+          action: isRu
+            ? 'Используйте кровать только для сна'
+            : 'Use bed only for sleep',
+        };
+
+      case 'cognitive_restructuring':
+        const questions = this.cognitiveRestructuring.generateSocraticQuestions({
+          id: 'default',
+          category: 'consequences',
+          belief: isRu ? 'Мне нужно 8 часов сна' : 'I need 8 hours of sleep',
+          intensity: state.cognitions.sleepAnxiety,
+          frequency: 0.5,
+          evidenceFor: [],
+          evidenceAgainst: [],
+          alternativeThought: '',
+          isActive: true,
+        });
+        return { action: questions[0] || (isRu ? 'Проанализируйте свои мысли о сне' : 'Analyze your thoughts about sleep') };
+
+      case 'sleep_hygiene':
+        const assessment = this.sleepHygiene.assess(state);
+        if (assessment.topIssues.length > 0) {
+          const content = this.sleepHygiene.getEducationalContent(assessment.topIssues[0]);
+          return { action: content.tips[0] };
+        }
+        return {
+          action: isRu
+            ? 'Поддерживайте хорошие привычки гигиены сна'
+            : 'Maintain good sleep hygiene habits',
+        };
+
+      case 'relaxation':
+        const technique = this.relaxation.recommendTechnique(state, 'bedtime');
+        return {
+          action: isRu
+            ? `Практикуйте ${this.getTechniqueName(technique)} перед сном`
+            : `Practice ${technique.replace(/_/g, ' ')} before bed`,
+        };
+
+      default:
+        return {
+          action: isRu
+            ? 'Продолжайте следовать рекомендациям'
+            : 'Continue following recommendations',
+        };
+    }
+  }
+
+  /**
+   * Determine optimal timing for intervention
+   */
+  private determineTiming(
+    action: string,
+    state: ISleepState
+  ): 'immediate' | 'tonight' | 'this_week' {
+    // Immediate actions: stimulus control when SOL is high
+    if (action.includes('leave_bed') || action.includes('stimulus_control')) {
+      return 'immediate';
+    }
+
+    // Tonight: relaxation and sleep window enforcement
+    if (
+      action.includes('relaxation') ||
+      action.includes('sleep_window') ||
+      action.includes('enforce')
+    ) {
+      return 'tonight';
+    }
+
+    // This week: cognitive work and hygiene education
+    return 'this_week';
   }
 
   /**
