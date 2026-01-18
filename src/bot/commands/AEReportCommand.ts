@@ -46,7 +46,7 @@ type AEReportStep =
   | 'confirm'
   | 'submitted';
 
-interface IAEReportData {
+export interface IAEReportData {
   step: AEReportStep;
   category?: string;
   severity?: AESeverity;
@@ -61,7 +61,7 @@ interface IAEReportData {
  * Adverse Event Report Command
  * Allows patients to report problems or side effects
  */
-class AEReportCommand implements ICommand, IConversationCommand {
+export class AEReportCommand implements ICommand, IConversationCommand {
   name = 'aereport';
   description = 'Сообщить о проблеме или побочном эффекте';
   aliases = ['ae', 'problem', 'sideeffect'];

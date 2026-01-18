@@ -15,6 +15,11 @@
  * - /rehearsal - Pre-sleep mental rehearsal (Smart Memory Window)
  * - /recall - Morning memory quiz (Smart Memory Window)
  * - /smart_tips - Context-aware content recommendations (Content Library)
+ * - /therapy - Structured 6-week CBT-I sessions
+ * - /chronotype - Chronotype assessment (MEQ/MCTQ)
+ * - /profile - Player gamification profile
+ * - /admin - Clinical pilot dashboard (admin only)
+ * - /ae_report - Adverse event self-reporting
  *
  * @packageDocumentation
  * @module @sleepcore/bot/commands
@@ -63,6 +68,11 @@ export { TherapyCommand, therapyCommand } from './TherapyCommand';
 // Phase 2.1: Circadian/Chronotype Assessment
 export { ChronotypeCommand, chronotypeCommand } from './ChronotypeCommand';
 
+// Phase 8: Clinical Pilot Support
+export { ProfileCommand, profileCommand } from './ProfileCommand';
+export { AdminCommand, adminCommand } from './AdminCommand';
+export { AEReportCommand, aeReportCommand } from './AEReportCommand';
+
 // ==================== Handler ====================
 export { CommandHandler, createCommandHandler } from './CommandHandler';
 
@@ -105,6 +115,9 @@ import { evolutionCommand } from './EvolutionCommand';
 import { smartTipsCommand } from './SmartTipsCommand';
 import { therapyCommand } from './TherapyCommand';
 import { chronotypeCommand } from './ChronotypeCommand';
+import { profileCommand } from './ProfileCommand';
+import { adminCommand } from './AdminCommand';
+import { aeReportCommand } from './AEReportCommand';
 
 /**
  * All registered commands
@@ -128,6 +141,12 @@ export const allCommands = [
   smartTipsCommand,
   // Phase 7: Structured CBT-I Sessions
   therapyCommand,
+  // Phase 2.1: Circadian/Chronotype Assessment
+  chronotypeCommand,
+  // Phase 8: Clinical Pilot Support
+  profileCommand,
+  adminCommand,
+  aeReportCommand,
 ] as const;
 
 /**
