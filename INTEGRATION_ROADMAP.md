@@ -1,15 +1,28 @@
 # SleepCore: План полной интеграции CogniCore Engine
 
-## Статус на момент аудита (Январь 2026)
+## Статус на момент обновления (Январь 2026)
 
-| Метрика | Значение |
-|---------|----------|
-| Архитектура CogniCore | 100% реализована |
-| Интеграция в Telegram бот | ~30% |
-| Активные компоненты | 3 из 15 |
-| Deprecated код в runtime | SleepCorePOMDP |
+| Метрика | Было | Стало |
+|---------|------|-------|
+| Архитектура CogniCore | 100% реализована | 100% реализована |
+| Интеграция в Telegram бот | ~30% | **95%** |
+| Активные компоненты | 3 из 15 | **14 из 15** |
+| Deprecated код в runtime | SleepCorePOMDP | Частично |
+| Новые AI-команды | 0 | **6** (/predict, /insights, /explain, /safety, /twin, /whatif) |
+| Proactive Intelligence | Нет | **CSD + Thompson Sampling + Anti-Fatigue** |
+| Тестов | ~1200 | **1,244+** |
 
-**Цель**: Довести интеграцию до 200%+ (полное использование + расширение)
+**Статус**: ✅ Основная интеграция завершена (Sprints 1-5)
+
+### Выполненные спринты
+
+| Sprint | Компоненты | Статус |
+|--------|------------|--------|
+| Sprint 1 | SleepPredictionService, PLRNN, /predict | ✅ |
+| Sprint 2 | DigitalTwinService, ConstitutionalMiddleware, XAI | ✅ |
+| Sprint 3 | CausalInsightsService, /insights, /whatif | ✅ |
+| Sprint 4 | SafetyMonitorService, /safety, все команды | ✅ |
+| Sprint 5 | ProactiveIntelligence (CSD, Thompson Sampling, Anti-Fatigue) | ✅ |
 
 ---
 
@@ -25,38 +38,34 @@ src/SleepCoreAPI.ts
 src/main.ts
 ```
 
-**Задачи**:
-- [ ] Заменить `new SleepCorePOMDP()` на `createSleepCoreAdapter()`
-- [ ] Обновить `getNextIntervention()` для использования Thompson Sampling
-- [ ] Добавить `recordOutcome()` для обучения на результатах
-- [ ] Мигрировать все вызовы `pomdp.updateBelief()` на `adapter.updateBelief()`
+**Задачи**: ✅ ВЫПОЛНЕНО (Sprint 1-2)
+- [x] Заменить `new SleepCorePOMDP()` на `createSleepCoreAdapter()`
+- [x] Обновить `getNextIntervention()` для использования Thompson Sampling
+- [x] Добавить `recordOutcome()` для обучения на результатах
+- [ ] Мигрировать все вызовы `pomdp.updateBelief()` на `adapter.updateBelief()` (частично)
 
-**Результат**: Активация Thompson Sampling, MotivationalEngine, ExplainabilityService
+**Результат**: ✅ Thompson Sampling, MotivationalEngine, ExplainabilityService активны
 
-### 0.2 Подключение SleepPredictionService
+### 0.2 Подключение SleepPredictionService ✅
 
-**Проблема**: Сервис PLRNN-предикций написан, но не импортируется в runtime.
-
-**Файлы для изменения**:
-```
-src/main.ts
-src/bot/commands/ProgressCommand.ts
-src/bot/commands/TodayCommand.ts
-```
+**Статус**: ✅ ВЫПОЛНЕНО (Sprint 1)
 
 **Задачи**:
-- [ ] Импортировать `createSleepPredictionService` в main.ts
-- [ ] Инициализировать сервис при старте бота
-- [ ] Интегрировать предикции в `/progress` команду
-- [ ] Добавить Early Warning Signals в `/today`
+- [x] Импортировать `createSleepPredictionService` в main.ts
+- [x] Инициализировать сервис при старте бота
+- [x] Интегрировать предикции в `/progress` команду
+- [x] Добавить Early Warning Signals в `/today`
+- [x] Создать команду `/predict`
 
-**Результат**: Активация PLRNNEngine, KalmanFormer, 7-дневный прогноз SE
+**Результат**: ✅ PLRNNEngine, KalmanFormer, 7-дневный прогноз SE работают
 
 ---
 
 ## Фаза 1: Полная интеграция (Недели 2-3)
 
-### 1.1 Digital Twin Integration
+### 1.1 Digital Twin Integration ✅
+
+**Статус**: ✅ ВЫПОЛНЕНО (Sprint 2)
 
 **Компоненты CogniCore**:
 - `BifurcationEngine` - детекция типпинг-поинтов
@@ -84,12 +93,16 @@ interface IDigitalTwinService {
 **Новая команда**: `/twin` или `/predict`
 
 **Задачи**:
-- [ ] Создать `DigitalTwinService` как обёртку над CogniCore компонентами
-- [ ] Добавить автоматическое обновление twin при каждом diary entry
-- [ ] Создать команду `/predict` для показа траектории
-- [ ] Интегрировать tipping point alerts в crisis detection
+- [x] Создать `DigitalTwinService` как обёртку над CogniCore компонентами
+- [x] Добавить автоматическое обновление twin при каждом diary entry
+- [x] Создать команду `/predict` для показа траектории
+- [x] Интегрировать tipping point alerts в crisis detection
 
-### 1.2 Causal Discovery Integration
+**Результат**: ✅ DigitalTwinService, команды `/twin` и `/predict` работают
+
+### 1.2 Causal Discovery Integration ✅
+
+**Статус**: ✅ ВЫПОЛНЕНО (Sprint 3)
 
 **Компоненты CogniCore**:
 - `CausalDiscoveryEngine` - PC/GES алгоритмы
@@ -114,12 +127,16 @@ interface ICausalInsightsService {
 **Новая команда**: `/insights` или `/why`
 
 **Задачи**:
-- [ ] Создать `CausalInsightsService`
-- [ ] Накапливать данные для causal discovery (минимум 14 дней)
-- [ ] Создать визуализацию причинного графа (ASCII или emoji)
-- [ ] Интегрировать insights в `/progress`
+- [x] Создать `CausalInsightsService`
+- [x] Накапливать данные для causal discovery (минимум 14 дней)
+- [x] Создать визуализацию причинного графа (ASCII или emoji)
+- [x] Интегрировать insights в `/progress`
 
-### 1.3 Explainability Integration
+**Результат**: ✅ CausalInsightsService, команда `/insights` работает
+
+### 1.3 Explainability Integration ✅
+
+**Статус**: ✅ ВЫПОЛНЕНО (Sprint 2-3)
 
 **Компоненты CogniCore**:
 - `ExplainabilityService` - объяснения решений
@@ -130,10 +147,12 @@ interface ICausalInsightsService {
 **Расширение**: Добавить объяснения ко всем рекомендациям
 
 **Задачи**:
-- [ ] Интегрировать `ExplainabilityService` в SleepCoreAdapter
-- [ ] Добавить кнопку "Почему?" к каждой рекомендации в `/today`
-- [ ] Создать команду `/whatif` для counterfactual scenarios
-- [ ] Генерировать weekly narrative summaries
+- [x] Интегрировать `ExplainabilityService` в SleepCoreAdapter
+- [x] Добавить кнопку "Почему?" к каждой рекомендации в `/today`
+- [x] Создать команду `/whatif` для counterfactual scenarios
+- [x] Генерировать weekly narrative summaries
+
+**Результат**: ✅ ExplainabilityService, команды `/explain` и `/whatif` работают
 
 **Пример UX**:
 ```
@@ -153,7 +172,9 @@ interface ICausalInsightsService {
   → Прогноз: SE вырастет до 85% за 2 недели
 ```
 
-### 1.4 Constitutional AI Integration
+### 1.4 Constitutional AI Integration ✅
+
+**Статус**: ✅ ВЫПОЛНЕНО (Sprint 2)
 
 **Компоненты CogniCore**:
 - `ConstitutionalClassifierEngine` - этический классификатор
@@ -163,10 +184,12 @@ interface ICausalInsightsService {
 **Интеграция**: Фильтр всех исходящих сообщений бота
 
 **Задачи**:
-- [ ] Создать middleware для Grammy, проверяющий все ответы
-- [ ] Интегрировать Constitutional principles в Sonya persona
-- [ ] Добавить logging нарушений принципов
-- [ ] Реализовать graceful degradation при нарушениях
+- [x] Создать middleware для Grammy, проверяющий все ответы
+- [x] Интегрировать Constitutional principles в Sonya persona
+- [x] Добавить logging нарушений принципов
+- [x] Реализовать graceful degradation при нарушениях
+
+**Результат**: ✅ ConstitutionalMiddleware, SafetyMonitorService, команда `/safety` работают
 
 ### 1.5 Metacognitive Engine Integration
 
@@ -188,18 +211,24 @@ interface ICausalInsightsService {
 
 ## Фаза 2: Расширение до 200% (Недели 4-6)
 
-### 2.1 Новые команды на базе CogniCore
+### 2.1 Новые команды на базе CogniCore ✅
 
-| Команда | Компонент CogniCore | Функционал |
-|---------|---------------------|------------|
-| `/predict` | PLRNNEngine + BifurcationEngine | 7-дневный прогноз с early warnings |
-| `/insights` | CausalDiscoveryEngine | "Почему я плохо сплю?" с графом причин |
-| `/whatif` | CounterfactualExplainer | Симуляция сценариев |
-| `/twin` | DigitalTwinService | Интерактивная модель пациента |
-| `/explain` | ExplainabilityService | Объяснение любой рекомендации |
-| `/safety` | SafetyMonitorService | Статус безопасности и история |
+**Статус**: ✅ ВЫПОЛНЕНО (Sprint 1-4)
 
-### 2.2 Proactive Intelligence Layer
+| Команда | Компонент CogniCore | Функционал | Статус |
+|---------|---------------------|------------|--------|
+| `/predict` | PLRNNEngine + BifurcationEngine | 7-дневный прогноз с early warnings | ✅ |
+| `/insights` | CausalDiscoveryEngine | "Почему я плохо сплю?" с графом причин | ✅ |
+| `/whatif` | CounterfactualExplainer | Симуляция сценариев | ✅ |
+| `/twin` | DigitalTwinService | Интерактивная модель пациента | ✅ |
+| `/explain` | ExplainabilityService | Объяснение любой рекомендации | ✅ |
+| `/safety` | SafetyMonitorService | Статус безопасности и история | ✅ |
+
+**Результат**: ✅ Все 6 AI-команд работают
+
+### 2.2 Proactive Intelligence Layer ✅
+
+**Статус**: ✅ ВЫПОЛНЕНО (Sprint 5)
 
 **Концепция**: Бот не ждёт команд, а проактивно предлагает insights.
 
@@ -215,14 +244,27 @@ interface IProactiveIntelligenceService {
 
   // Оптимальный момент для вмешательства
   findOptimalInterventionTime(userId: string): Promise<Date>;
+
+  // Sprint 5: Critical Slowing Down & Thompson Sampling
+  calculateCriticalSlowingDown(sleepHistory: ISleepState[]): ICriticalSlowingDown | null;
+  sampleInsightTypeThompson(userId: string, types: string[]): string;
+  canSendInsight(userId: string): { allowed: boolean; reason?: string };
 }
 ```
 
 **Интеграция с ProactiveNotificationService**:
-- [ ] Добавить PLRNN-based prediction alerts
-- [ ] Интегрировать bifurcation early warnings
-- [ ] Создать causal-based personalized tips
-- [ ] Реализовать optimal timing для интервенций
+- [x] Добавить PLRNN-based prediction alerts
+- [x] Интегрировать bifurcation early warnings
+- [x] Создать causal-based personalized tips
+- [x] Реализовать optimal timing для интервенций
+
+**Sprint 5 дополнения**:
+- [x] Critical Slowing Down (CSD) - Early Warning Signals (Smit et al. 2025)
+- [x] Thompson Sampling - персонализация сообщений (DIAMANTE trial 2024)
+- [x] Anti-Fatigue механизм (макс 3 insights/день, 4ч интервал)
+- [x] Cron job каждые 2 часа (10:00-20:00 MSK)
+
+**Результат**: ✅ ProactiveIntelligenceService с CSD, Thompson Sampling, Anti-Fatigue работает
 
 ### 2.3 Adaptive Persona Engine
 
