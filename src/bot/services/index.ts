@@ -259,5 +259,38 @@ export type {
   ISleepEarlyWarning,
 } from './SleepPredictionService';
 
+// ==================== Digital Twin (Sprint 2) ====================
+export {
+  DigitalTwinService,
+  createDigitalTwinService,
+  digitalTwinService,
+  DEFAULT_DIGITAL_TWIN_CONFIG,
+} from './DigitalTwinService';
+
+export type {
+  IDigitalTwin,
+  ITrajectory,
+  ITippingPoint,
+  IScenario,
+  ISimulationResult,
+  IComparisonResult,
+  IDigitalTwinConfig,
+} from './DigitalTwinService';
+
+// ==================== Constitutional AI Middleware (Sprint 2) ====================
+export {
+  ConstitutionalMiddleware,
+  createConstitutionalMiddleware,
+  constitutionalMiddleware,
+  DEFAULT_CONSTITUTIONAL_CONFIG,
+} from '../middleware/ConstitutionalMiddleware';
+
+export type {
+  ConstitutionalPrinciple,
+  ViolationSeverity,
+  IConstitutionalCheck,
+  IConstitutionalConfig,
+} from '../middleware/ConstitutionalMiddleware';
+
 // ==================== Modules Re-export ====================
 export * from '../../modules';

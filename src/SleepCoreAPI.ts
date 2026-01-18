@@ -24,6 +24,7 @@ import {
   SleepCoreAdapter,
   createSleepCoreAdapter,
   type ISleepInterventionSelection,
+  type ISleepInterventionExplanation,
 } from './platform/SleepCoreAdapter';
 import type { ISleepObservation, SleepAction } from './platform/SleepCorePOMDP';
 import { ThirdWaveCoordinator } from './third-wave/engines/ThirdWaveCoordinator';
@@ -397,6 +398,30 @@ export class SleepCoreAPI {
 
     const currentState = userStates[userStates.length - 1];
     return this.cbtiEngine.getNextIntervention(session.plan, currentState);
+  }
+
+  /**
+   * Get explanation for an intervention selection
+   * Uses CogniCore ExplainabilityService for SHAP-style feature attribution
+   *
+   * Research basis (2025-2026):
+   * - Explainable AI improves patient trust (HIGH confidence)
+   * - SHAP values preferred for healthcare transparency (Lundberg 2020)
+   * - Counterfactual explanations improve understanding (HIGH confidence)
+   *
+   * @param userId - User ID
+   * @param selection - The intervention selection to explain
+   * @returns Detailed explanation with key factors, confidence, and actionable advice
+   */
+  async explainIntervention(
+    userId: string,
+    selection: ISleepInterventionSelection
+  ): Promise<ISleepInterventionExplanation | null> {
+    const userStates = this.sleepStates.get(userId) || [];
+    if (userStates.length === 0) return null;
+
+    const currentState = userStates[userStates.length - 1];
+    return this.adapter.explainIntervention(selection, currentState);
   }
 
   /**
