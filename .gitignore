@@ -4,6 +4,12 @@ node_modules/
 # Build output
 dist/
 
+# Compiled TypeScript in source directories
+packages/*/src/**/*.js
+packages/*/src/**/*.js.map
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.d.ts.map
+
 # Coverage reports
 coverage/
 
@@ -30,6 +36,7 @@ npm-debug.log*
 
 # Claude Code
 .claude/
+tmpclaude-*
 
 # Archives
 *.zip
