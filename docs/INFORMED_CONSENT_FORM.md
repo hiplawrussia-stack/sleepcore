@@ -1,13 +1,25 @@
 # Informed Consent Form / Форма информированного согласия
 
-## Clinical Study: SleepCore Digital CBT-I for Chronic Insomnia
-## Клиническое исследование: Цифровая КПТ-И SleepCore при хронической бессоннице
+## Pilot Study: SleepCore Digital CBT-I for Chronic Insomnia
+## Пилотное исследование: Цифровая КПТ-И SleepCore при хронической бессоннице
 
-> **Protocol Version**: 1.0
+> **Protocol Version**: 2.0 (Pilot Study)
+> **Study Type**: Feasibility / Usability Pilot (N=10-30)
 > **IRB/Ethics Approval Number**: [TO BE ASSIGNED]
 > **ClinicalTrials.gov ID**: [TO BE REGISTERED]
-> **Document Version**: 1.0
-> **Date**: 2026-01-08
+> **Document Version**: 2.0
+> **Date**: 2026-01-11
+> **Regulatory Compliance**: ФЗ-152 (ред. 01.09.2025), ICH E6(R3) 2025
+
+---
+
+> ⚠️ **ВАЖНО / IMPORTANT**
+>
+> В соответствии с Федеральным законом № 152-ФЗ «О персональных данных» (в редакции от 01.09.2025):
+> **Данная форма согласия является отдельным документом** и не может быть включена в другие документы или соглашения.
+>
+> In accordance with Federal Law No. 152-FZ "On Personal Data" (as amended September 1, 2025):
+> **This consent form is a separate document** and cannot be included in other documents or agreements.
 
 ---
 
@@ -19,11 +31,14 @@
 
 | Item | Information |
 |------|-------------|
-| **Purpose** | To evaluate the effectiveness of SleepCore, a digital application delivering Cognitive Behavioral Therapy for Insomnia (CBT-I), in adults with chronic insomnia |
-| **Duration** | 8 weeks of active treatment + 4 weeks of follow-up (12 weeks total) |
+| **Purpose** | To evaluate the usability, feasibility, and preliminary effectiveness of SleepCore, a digital CBT-I application |
+| **Study Type** | Pilot feasibility study (not a full clinical trial) |
+| **Duration** | 4-6 weeks of active use + 2 weeks of follow-up |
+| **Sample Size** | 10-30 volunteer participants |
 | **Procedures** | Daily sleep diary entries, weekly questionnaires, following CBT-I recommendations via Telegram bot |
-| **Key Risks** | Temporary increased daytime sleepiness, fatigue during first 2 weeks of sleep restriction |
-| **Key Benefits** | Potential improvement in sleep quality and insomnia symptoms |
+| **Key Risks** | Temporary increased daytime sleepiness, fatigue during first 1-2 weeks |
+| **Safety System** | 24/7 automated crisis detection with immediate escalation protocols |
+| **Key Benefits** | Potential improvement in sleep quality; contributing to insomnia research |
 | **Alternatives** | Not participating; seeking standard care from a healthcare provider |
 | **Voluntary** | Participation is completely voluntary; you may withdraw at any time |
 
@@ -33,11 +48,14 @@
 
 | Пункт | Информация |
 |-------|------------|
-| **Цель** | Оценить эффективность SleepCore — цифрового приложения для проведения когнитивно-поведенческой терапии бессонницы (КПТ-И) — у взрослых с хронической бессонницей |
-| **Продолжительность** | 8 недель активного лечения + 4 недели наблюдения (всего 12 недель) |
+| **Цель** | Оценить удобство использования, осуществимость и предварительную эффективность SleepCore — цифрового приложения КПТ-И |
+| **Тип исследования** | Пилотное исследование осуществимости (не полноценное клиническое испытание) |
+| **Продолжительность** | 4-6 недель активного использования + 2 недели наблюдения |
+| **Размер выборки** | 10-30 волонтёров |
 | **Процедуры** | Ежедневное ведение дневника сна, еженедельные опросники, следование рекомендациям КПТ-И через Telegram-бота |
-| **Основные риски** | Временное повышение дневной сонливости, усталость в первые 2 недели ограничения сна |
-| **Основные преимущества** | Потенциальное улучшение качества сна и симптомов бессонницы |
+| **Основные риски** | Временное повышение дневной сонливости, усталость в первые 1-2 недели |
+| **Система безопасности** | Круглосуточное автоматическое обнаружение кризисных состояний с немедленной эскалацией |
+| **Основные преимущества** | Потенциальное улучшение качества сна; вклад в исследование бессонницы |
 | **Альтернативы** | Неучастие; обращение за стандартной помощью к врачу |
 | **Добровольность** | Участие полностью добровольно; вы можете отказаться в любое время |
 
@@ -136,11 +154,21 @@ You **cannot** participate if you:
 ### 4.1 Overview / Обзор
 
 ```
-SCREENING → BASELINE → TREATMENT (8 weeks) → FOLLOW-UP (4 weeks)
-   │            │              │                    │
-   └── ISI     └── Surveys    └── Daily diary     └── Final surveys
-       Eligibility  Demographics   Weekly ISI           ISI, SUS
+SCREENING → BASELINE → PILOT TREATMENT (4-6 weeks) → FOLLOW-UP (2 weeks)
+   │            │              │                          │
+   └── ISI     └── Surveys    └── Daily diary           └── Final surveys
+       Eligibility  Demographics   Weekly check-ins         ISI, SUS, Feedback
 ```
+
+**Pilot Study Timeline / График пилотного исследования:**
+
+| Week | Activities |
+|------|------------|
+| 0 | Screening, consent, baseline ISI |
+| 1-2 | Sleep education, diary training |
+| 3-4 | Sleep restriction, stimulus control |
+| 5-6 | Cognitive techniques, consolidation |
+| 7-8 | Follow-up assessments, SUS, feedback |
 
 ### 4.2 Detailed Procedures / Подробные процедуры
 
@@ -185,10 +213,14 @@ SCREENING → BASELINE → TREATMENT (8 weeks) → FOLLOW-UP (4 weeks)
 
 | Period | Estimated Time |
 |--------|----------------|
-| Screening & Baseline | ~45 minutes |
-| Weekly (Weeks 1-8) | ~30-45 minutes per week |
-| Follow-up | ~30 minutes total |
-| **Total over 12 weeks** | **~6-8 hours** |
+| Screening & Baseline | ~30 minutes |
+| Weekly (Weeks 1-6) | ~20-30 minutes per week |
+| Follow-up (Weeks 7-8) | ~30 minutes total |
+| **Total over 8 weeks** | **~4-5 hours** |
+
+*Note: This is a pilot study with reduced time commitment compared to full clinical trials.*
+
+*Примечание: Это пилотное исследование с уменьшенными временными затратами по сравнению с полноценными клиническими испытаниями.*
 
 ---
 
@@ -232,6 +264,41 @@ Contact us immediately if you experience:
 - Мысли о самоповреждении или суициде
 - Значительное ухудшение настроения или тревожность
 - Любые другие тревожные симптомы
+
+### 5.5 Automated Crisis Detection System / Автоматическая система обнаружения кризисов
+
+**SleepCore includes a multi-layer crisis detection system that operates 24/7:**
+
+| Layer | Function | Response |
+|-------|----------|----------|
+| **Layer 1** | Real-time keyword scanning (Russian/English) | Immediate detection |
+| **Layer 2** | Context and pattern analysis | Severity classification |
+| **Layer 3** | State-based risk assessment | Escalation decision |
+
+**Кризисные протоколы / Crisis Protocols:**
+
+| Severity Level | System Action |
+|----------------|---------------|
+| **Low** | Monitor; provide supportive resources |
+| **Moderate** | Proactive check-in; offer /sos command |
+| **High** | Immediate crisis resources; escalate to admin |
+| **Critical** | Emergency protocol; notify crisis team; provide hotline numbers |
+
+**What happens if crisis is detected:**
+1. The bot will immediately provide crisis resources and hotline numbers
+2. A trained study team member will be notified
+3. You will be offered direct support options
+4. Emergency services information will be provided
+
+**Что происходит при обнаружении кризиса:**
+1. Бот немедленно предоставит кризисные ресурсы и номера горячих линий
+2. Обученный член исследовательской группы получит уведомление
+3. Вам будут предложены варианты прямой поддержки
+4. Будет предоставлена информация об экстренных службах
+
+> ⚠️ **The crisis detection system is designed to help, not to judge. All crisis-related data is handled with the highest confidentiality.**
+>
+> ⚠️ **Система обнаружения кризисов создана для помощи, а не для осуждения. Все данные, связанные с кризисами, обрабатываются с максимальной конфиденциальностью.**
 
 ---
 
@@ -558,19 +625,58 @@ Signature / Подпись
 
 ---
 
-## Appendix: Regulatory Compliance / Приложение: Соответствие нормативным требованиям
+## Appendix A: Regulatory Compliance / Приложение А: Соответствие нормативным требованиям
 
 This Informed Consent Form has been prepared in accordance with:
 
-| Standard | Version | Date |
-|----------|---------|------|
-| ICH E6(R3) Good Clinical Practice | Step 4 Final | January 6, 2025 |
-| 21 CFR Part 50 (FDA) | Current | 2025 |
-| Declaration of Helsinki | 2013 Revision | |
-| Federal Law No. 152-FZ (Russia) | As amended | September 1, 2025 |
-| GDPR (if EU participants) | Regulation 2016/679 | |
+| Standard | Version | Date | Notes |
+|----------|---------|------|-------|
+| ICH E6(R3) Good Clinical Practice | Step 4 Final | January 6, 2025 | Enhanced audit trail requirements |
+| 21 CFR Part 50 (FDA) | Current | 2025 | Informed consent requirements |
+| Declaration of Helsinki | 2013 Revision | | Ethical principles |
+| Federal Law No. 152-FZ (Russia) | As amended | September 1, 2025 | **Consent must be separate document** |
+| Federal Law No. 420-FZ (Russia) | | May 30, 2025 | Enhanced penalties for data violations |
+| GDPR (if EU participants) | Regulation 2016/679 | | Data protection |
+| UK MHRA AE Reporting | Updated | June 16, 2025 | Digital mental health technologies |
 
 ---
 
-*Document prepared: 2026-01-08*
-*Version: 1.0*
+## Appendix B: Pilot Study Feasibility Endpoints / Приложение Б: Конечные точки пилотного исследования
+
+This is a **feasibility pilot study**, not a full randomized controlled trial. Primary endpoints are:
+
+| Endpoint | Measure | Target |
+|----------|---------|--------|
+| **Recruitment rate** | % of invited who consent | ≥15% |
+| **Retention rate** | % completing study | ≥70% |
+| **Engagement** | Daily diary completion rate | ≥60% |
+| **Usability** | System Usability Scale (SUS) | ≥68 |
+| **Acceptability** | User satisfaction rating | ≥3.5/5 |
+| **Safety** | Adverse events monitored | 100% reported |
+
+Secondary (exploratory) clinical endpoints:
+- ISI score change (baseline to endpoint)
+- Sleep efficiency improvement
+- PHQ-9/GAD-7 score changes
+
+---
+
+## Appendix C: Adverse Event Classification / Приложение В: Классификация нежелательных явлений
+
+Per JMIR Mental Health 2025 and UK MHRA guidance:
+
+| Category | Definition | Examples |
+|----------|------------|----------|
+| **Expected** | Known side effects of CBT-I | Daytime sleepiness, fatigue |
+| **Unexpected** | Not previously documented | Novel symptoms |
+| **Related** | Probably caused by intervention | Symptoms from sleep restriction |
+| **Unrelated** | Not caused by intervention | Unrelated illness |
+| **Serious** | Death, hospitalization, disability | Requires immediate action |
+
+**Weekly monitoring survey** will collect adverse event data systematically.
+
+---
+
+*Document prepared: 2026-01-11*
+*Version: 2.0 (Pilot Study Edition)*
+*Next review date: 2026-02-11*
