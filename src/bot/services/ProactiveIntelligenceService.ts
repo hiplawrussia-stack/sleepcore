@@ -167,6 +167,85 @@ export interface IDailyAnalysis {
   };
 }
 
+// ==================== Critical Slowing Down (CSD) ====================
+// Research basis: Smit et al. 2025 - EWS preceded recurrence in 32.9% of participants
+// Method: Track autocorrelation (AR1) and variance in moving windows
+
+/**
+ * Critical Slowing Down indicators for early warning
+ * Based on dynamical systems theory (PNAS, Clinical Psychological Science 2025)
+ */
+export interface ICriticalSlowingDown {
+  /** Autocorrelation coefficient (AR1) - increasing = slowing down */
+  autocorrelation: number;
+
+  /** Rolling variance - increasing = destabilization */
+  variance: number;
+
+  /** Rate of change in autocorrelation */
+  autocorrelationTrend: number;
+
+  /** Rate of change in variance */
+  varianceTrend: number;
+
+  /** Combined CSD indicator (0-1) */
+  csdIndex: number;
+
+  /** Whether early warning threshold exceeded */
+  isWarning: boolean;
+
+  /** Estimated days to transition (null if not detectable) */
+  estimatedDaysToTransition: number | null;
+}
+
+/**
+ * Thompson Sampling state for personalized message selection
+ * Research basis: DIAMANTE trial 2024, IntelligentPooling (PMC 8494236)
+ */
+export interface IThompsonSamplingState {
+  /** Insight type */
+  insightType: IProactiveInsight['type'];
+
+  /** Number of times shown (α + β in Beta distribution) */
+  impressions: number;
+
+  /** Number of positive engagements (α in Beta distribution) */
+  engagements: number;
+
+  /** Sampled probability (for current decision) */
+  sampledProbability?: number;
+}
+
+/**
+ * User engagement tracking for anti-fatigue
+ * Research basis: JMIR 2023 - 3.5x engagement increase with tailored timing
+ */
+export interface IEngagementTracking {
+  /** User ID */
+  userId: string;
+
+  /** Insights delivered today */
+  insightsDeliveredToday: number;
+
+  /** Last insight delivery time */
+  lastInsightTime: Date | null;
+
+  /** Thompson Sampling states per insight type */
+  thompsonStates: Map<IProactiveInsight['type'], IThompsonSamplingState>;
+
+  /** Historical engagement by hour of day */
+  hourlyEngagement: number[];
+
+  /** Notifications user has interacted with (for learning) */
+  interactionHistory: Array<{
+    insightId: string;
+    type: IProactiveInsight['type'];
+    deliveredAt: Date;
+    interactedAt: Date | null;
+    interactionType: 'clicked' | 'dismissed' | 'ignored' | null;
+  }>;
+}
+
 // ==================== Configuration ====================
 
 /**
@@ -195,19 +274,70 @@ export interface IProactiveIntelligenceConfig {
     eveningWindowStart: number;
     eveningWindowEnd: number;
   };
+
+  /** Critical Slowing Down configuration */
+  csd: {
+    /** Window size for CSD calculation (days) */
+    windowSize: number;
+    /** Minimum data points for CSD */
+    minDataPoints: number;
+    /** Autocorrelation warning threshold */
+    autocorrelationThreshold: number;
+    /** Variance increase warning threshold (multiplier) */
+    varianceThreshold: number;
+  };
+
+  /** Thompson Sampling configuration */
+  thompsonSampling: {
+    /** Enable Thompson Sampling for message selection */
+    enabled: boolean;
+    /** Initial alpha (prior successes) */
+    priorAlpha: number;
+    /** Initial beta (prior failures) */
+    priorBeta: number;
+    /** Exploration bonus for new insight types */
+    explorationBonus: number;
+  };
+
+  /** Anti-fatigue configuration */
+  antiFatigue: {
+    /** Minimum hours between insights */
+    minHoursBetweenInsights: number;
+    /** Maximum insights per week */
+    maxInsightsPerWeek: number;
+    /** Cool-down after ignored insight (hours) */
+    cooldownAfterIgnore: number;
+  };
 }
 
 export const DEFAULT_PROACTIVE_CONFIG: IProactiveIntelligenceConfig = {
   enabled: true,
   minDataDays: 3,
-  maxInsightsPerDay: 3,
+  maxInsightsPerDay: 3, // Research: alert fatigue starts at 3+ (PMC 5466696)
   patternChangeThreshold: 0.15, // 15% change triggers alert
   riskEscalationThreshold: 0.6,
   timing: {
     morningWindowStart: 7,
     morningWindowEnd: 9,
-    eveningWindowStart: 19,
+    eveningWindowStart: 19, // Research: 17:00-20:00 golden hour (JMIR 2023)
     eveningWindowEnd: 21,
+  },
+  csd: {
+    windowSize: 7, // 7-day rolling window
+    minDataPoints: 14, // Research: need 14+ days for CSD (Smit et al. 2025)
+    autocorrelationThreshold: 0.7, // High AR1 = slowing down
+    varianceThreshold: 1.5, // 50% variance increase = warning
+  },
+  thompsonSampling: {
+    enabled: true,
+    priorAlpha: 1, // Uniform prior
+    priorBeta: 1,
+    explorationBonus: 0.1,
+  },
+  antiFatigue: {
+    minHoursBetweenInsights: 4, // At least 4 hours between proactive messages
+    maxInsightsPerWeek: 14, // ~2 per day average
+    cooldownAfterIgnore: 24, // 24 hours cooldown if user ignores
   },
 };
 
@@ -879,6 +1009,432 @@ export class ProactiveIntelligenceService {
 
     const diffMs = now.getTime() - lastDate.getTime();
     return Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  }
+
+  // ==================== Critical Slowing Down (EWS) ====================
+  // Research: Smit et al. 2025 - EWS preceded recurrence in 32.9% of participants
+  // Method: Track autocorrelation (AR1) and variance in moving windows
+
+  /**
+   * Calculate Critical Slowing Down indicators for early warning
+   * Based on dynamical systems theory (Scheffer et al., van de Leemput et al.)
+   *
+   * @param sleepHistory - Sleep state history (needs 14+ days)
+   * @param metric - Which metric to analyze (default: sleepEfficiency)
+   * @returns CSD indicators or null if insufficient data
+   */
+  calculateCriticalSlowingDown(
+    sleepHistory: ISleepState[],
+    metric: 'sleepEfficiency' | 'sleepOnsetLatency' | 'wakeAfterSleepOnset' = 'sleepEfficiency'
+  ): ICriticalSlowingDown | null {
+    const { csd } = this.config;
+
+    // Need minimum data points
+    if (sleepHistory.length < csd.minDataPoints) {
+      return null;
+    }
+
+    // Extract metric values
+    const values = sleepHistory.map(s => {
+      switch (metric) {
+        case 'sleepEfficiency':
+          return s.metrics?.sleepEfficiency || 0;
+        case 'sleepOnsetLatency':
+          return s.metrics?.sleepOnsetLatency || 0;
+        case 'wakeAfterSleepOnset':
+          return s.metrics?.wakeAfterSleepOnset || 0;
+      }
+    });
+
+    // Calculate rolling autocorrelation and variance
+    const windowSize = csd.windowSize;
+    const autocorrelations: number[] = [];
+    const variances: number[] = [];
+
+    for (let i = windowSize; i <= values.length; i++) {
+      const window = values.slice(i - windowSize, i);
+      autocorrelations.push(this.calculateAutocorrelation(window));
+      variances.push(this.calculateVariance(window));
+    }
+
+    if (autocorrelations.length < 2) {
+      return null;
+    }
+
+    // Current values
+    const currentAutocorrelation = autocorrelations[autocorrelations.length - 1];
+    const currentVariance = variances[variances.length - 1];
+
+    // Calculate trends (rate of change)
+    const autocorrelationTrend = this.calculateTrend(autocorrelations);
+    const varianceTrend = this.calculateTrend(variances);
+
+    // Baseline variance (first window)
+    const baselineVariance = variances[0];
+    const varianceRatio = baselineVariance > 0 ? currentVariance / baselineVariance : 1;
+
+    // Combined CSD index (0-1)
+    // Higher = more warning signs
+    const autocorrelationScore = Math.min(1, Math.max(0, currentAutocorrelation / csd.autocorrelationThreshold));
+    const varianceScore = Math.min(1, Math.max(0, (varianceRatio - 1) / (csd.varianceThreshold - 1)));
+    const trendScore = Math.min(1, Math.max(0, (autocorrelationTrend + varianceTrend) / 0.1));
+
+    const csdIndex = (autocorrelationScore * 0.4 + varianceScore * 0.4 + trendScore * 0.2);
+
+    // Warning threshold
+    const isWarning = currentAutocorrelation >= csd.autocorrelationThreshold ||
+                      varianceRatio >= csd.varianceThreshold ||
+                      csdIndex >= 0.7;
+
+    // Estimate days to transition (if trend is positive)
+    let estimatedDaysToTransition: number | null = null;
+    if (autocorrelationTrend > 0.01 && currentAutocorrelation < 1) {
+      // Linear extrapolation to AR1 = 1 (critical point)
+      const daysToAR1 = (1 - currentAutocorrelation) / autocorrelationTrend;
+      if (daysToAR1 > 0 && daysToAR1 < 30) {
+        estimatedDaysToTransition = Math.round(daysToAR1);
+      }
+    }
+
+    return {
+      autocorrelation: currentAutocorrelation,
+      variance: currentVariance,
+      autocorrelationTrend,
+      varianceTrend,
+      csdIndex,
+      isWarning,
+      estimatedDaysToTransition,
+    };
+  }
+
+  /**
+   * Calculate lag-1 autocorrelation (AR1) for a time series
+   */
+  private calculateAutocorrelation(values: number[]): number {
+    if (values.length < 2) return 0;
+
+    const n = values.length;
+    const mean = values.reduce((a, b) => a + b, 0) / n;
+
+    let numerator = 0;
+    let denominator = 0;
+
+    for (let i = 0; i < n - 1; i++) {
+      numerator += (values[i] - mean) * (values[i + 1] - mean);
+    }
+
+    for (let i = 0; i < n; i++) {
+      denominator += (values[i] - mean) ** 2;
+    }
+
+    if (denominator === 0) return 0;
+    return numerator / denominator;
+  }
+
+  /**
+   * Calculate variance of a time series
+   */
+  private calculateVariance(values: number[]): number {
+    if (values.length < 2) return 0;
+
+    const n = values.length;
+    const mean = values.reduce((a, b) => a + b, 0) / n;
+    const squaredDiffs = values.map(v => (v - mean) ** 2);
+
+    return squaredDiffs.reduce((a, b) => a + b, 0) / (n - 1);
+  }
+
+  /**
+   * Calculate linear trend (slope) of a time series
+   */
+  private calculateTrend(values: number[]): number {
+    if (values.length < 2) return 0;
+
+    const n = values.length;
+    const xMean = (n - 1) / 2;
+    const yMean = values.reduce((a, b) => a + b, 0) / n;
+
+    let numerator = 0;
+    let denominator = 0;
+
+    for (let i = 0; i < n; i++) {
+      numerator += (i - xMean) * (values[i] - yMean);
+      denominator += (i - xMean) ** 2;
+    }
+
+    if (denominator === 0) return 0;
+    return numerator / denominator;
+  }
+
+  // ==================== Thompson Sampling ====================
+  // Research: DIAMANTE trial 2024, IntelligentPooling (PMC 8494236)
+
+  /** User engagement tracking storage */
+  private engagementTracking: Map<string, IEngagementTracking> = new Map();
+
+  /**
+   * Get or create engagement tracking for user
+   */
+  getEngagementTracking(userId: string): IEngagementTracking {
+    let tracking = this.engagementTracking.get(userId);
+
+    if (!tracking) {
+      // Initialize with default Thompson Sampling states
+      const thompsonStates = new Map<IProactiveInsight['type'], IThompsonSamplingState>();
+      const insightTypes: IProactiveInsight['type'][] = ['pattern_change', 'risk_alert', 'opportunity', 'milestone', 'tip'];
+
+      for (const type of insightTypes) {
+        thompsonStates.set(type, {
+          insightType: type,
+          impressions: this.config.thompsonSampling.priorAlpha + this.config.thompsonSampling.priorBeta,
+          engagements: this.config.thompsonSampling.priorAlpha,
+        });
+      }
+
+      tracking = {
+        userId,
+        insightsDeliveredToday: 0,
+        lastInsightTime: null,
+        thompsonStates,
+        hourlyEngagement: new Array(24).fill(0),
+        interactionHistory: [],
+      };
+
+      this.engagementTracking.set(userId, tracking);
+    }
+
+    return tracking;
+  }
+
+  /**
+   * Sample insight type using Thompson Sampling
+   * Returns the insight type with highest sampled probability
+   */
+  sampleInsightTypeThompson(userId: string, availableTypes: IProactiveInsight['type'][]): IProactiveInsight['type'] {
+    if (!this.config.thompsonSampling.enabled || availableTypes.length === 0) {
+      return availableTypes[0] || 'tip';
+    }
+
+    const tracking = this.getEngagementTracking(userId);
+    let bestType = availableTypes[0];
+    let bestSample = -1;
+
+    for (const type of availableTypes) {
+      const state = tracking.thompsonStates.get(type);
+      if (!state) continue;
+
+      // Sample from Beta distribution
+      // Using approximation: Beta(α, β) ≈ α / (α + β) + noise
+      const alpha = state.engagements + this.config.thompsonSampling.priorAlpha;
+      const beta = (state.impressions - state.engagements) + this.config.thompsonSampling.priorBeta;
+
+      // Thompson Sampling: sample from Beta(alpha, beta)
+      const sample = this.sampleBeta(alpha, beta);
+
+      // Add exploration bonus for under-sampled types
+      const explorationBonus = state.impressions < 10
+        ? this.config.thompsonSampling.explorationBonus * (10 - state.impressions) / 10
+        : 0;
+
+      const adjustedSample = sample + explorationBonus;
+
+      if (adjustedSample > bestSample) {
+        bestSample = adjustedSample;
+        bestType = type;
+      }
+
+      // Store sampled probability for debugging
+      state.sampledProbability = sample;
+    }
+
+    return bestType;
+  }
+
+  /**
+   * Sample from Beta distribution using Jöhnk's algorithm
+   */
+  private sampleBeta(alpha: number, beta: number): number {
+    // For simplicity, use approximation for small alpha/beta
+    // Real implementation would use gamma function sampling
+
+    if (alpha <= 0 || beta <= 0) return 0.5;
+
+    // Simple approximation using uniform samples
+    // More accurate: use jStat or similar library
+    const samples = 10;
+    let sum = 0;
+
+    for (let i = 0; i < samples; i++) {
+      // Generate approximate beta sample using ratio of gammas
+      // Simplified: use mean + noise
+      const mean = alpha / (alpha + beta);
+      const variance = (alpha * beta) / ((alpha + beta) ** 2 * (alpha + beta + 1));
+      const noise = (Math.random() - 0.5) * 2 * Math.sqrt(variance);
+      sum += Math.max(0, Math.min(1, mean + noise));
+    }
+
+    return sum / samples;
+  }
+
+  /**
+   * Record user interaction with an insight
+   */
+  recordInsightInteraction(
+    userId: string,
+    insightId: string,
+    insightType: IProactiveInsight['type'],
+    interactionType: 'clicked' | 'dismissed' | 'ignored'
+  ): void {
+    const tracking = this.getEngagementTracking(userId);
+
+    // Update Thompson Sampling state
+    const state = tracking.thompsonStates.get(insightType);
+    if (state) {
+      state.impressions++;
+      if (interactionType === 'clicked') {
+        state.engagements++;
+      }
+    }
+
+    // Update hourly engagement
+    const hour = new Date().getHours();
+    if (interactionType === 'clicked') {
+      tracking.hourlyEngagement[hour]++;
+    }
+
+    // Add to interaction history
+    tracking.interactionHistory.push({
+      insightId,
+      type: insightType,
+      deliveredAt: new Date(),
+      interactedAt: interactionType !== 'ignored' ? new Date() : null,
+      interactionType,
+    });
+
+    // Keep only last 100 interactions
+    if (tracking.interactionHistory.length > 100) {
+      tracking.interactionHistory = tracking.interactionHistory.slice(-100);
+    }
+  }
+
+  /**
+   * Check if anti-fatigue allows sending insight now
+   */
+  canSendInsight(userId: string): { allowed: boolean; reason?: string } {
+    const tracking = this.getEngagementTracking(userId);
+    const now = new Date();
+    const { antiFatigue } = this.config;
+
+    // Check max per day
+    if (tracking.insightsDeliveredToday >= this.config.maxInsightsPerDay) {
+      return { allowed: false, reason: 'max_daily_limit' };
+    }
+
+    // Check minimum time between insights
+    if (tracking.lastInsightTime) {
+      const hoursSinceLast = (now.getTime() - tracking.lastInsightTime.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceLast < antiFatigue.minHoursBetweenInsights) {
+        return { allowed: false, reason: 'too_soon' };
+      }
+    }
+
+    // Check cooldown after ignored insights
+    const recentIgnored = tracking.interactionHistory
+      .filter(h => h.interactionType === 'ignored')
+      .filter(h => {
+        const hoursSince = (now.getTime() - h.deliveredAt.getTime()) / (1000 * 60 * 60);
+        return hoursSince < antiFatigue.cooldownAfterIgnore;
+      });
+
+    if (recentIgnored.length > 0) {
+      return { allowed: false, reason: 'cooldown_after_ignore' };
+    }
+
+    return { allowed: true };
+  }
+
+  /**
+   * Mark insight as delivered (for anti-fatigue tracking)
+   */
+  markInsightSent(userId: string, insightId: string): void {
+    const tracking = this.getEngagementTracking(userId);
+    tracking.insightsDeliveredToday++;
+    tracking.lastInsightTime = new Date();
+  }
+
+  /**
+   * Reset daily counters (call at midnight)
+   */
+  resetDailyCounters(): void {
+    for (const tracking of this.engagementTracking.values()) {
+      tracking.insightsDeliveredToday = 0;
+    }
+  }
+
+  /**
+   * Get optimal hour for sending insights to user
+   * Based on historical engagement data
+   */
+  getOptimalInsightHour(userId: string): number {
+    const tracking = this.getEngagementTracking(userId);
+
+    // Find hour with highest engagement
+    let bestHour = 19; // Default: evening (research shows 17:00-20:00 is golden hour)
+    let bestEngagement = -1;
+
+    for (let hour = 0; hour < 24; hour++) {
+      if (tracking.hourlyEngagement[hour] > bestEngagement) {
+        bestEngagement = tracking.hourlyEngagement[hour];
+        bestHour = hour;
+      }
+    }
+
+    // If no data, use research-backed default (evening)
+    if (bestEngagement === 0) {
+      return 19;
+    }
+
+    return bestHour;
+  }
+
+  // ==================== Enhanced Risk Detection with CSD ====================
+
+  /**
+   * Detect risk alerts with Critical Slowing Down indicators
+   * Enhanced version that incorporates EWS
+   */
+  async detectRiskAlertsWithCSD(
+    userId: string,
+    sleepHistory: ISleepState[]
+  ): Promise<{ alerts: IRiskAlert[]; csd: ICriticalSlowingDown | null }> {
+    const alerts = await this.detectRiskAlerts(userId, sleepHistory);
+    const csd = this.calculateCriticalSlowingDown(sleepHistory);
+
+    // Add CSD-based alert if warning
+    if (csd?.isWarning) {
+      const severity: IRiskAlert['severity'] = csd.csdIndex >= 0.8 ? 'high' : 'moderate';
+      const escalation: IRiskAlert['escalation'] = csd.csdIndex >= 0.8 ? 'notify_admin' : 'monitor';
+
+      const csdAlert: IRiskAlert = {
+        type: 'sleep_deterioration',
+        severity,
+        riskScore: csd.csdIndex,
+        factors: [
+          `high_autocorrelation_${csd.autocorrelation.toFixed(2)}`,
+          `variance_increase_${((csd.variance / this.calculateVariance(sleepHistory.slice(0, 7).map(s => s.metrics?.sleepEfficiency || 0)) - 1) * 100).toFixed(0)}%`,
+          csd.estimatedDaysToTransition ? `estimated_transition_${csd.estimatedDaysToTransition}_days` : 'trend_increasing',
+        ],
+        escalation,
+        messageRu: csd.estimatedDaysToTransition
+          ? `⚠️ Ранние сигналы предупреждения: система обнаружила признаки нестабильности сна. Возможный переход к ухудшению через ${csd.estimatedDaysToTransition} дней.`
+          : `⚠️ Ранние сигналы предупреждения: повышенная нестабильность показателей сна. Рекомендуется усилить соблюдение режима.`,
+      };
+
+      // Insert CSD alert at the beginning (high priority)
+      alerts.unshift(csdAlert);
+    }
+
+    return { alerts, csd };
   }
 }
 

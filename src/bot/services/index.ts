@@ -307,7 +307,7 @@ export type {
   ICausalInsightsConfig,
 } from './CausalInsightsService';
 
-// ==================== Proactive Intelligence (Sprint 4) ====================
+// ==================== Proactive Intelligence (Sprint 4-5) ====================
 export {
   ProactiveIntelligenceService,
   createProactiveIntelligenceService,
@@ -321,6 +321,11 @@ export type {
   IPatternAlert,
   IRiskAlert,
   IProactiveIntelligenceConfig,
+  // Sprint 5: Critical Slowing Down & Thompson Sampling
+  ICriticalSlowingDown,
+  IThompsonSamplingState,
+  IEngagementTracking,
+  IOptimalTiming,
 } from './ProactiveIntelligenceService';
 
 // ==================== Adaptive Persona (Sprint 4) ====================

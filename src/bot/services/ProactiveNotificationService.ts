@@ -23,6 +23,12 @@ import {
   getMoscowHour,
 } from '../commands/registry';
 import { dailyGreeting } from './DailyGreetingService';
+import {
+  proactiveIntelligenceService,
+  type IProactiveInsight,
+  type ICriticalSlowingDown,
+} from './ProactiveIntelligenceService';
+import type { ISleepState } from '../../sleep/interfaces/ISleepState';
 
 // ==================== Constants (Research-Based) ====================
 
@@ -488,6 +494,238 @@ export class ProactiveNotificationService {
     return {
       times: NOTIFICATION_TIMES,
       reengagement: REENGAGEMENT_CONFIG,
+    };
+  }
+
+  // ==================== Proactive Intelligence Integration ====================
+
+  /** Sleep history cache for proactive insights */
+  private userSleepHistory: Map<string, ISleepState[]> = new Map();
+
+  /**
+   * Update user's sleep history for proactive analysis
+   */
+  updateUserSleepHistory(userId: string, sleepHistory: ISleepState[]): void {
+    this.userSleepHistory.set(userId, sleepHistory);
+  }
+
+  /**
+   * Send proactive insight to user using Thompson Sampling
+   * This is the main integration point with ProactiveIntelligenceService
+   *
+   * Research basis:
+   * - Thompson Sampling: DIAMANTE trial 2024 (personalized message selection)
+   * - CSD: Smit et al. 2025 (early warning signals)
+   * - Anti-fatigue: PMC 5466696 (max 2-3 notifications/day)
+   */
+  async sendProactiveInsight(userId: string): Promise<boolean> {
+    const userData = this.activeUsers.get(userId);
+    if (!userData) return false;
+
+    const sleepHistory = this.userSleepHistory.get(userId);
+    if (!sleepHistory || sleepHistory.length < 7) {
+      console.log(`[Proactive] Not enough data for ${userId}`);
+      return false;
+    }
+
+    // Check anti-fatigue limits
+    const canSend = proactiveIntelligenceService.canSendInsight(userId);
+    if (!canSend.allowed) {
+      console.log(`[Proactive] Skipping ${userId}: ${canSend.reason}`);
+      return false;
+    }
+
+    // Check 14-day rule
+    if (!this.canSendFollowUp(userData)) {
+      console.log(`[Proactive] Skipping ${userId}: 14-day window exceeded`);
+      return false;
+    }
+
+    try {
+      // Run daily analysis with CSD
+      const analysis = await proactiveIntelligenceService.runDailyAnalysis(userId, sleepHistory);
+
+      if (analysis.insights.length === 0) {
+        console.log(`[Proactive] No insights available for ${userId}`);
+        return false;
+      }
+
+      // Use Thompson Sampling to select best insight type
+      const availableTypes = [...new Set(analysis.insights.map(i => i.type))];
+      const selectedType = proactiveIntelligenceService.sampleInsightTypeThompson(userId, availableTypes);
+
+      // Find best insight of selected type
+      const insight = analysis.insights.find(i => i.type === selectedType) || analysis.insights[0];
+
+      // Check CSD for early warning
+      const { csd } = await proactiveIntelligenceService.detectRiskAlertsWithCSD(userId, sleepHistory);
+
+      // Build notification with insight
+      const notification = this.buildInsightNotification(insight, csd, userData.userName);
+
+      // Send notification
+      await this.sendNotification(userData.chatId, notification);
+
+      // Track for Thompson Sampling and anti-fatigue
+      proactiveIntelligenceService.markInsightSent(userId, insight.id);
+      userData.lastNotificationAt = new Date();
+
+      console.log(`[Proactive] Sent ${insight.type} insight to ${userId}`);
+      return true;
+    } catch (error) {
+      console.error(`[Proactive] Failed to send insight to ${userId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Build notification from proactive insight
+   */
+  private buildInsightNotification(
+    insight: IProactiveInsight,
+    csd: ICriticalSlowingDown | null,
+    userName?: string
+  ): { message: string; keyboard: { text: string; callbackData?: string }[][] } {
+    let message = '';
+
+    // Add greeting if available
+    if (userName) {
+      message += `${userName}, `;
+    }
+
+    // Add main insight message
+    message += `**${insight.titleRu}**\n\n`;
+    message += insight.messageRu;
+
+    // Add CSD warning if detected
+    if (csd?.isWarning) {
+      message += '\n\n';
+      message += csd.estimatedDaysToTransition
+        ? `⚠️ _Система обнаружила ранние признаки изменений. Важно следить за режимом в ближайшие ${csd.estimatedDaysToTransition} дней._`
+        : `⚠️ _Повышенная нестабильность показателей. Рекомендуется усилить внимание к режиму сна._`;
+    }
+
+    // Add confidence indicator
+    const confidenceEmoji = insight.confidence >= 0.8 ? '🎯' : insight.confidence >= 0.6 ? '📊' : '💡';
+    message += `\n\n${confidenceEmoji} Уверенность: ${Math.round(insight.confidence * 100)}%`;
+
+    // Build keyboard
+    const keyboard: { text: string; callbackData?: string }[][] = [];
+
+    if (insight.action?.command) {
+      keyboard.push([
+        { text: insight.action.text || 'Подробнее', callbackData: `cmd:${insight.action.command}` },
+      ]);
+    }
+
+    // Add feedback buttons for Thompson Sampling
+    keyboard.push([
+      { text: '👍 Полезно', callbackData: `insight_feedback:${insight.id}:clicked` },
+      { text: '👎 Не актуально', callbackData: `insight_feedback:${insight.id}:dismissed` },
+    ]);
+
+    return { message, keyboard };
+  }
+
+  /**
+   * Handle insight feedback (for Thompson Sampling learning)
+   */
+  recordInsightFeedback(
+    userId: string,
+    insightId: string,
+    insightType: IProactiveInsight['type'],
+    feedback: 'clicked' | 'dismissed'
+  ): void {
+    proactiveIntelligenceService.recordInsightInteraction(userId, insightId, insightType, feedback);
+    console.log(`[Proactive] Recorded ${feedback} feedback from ${userId} for ${insightType}`);
+  }
+
+  /**
+   * Send proactive insights to all eligible users
+   * Called periodically (suggested: every 2-4 hours during 17:00-21:00)
+   */
+  async sendProactiveInsightsToAll(): Promise<{ sent: number; skipped: number }> {
+    const hour = getMoscowHour();
+
+    // Research: "golden hour" is 17:00-20:00 (JMIR 2023)
+    // Don't send outside reasonable hours
+    if (hour < 10 || hour > 21) {
+      console.log(`[Proactive] Outside active hours (${hour}:00), skipping batch`);
+      return { sent: 0, skipped: this.activeUsers.size };
+    }
+
+    let sent = 0;
+    let skipped = 0;
+
+    for (const [userId] of this.activeUsers) {
+      // Check optimal hour for this user
+      const optimalHour = proactiveIntelligenceService.getOptimalInsightHour(userId);
+
+      // Send if within ±1 hour of optimal time
+      if (Math.abs(hour - optimalHour) <= 1) {
+        const success = await this.sendProactiveInsight(userId);
+        if (success) {
+          sent++;
+        } else {
+          skipped++;
+        }
+      } else {
+        skipped++;
+      }
+    }
+
+    console.log(`[Proactive] Batch complete: sent=${sent}, skipped=${skipped}`);
+    return { sent, skipped };
+  }
+
+  /**
+   * Schedule proactive insights job
+   * Runs every 2 hours during 10:00-21:00 MSK
+   */
+  startProactiveInsightsJob(): void {
+    // Run at 10:00, 12:00, 14:00, 16:00, 18:00, 20:00 MSK
+    const task = cron.schedule(
+      '0 10,12,14,16,18,20 * * *',
+      async () => {
+        console.log('[Proactive] Running proactive insights job');
+        await this.sendProactiveInsightsToAll();
+      },
+      { timezone: 'Europe/Moscow' }
+    );
+
+    this.jobs.set('proactive_insights', task);
+    console.log('[Proactive] Scheduled proactive insights job (every 2h, 10:00-20:00 MSK)');
+  }
+
+  /**
+   * Reset daily counters at midnight
+   */
+  scheduleDailyReset(): void {
+    const task = cron.schedule(
+      '0 0 * * *',
+      () => {
+        proactiveIntelligenceService.resetDailyCounters();
+        console.log('[Proactive] Reset daily counters');
+      },
+      { timezone: 'Europe/Moscow' }
+    );
+
+    this.jobs.set('daily_reset', task);
+    console.log('[Proactive] Scheduled daily reset job (00:00 MSK)');
+  }
+
+  /**
+   * Get proactive intelligence stats for user
+   */
+  getProactiveStats(userId: string): {
+    tracking: ReturnType<typeof proactiveIntelligenceService.getEngagementTracking>;
+    canSend: ReturnType<typeof proactiveIntelligenceService.canSendInsight>;
+    optimalHour: number;
+  } {
+    return {
+      tracking: proactiveIntelligenceService.getEngagementTracking(userId),
+      canSend: proactiveIntelligenceService.canSendInsight(userId),
+      optimalHour: proactiveIntelligenceService.getOptimalInsightHour(userId),
     };
   }
 }
