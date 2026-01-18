@@ -20,6 +20,11 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
+import {
+  sleepPredictionService,
+  type ISleepPrediction,
+  type ISleepEarlyWarning,
+} from '../services/SleepPredictionService';
 
 /**
  * /progress Command Implementation
@@ -104,6 +109,10 @@ ${formatter.tip('Чем больше данных, тем точнее анал�
     // Response status indicator
     const statusInfo = this.getResponseStatusInfo(report.responseStatus);
 
+    // Get PLRNN-based 7-day prediction
+    const prediction = sleepPredictionService.predict(ctx.userId, 'long');
+    const predictionSection = this.buildPredictionSection(prediction);
+
     // Sonya's encouragement based on therapy week and response
     const weekMessage = sonya.encourageByWeek(report.currentWeek);
     const emotionalResponse = report.responseStatus === 'responding'
@@ -159,6 +168,8 @@ ${formatter.divider()}
 
 *📈 Эффективность сна (7 дней):*
 ${trendChart}
+
+${predictionSection}
 
 ${formatter.divider()}
 
@@ -247,6 +258,165 @@ _${statusInfo.description}_
           label: 'Требуется корректировка',
           description: 'Рассмотрим дополнительные подходы (MBT-I, ACT-I).',
         };
+    }
+  }
+
+  // ==================== PLRNN Prediction Section ====================
+
+  /**
+   * Build PLRNN prediction visualization section
+   * Research-informed design (2025-2026):
+   * - Color coding improves risk understanding (HIGH confidence)
+   * - Patients prefer simple formats over confidence intervals (HIGH confidence)
+   * - Trend emoji provides quick understanding
+   */
+  private buildPredictionSection(prediction: ISleepPrediction | null): string {
+    if (!prediction) {
+      return ''; // No prediction available yet
+    }
+
+    const lines: string[] = [];
+    lines.push(`${formatter.divider()}`);
+    lines.push('');
+    lines.push('*🔮 Прогноз на 7 дней:*');
+
+    // Trend emoji and color
+    const trendInfo = this.getTrendInfo(prediction.trend);
+    lines.push(`${trendInfo.icon} Тренд: *${trendInfo.label}*`);
+
+    // Predicted Sleep Efficiency trajectory (simplified, no CI per research)
+    lines.push('');
+    lines.push('_Прогнозируемая эффективность сна:_');
+    lines.push(this.buildPredictionTrajectory(prediction.sleepEfficiencyTrajectory));
+
+    // Show deterioration risk if significant
+    if (prediction.deteriorationRisk > 0.3) {
+      const riskInfo = this.getRiskInfo(prediction.deteriorationRisk);
+      lines.push('');
+      lines.push(`${riskInfo.icon} _${riskInfo.label}_`);
+    }
+
+    // Early warnings summary (if any)
+    if (prediction.earlyWarnings.length > 0) {
+      const warningsSummary = this.buildWarningsSummary(prediction.earlyWarnings);
+      if (warningsSummary) {
+        lines.push('');
+        lines.push(warningsSummary);
+      }
+    }
+
+    // Top recommendation from prediction
+    if (prediction.recommendations.length > 0) {
+      lines.push('');
+      lines.push(`💡 ${prediction.recommendations[0]}`);
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Get trend information with emoji and label
+   */
+  private getTrendInfo(trend: ISleepPrediction['trend']): {
+    icon: string;
+    label: string;
+  } {
+    switch (trend) {
+      case 'improving':
+        return { icon: '🟢📈', label: 'Улучшение' };
+      case 'stable':
+        return { icon: '🟡➡️', label: 'Стабильно' };
+      case 'declining':
+        return { icon: '🟠📉', label: 'Снижение' };
+      case 'critical':
+        return { icon: '🔴⚠️', label: 'Требует внимания' };
+    }
+  }
+
+  /**
+   * Get risk level information
+   */
+  private getRiskInfo(risk: number): {
+    icon: string;
+    label: string;
+  } {
+    if (risk >= 0.7) {
+      return { icon: '🔴', label: 'Высокий риск ухудшения сна — рекомендуем усилить режим' };
+    }
+    if (risk >= 0.5) {
+      return { icon: '🟠', label: 'Умеренный риск — следите за режимом сна' };
+    }
+    return { icon: '🟡', label: 'Небольшой риск — продолжайте программу' };
+  }
+
+  /**
+   * Build simplified prediction trajectory visualization
+   * Uses emoji bar instead of numbers with confidence intervals
+   * (Research: patients don't like confidence intervals)
+   */
+  private buildPredictionTrajectory(
+    trajectory: ISleepPrediction['sleepEfficiencyTrajectory']
+  ): string {
+    if (trajectory.length === 0) return 'Недостаточно данных';
+
+    const days = ['Д1', 'Д2', 'Д3', 'Д4', 'Д5', 'Д6', 'Д7'];
+    const lines: string[] = [];
+
+    trajectory.slice(0, 7).forEach((point, i) => {
+      const dayLabel = days[i] || `Д${i + 1}`;
+      const valueRounded = Math.round(point.predicted);
+      const seEmoji = this.getSEEmoji(valueRounded);
+      const miniBar = this.miniBar(valueRounded);
+
+      lines.push(`${dayLabel}: ${miniBar} ${seEmoji} ${valueRounded}%`);
+    });
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Get SE level emoji indicator
+   */
+  private getSEEmoji(se: number): string {
+    if (se >= 85) return '🟢';
+    if (se >= 75) return '🟡';
+    if (se >= 65) return '🟠';
+    return '🔴';
+  }
+
+  /**
+   * Build early warnings summary (simplified for patients)
+   * Research: Don't use "Critical Slowing Down" terminology
+   */
+  private buildWarningsSummary(warnings: ISleepEarlyWarning[]): string {
+    // Filter to show only significant warnings
+    const significantWarnings = warnings.filter(
+      w => w.severity === 'high' || w.severity === 'critical' || w.strength > 0.6
+    );
+
+    if (significantWarnings.length === 0) return '';
+
+    const lines: string[] = [];
+    lines.push('⚠️ *На что обратить внимание:*');
+
+    // Show top 2 warnings max
+    significantWarnings.slice(0, 2).forEach(warning => {
+      const severityIcon = this.getWarningSeverityIcon(warning.severity);
+      lines.push(`${severityIcon} ${warning.messageRu}`);
+    });
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Get warning severity icon
+   */
+  private getWarningSeverityIcon(severity: ISleepEarlyWarning['severity']): string {
+    switch (severity) {
+      case 'critical': return '🔴';
+      case 'high': return '🟠';
+      case 'moderate': return '🟡';
+      default: return '⚪';
     }
   }
 }

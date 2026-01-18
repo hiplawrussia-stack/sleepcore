@@ -87,6 +87,8 @@ import {
   // Phase 1.4 Safety: Crisis Detection & Escalation
   crisisDetectionService,
   crisisEscalationService,
+  // Sprint 1 CogniCore: PLRNN-based Sleep Prediction
+  sleepPredictionService,
   type IStreakData,
   type IMoodHistory,
   type MoodLevel,
@@ -2609,6 +2611,12 @@ async function main(): Promise<void> {
   } else {
     console.warn('[CrisisEscalation] WARNING: No ADMIN_USER_IDS configured - crisis escalation will not notify anyone!');
   }
+
+  // --- Sprint 1 CogniCore: PLRNN-based Sleep Prediction Service ---
+  // Uses PLRNNEngine for 7-day trajectory prediction and Early Warning Signals
+  console.log('[PLRNN] Sleep Prediction Service initialized (CogniCore Engine 2.0)');
+  // Note: sleepPredictionService is a singleton, already initialized on import
+  // It will be used by ProgressCommand for 7-day predictions and TodayCommand for Early Warning Signals
 
   // Setup handlers
   setupCommands(bot, api, { userRepository, auditService });

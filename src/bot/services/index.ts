@@ -247,6 +247,7 @@ export type {
 export {
   SleepPredictionService,
   createSleepPredictionService,
+  sleepPredictionService, // Sprint 1: Singleton instance for runtime
   DEFAULT_SLEEP_PREDICTION_CONFIG,
   SLEEP_DIMENSION_MAPPING,
 } from './SleepPredictionService';

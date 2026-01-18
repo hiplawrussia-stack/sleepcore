@@ -22,6 +22,11 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
+import {
+  sleepPredictionService,
+  type ISleepPrediction,
+  type ISleepEarlyWarning,
+} from '../services/SleepPredictionService';
 
 /**
  * /today Command Implementation
@@ -143,11 +148,15 @@ ${formatter.tip('Чем больше данных, тем точнее реко�
     // Sonya's greeting
     const greeting = sonya.greet({ timeOfDay: this.getTimeOfDay() });
 
+    // Get Early Warning Signals from PLRNN prediction (short-term)
+    const prediction = sleepPredictionService.predict(ctx.userId, 'short');
+    const ewsAlert = this.buildEarlyWarningAlert(prediction);
+
     const message = `
 ${sonya.emoji} *${sonya.name}*
 
 ${greeting.text}
-
+${ewsAlert}
 ${formatter.header('Задание на сегодня')}
 
 ${icon} *${name}*
@@ -175,7 +184,7 @@ ${sonya.tip('Выполняй задания последовательно дл
       success: true,
       message,
       keyboard,
-      metadata: { intervention },
+      metadata: { intervention, prediction },
     };
   }
 
@@ -187,6 +196,94 @@ ${sonya.tip('Выполняй задания последовательно дл
     if (hour >= 12 && hour < 17) return 'day';
     if (hour >= 17 && hour < 22) return 'evening';
     return 'night';
+  }
+
+  // ==================== Early Warning Signals ====================
+
+  /**
+   * Build Early Warning Signals alert for /today command
+   *
+   * Research-informed design (2025-2026):
+   * - Critical Slowing Down (CSD) is key EWS theory (HIGH confidence, Karger 2016, PNAS 2014)
+   * - DON'T use "Critical Slowing Down" terminology with patients
+   * - Use actionable, understandable language
+   * - Color-code by severity (🟢🟡🟠🔴)
+   */
+  private buildEarlyWarningAlert(prediction: ISleepPrediction | null): string {
+    if (!prediction) {
+      return ''; // No prediction available
+    }
+
+    // Filter significant warnings (high/critical or high strength)
+    const significantWarnings = prediction.earlyWarnings.filter(
+      (w) => w.severity === 'high' || w.severity === 'critical' || w.strength > 0.7
+    );
+
+    if (significantWarnings.length === 0) {
+      return ''; // No significant warnings
+    }
+
+    // Build alert block
+    const lines: string[] = [];
+    lines.push('');
+    lines.push(formatter.divider());
+
+    // Show trend context
+    const trendIcon = this.getTrendIcon(prediction.trend);
+    if (prediction.trend === 'declining' || prediction.trend === 'critical') {
+      lines.push(`${trendIcon} *Важное наблюдение:*`);
+    } else {
+      lines.push(`${trendIcon} *Обратите внимание:*`);
+    }
+
+    // Show top 2 warnings with patient-friendly language
+    const topWarnings = significantWarnings.slice(0, 2);
+    for (const warning of topWarnings) {
+      const icon = this.getWarningSeverityIcon(warning.severity);
+      // Use Russian message which is already patient-friendly
+      lines.push(`${icon} ${warning.messageRu}`);
+
+      // Add actionable recommendation
+      if (warning.recommendation && warning.severity !== 'low') {
+        lines.push(`   _→ ${warning.recommendation}_`);
+      }
+    }
+
+    // Add overall risk context if high
+    if (prediction.deteriorationRisk > 0.5) {
+      lines.push('');
+      const riskIcon = prediction.deteriorationRisk > 0.7 ? '🔴' : '🟠';
+      lines.push(`${riskIcon} _Сегодня особенно важно следовать программе_`);
+    }
+
+    lines.push(formatter.divider());
+    lines.push('');
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Get trend icon
+   */
+  private getTrendIcon(trend: ISleepPrediction['trend']): string {
+    switch (trend) {
+      case 'improving': return '🟢';
+      case 'stable': return '🟡';
+      case 'declining': return '🟠';
+      case 'critical': return '🔴';
+    }
+  }
+
+  /**
+   * Get warning severity icon
+   */
+  private getWarningSeverityIcon(severity: ISleepEarlyWarning['severity']): string {
+    switch (severity) {
+      case 'critical': return '🔴';
+      case 'high': return '🟠';
+      case 'moderate': return '🟡';
+      default: return '⚪';
+    }
   }
 }
 

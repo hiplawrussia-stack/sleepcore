@@ -20,7 +20,12 @@
 
 import { SleepDiaryService } from './diary/SleepDiaryService';
 import { CBTIEngine } from './cbt-i/engines/CBTIEngine';
-import { SleepCorePOMDP, type ISleepObservation, type SleepAction } from './platform/SleepCorePOMDP';
+import {
+  SleepCoreAdapter,
+  createSleepCoreAdapter,
+  type ISleepInterventionSelection,
+} from './platform/SleepCoreAdapter';
+import type { ISleepObservation, SleepAction } from './platform/SleepCorePOMDP';
 import { ThirdWaveCoordinator } from './third-wave/engines/ThirdWaveCoordinator';
 import type {
   ISleepState,
@@ -172,7 +177,7 @@ export interface IProgressReport {
 export class SleepCoreAPI {
   private readonly diaryService: SleepDiaryService;
   private readonly cbtiEngine: CBTIEngine;
-  private readonly pomdp: SleepCorePOMDP;
+  private readonly adapter: SleepCoreAdapter;
   private readonly thirdWave: ThirdWaveCoordinator;
 
   // NEW: Circadian & Cultural Adaptation Engines
@@ -207,7 +212,7 @@ export class SleepCoreAPI {
   constructor() {
     this.diaryService = new SleepDiaryService();
     this.cbtiEngine = new CBTIEngine();
-    this.pomdp = new SleepCorePOMDP();
+    this.adapter = createSleepCoreAdapter({ language: 'ru' });
     this.thirdWave = new ThirdWaveCoordinator();
 
     // NEW: Initialize Circadian & Cultural Adaptation Engines
@@ -300,8 +305,10 @@ export class SleepCoreAPI {
   /**
    * Initialize CBT-I treatment plan
    * Requires at least 7 days of baseline sleep data
+   *
+   * Now uses SleepCoreAdapter with Thompson Sampling for intervention optimization.
    */
-  initializeTreatment(userId: string, baselineData: ISleepState[]): ICBTIPlan {
+  async initializeTreatment(userId: string, baselineData: ISleepState[]): Promise<ICBTIPlan> {
     if (baselineData.length < 7) {
       throw new Error('Need at least 7 days of baseline sleep data');
     }
@@ -314,16 +321,12 @@ export class SleepCoreAPI {
       this.sessions.set(userId, { ...session, plan });
     }
 
-    // Initialize POMDP with baseline
+    // Initialize adapter with baseline data
+    // The adapter builds beliefs incrementally through selectIntervention calls
+    // Process baseline states to warm up the Thompson Sampling model
     for (const state of baselineData) {
-      this.pomdp.updateBelief({
-        source: state.source,
-        metrics: state.metrics,
-        subjectiveQuality: this.qualityToNumber(state.subjectiveQuality),
-        followedPrescription: true,
-        morningMood: state.morningAlertness * 5,
-        timestamp: state.timestamp,
-      });
+      // Select intervention for each baseline state to populate beliefs
+      await this.adapter.selectIntervention(state, userId);
     }
 
     return plan;
@@ -331,24 +334,11 @@ export class SleepCoreAPI {
 
   /**
    * Process daily check-in and get recommendations
-   * Now async due to CogniCore Thompson Sampling integration
+   * Uses CogniCore Thompson Sampling via SleepCoreAdapter for personalized intervention selection.
    */
   async processDailyCheckIn(checkIn: IDailyCheckIn): Promise<IInterventionResult> {
     // Add diary entry
     const metrics = this.addDiaryEntry(checkIn.diaryEntry);
-
-    // Create observation for POMDP
-    const observation: ISleepObservation = {
-      source: 'diary',
-      metrics,
-      subjectiveQuality: checkIn.morningMood,
-      followedPrescription: checkIn.followedSleepWindow,
-      morningMood: checkIn.morningMood,
-      timestamp: new Date(),
-    };
-
-    // Update POMDP belief
-    this.pomdp.updateBelief(observation);
 
     // Get session and plan
     const session = this.sessions.get(checkIn.userId);
@@ -364,25 +354,33 @@ export class SleepCoreAPI {
     userStates.push(currentState);
     this.sleepStates.set(checkIn.userId, userStates);
 
-    // Get CBT-I intervention (now async with CogniCore integration)
+    // Get CBT-I intervention from engine
     const intervention = await this.cbtiEngine.getNextIntervention(session.plan, currentState);
 
-    // Use POMDP to select action (kept for backwards compatibility, will be deprecated)
-    const pomdpAction = this.pomdp.selectAction(
-      this.pomdp.sleepStateToPomdpState(currentState)
-    );
+    // Use SleepCoreAdapter with Thompson Sampling for action selection
+    // The adapter updates beliefs internally and selects optimal intervention
+    const adapterSelection = await this.adapter.selectIntervention(currentState, checkIn.userId);
 
-    // Calculate confidence based on action stats
-    const actionStats = this.pomdp.getActionStats().get(pomdpAction);
-    const confidence = actionStats
-      ? actionStats.alpha / (actionStats.alpha + actionStats.beta)
-      : 0.5;
+    // Record previous outcome if we have history (for Thompson Sampling learning)
+    // The adapter calculates reward internally based on state improvement
+    if (userStates.length > 1) {
+      const previousState = userStates[userStates.length - 2];
+      await this.adapter.recordOutcome(
+        adapterSelection.action,
+        previousState,
+        currentState,
+        checkIn.userId
+      );
+    }
 
     return {
       intervention,
-      confidence,
-      alternatives: [], // Could generate alternatives here
-      rationale: this.generateRationale(intervention, pomdpAction, currentState),
+      confidence: adapterSelection.confidence,
+      alternatives: adapterSelection.alternatives.map((alt) => ({
+        ...intervention,
+        rationale: `Альтернатива: ${alt.action}`,
+      })).slice(0, 2),
+      rationale: this.generateRationale(intervention, adapterSelection.action, currentState),
     };
   }
 
