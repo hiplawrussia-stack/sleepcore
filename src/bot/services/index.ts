@@ -361,5 +361,81 @@ export type {
   IVoiceBiomarkerConfig,
 } from './VoiceBiomarkerService';
 
+// ==================== Metacognitive Therapy (Sprint 7) ====================
+export {
+  WorryPostponementService,
+  worryPostponementService,
+} from './WorryPostponementService';
+
+export type {
+  IWorryEntry,
+  IWorryTimeSettings,
+  IWorrySession,
+  IWorryStatistics,
+  IWorryPostponementConfig,
+} from './WorryPostponementService';
+
+export {
+  ATTService,
+  attService,
+  createATTService,
+  DEFAULT_ATT_CONFIG,
+} from './ATTService';
+
+export type {
+  ATTPhase,
+  IATTAudioInstruction,
+  IATTSessionRecord,
+  IATTProgress,
+  IATTConfig,
+} from './ATTService';
+
+export {
+  MCQ30AssessmentService,
+  mcq30AssessmentService,
+  createMCQ30AssessmentService,
+  MCQ30_ITEMS,
+  MCQ30_SUBSCALES,
+  MCQ30_RESPONSE_OPTIONS,
+  DEFAULT_MCQ30_CONFIG,
+} from './MCQ30AssessmentService';
+
+export type {
+  MCQ30Subscale,
+  IMCQ30Item,
+  ISubscaleInfo,
+  IMCQ30Response,
+  IMCQ30Result,
+  IMCQ30Config,
+} from './MCQ30AssessmentService';
+
+export {
+  DetachedMindfulnessService,
+  detachedMindfulnessService,
+  createDetachedMindfulnessService,
+  DM_EXERCISES,
+  DEFAULT_DM_CONFIG,
+} from './DetachedMindfulnessService';
+
+export type {
+  DMExerciseType,
+  IDMExercise,
+  IDMSessionRecord,
+  IDMSkillLevel,
+  IDMConfig,
+} from './DetachedMindfulnessService';
+
+export {
+  MetacognitiveEngineService,
+  metacognitiveEngineService,
+} from './MetacognitiveEngineService';
+
+export type {
+  MCTTrigger,
+  IMCTResponse,
+  IMCTStatus,
+  IMCTCSDData,
+} from './MetacognitiveEngineService';
+
 // ==================== Modules Re-export ====================
 export * from '../../modules';
