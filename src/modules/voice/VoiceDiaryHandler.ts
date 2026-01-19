@@ -15,6 +15,10 @@
  */
 
 import { WhisperService, ITranscriptionResult } from './WhisperService';
+import type {
+  VoiceBiomarkerService,
+  IVoiceBiomarkerResult,
+} from '../../bot/services/VoiceBiomarkerService';
 
 /**
  * Voice diary entry
@@ -33,6 +37,15 @@ export interface IVoiceDiaryEntry {
     fileId?: string;
     fileSize?: number;
     language?: string;
+  };
+  /** Voice biomarker analysis (Sprint 6) */
+  biomarkers?: {
+    depressionRisk: number;
+    anxietyRisk: number;
+    combinedRisk: number;
+    confidence: number;
+    interpretation: string;
+    escalationRecommended: boolean;
   };
 }
 
@@ -56,6 +69,8 @@ export interface IVoiceProcessingResult {
   transcription?: ITranscriptionResult;
   error?: string;
   validationIssues?: string[];
+  /** Voice biomarker analysis result (Sprint 6) */
+  biomarkerResult?: IVoiceBiomarkerResult;
 }
 
 /**
@@ -78,15 +93,18 @@ export type EmotionAnalyzer = (text: string, userId: string) => Promise<IEmotion
 export class VoiceDiaryHandler {
   private whisperService: WhisperService;
   private emotionAnalyzer?: EmotionAnalyzer;
+  private biomarkerService?: VoiceBiomarkerService;
   private minDuration: number = 2; // Minimum 2 seconds
   private maxDuration: number = 300; // Maximum 5 minutes
 
   constructor(
     whisperService: WhisperService,
-    emotionAnalyzer?: EmotionAnalyzer
+    emotionAnalyzer?: EmotionAnalyzer,
+    biomarkerService?: VoiceBiomarkerService
   ) {
     this.whisperService = whisperService;
     this.emotionAnalyzer = emotionAnalyzer;
+    this.biomarkerService = biomarkerService;
   }
 
   /**
@@ -149,6 +167,25 @@ export class VoiceDiaryHandler {
         }
       }
 
+      // Analyze voice biomarkers if service is available (Sprint 6)
+      let biomarkerResult: IVoiceBiomarkerResult | undefined;
+      if (this.biomarkerService) {
+        try {
+          // Download audio buffer for biomarker analysis
+          const audioResponse = await fetch(audioUrl);
+          if (audioResponse.ok) {
+            const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+            biomarkerResult = await this.biomarkerService.analyzeVoice(
+              userId,
+              audioBuffer,
+              voice.duration
+            );
+          }
+        } catch (error) {
+          console.warn('Voice biomarker analysis failed:', error);
+        }
+      }
+
       // Create diary entry
       const entry: IVoiceDiaryEntry = {
         id: `voice_${Date.now()}_${Math.random().toString(36).slice(2)}`,
@@ -165,6 +202,15 @@ export class VoiceDiaryHandler {
           fileSize: voice.fileSize,
           language: transcription.language,
         },
+        // Add biomarker data if available
+        biomarkers: biomarkerResult ? {
+          depressionRisk: biomarkerResult.depressionRisk,
+          anxietyRisk: biomarkerResult.anxietyRisk,
+          combinedRisk: biomarkerResult.combinedRisk,
+          confidence: biomarkerResult.confidence,
+          interpretation: biomarkerResult.interpretation.summaryRu,
+          escalationRecommended: biomarkerResult.interpretation.escalationRecommended,
+        } : undefined,
       };
 
       return {
@@ -172,6 +218,7 @@ export class VoiceDiaryHandler {
         entry,
         transcription,
         validationIssues: validation.isValid ? undefined : validation.issues,
+        biomarkerResult,
       };
     } catch (error) {
       console.error('Voice processing error:', error);
@@ -308,6 +355,13 @@ export class VoiceDiaryHandler {
   }
 
   /**
+   * Set voice biomarker service (Sprint 6)
+   */
+  setBiomarkerService(service: VoiceBiomarkerService): void {
+    this.biomarkerService = service;
+  }
+
+  /**
    * Configure duration limits
    */
   setDurationLimits(min: number, max: number): void {
@@ -319,7 +373,8 @@ export class VoiceDiaryHandler {
 // Factory function
 export function createVoiceDiaryHandler(
   whisperService: WhisperService,
-  emotionAnalyzer?: EmotionAnalyzer
+  emotionAnalyzer?: EmotionAnalyzer,
+  biomarkerService?: VoiceBiomarkerService
 ): VoiceDiaryHandler {
-  return new VoiceDiaryHandler(whisperService, emotionAnalyzer);
+  return new VoiceDiaryHandler(whisperService, emotionAnalyzer, biomarkerService);
 }

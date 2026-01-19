@@ -343,5 +343,23 @@ export type {
   ICommunicationProfile,
 } from './AdaptivePersonaService';
 
+// ==================== Voice Biomarkers (Sprint 6) ====================
+export {
+  VoiceBiomarkerService,
+  createVoiceBiomarkerService,
+  voiceBiomarkerService,
+  DEFAULT_VOICE_BIOMARKER_CONFIG,
+} from './VoiceBiomarkerService';
+
+export type {
+  IAcousticFeatures,
+  IVoiceBiomarkerResult,
+  IFeatureDeviation,
+  IVoiceInterpretation,
+  IRecordingQuality,
+  IVoiceBaseline,
+  IVoiceBiomarkerConfig,
+} from './VoiceBiomarkerService';
+
 // ==================== Modules Re-export ====================
 export * from '../../modules';

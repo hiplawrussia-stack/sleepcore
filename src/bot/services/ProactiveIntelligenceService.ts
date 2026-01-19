@@ -23,6 +23,7 @@ import type { ISleepState, ISleepMetrics } from '../../sleep/interfaces/ISleepSt
 import { sleepPredictionService, type ISleepPrediction } from './SleepPredictionService';
 import { digitalTwinService } from './DigitalTwinService';
 import { causalInsightsService } from './CausalInsightsService';
+import { voiceBiomarkerService } from './VoiceBiomarkerService';
 
 // ==================== Interfaces ====================
 
@@ -1435,6 +1436,206 @@ export class ProactiveIntelligenceService {
     }
 
     return { alerts, csd };
+  }
+
+  // ==================== Multi-Modal Risk Assessment (Sprint 6) ====================
+  // Combines CSD from sleep data with voice biomarkers for comprehensive assessment
+
+  /**
+   * Combined risk assessment using CSD + Voice Biomarkers
+   * Research basis: Multi-modal assessment improves prediction accuracy
+   *
+   * @param userId - User ID
+   * @param sleepHistory - Sleep state history
+   * @returns Combined risk assessment with all modalities
+   */
+  async getCombinedRiskAssessment(
+    userId: string,
+    sleepHistory: ISleepState[]
+  ): Promise<{
+    available: boolean;
+    combinedRiskScore: number;
+    riskLevel: 'low' | 'moderate' | 'high' | 'critical';
+    components: {
+      sleepCSD: { available: boolean; score: number; isWarning: boolean };
+      voiceBiomarkers: { available: boolean; depressionRisk: number; anxietyRisk: number; trend: string };
+      sleepEfficiency: { available: boolean; value: number; trend: string };
+    };
+    primaryConcerns: string[];
+    recommendations: string[];
+    escalationRequired: boolean;
+    summaryRu: string;
+  }> {
+    // Get CSD indicators
+    const csd = this.calculateCriticalSlowingDown(sleepHistory);
+
+    // Get voice biomarker risk
+    const voiceRisk = voiceBiomarkerService.getVoiceRiskForCSD(userId);
+
+    // Get recent sleep efficiency
+    const recentSE = sleepHistory.length >= 7
+      ? this.calculateAverageSE(sleepHistory.slice(-7))
+      : null;
+    const previousSE = sleepHistory.length >= 14
+      ? this.calculateAverageSE(sleepHistory.slice(-14, -7))
+      : null;
+
+    // Calculate sleep efficiency trend
+    let seTrend: 'improving' | 'stable' | 'worsening' = 'stable';
+    if (recentSE !== null && previousSE !== null) {
+      const change = recentSE - previousSE;
+      if (change > 0.05) seTrend = 'improving';
+      else if (change < -0.05) seTrend = 'worsening';
+    }
+
+    // Build components
+    const components = {
+      sleepCSD: {
+        available: csd !== null,
+        score: csd?.csdIndex || 0,
+        isWarning: csd?.isWarning || false,
+      },
+      voiceBiomarkers: {
+        available: voiceRisk.available,
+        depressionRisk: voiceRisk.depressionRisk,
+        anxietyRisk: voiceRisk.anxietyRisk,
+        trend: voiceRisk.trend,
+      },
+      sleepEfficiency: {
+        available: recentSE !== null,
+        value: recentSE || 0,
+        trend: seTrend,
+      },
+    };
+
+    // Calculate combined risk score (weighted average)
+    let combinedScore = 0;
+    let totalWeight = 0;
+
+    // CSD weight: 0.35 (strongest predictor from research)
+    if (components.sleepCSD.available) {
+      combinedScore += components.sleepCSD.score * 0.35;
+      totalWeight += 0.35;
+    }
+
+    // Voice biomarkers weight: 0.30 (70-83% accuracy per research)
+    if (components.voiceBiomarkers.available) {
+      const voiceScore = components.voiceBiomarkers.depressionRisk * 0.6 +
+                        components.voiceBiomarkers.anxietyRisk * 0.4;
+      combinedScore += voiceScore * 0.30;
+      totalWeight += 0.30;
+
+      // Boost if voice trend is worsening
+      if (components.voiceBiomarkers.trend === 'worsening') {
+        combinedScore += 0.05;
+      }
+    }
+
+    // Sleep efficiency weight: 0.35
+    if (components.sleepEfficiency.available) {
+      // Convert SE to risk (lower SE = higher risk)
+      const seRisk = 1 - components.sleepEfficiency.value;
+      combinedScore += seRisk * 0.35;
+      totalWeight += 0.35;
+
+      // Boost if SE trend is worsening
+      if (seTrend === 'worsening') {
+        combinedScore += 0.05;
+      }
+    }
+
+    // Normalize
+    const combinedRiskScore = totalWeight > 0
+      ? Math.min(1, combinedScore / totalWeight)
+      : 0.5;
+
+    // Determine risk level
+    let riskLevel: 'low' | 'moderate' | 'high' | 'critical';
+    if (combinedRiskScore >= 0.8) {
+      riskLevel = 'critical';
+    } else if (combinedRiskScore >= 0.6) {
+      riskLevel = 'high';
+    } else if (combinedRiskScore >= 0.4) {
+      riskLevel = 'moderate';
+    } else {
+      riskLevel = 'low';
+    }
+
+    // Identify primary concerns
+    const primaryConcerns: string[] = [];
+
+    if (components.sleepCSD.isWarning) {
+      primaryConcerns.push('Ранние сигналы предупреждения в показателях сна (CSD)');
+    }
+    if (components.voiceBiomarkers.available && components.voiceBiomarkers.depressionRisk >= 0.5) {
+      primaryConcerns.push('Повышенные маркеры депрессии в голосе');
+    }
+    if (components.voiceBiomarkers.available && components.voiceBiomarkers.anxietyRisk >= 0.5) {
+      primaryConcerns.push('Повышенные маркеры тревоги в голосе');
+    }
+    if (components.sleepEfficiency.available && components.sleepEfficiency.value < 0.7) {
+      primaryConcerns.push('Низкая эффективность сна');
+    }
+    if (seTrend === 'worsening') {
+      primaryConcerns.push('Тренд ухудшения качества сна');
+    }
+    if (components.voiceBiomarkers.trend === 'worsening') {
+      primaryConcerns.push('Тренд ухудшения голосовых биомаркеров');
+    }
+
+    // Generate recommendations
+    const recommendations: string[] = [];
+
+    if (riskLevel === 'critical' || riskLevel === 'high') {
+      recommendations.push('Рекомендуется консультация специалиста');
+    }
+    if (components.voiceBiomarkers.depressionRisk >= 0.4) {
+      recommendations.push('Попробуйте техники поведенческой активации');
+      recommendations.push('Поддерживайте социальные контакты');
+    }
+    if (components.voiceBiomarkers.anxietyRisk >= 0.4) {
+      recommendations.push('Практикуйте дыхательные упражнения');
+      recommendations.push('Попробуйте /relax для релаксации');
+    }
+    if (components.sleepEfficiency.value < 0.8) {
+      recommendations.push('Соблюдайте режим сна');
+      recommendations.push('Используйте /therapy для рекомендаций');
+    }
+    if (recommendations.length === 0) {
+      recommendations.push('Продолжайте вести дневник сна');
+    }
+
+    // Escalation required?
+    const escalationRequired = riskLevel === 'critical' ||
+      (riskLevel === 'high' && primaryConcerns.length >= 2);
+
+    // Generate Russian summary
+    let summaryRu: string;
+    if (riskLevel === 'low') {
+      summaryRu = '✅ Комплексная оценка: показатели в норме. Продолжайте следовать программе.';
+    } else if (riskLevel === 'moderate') {
+      summaryRu = '⚡ Комплексная оценка: умеренный уровень риска. ' +
+        `Основные области внимания: ${primaryConcerns.slice(0, 2).join(', ').toLowerCase()}.`;
+    } else if (riskLevel === 'high') {
+      summaryRu = '⚠️ Комплексная оценка: повышенный уровень риска. ' +
+        `Выявлены: ${primaryConcerns.join(', ').toLowerCase()}. ` +
+        'Рекомендуется обратить особое внимание на своё состояние.';
+    } else {
+      summaryRu = '🚨 Комплексная оценка: требуется внимание. ' +
+        'Несколько показателей указывают на необходимость дополнительной поддержки. ' +
+        'Рекомендуется консультация специалиста.';
+    }
+
+    return {
+      available: totalWeight > 0,
+      combinedRiskScore,
+      riskLevel,
+      components,
+      primaryConcerns,
+      recommendations,
+      escalationRequired,
+      summaryRu,
+    };
   }
 }
 

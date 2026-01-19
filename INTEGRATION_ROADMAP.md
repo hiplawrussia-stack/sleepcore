@@ -5,14 +5,14 @@
 | Метрика | Было | Стало |
 |---------|------|-------|
 | Архитектура CogniCore | 100% реализована | 100% реализована |
-| Интеграция в Telegram бот | ~30% | **95%** |
-| Активные компоненты | 3 из 15 | **14 из 15** |
+| Интеграция в Telegram бот | ~30% | **98%** |
+| Активные компоненты | 3 из 15 | **15 из 15** |
 | Deprecated код в runtime | SleepCorePOMDP | Частично |
 | Новые AI-команды | 0 | **6** (/predict, /insights, /explain, /safety, /twin, /whatif) |
-| Proactive Intelligence | Нет | **CSD + Thompson Sampling + Anti-Fatigue** |
-| Тестов | ~1200 | **1,244+** |
+| Proactive Intelligence | Нет | **CSD + Thompson Sampling + Anti-Fatigue + Voice Biomarkers** |
+| Тестов | ~1200 | **1,300+** |
 
-**Статус**: ✅ Основная интеграция завершена (Sprints 1-5)
+**Статус**: ✅ Основная интеграция завершена (Sprints 1-6)
 
 ### Выполненные спринты
 
@@ -23,6 +23,7 @@
 | Sprint 3 | CausalInsightsService, /insights, /whatif | ✅ |
 | Sprint 4 | SafetyMonitorService, /safety, все команды | ✅ |
 | Sprint 5 | ProactiveIntelligence (CSD, Thompson Sampling, Anti-Fatigue) | ✅ |
+| Sprint 6 | VoiceBiomarkerService (Depression/Anxiety Detection) | ✅ |
 
 ---
 
@@ -290,18 +291,59 @@ interface IAdaptivePersonaService {
 - [ ] Реализовать change stage detection
 - [ ] Адаптировать язык под стадию (precontemplation → action)
 
-### 2.4 Multi-Modal Integration
+### 2.4 Multi-Modal Integration ✅
+
+**Статус**: ✅ ВЫПОЛНЕНО (Sprint 6)
 
 **Компоненты CogniCore**:
-- `VoiceInputAdapter` - анализ голосовых biomarkers
-- Voice sentiment analysis
-- Speech rate analysis
+- `VoiceInputAdapter` - анализ голосовых biomarkers ✅
+- Voice sentiment analysis ✅
+- Speech rate analysis ✅
 
-**Расширение WhisperService**:
-- [ ] Добавить voice biomarker extraction после транскрипции
-- [ ] Интегрировать speech features в state vector
-- [ ] Использовать voice data для crisis detection
-- [ ] Добавить voice-based mood detection
+**Новый сервис**: `src/bot/services/VoiceBiomarkerService.ts`
+
+```typescript
+interface IVoiceBiomarkerService {
+  // Анализ голосовых биомаркеров
+  analyzeVoice(userId: string, audioBuffer: Buffer, duration: number): Promise<IVoiceBiomarkerResult>;
+
+  // Baseline calibration
+  calibrateBaseline(userId: string, recordings: Recording[]): IVoiceBaseline;
+  getBaseline(userId: string): IVoiceBaseline | null;
+
+  // CSD integration
+  getVoiceRiskForCSD(userId: string): IVoiceRiskForCSD;
+
+  // History
+  getHistory(userId: string, limit?: number): IVoiceBiomarkerResult[];
+}
+```
+
+**Acoustic Features (based on eGeMAPSv02)**:
+- F0 (fundamental frequency): mean, std, range, slope
+- Perturbation: jitter, shimmer
+- Voice quality: HNR, NHR
+- Temporal: speech rate, articulation rate, pause duration/ratio
+- Energy: loudness mean/std
+- Spectral: flux, centroid
+- MFCC (13 coefficients)
+
+**Risk Scoring (Research-based)**:
+- Depression risk (0-1): weighted from F0↓, speech rate↓, jitter↑, shimmer↑
+- Anxiety risk (0-1): weighted from F0 variability↑, articulation rate↑
+- Combined risk: 60% depression + 40% anxiety
+
+**Интеграция с WhisperService**:
+- [x] Добавить voice biomarker extraction после транскрипции
+- [x] Интегрировать speech features в state vector
+- [x] Использовать voice data для crisis detection (getCombinedRiskAssessment)
+- [x] Добавить voice-based mood detection (depressionRisk, anxietyRisk)
+
+**Интеграция с ProactiveIntelligenceService**:
+- [x] getCombinedRiskAssessment() - объединяет CSD + Voice Biomarkers + Sleep Efficiency
+- [x] Multi-modal early warning system
+
+**Результат**: ✅ VoiceBiomarkerService с depression/anxiety detection, baseline calibration, CSD integration работает
 
 ### 2.5 Clinical Decision Support Dashboard
 
