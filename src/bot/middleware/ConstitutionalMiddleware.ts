@@ -215,6 +215,7 @@ export class ConstitutionalMiddleware {
         const check = await this.checkIncomingMessage(messageText, ctx.from?.id?.toString() || 'unknown');
 
         // Store check result in context for downstream handlers
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Extending Telegraf context dynamically
         (ctx as any).constitutionalCheck = check;
 
         // Handle based on action

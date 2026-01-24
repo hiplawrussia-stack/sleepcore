@@ -12,11 +12,10 @@
 import {
   SleepCoreAdapter,
   createSleepCoreAdapter,
-  type ISleepInterventionSelection,
   type SleepMotivationalContext,
 } from '../SleepCoreAdapter';
 
-import type { ISleepState, ISleepMetrics, ISleepCognitions } from '../../sleep/interfaces/ISleepState';
+import type { ISleepState } from '../../sleep/interfaces/ISleepState';
 import type { SleepAction } from '../SleepCorePOMDP';
 
 // ============================================================================
@@ -133,7 +132,7 @@ function simulateOutcome(
   action: SleepAction,
   effectiveness: number // 0-1, how well the intervention worked
 ): ISleepState {
-  const baseImprovement = effectiveness * 0.15; // Max 15% improvement per intervention
+  const _baseImprovement = effectiveness * 0.15; // Max 15% improvement per intervention
 
   // Different actions affect different metrics
   const actionEffects: Record<SleepAction, Partial<{
@@ -516,7 +515,7 @@ describe('SleepCoreAdapter Integration Tests', () => {
     });
 
     it('should update motivational state based on speech', async () => {
-      const initialState = adapter.getUserMotivationalState(userId);
+      const _initialState = adapter.getUserMotivationalState(userId);
 
       // Create message history with change talk utterances
       const messages = [

@@ -416,7 +416,7 @@ export class CrisisDetectionService {
   private createContinueResponse(
     userId: string,
     chatId: string,
-    text: string
+    _text: string
   ): ICrisisResponse {
     const event: ICrisisEvent = {
       userId,

@@ -27,7 +27,6 @@
 import {
   WorryPostponementService,
   createWorryPostponementService,
-  type IWorryEntry,
   type IWorryStatistics,
 } from './WorryPostponementService';
 
@@ -35,22 +34,17 @@ import {
   ATTService,
   createATTService,
   type IATTProgress,
-  type IATTSessionRecord,
 } from './ATTService';
 
 import {
   MCQ30AssessmentService,
   createMCQ30AssessmentService,
-  type IMCQ30Result,
-  type MCQ30Subscale,
 } from './MCQ30AssessmentService';
 
 import {
   DetachedMindfulnessService,
   createDetachedMindfulnessService,
   type IDMSkillLevel,
-  type IDMExercise,
-  type DMExerciseType,
 } from './DetachedMindfulnessService';
 
 // ============================================================================
@@ -435,7 +429,7 @@ export class MetacognitiveEngineService {
   /**
    * Handle rumination detected
    */
-  private handleRuminationDetected(userId: string): IMCTResponse {
+  private handleRuminationDetected(_userId: string): IMCTResponse {
     const dmExercise = this.dmService.getExercise('leaves_river')!;
 
     return {
@@ -461,7 +455,7 @@ export class MetacognitiveEngineService {
   /**
    * Handle sleep anxiety
    */
-  private handleSleepAnxiety(userId: string): IMCTResponse {
+  private handleSleepAnxiety(_userId: string): IMCTResponse {
     const dmExercise = this.dmService.getExercise('quick_dm')!;
 
     return {
@@ -484,7 +478,7 @@ export class MetacognitiveEngineService {
   /**
    * Handle racing thoughts
    */
-  private handleRacingThoughts(userId: string): IMCTResponse {
+  private handleRacingThoughts(_userId: string): IMCTResponse {
     const dmExercise = this.dmService.getExercise('train_station')!;
 
     return {
@@ -506,7 +500,7 @@ export class MetacognitiveEngineService {
   /**
    * Handle nighttime awakening
    */
-  private handleNighttimeAwakening(userId: string): IMCTResponse {
+  private handleNighttimeAwakening(_userId: string): IMCTResponse {
     const nightInstructions = this.worryService.getNightProtocolInstructions();
 
     return {
@@ -633,7 +627,7 @@ export class MetacognitiveEngineService {
     worryStats: IWorryStatistics,
     attProgress: IATTProgress,
     dmSkill: IDMSkillLevel,
-    mcq30Data: ReturnType<MCQ30AssessmentService['getMetacognitiveRiskForCSD']>
+    _mcq30Data: ReturnType<MCQ30AssessmentService['getMetacognitiveRiskForCSD']>
   ): string[] {
     const recommendations: string[] = [];
 

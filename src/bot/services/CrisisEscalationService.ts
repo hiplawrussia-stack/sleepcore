@@ -20,8 +20,8 @@
  */
 
 import { Bot, Context } from 'grammy';
-import type { ICrisisEvent, CrisisAction } from './CrisisDetectionService';
-import type { AdverseEventService, IAdverseEventReport } from './AdverseEventService';
+import type { ICrisisEvent } from './CrisisDetectionService';
+import type { AdverseEventService } from './AdverseEventService';
 import { DTX_AE_CATEGORIES } from './AdverseEventService';
 
 // ============================================================================
@@ -541,7 +541,7 @@ export class CrisisEscalationService {
   /**
    * Get safety plan steps for user
    */
-  getSafetyPlanSteps(language: 'ru' | 'en' = 'ru'): ISafetyPlanStep[] {
+  getSafetyPlanSteps(_language: 'ru' | 'en' = 'ru'): ISafetyPlanStep[] {
     return SAFETY_PLAN_STEPS;
   }
 

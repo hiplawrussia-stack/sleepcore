@@ -96,7 +96,7 @@ export class ExplainCommand implements ICommand, Partial<IConversationCommand> {
 
   // ==================== Response Handlers ====================
 
-  private async showExplanationMenu(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showExplanationMenu(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.header('🔍 Объяснения AI (XAI)')}
 
@@ -152,8 +152,8 @@ ${sonya.tip('Прозрачность — основа доверия. Спра�
   }
 
   private async explainRecommendation(
-    ctx: ISleepCoreContext,
-    recommendationId?: string
+    _ctx: ISleepCoreContext,
+    _recommendationId?: string
   ): Promise<ICommandResult> {
     const message = `
 ${formatter.header('📊 Как формируются рекомендации')}
@@ -208,7 +208,7 @@ ${sonya.tip('Каждая рекомендация — это не догадк�
     return { success: true, message, keyboard };
   }
 
-  private async explainPrediction(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async explainPrediction(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.header('🔮 Как строятся прогнозы')}
 
@@ -258,7 +258,7 @@ ${sonya.tip('Прогноз — это не гадание, а математи�
     return { success: true, message, keyboard };
   }
 
-  private async explainDigitalTwin(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async explainDigitalTwin(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.header('👤 Цифровой двойник (Digital Twin)')}
 
@@ -313,7 +313,7 @@ ${sonya.tip('Твой цифровой двойник — это зеркало 
     return { success: true, message, keyboard };
   }
 
-  private async explainHowAIWorks(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async explainHowAIWorks(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.header('🧠 Как работает AI в SleepCore')}
 
@@ -363,7 +363,7 @@ ${sonya.tip('AI — это инструмент, а не замена врача
     return { success: true, message, keyboard };
   }
 
-  private async explainDataUsage(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async explainDataUsage(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.header('🔒 Использование ваших данных')}
 
@@ -410,7 +410,7 @@ ${sonya.tip('Твои данные — твоя собственность. Мы
     return { success: true, message, keyboard };
   }
 
-  private async explainLimitations(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async explainLimitations(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.header('⚠️ Ограничения AI')}
 
@@ -458,7 +458,7 @@ ${sonya.say('Я — помощник, не врач. Но я делаю всё �
     return { success: true, message, keyboard };
   }
 
-  private async explainSafetyMeasures(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async explainSafetyMeasures(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.header('🛡️ Меры безопасности')}
 

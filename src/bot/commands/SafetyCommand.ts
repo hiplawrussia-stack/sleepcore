@@ -21,8 +21,6 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import { crisisDetectionService } from '../services/CrisisDetectionService';
-import { crisisEscalationService } from '../services/CrisisEscalationService';
 
 /**
  * /safety Command Implementation
@@ -217,7 +215,7 @@ ${sonya.tip('Если у тебя есть вопросы о любом собы
     return { success: true, message, keyboard };
   }
 
-  private async showConstitutionalPrinciples(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showConstitutionalPrinciples(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.header('📋 Конституционные принципы AI')}
 
@@ -260,7 +258,7 @@ ${sonya.say('Эти принципы — моя "конституция". Я с�
     return { success: true, message, keyboard };
   }
 
-  private async showHotlines(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showHotlines(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.header('📞 Горячие линии помощи')}
 
@@ -308,7 +306,7 @@ ${sonya.say('Помощь рядом. Не стесняйся обращатьс
     return { success: true, message, keyboard };
   }
 
-  private async showHowSafetyWorks(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showHowSafetyWorks(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.header('⚙️ Как работает система безопасности')}
 
@@ -370,7 +368,7 @@ ${sonya.tip('Всё это происходит автоматически и м
     return { success: true, message, keyboard };
   }
 
-  private async showFeedbackForm(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showFeedbackForm(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.header('📝 Обратная связь о безопасности')}
 
@@ -399,7 +397,7 @@ ${sonya.tip('Твоя обратная связь помогает сделат�
 
   // ==================== Helper Methods ====================
 
-  private getCurrentSafetyStatus(userId: string): {
+  private getCurrentSafetyStatus(_userId: string): {
     level: 'safe' | 'monitoring' | 'elevated' | 'critical';
     riskScore: number;
     messagesChecked: number;
@@ -423,7 +421,7 @@ ${sonya.tip('Твоя обратная связь помогает сделат�
     };
   }
 
-  private getRiskIndicators(userId: string): Array<{ emoji: string; name: string; value: string }> {
+  private getRiskIndicators(_userId: string): Array<{ emoji: string; name: string; value: string }> {
     return [
       { emoji: '😊', name: 'Настроение', value: 'Стабильное' },
       { emoji: '💬', name: 'Коммуникация', value: 'Нормальная' },
@@ -433,7 +431,7 @@ ${sonya.tip('Твоя обратная связь помогает сделат�
     ];
   }
 
-  private getCrisisHistory(userId: string): Array<{
+  private getCrisisHistory(_userId: string): Array<{
     date: Date;
     type: string;
     severity: string;

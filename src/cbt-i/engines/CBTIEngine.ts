@@ -405,7 +405,7 @@ export class CBTIEngine implements ICBTIEngine {
             : 'Use bed only for sleep',
         };
 
-      case 'cognitive_restructuring':
+      case 'cognitive_restructuring': {
         const questions = this.cognitiveRestructuring.generateSocraticQuestions({
           id: 'default',
           category: 'consequences',
@@ -418,8 +418,9 @@ export class CBTIEngine implements ICBTIEngine {
           isActive: true,
         });
         return { action: questions[0] || (isRu ? 'Проанализируйте свои мысли о сне' : 'Analyze your thoughts about sleep') };
+      }
 
-      case 'sleep_hygiene':
+      case 'sleep_hygiene': {
         const assessment = this.sleepHygiene.assess(state);
         if (assessment.topIssues.length > 0) {
           const content = this.sleepHygiene.getEducationalContent(assessment.topIssues[0]);
@@ -430,14 +431,16 @@ export class CBTIEngine implements ICBTIEngine {
             ? 'Поддерживайте хорошие привычки гигиены сна'
             : 'Maintain good sleep hygiene habits',
         };
+      }
 
-      case 'relaxation':
+      case 'relaxation': {
         const technique = this.relaxation.recommendTechnique(state, 'bedtime');
         return {
           action: isRu
             ? `Практикуйте ${this.getTechniqueName(technique)} перед сном`
             : `Practice ${technique.replace(/_/g, ' ')} before bed`,
         };
+      }
 
       default:
         return {
@@ -453,7 +456,7 @@ export class CBTIEngine implements ICBTIEngine {
    */
   private determineTiming(
     action: string,
-    state: ISleepState
+    _state: ISleepState
   ): 'immediate' | 'tonight' | 'this_week' {
     // Immediate actions: stimulus control when SOL is high
     if (action.includes('leave_bed') || action.includes('stimulus_control')) {

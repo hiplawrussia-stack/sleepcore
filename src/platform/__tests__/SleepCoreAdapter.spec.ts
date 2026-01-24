@@ -13,11 +13,10 @@ import {
   INTERVENTION_ID_TO_SLEEP_ACTION,
   SLEEP_ACTION_TO_COMPONENT,
   COMPONENT_TO_CATEGORY,
-  type ISleepInterventionSelection,
   type CBTIComponent,
 } from '../SleepCoreAdapter';
 
-import type { ISleepState, ISleepMetrics, ISleepCognitions } from '../../sleep/interfaces/ISleepState';
+import type { ISleepState, ISleepMetrics, IInsomniaSeverity } from '../../sleep/interfaces/ISleepState';
 import type { SleepAction } from '../SleepCorePOMDP';
 
 // ============================================================================
@@ -430,13 +429,13 @@ describe('SleepCoreAdapter', () => {
   describe('recordOutcome', () => {
     it('should record positive outcome', async () => {
       const previousState = createMockSleepState({
-        metrics: { sleepEfficiency: 70 } as any,
-        insomnia: { isiScore: 18 } as any,
+        metrics: { sleepEfficiency: 70 } as Partial<ISleepMetrics> as ISleepMetrics,
+        insomnia: { isiScore: 18 } as Partial<IInsomniaSeverity> as IInsomniaSeverity,
       });
 
       const currentState = createMockSleepState({
-        metrics: { sleepEfficiency: 80 } as any, // Improved
-        insomnia: { isiScore: 14 } as any, // Improved
+        metrics: { sleepEfficiency: 80 } as Partial<ISleepMetrics> as ISleepMetrics, // Improved
+        insomnia: { isiScore: 14 } as Partial<IInsomniaSeverity> as IInsomniaSeverity, // Improved
       });
 
       // Should not throw
@@ -447,13 +446,13 @@ describe('SleepCoreAdapter', () => {
 
     it('should record negative outcome', async () => {
       const previousState = createMockSleepState({
-        metrics: { sleepEfficiency: 80 } as any,
-        insomnia: { isiScore: 14 } as any,
+        metrics: { sleepEfficiency: 80 } as Partial<ISleepMetrics> as ISleepMetrics,
+        insomnia: { isiScore: 14 } as Partial<IInsomniaSeverity> as IInsomniaSeverity,
       });
 
       const currentState = createMockSleepState({
-        metrics: { sleepEfficiency: 70 } as any, // Declined
-        insomnia: { isiScore: 18 } as any, // Worsened
+        metrics: { sleepEfficiency: 70 } as Partial<ISleepMetrics> as ISleepMetrics, // Declined
+        insomnia: { isiScore: 18 } as Partial<IInsomniaSeverity> as IInsomniaSeverity, // Worsened
       });
 
       await expect(
@@ -479,7 +478,7 @@ describe('SleepCoreAdapter', () => {
         await adapter.recordOutcome(
           selection.action,
           sleepState,
-          createMockSleepState({ metrics: { sleepEfficiency: 80 + i } as any })
+          createMockSleepState({ metrics: { sleepEfficiency: 80 + i } as Partial<ISleepMetrics> as ISleepMetrics })
         );
       }
 

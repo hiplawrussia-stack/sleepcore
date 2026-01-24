@@ -26,7 +26,6 @@ import type {
   IFullBeliefState,
   Observation,
   ObservationType,
-  BeliefUpdateResult,
   IBeliefUpdateEngine,
   DimensionBelief,
   IIntervention,
@@ -36,15 +35,10 @@ import type {
   IInterventionOptimizer,
   InterventionCategory,
   InterventionIntensity,
-  IUserInterventionProfile,
-  IExplainabilityService,
-  IUserExplanation,
-  IUserFactor,
   IExplanationRequest,
   IExplanationResponse,
   // Motivational Engine Types (Phase 5)
   IMotivationalState,
-  IMotivationalInterviewingEngine,
   ClientUtterance,
   ChangeTaskSubtype,
   MIResponse,
@@ -759,6 +753,7 @@ export class SleepCoreAdapter {
     const d = shape - 1 / 3;
     const c = 1 / Math.sqrt(9 * d);
 
+    // eslint-disable-next-line no-constant-condition -- Rejection sampling algorithm requires infinite loop
     while (true) {
       let x: number;
       let v: number;

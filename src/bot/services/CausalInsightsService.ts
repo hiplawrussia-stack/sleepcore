@@ -25,7 +25,7 @@
  * @module @sleepcore/bot/services
  */
 
-import type { ISleepState, ISleepMetrics } from '../../sleep/interfaces/ISleepState';
+import type { ISleepState } from '../../sleep/interfaces/ISleepState';
 
 // ==================== Interfaces ====================
 
@@ -351,7 +351,7 @@ export class CausalInsightsService {
     }
 
     const insights: IPersonalizedInsight[] = [];
-    const graph = await this.discoverCausalGraph(userId, sleepHistory);
+    const _graph = await this.discoverCausalGraph(userId, sleepHistory);
 
     // Analyze main patterns
     const patterns = this.analyzePatterns(sleepHistory);
@@ -679,7 +679,7 @@ export class CausalInsightsService {
    */
   private analyzePatterns(sleepHistory: ISleepState[]): IPersonalizedInsight[] {
     const insights: IPersonalizedInsight[] = [];
-    const metrics = this.aggregateMetrics(sleepHistory);
+    const _metrics = this.aggregateMetrics(sleepHistory);
 
     // Check for weekend effect
     const weekdayMetrics = this.aggregateMetrics(

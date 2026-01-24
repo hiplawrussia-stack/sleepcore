@@ -1144,7 +1144,7 @@ export class VoiceBiomarkerService {
     depressionRisk: number,
     anxietyRisk: number,
     deviations: IFeatureDeviation[],
-    quality: IRecordingQuality
+    _quality: IRecordingQuality
   ): IVoiceInterpretation {
     const combinedRisk = depressionRisk * 0.6 + anxietyRisk * 0.4;
 

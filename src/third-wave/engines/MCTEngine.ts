@@ -510,7 +510,7 @@ export class MCTEngine implements IMCTEngine {
    */
   getATTSession(
     phase: 'selective' | 'switching' | 'divided',
-    duration: number
+    _duration: number
   ): {
     instructions: string[];
     audioUrl?: string;

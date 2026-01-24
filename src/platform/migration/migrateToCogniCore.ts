@@ -89,7 +89,7 @@ export async function migrateUser(
     }
 
     // Calculate total observations
-    for (const [action, stats] of actionStats) {
+    for (const [_action, stats] of actionStats) {
       const observations = Math.max(0, (stats.alpha - 1) + (stats.beta - 1));
       result.totalObservations += observations;
     }

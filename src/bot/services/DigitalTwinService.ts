@@ -214,7 +214,7 @@ export class DigitalTwinService {
 
     // Get history from prediction service
     const history = sleepPredictionService.getHistory(userId);
-    const currentState = sleepPredictionService.getCurrentState(userId);
+    const _currentState = sleepPredictionService.getCurrentState(userId);
 
     // Calculate state quality based on data availability
     const stateQuality = this.calculateStateQuality(history.length);
@@ -532,7 +532,7 @@ export class DigitalTwinService {
 
   private warningToTippingPoint(
     warning: ISleepEarlyWarning,
-    prediction: ISleepPrediction
+    _prediction: ISleepPrediction
   ): ITippingPoint {
     return {
       type: 'deterioration',

@@ -607,7 +607,7 @@ export class AdminDashboardService {
     recentDiaries: number;
     recentSessions: number;
   } | null> {
-    const users = await this.getUserList(1, 0);
+    const _users = await this.getUserList(1, 0);
     const userList = await this.db.query<{ id: number }>(
       `SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`,
       [userId]

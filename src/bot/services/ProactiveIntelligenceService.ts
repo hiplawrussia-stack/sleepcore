@@ -19,10 +19,8 @@
  * @module @sleepcore/bot/services
  */
 
-import type { ISleepState, ISleepMetrics } from '../../sleep/interfaces/ISleepState';
-import { sleepPredictionService, type ISleepPrediction } from './SleepPredictionService';
-import { digitalTwinService } from './DigitalTwinService';
-import { causalInsightsService } from './CausalInsightsService';
+import type { ISleepState } from '../../sleep/interfaces/ISleepState';
+import { sleepPredictionService } from './SleepPredictionService';
 import { voiceBiomarkerService } from './VoiceBiomarkerService';
 
 // ==================== Interfaces ====================
@@ -476,7 +474,7 @@ export class ProactiveIntelligenceService {
     sleepHistory: ISleepState[]
   ): Promise<IProactiveInsight[]> {
     const insights: IProactiveInsight[] = [];
-    const now = new Date();
+    const _now = new Date();
 
     // 1. Check for milestones
     const milestoneInsight = this.checkMilestones(userId, sleepHistory);
@@ -632,7 +630,7 @@ export class ProactiveIntelligenceService {
     const recentHistory = sleepHistory.slice(-7);
     const avgSOL = this.calculateAverageSOL(recentHistory);
     const avgWASO = this.calculateAverageWASO(recentHistory);
-    const avgSE = this.calculateAverageSE(recentHistory);
+    const _avgSE = this.calculateAverageSE(recentHistory);
 
     // Generate tip based on biggest issue
     if (avgSOL > 30) {
@@ -1357,7 +1355,7 @@ export class ProactiveIntelligenceService {
   /**
    * Mark insight as delivered (for anti-fatigue tracking)
    */
-  markInsightSent(userId: string, insightId: string): void {
+  markInsightSent(userId: string, _insightId: string): void {
     const tracking = this.getEngagementTracking(userId);
     tracking.insightsDeliveredToday++;
     tracking.lastInsightTime = new Date();

@@ -404,7 +404,7 @@ ${sonya.tip('Это прогноз на основе твоих данных. Р
   /**
    * Show simulation error
    */
-  private showSimulationError(ctx: ISleepCoreContext): ICommandResult {
+  private showSimulationError(_ctx: ISleepCoreContext): ICommandResult {
     const message = `
 ${sonya.emoji} *${sonya.name}*
 
@@ -465,7 +465,7 @@ ${sonya.tip('Попробуй заполнить ещё несколько за�
     comparison: IComparisonResult
   ): ICommandResult {
     // Build comparison table
-    const tableRows = comparison.results.map((result, idx) => {
+    const tableRows = comparison.results.map((result, _idx) => {
       const changeSign = result.predictedOutcome.sleepEfficiencyChange >= 0 ? '+' : '';
       const isBest = result.scenario.name === comparison.bestScenario.name;
       const marker = isBest ? '⭐ ' : '';
@@ -695,7 +695,7 @@ ${sonya.tip('Выбери сценарий для моделирования')}
   /**
    * Show compare menu
    */
-  private showCompareMenu(ctx: ISleepCoreContext): ICommandResult {
+  private showCompareMenu(_ctx: ISleepCoreContext): ICommandResult {
     const message = `
 ${sonya.emoji} *${sonya.name}*
 

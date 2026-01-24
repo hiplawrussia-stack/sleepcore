@@ -407,7 +407,7 @@ export class MCQ30AssessmentService {
   private generateSummary(
     overall: 'low' | 'moderate' | 'high' | 'very_high',
     concernAreas: MCQ30Subscale[],
-    scores: Record<MCQ30Subscale, number>
+    _scores: Record<MCQ30Subscale, number>
   ): string {
     const levelDescriptions = {
       low: 'Ваши метакогнитивные убеждения находятся в нормальном диапазоне.',
@@ -439,7 +439,7 @@ export class MCQ30AssessmentService {
    */
   private generateRecommendations(
     concernAreas: MCQ30Subscale[],
-    scores: Record<MCQ30Subscale, number>
+    _scores: Record<MCQ30Subscale, number>
   ): string[] {
     const recommendations: string[] = [];
 

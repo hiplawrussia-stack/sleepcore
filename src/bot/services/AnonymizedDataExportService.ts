@@ -693,13 +693,15 @@ export class AnonymizedDataExportService {
       case 'exact':
         return age.toString();
 
-      case 'ranges_5':
+      case 'ranges_5': {
         const range5Start = Math.floor(age / 5) * 5;
         return `${range5Start}-${range5Start + 4}`;
+      }
 
-      case 'ranges_10':
+      case 'ranges_10': {
         const range10Start = Math.floor(age / 10) * 10;
         return `${range10Start}-${range10Start + 9}`;
+      }
 
       case 'cap_89':
         if (age >= 89) return '89+';
