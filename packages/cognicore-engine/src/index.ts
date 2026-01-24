@@ -460,3 +460,185 @@ export type {
   CrisisDetectorConfig,
   StateRiskData,
 } from './crisis';
+
+// =============================================================================
+// CENTRALIZED ERROR HANDLING (2026)
+// =============================================================================
+
+// Error classes, codes, and handler
+export {
+  // Base error
+  CogniCoreError,
+  // Error codes and enums
+  ErrorCode,
+  ErrorSeverity,
+  ErrorCategory,
+  getErrorCategory,
+  getDefaultSeverity,
+  // Domain errors
+  BeliefUpdateError,
+  InvalidObservationError,
+  DimensionNotFoundError,
+  TemporalNotInitializedError,
+  PredictionError,
+  InvalidTrajectoryError,
+  CrisisDetectionError,
+  InvalidCrisisStateError,
+  InterventionNotFoundError,
+  InterventionSelectionError,
+  NoEligibleInterventionsError,
+  InvalidMetacognitionItemError,
+  MetacognitionAnalysisError,
+  CausalNodeNotFoundError,
+  InvalidCausalGraphError,
+  // Application errors
+  SessionNotFoundError,
+  SessionExpiredError,
+  SessionStartError,
+  SessionEndError,
+  MessageProcessingError,
+  InvalidMessageFormatError,
+  PipelineStageError,
+  PipelineTimeoutError,
+  VoiceProcessingError,
+  TranscriptionError,
+  DataExportError,
+  DataImportError,
+  DataDeleteError,
+  // Infrastructure errors
+  StorageReadError,
+  StorageWriteError,
+  StorageConnectionError,
+  ExternalServiceUnavailableError,
+  ExternalServiceTimeoutError,
+  ExternalServiceError,
+  NLPServiceError,
+  AIModelNotLoadedError,
+  // Validation errors
+  RequiredFieldError,
+  InvalidFormatError,
+  OutOfRangeError,
+  InvalidTypeError,
+  EmptyArrayError,
+  InvalidIdError,
+  // Error handler
+  ErrorHandler,
+  errorHandler,
+  // Global handlers
+  initializeGlobalErrorHandlers,
+  isGlobalErrorHandlersInitialized,
+  resetGlobalErrorHandlers,
+} from './errors';
+
+export type {
+  ErrorContext,
+  SerializedError,
+  ErrorCallback,
+  ErrorLogger,
+  ErrorHandlerConfig,
+  GlobalErrorHandlerOptions,
+} from './errors';
+
+// =============================================================================
+// EVENT-DRIVEN ARCHITECTURE (2026)
+// =============================================================================
+
+// Events module - Event Sourcing, HIPAA audit, GDPR compliance
+export {
+  // Event Bus
+  CogniCoreEventBus,
+  createEventBus,
+  createInitializedEventBus,
+  // Event Store
+  InMemoryEventStore,
+  InMemoryAuditLogger,
+  createInMemoryEventStore,
+  createInMemoryAuditLogger,
+  // Pipeline Behaviors
+  LoggingBehavior,
+  ValidationBehavior,
+  MetricsBehavior,
+  AuditBehavior,
+  RetryBehavior,
+  ThrottlingBehavior,
+  CrisisAlertBehavior,
+  createDefaultBehaviors,
+  createCrisisAwareBehaviors,
+  // Event Handlers
+  BaseEventHandler,
+  CrisisEventHandler,
+  StateChangeEventHandler,
+  InterventionOutcomeHandler,
+  VulnerabilityWindowHandler,
+  MessageAnalyticsHandler,
+  CompositeEventHandler,
+  EventHandlerRegistry,
+  createDefaultHandlerRegistry,
+  createCrisisHandlerRegistry,
+  // Factory functions
+  createEventMetadata,
+  createPipelineContext,
+  createEventSystem,
+  createMinimalEventSystem,
+  // Constants
+  DEFAULT_EVENT_BUS_CONFIG,
+  DEFAULT_EVENT_STORE_CONFIG,
+} from './events';
+
+export type {
+  // Event Store interfaces
+  IEventStoreConfig,
+  IStoredEvent,
+  IEventQueryOptions,
+  IAggregateSnapshot,
+  IEventStore,
+  // Pipeline interfaces
+  IPipelineContext,
+  IPipelineBehavior,
+  // Handler interfaces
+  IEventHandlerRegistration,
+  IEventHandlerResult,
+  IEventDispatchResult,
+  // Audit interfaces
+  IAuditLogEntry,
+  IAuditLogQueryOptions,
+  IAuditLogger,
+  // Configuration
+  IEventBusConfig,
+  IEventSystemConfig,
+  IEventSystem,
+  // Callback interfaces
+  ICrisisNotificationCallback,
+  IStateChangeCallback,
+  IInterventionLearningCallback,
+  IProactiveInterventionCallback,
+  IAnalyticsCallback,
+  // Behavior types
+  EventValidator,
+  IMetricsCollector,
+} from './events';
+
+// =============================================================================
+// UTILITIES (2026)
+// =============================================================================
+
+// SecureRandom - Cryptographically Secure Random Number Generation
+// Addresses OWASP A04:2025 CWE-338 (Weak PRNG)
+export {
+  // ID Generation
+  generateSecureId,
+  generateShortSecureId,
+  // Random Numbers
+  secureRandom,
+  secureRandomInt,
+  // Statistical Distributions
+  boxMullerSecure,
+  gaussianSecure,
+  betaSampleSecure,
+  gammaSampleSecure,
+  // Array Operations
+  shuffleSecure,
+  randomElementSecure,
+  randomBooleanSecure,
+  weightedRandomIndexSecure,
+} from './utils';

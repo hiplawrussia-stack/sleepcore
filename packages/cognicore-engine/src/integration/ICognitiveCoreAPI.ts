@@ -21,8 +21,8 @@
  */
 
 import type { IStateVector } from '../state/interfaces/IStateVector';
-import type { TemporalPrediction } from '../state/interfaces/IStateVector';
-import type { BeliefState, Observation } from '../belief/IBeliefUpdate';
+import type { TemporalPrediction, BeliefState } from '../state/interfaces/IStateVector';
+import type { Observation } from '../belief/IBeliefUpdate';
 import type { VulnerabilityWindow } from '../temporal/ITemporalPrediction';
 import type { TextAnalysisResult, TherapeuticInsight, SocraticQuestion } from '../mirror/IDeepCognitiveMirror';
 import type { IInterventionSelection, IIntervention, IInterventionOutcome } from '../intervention/IInterventionOptimizer';
