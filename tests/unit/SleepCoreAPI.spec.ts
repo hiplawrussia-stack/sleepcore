@@ -262,12 +262,12 @@ describe('SleepCoreAPI', () => {
 
   describe('CBT-I Treatment', () => {
     describe('initializeTreatment()', () => {
-      it('should require at least 7 days of baseline data', () => {
+      it('should require at least 7 days of baseline data', async () => {
         api.startSession('user-123');
         const baselineData = createBaselineData('user-123', 5);
 
-        expect(() => api.initializeTreatment('user-123', baselineData))
-          .toThrow('Need at least 7 days of baseline sleep data');
+        await expect(api.initializeTreatment('user-123', baselineData))
+          .rejects.toThrow('Need at least 7 days of baseline sleep data');
       });
 
       it('should create treatment plan with 7 days of data', async () => {

@@ -36,6 +36,7 @@ module.exports = {
   moduleNameMapper: {
     '^@sleepcore/(.*)$': '<rootDir>/src/$1',
     '^@cognicore/engine$': '<rootDir>/packages/cognicore-engine/dist/index.js',
+    '^uuid$': '<rootDir>/packages/cognicore-engine/src/__mocks__/uuid.ts',
   },
   // Verbose output for debugging
   verbose: true,
