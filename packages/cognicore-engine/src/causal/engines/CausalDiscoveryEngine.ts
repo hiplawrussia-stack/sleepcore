@@ -23,17 +23,17 @@
  */
 
 import {
-  ICausalGraph,
-  ICausalNode,
-  ICausalEdge,
-  ICausalObservation,
-  ICausalDiscoveryConfig,
-  ICausalDiscoveryResult,
-  ICausalDiscoveryEngine,
-  IGraphValidationResult,
-  IValidationViolation,
-  CausalNodeType,
-  CausalConfidence,
+  type ICausalGraph,
+  type ICausalNode,
+  type ICausalEdge,
+  type ICausalObservation,
+  type ICausalDiscoveryConfig,
+  type ICausalDiscoveryResult,
+  type ICausalDiscoveryEngine,
+  type IGraphValidationResult,
+  type IValidationViolation,
+  type CausalNodeType,
+  type CausalConfidence,
   DEFAULT_DISCOVERY_CONFIG,
   DEFAULT_NODE_TEMPLATES,
   MENTAL_HEALTH_DOMAIN_PRIORS,
@@ -48,19 +48,19 @@ import {
  * O(n) complexity
  */
 function pearsonCorrelation(x: number[], y: number[]): number {
-  if (x.length !== y.length || x.length < 2) return 0;
+  if (x.length !== y.length || x.length < 2) {return 0;}
 
   const n = x.length;
   const sumX = x.reduce((a, b) => a + b, 0);
   const sumY = y.reduce((a, b) => a + b, 0);
-  const sumXY = x.reduce((acc, xi, i) => acc + xi * y[i], 0);
+  const sumXY = x.reduce((acc, xi, i) => acc + xi * (y[i] ?? 0), 0);
   const sumX2 = x.reduce((acc, xi) => acc + xi * xi, 0);
   const sumY2 = y.reduce((acc, yi) => acc + yi * yi, 0);
 
   const numerator = n * sumXY - sumX * sumY;
   const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
 
-  if (denominator === 0) return 0;
+  if (denominator === 0) {return 0;}
   return numerator / denominator;
 }
 
@@ -69,7 +69,7 @@ function pearsonCorrelation(x: number[], y: number[]): number {
  * Uses regression residuals approach
  */
 function partialCorrelation(x: number[], y: number[], z: number[][]): number {
-  if (z.length === 0) return pearsonCorrelation(x, y);
+  if (z.length === 0) {return pearsonCorrelation(x, y);}
 
   const residualsX = residualize(x, z);
   const residualsY = residualize(y, z);
@@ -81,10 +81,10 @@ function partialCorrelation(x: number[], y: number[], z: number[][]): number {
  * Get residuals after regressing out control variables
  */
 function residualize(y: number[], X: number[][]): number[] {
-  if (X.length === 0) return y;
+  if (X.length === 0) {return y;}
 
   const n = y.length;
-  const predicted = new Array(n).fill(0);
+  const predicted: number[] = Array.from({ length: n }, () => 0);
 
   for (const x of X) {
     const r = pearsonCorrelation(y, x);
@@ -98,19 +98,21 @@ function residualize(y: number[], X: number[][]): number[] {
       const alpha = meanY - beta * meanX;
 
       for (let i = 0; i < n; i++) {
-        predicted[i] += beta * x[i] + alpha / X.length;
+        const pred = predicted[i] ?? 0;
+        const xi = x[i] ?? 0;
+        predicted[i] = pred + beta * xi + alpha / X.length;
       }
     }
   }
 
-  return y.map((yi, i) => yi - predicted[i]);
+  return y.map((yi, i) => yi - (predicted[i] ?? 0));
 }
 
 /**
  * Calculate mean of array
  */
 function mean(arr: number[]): number {
-  if (arr.length === 0) return 0;
+  if (arr.length === 0) {return 0;}
   return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
@@ -118,7 +120,7 @@ function mean(arr: number[]): number {
  * Calculate standard deviation
  */
 function standardDeviation(arr: number[]): number {
-  if (arr.length === 0) return 0;
+  if (arr.length === 0) {return 0;}
   const m = mean(arr);
   const squaredDiffs = arr.map(x => (x - m) ** 2);
   return Math.sqrt(mean(squaredDiffs));
@@ -143,7 +145,7 @@ function testIndependenceCI(
   numConditioned: number,
   alpha: number
 ): boolean {
-  if (n <= numConditioned + 3) return true; // Not enough data
+  if (n <= numConditioned + 3) {return true;} // Not enough data
 
   const z = fisherZ(partialCorr);
   const se = 1 / Math.sqrt(n - numConditioned - 3);
@@ -163,7 +165,7 @@ function calculateBIC(
   observations: ICausalObservation[]
 ): number {
   const n = observations.length;
-  if (n === 0) return Infinity;
+  if (n === 0) {return Infinity;}
 
   let logLikelihood = 0;
   let numParameters = 0;
@@ -277,8 +279,8 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
         id: varId,
         name: template?.name ?? varId,
         nameRu: template?.nameRu ?? varId,
-        type: (template?.type as CausalNodeType) ?? 'emotion',
-        value: values.length > 0 ? values[values.length - 1] : 0,
+        type: template?.type ?? 'emotion',
+        value: values.length > 0 ? (values[values.length - 1] ?? 0) : 0,
         observedAt: new Date(),
         isObservable: template?.isObservable ?? true,
         isManipulable: template?.isManipulable ?? false,
@@ -384,10 +386,10 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
             config.significanceLevel
           );
 
-          if (isIndependent) break;
+          if (isIndependent) {break;}
         }
 
-        if (isIndependent) break;
+        if (isIndependent) {break;}
       }
 
       // Only remove if not established by domain knowledge
@@ -440,29 +442,30 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
 
       for (let i = 0; i < nodeIds.length; i++) {
         for (let j = 0; j < nodeIds.length; j++) {
-          if (i === j) continue;
+          if (i === j) {continue;}
 
           const sourceId = nodeIds[i];
           const targetId = nodeIds[j];
+          if (!sourceId || !targetId) {continue;}
           const edgeId = `${sourceId}->${targetId}`;
 
           // Skip existing or forbidden edges
-          if (graph.edges.has(edgeId)) continue;
-          if (config.forbiddenEdges.some(([s, t]) => s === sourceId && t === targetId)) continue;
+          if (graph.edges.has(edgeId)) {continue;}
+          if (config.forbiddenEdges.some(([s, t]) => s === sourceId && t === targetId)) {continue;}
 
           // Check temporal constraints
           if (config.respectTemporalOrder) {
-            const sourceNode = graph.nodes.get(sourceId)!;
-            const targetNode = graph.nodes.get(targetId)!;
-            if (this.violatesTemporalOrder(sourceNode.type, targetNode.type)) continue;
+            const sourceNode = graph.nodes.get(sourceId);
+            const targetNode = graph.nodes.get(targetId);
+            if (sourceNode && targetNode && this.violatesTemporalOrder(sourceNode.type, targetNode.type)) {continue;}
           }
 
           // Check for cycles
-          if (this.wouldCreateCycle(graph, sourceId, targetId)) continue;
+          if (this.wouldCreateCycle(graph, sourceId, targetId)) {continue;}
 
           // Check parent limit
           const currentParents = graph.reverseAdjacency.get(targetId) || [];
-          if (currentParents.length >= config.maxParents) continue;
+          if (currentParents.length >= config.maxParents) {continue;}
 
           // Calculate correlation for edge strength
           const sourceData = observations.map(obs => obs.variables.get(sourceId) ?? 0);
@@ -470,7 +473,7 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
           const correlation = pearsonCorrelation(sourceData, targetData);
 
           // Only consider meaningful correlations
-          if (Math.abs(correlation) < 0.2) continue;
+          if (Math.abs(correlation) < 0.2) {continue;}
 
           // Try adding edge
           const newEdge: ICausalEdge = {
@@ -489,8 +492,10 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
           };
 
           graph.edges.set(edgeId, newEdge);
-          graph.adjacencyList.get(sourceId)!.push(targetId);
-          graph.reverseAdjacency.get(targetId)!.push(sourceId);
+          const adjList = graph.adjacencyList.get(sourceId);
+          const revAdj = graph.reverseAdjacency.get(targetId);
+          if (adjList) {adjList.push(targetId);}
+          if (revAdj) {revAdj.push(sourceId);}
 
           const newScore = calculateBIC(graph, observations);
 
@@ -500,14 +505,14 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
           } else {
             // Remove edge (not helpful)
             graph.edges.delete(edgeId);
-            graph.adjacencyList.set(
-              sourceId,
-              graph.adjacencyList.get(sourceId)!.filter(c => c !== targetId)
-            );
-            graph.reverseAdjacency.set(
-              targetId,
-              graph.reverseAdjacency.get(targetId)!.filter(p => p !== sourceId)
-            );
+            const srcAdj = graph.adjacencyList.get(sourceId);
+            if (srcAdj) {
+              graph.adjacencyList.set(sourceId, srcAdj.filter(c => c !== targetId));
+            }
+            const tgtRev = graph.reverseAdjacency.get(targetId);
+            if (tgtRev) {
+              graph.reverseAdjacency.set(targetId, tgtRev.filter(p => p !== sourceId));
+            }
           }
         }
       }
@@ -690,7 +695,7 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
     while (stack.length > 0) {
       const current = stack.pop()!;
 
-      if (current === sourceId) return true;
+      if (current === sourceId) {return true;}
 
       if (!visited.has(current)) {
         visited.add(current);
@@ -717,7 +722,7 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
 
       for (const child of children) {
         if (!visited.has(child)) {
-          if (dfs(child)) return true;
+          if (dfs(child)) {return true;}
         } else if (recStack.has(child)) {
           const cycleStart = path.indexOf(child);
           cycles.push(path.slice(cycleStart));
@@ -744,12 +749,14 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
 
     while (cycles.length > 0) {
       const cycle = cycles[0];
+      if (!cycle) {break;}
       let weakestEdge: ICausalEdge | null = null;
       let weakestStrength = Infinity;
 
       for (let i = 0; i < cycle.length; i++) {
         const sourceId = cycle[i];
         const targetId = cycle[(i + 1) % cycle.length];
+        if (!sourceId || !targetId) {continue;}
         const edgeId = `${sourceId}->${targetId}`;
         const edge = graph.edges.get(edgeId);
 
@@ -764,12 +771,12 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
         const children = graph.adjacencyList.get(weakestEdge.sourceId) || [];
         graph.adjacencyList.set(
           weakestEdge.sourceId,
-          children.filter(c => c !== weakestEdge!.targetId)
+          children.filter(c => c !== weakestEdge.targetId)
         );
         const parents = graph.reverseAdjacency.get(weakestEdge.targetId) || [];
         graph.reverseAdjacency.set(
           weakestEdge.targetId,
-          parents.filter(p => p !== weakestEdge!.sourceId)
+          parents.filter(p => p !== weakestEdge.sourceId)
         );
       }
 
@@ -825,7 +832,7 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
     to: string,
     blocked: Set<string>
   ): boolean {
-    if (from === to) return true;
+    if (from === to) {return true;}
 
     const visited = new Set<string>();
     const stack = [from];
@@ -833,7 +840,7 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
     while (stack.length > 0) {
       const current = stack.pop()!;
 
-      if (current === to) return true;
+      if (current === to) {return true;}
 
       if (!visited.has(current) && !blocked.has(current)) {
         visited.add(current);
@@ -846,8 +853,8 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
   }
 
   private getSubsets<T>(arr: T[], size: number): T[][] {
-    if (size === 0) return [[]];
-    if (size > arr.length) return [];
+    if (size === 0) {return [[]];}
+    if (size > arr.length) {return [];}
 
     const result: T[][] = [];
 
@@ -858,9 +865,12 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
       }
 
       for (let i = start; i < arr.length; i++) {
-        current.push(arr[i]);
-        helper(i + 1, current);
-        current.pop();
+        const item = arr[i];
+        if (item !== undefined) {
+          current.push(item);
+          helper(i + 1, current);
+          current.pop();
+        }
       }
     }
 
@@ -872,7 +882,7 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
     graph: ICausalGraph,
     observations: ICausalObservation[]
   ): number {
-    if (observations.length === 0) return 0;
+    if (observations.length === 0) {return 0;}
 
     let totalR2 = 0;
     let nodeCount = 0;
@@ -902,7 +912,7 @@ export class CausalDiscoveryEngine implements ICausalDiscoveryEngine {
   }
 
   private calculateOverallConfidence(graph: ICausalGraph): number {
-    if (graph.edges.size === 0) return 0;
+    if (graph.edges.size === 0) {return 0;}
 
     const confidenceScores: Record<CausalConfidence, number> = {
       established: 1.0,

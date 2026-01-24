@@ -240,14 +240,14 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
    */
   async analyzeCircadianRhythm(
     stateHistory: IStateVector[],
-    minDays: number = 7
+    minDays = 7
   ): Promise<CircadianProfile | null> {
     if (stateHistory.length < minDays * 4) { // At least 4 observations per day
       return null;
     }
 
     // Group by hour
-    const hourlyData: Map<number, number[]> = new Map();
+    const hourlyData = new Map<number, number[]>();
     for (let h = 0; h < 24; h++) {
       hourlyData.set(h, []);
     }
@@ -297,7 +297,7 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
    */
   detectEarlyWarnings(
     stateHistory: IStateVector[],
-    windowSize: number = 10
+    windowSize = 10
   ): EarlyWarningSignal[] {
     const signals: EarlyWarningSignal[] = [];
 
@@ -540,10 +540,10 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
    * Convert number to risk level
    */
   private numberToRisk(value: number): RiskLevel {
-    if (value >= 0.85) return 'critical';
-    if (value >= 0.7) return 'high';
-    if (value >= 0.4) return 'medium';
-    if (value >= 0.2) return 'low';
+    if (value >= 0.85) {return 'critical';}
+    if (value >= 0.7) {return 'high';}
+    if (value >= 0.4) {return 'medium';}
+    if (value >= 0.2) {return 'low';}
     return 'none';
   }
 
@@ -566,7 +566,7 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
    * Calculate overall trend
    */
   private calculateOverallTrend(series: TimeSeriesPoint[]): TrendDirection {
-    if (series.length < 3) return 'unknown';
+    if (series.length < 3) {return 'unknown';}
 
     const values = series.map(p => p.value);
     const recentAvg = this.average(values.slice(-3));
@@ -575,21 +575,21 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
     const diff = recentAvg - olderAvg;
     const variance = this.variance(values);
 
-    if (variance > 0.1) return 'volatile';
-    if (diff > 0.1) return 'improving';
-    if (diff < -0.1) return 'declining';
+    if (variance > 0.1) {return 'volatile';}
+    if (diff > 0.1) {return 'improving';}
+    if (diff < -0.1) {return 'declining';}
     return 'stable';
   }
 
   /**
    * Identify contributing factors
    */
-  private identifyContributingFactors(state: IStateVector): Array<{
+  private identifyContributingFactors(state: IStateVector): {
     factor: string;
     weight: number;
     direction: 'positive' | 'negative' | 'neutral';
-  }> {
-    const factors: Array<{ factor: string; weight: number; direction: 'positive' | 'negative' | 'neutral' }> = [];
+  }[] {
+    const factors: { factor: string; weight: number; direction: 'positive' | 'negative' | 'neutral' }[] = [];
 
     // Emotional factors
     if (state.emotional.vad.valence < -0.3) {
@@ -651,20 +651,20 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
   private detectPhaseTransitions(
     _history: IStateVector[],
     current: IStateVector
-  ): Array<{
+  ): {
     type: PhaseTransition;
     predictedTime: Date;
     confidence: number;
     preventable: boolean;
     preventionActions: string[];
-  }> {
-    const transitions: Array<{
+  }[] {
+    const transitions: {
       type: PhaseTransition;
       predictedTime: Date;
       confidence: number;
       preventable: boolean;
       preventionActions: string[];
-    }> = [];
+    }[] = [];
 
     // Simple heuristic: if risk is increasing, predict crisis approaching
     const currentRisk = this.riskToNumber(current.risk.level);
@@ -744,7 +744,7 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
   }
 
   private variance(values: number[]): number {
-    if (values.length < 2) return 0;
+    if (values.length < 2) {return 0;}
     const avg = this.average(values);
     return values.reduce((sum, v) => sum + (v - avg) ** 2, 0) / (values.length - 1);
   }
@@ -754,7 +754,7 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
   }
 
   private calculateAutocorrelation(values: number[], lag: number): number {
-    if (values.length <= lag) return 0;
+    if (values.length <= lag) {return 0;}
     const avg = this.average(values);
     let numerator = 0;
     let denominator = 0;
@@ -786,8 +786,8 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
 
   private detectWeeklyPattern(states: IStateVector[]): TemporalPattern | null {
     // Group by day of week
-    const byDay: Map<number, number[]> = new Map();
-    for (let d = 0; d < 7; d++) byDay.set(d, []);
+    const byDay = new Map<number, number[]>();
+    for (let d = 0; d < 7; d++) {byDay.set(d, []);}
 
     for (const state of states) {
       const day = state.timestamp.getDay();
@@ -816,8 +816,8 @@ export class TemporalEchoEngine implements ITemporalEchoEngine {
 
   private detectCircadianPattern(states: IStateVector[]): TemporalPattern | null {
     // Group by hour
-    const byHour: Map<number, number[]> = new Map();
-    for (let h = 0; h < 24; h++) byHour.set(h, []);
+    const byHour = new Map<number, number[]>();
+    for (let h = 0; h < 24; h++) {byHour.set(h, []);}
 
     for (const state of states) {
       const hour = state.timestamp.getHours();

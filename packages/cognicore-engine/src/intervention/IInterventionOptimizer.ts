@@ -812,11 +812,11 @@ export interface ISelectionReasoning {
   primaryFactor: string;
 
   /** Context features that influenced decision */
-  influentialFeatures: Array<{
+  influentialFeatures: {
     feature: string;
     value: number;
     influence: 'positive' | 'negative' | 'neutral';
-  }>;
+  }[];
 
   /** Why alternatives were rejected */
   rejectionReasons: Record<string, string>;
@@ -849,10 +849,10 @@ export interface IOptimizerState {
   recentDecisionPoints: IDecisionPoint[];
 
   /** Pending outcomes (awaiting measurement) */
-  pendingOutcomes: Array<{
+  pendingOutcomes: {
     decisionPointId: string;
     expectedOutcomeTime: Date;
-  }>;
+  }[];
 
   /** Global statistics */
   globalStats: IGlobalStats;

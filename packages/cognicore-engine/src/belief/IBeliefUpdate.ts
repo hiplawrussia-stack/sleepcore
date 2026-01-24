@@ -195,12 +195,12 @@ export interface BeliefUpdateResult {
   /**
    * Significant changes detected
    */
-  readonly significantChanges: Array<{
+  readonly significantChanges: {
     readonly dimension: string;
     readonly changeType: 'improvement' | 'decline' | 'volatility' | 'stabilization';
     readonly magnitude: number;
     readonly clinicalSignificance: boolean;
-  }>;
+  }[];
 }
 
 /**
@@ -318,12 +318,12 @@ export interface IBeliefUpdateEngine {
    */
   checkBeliefConsistency(belief: IFullBeliefState): {
     isConsistent: boolean;
-    inconsistencies: Array<{
+    inconsistencies: {
       dimension1: string;
       dimension2: string;
       conflictType: string;
       resolution: string;
-    }>;
+    }[];
   };
 
   /**
@@ -341,11 +341,11 @@ export interface IBeliefUpdateEngine {
     userId: string | number,
     dimension: string,
     timeRange: { start: Date; end: Date }
-  ): Promise<Array<{
+  ): Promise<{
     timestamp: Date;
     mean: number;
     variance: number;
-  }>>;
+  }[]>;
 }
 
 /**

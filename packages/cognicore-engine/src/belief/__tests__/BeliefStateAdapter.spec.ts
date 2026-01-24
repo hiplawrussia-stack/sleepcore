@@ -18,13 +18,12 @@ import {
   mergeHybridPredictions,
   DIMENSION_MAPPING,
   DIMENSION_INDEX,
-  type IHybridPrediction,
   type IBeliefAdapterEngines,
 } from '../BeliefStateAdapter';
 
 import type { BeliefState, DimensionBelief, Prior, Posterior } from '../IBeliefUpdate';
-import type { IPLRNNState, IPLRNNPrediction, IEarlyWarningSignal, ICausalNetwork, IInterventionSimulation } from '../../temporal/interfaces/IPLRNNEngine';
-import type { IKalmanFormerState, IKalmanFormerPrediction, IAttentionWeights } from '../../temporal/interfaces/IKalmanFormer';
+import type { IPLRNNState, IPLRNNPrediction } from '../../temporal/interfaces/IPLRNNEngine';
+import type { IKalmanFormerState, IKalmanFormerPrediction } from '../../temporal/interfaces/IKalmanFormer';
 import type { EmotionType } from '../../state/interfaces/IEmotionalState';
 import type { CognitiveDistortionType } from '../../state/interfaces/ICognitiveState';
 
@@ -35,7 +34,7 @@ import type { CognitiveDistortionType } from '../../state/interfaces/ICognitiveS
 /**
  * Create a mock Prior
  */
-function createMockPrior(mean: number = 0.5, variance: number = 0.1): Prior {
+function createMockPrior(mean = 0.5, variance = 0.1): Prior {
   return {
     mean,
     variance,
@@ -47,7 +46,7 @@ function createMockPrior(mean: number = 0.5, variance: number = 0.1): Prior {
 /**
  * Create a mock Posterior
  */
-function createMockPosterior(mean: number = 0.5, variance: number = 0.1): Posterior {
+function createMockPosterior(mean = 0.5, variance = 0.1): Posterior {
   return {
     mean,
     variance,
@@ -65,8 +64,8 @@ function createMockPosterior(mean: number = 0.5, variance: number = 0.1): Poster
  */
 function createMockDimensionBelief(
   dimension: string,
-  mean: number = 0.5,
-  variance: number = 0.1
+  mean = 0.5,
+  variance = 0.1
 ): DimensionBelief {
   return {
     dimension,
@@ -219,7 +218,6 @@ function createMockPLRNNPrediction(meanPrediction: number[] = [0.3, -0.2, 0.7, 0
  * Create a mock IKalmanFormerPrediction
  */
 function createMockKalmanFormerPrediction(blendedPrediction: number[] = [0.28, -0.25, 0.68, 0.12, 0.62]): IKalmanFormerPrediction {
-  const dim = blendedPrediction.length;
   return {
     stateEstimate: blendedPrediction,
     covariance: blendedPrediction.map(() => blendedPrediction.map(() => 0.1)),
@@ -252,7 +250,7 @@ function createMockPLRNNEngine(): IBeliefAdapterEngines['plrnn'] {
       ...state,
       timestep: state.timestep + 1,
     }),
-    predict: (state: IPLRNNState, horizon: number) => createMockPLRNNPrediction(),
+    predict: (_state: IPLRNNState, _horizon: number) => createMockPLRNNPrediction(),
     extractCausalNetwork: () => ({
       nodes: [
         { id: 'valence', label: 'Valence', selfWeight: 0.8, centrality: 0.9, value: 0.2 },
@@ -296,8 +294,8 @@ function createMockKalmanFormerEngine(): IBeliefAdapterEngines['kalmanFormer'] {
         timestamp,
       },
     }),
-    predict: (state: IKalmanFormerState, horizon: number) => createMockKalmanFormerPrediction(),
-    explain: (state: IKalmanFormerState) => ({
+    predict: (_state: IKalmanFormerState, _horizon: number) => createMockKalmanFormerPrediction(),
+    explain: (_state: IKalmanFormerState) => ({
       selfAttention: [[[0.5, 0.3, 0.2]]],
       topInfluentialObservations: [
         { index: 0, timestamp: new Date(), weight: 0.5, dimension: 'valence' },

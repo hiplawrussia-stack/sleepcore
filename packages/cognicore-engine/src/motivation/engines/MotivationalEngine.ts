@@ -68,6 +68,11 @@ import {
 
 import type { ChangeStage } from '../../state/interfaces/INarrativeState';
 
+import {
+  generateShortSecureId,
+  secureRandomInt,
+} from '../../utils/SecureRandom';
+
 // ============================================================
 // MOTIVATIONAL STATE BUILDER IMPLEMENTATION
 // ============================================================
@@ -100,7 +105,7 @@ class MotivationalStateBuilder implements IMotivationalStateBuilder {
   }
 
   private generateId(): string {
-    return `ms_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    return generateShortSecureId('ms');
   }
 
   setUserId(userId: string | number): this {
@@ -273,7 +278,7 @@ export class MotivationalStateFactory implements IMotivationalStateFactory {
   }
 
   async fromConversation(
-    messages: Array<{ text: string; timestamp: Date; isUser: boolean }>,
+    messages: { text: string; timestamp: Date; isUser: boolean }[],
     userId: string | number,
     previousState?: IMotivationalState
   ): Promise<IMotivationalState> {
@@ -455,8 +460,8 @@ export class MotivationalStateFactory implements IMotivationalStateFactory {
       const earlier = utterances.slice(-10, -5);
       const recentRatio = recent.filter(u => u.category === 'change_talk').length / recent.length;
       const earlierRatio = earlier.filter(u => u.category === 'change_talk').length / earlier.length;
-      if (recentRatio > earlierRatio + 0.1) trend = 'increasing';
-      else if (recentRatio < earlierRatio - 0.1) trend = 'decreasing';
+      if (recentRatio > earlierRatio + 0.1) {trend = 'increasing';}
+      else if (recentRatio < earlierRatio - 0.1) {trend = 'decreasing';}
     }
 
     return {
@@ -546,8 +551,8 @@ export class MotivationalStateFactory implements IMotivationalStateFactory {
 
     // If mobilizing language present, likely in preparation/action
     if (profile.mobilizingPresent && profile.mobilizingRatio > 0.3) {
-      if (profile.takingSteps >= 2) return 'action';
-      if (profile.commitment >= 2 || profile.activation >= 2) return 'preparation';
+      if (profile.takingSteps >= 2) {return 'action';}
+      if (profile.commitment >= 2 || profile.activation >= 2) {return 'preparation';}
     }
 
     // If CT ratio very low, likely precontemplation
@@ -562,7 +567,7 @@ export class MotivationalStateFactory implements IMotivationalStateFactory {
 
     // If high CT ratio with preparatory language
     if (balance.changeTalkRatio > 0.7) {
-      if (profile.dominantPreparatory !== 'none') return 'preparation';
+      if (profile.dominantPreparatory !== 'none') {return 'preparation';}
     }
 
     // Default: keep current stage or start at contemplation
@@ -680,7 +685,7 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
     const lowerText = text.toLowerCase();
 
     // Check for Change Talk patterns
-    let bestCtMatch: { subtype: ChangeTaskSubtype; strength: number; confidence: number; spans: Array<{ start: number; end: number; text: string; pattern: string }> } | null = null;
+    let bestCtMatch: { subtype: ChangeTaskSubtype; strength: number; confidence: number; spans: { start: number; end: number; text: string; pattern: string }[] } | null = null;
 
     for (const [subtype, patterns] of Object.entries(CHANGE_TALK_PATTERNS)) {
       const ctSubtype = subtype as ChangeTaskSubtype;
@@ -708,7 +713,7 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
     }
 
     // Check for Sustain Talk patterns
-    let bestStMatch: { subtype: SustainTalkSubtype; strength: number; confidence: number; spans: Array<{ start: number; end: number; text: string; pattern: string }> } | null = null;
+    let bestStMatch: { subtype: SustainTalkSubtype; strength: number; confidence: number; spans: { start: number; end: number; text: string; pattern: string }[] } | null = null;
 
     for (const [subtype, patterns] of Object.entries(SUSTAIN_TALK_PATTERNS)) {
       const stSubtype = subtype as SustainTalkSubtype;
@@ -741,7 +746,7 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
     let sustainSubtype: SustainTalkSubtype | undefined;
     let strength = 0;
     let confidence = 0.5;
-    let evidenceSpans: Array<{ start: number; end: number; text: string; pattern: string }> = [];
+    let evidenceSpans: { start: number; end: number; text: string; pattern: string }[] = [];
 
     if (bestCtMatch && (!bestStMatch || bestCtMatch.confidence > bestStMatch.confidence)) {
       category = 'change_talk';
@@ -758,7 +763,7 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
     }
 
     return {
-      id: `utt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: generateShortSecureId('utt'),
       text,
       timestamp: new Date(),
       category,
@@ -852,8 +857,9 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
       });
     }
 
-    // Select template based on context
-    const template = templates[Math.floor(Math.random() * templates.length)]!;
+    // Select template based on context (using secure random)
+    const templateIndex = secureRandomInt(0, templates.length - 1);
+    const template = templates[templateIndex]!;
     const text = context.language === 'ru' ? template.templateRu : template.template;
 
     return this.createResponse({
@@ -896,7 +902,8 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
       });
     }
 
-    const template = templates[Math.floor(Math.random() * templates.length)]!;
+    const templateIndex = secureRandomInt(0, templates.length - 1);
+    const template = templates[templateIndex]!;
     const text = context.language === 'ru' ? template.templateRu : template.template;
 
     return this.createResponse({
@@ -999,7 +1006,8 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
   ): Promise<MIResponse> {
     const strategy = DISCORD_RESPONSE_STRATEGIES[discordType];
     const templates = context.language === 'ru' ? strategy.templatesRu : strategy.templates;
-    const text = templates[Math.floor(Math.random() * templates.length)]!;
+    const textIndex = secureRandomInt(0, templates.length - 1);
+    const text = templates[textIndex]!;
 
     return this.createResponse({
       text,
@@ -1176,20 +1184,20 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
     const readinessHigh = state.readinessRuler.readiness >= 7;
     const ambivalenceResolved = state.ambivalence.level < 0.4;
 
-    if (ctRatioHigh) reasons.push('High change talk ratio');
-    if (mobilizingPresent) reasons.push('Mobilizing language present');
-    if (lowDiscord) reasons.push('Good therapeutic rapport');
-    if (readinessHigh) reasons.push('High readiness scores');
-    if (ambivalenceResolved) reasons.push('Ambivalence largely resolved');
+    if (ctRatioHigh) {reasons.push('High change talk ratio');}
+    if (mobilizingPresent) {reasons.push('Mobilizing language present');}
+    if (lowDiscord) {reasons.push('Good therapeutic rapport');}
+    if (readinessHigh) {reasons.push('High readiness scores');}
+    if (ambivalenceResolved) {reasons.push('Ambivalence largely resolved');}
 
     const ready = reasons.length >= 3;
 
     if (!ready) {
-      if (!ctRatioHigh) nextSteps.push('Continue evoking change talk');
-      if (!mobilizingPresent) nextSteps.push('Elicit commitment language');
-      if (!lowDiscord) nextSteps.push('Address therapeutic relationship');
-      if (!readinessHigh) nextSteps.push('Build importance and confidence');
-      if (!ambivalenceResolved) nextSteps.push('Explore remaining ambivalence');
+      if (!ctRatioHigh) {nextSteps.push('Continue evoking change talk');}
+      if (!mobilizingPresent) {nextSteps.push('Elicit commitment language');}
+      if (!lowDiscord) {nextSteps.push('Address therapeutic relationship');}
+      if (!readinessHigh) {nextSteps.push('Build importance and confidence');}
+      if (!ambivalenceResolved) {nextSteps.push('Explore remaining ambivalence');}
     }
 
     return { ready, reasons, nextSteps };
@@ -1217,7 +1225,7 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
     // If no mobilizing, work on preparatory first
     if (!profile.mobilizingPresent) {
       // Find weakest preparatory area
-      const prep: Array<{ type: ChangeTaskSubtype; count: number }> = [
+      const prep: { type: ChangeTaskSubtype; count: number }[] = [
         { type: 'desire', count: profile.desire },
         { type: 'ability', count: profile.ability },
         { type: 'reasons', count: profile.reasons },
@@ -1229,8 +1237,8 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
 
     // If mobilizing present but weak, strengthen it
     if (profile.mobilizingRatio < 0.5) {
-      if (profile.commitment < profile.activation) return 'commitment';
-      if (profile.activation < profile.takingSteps) return 'activation';
+      if (profile.commitment < profile.activation) {return 'commitment';}
+      if (profile.activation < profile.takingSteps) {return 'activation';}
       return 'taking_steps';
     }
 
@@ -1282,9 +1290,9 @@ export class MotivationalEngine implements IMotivationalInterviewingEngine {
       'persuade', 'confront', 'direct'
     ];
 
-    if (adherentBehaviors.includes(behavior)) return 0.9;
-    if (neutralBehaviors.includes(behavior)) return 0.7;
-    if (nonAdherentBehaviors.includes(behavior)) return 0.3;
+    if (adherentBehaviors.includes(behavior)) {return 0.9;}
+    if (neutralBehaviors.includes(behavior)) {return 0.7;}
+    if (nonAdherentBehaviors.includes(behavior)) {return 0.3;}
     return 0.6;
   }
 

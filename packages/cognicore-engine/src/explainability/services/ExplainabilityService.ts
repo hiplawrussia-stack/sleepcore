@@ -22,27 +22,27 @@
 
 import { randomUUID } from 'crypto';
 import {
-  IExplainabilityService,
-  IExplanationRequest,
-  IExplanationResponse,
-  ISHAPExplanation,
-  ICounterfactualExplanation,
-  IGlobalExplanation,
-  IGlobalFeatureImportance,
-  IDecisionRule,
-  IClinicianExplanation,
-  IUserExplanation,
-  IUserFactor,
-  ICausalExplanation,
-  ICausalChain,
-  INarrativeExplanation,
-  IExplanationEffectiveness,
-  ExplanationAudience,
-  ExplanationLevel,
-  EUAIActRiskLevel,
-  NarrativeStructure,
-  CognitiveStyle,
-  CounterfactualFeasibility,
+  type IExplainabilityService,
+  type IExplanationRequest,
+  type IExplanationResponse,
+  type ISHAPExplanation,
+  type ICounterfactualExplanation,
+  type IGlobalExplanation,
+  type IGlobalFeatureImportance,
+  type IDecisionRule,
+  type IClinicianExplanation,
+  type IUserExplanation,
+  type IUserFactor,
+  type ICausalExplanation,
+  type ICausalChain,
+  type INarrativeExplanation,
+  type IExplanationEffectiveness,
+  type ExplanationAudience,
+  type ExplanationLevel,
+  type EUAIActRiskLevel,
+  type NarrativeStructure,
+  type CognitiveStyle,
+  type CounterfactualFeasibility,
   DEFAULT_EXPLAINABILITY_CONFIG,
 } from '../interfaces/IExplainability';
 import {
@@ -51,6 +51,7 @@ import {
 } from '../engines/FeatureAttributionEngine';
 import { CounterfactualExplainer } from '../engines/CounterfactualExplainer';
 import { NarrativeGenerator } from './NarrativeGenerator';
+import { secureRandom } from '../../utils/SecureRandom';
 
 // ============================================================================
 // EXPLAINABILITY SERVICE
@@ -68,12 +69,12 @@ export class ExplainabilityService implements IExplainabilityService {
   private narrativeGenerator: NarrativeGenerator;
 
   // Caches
-  private globalExplanationCache: Map<string, {
+  private globalExplanationCache = new Map<string, {
     explanation: IGlobalExplanation;
     timestamp: number;
-  }> = new Map();
+  }>();
 
-  private effectivenessStore: Map<string, IExplanationEffectiveness> = new Map();
+  private effectivenessStore = new Map<string, IExplanationEffectiveness>();
 
   // Configuration
   private config = DEFAULT_EXPLAINABILITY_CONFIG;
@@ -232,7 +233,7 @@ export class ExplainabilityService implements IExplainabilityService {
   ): Promise<IGlobalExplanation> {
     // Check cache
     const cached = this.getCachedGlobalExplanation(predictionType);
-    if (cached) return cached;
+    if (cached) {return cached;}
 
     // Generate new global explanation
     const featureImportance = this.calculateGlobalFeatureImportance(predictionType);
@@ -284,13 +285,33 @@ export class ExplainabilityService implements IExplainabilityService {
   async generateClinicianExplanation(
     sessionData: Record<string, unknown>
   ): Promise<IClinicianExplanation> {
+    // Extract values with proper type handling
+    const userId = typeof sessionData.userId === 'string' || typeof sessionData.userId === 'number'
+      ? String(sessionData.userId) : 'anonymous';
+    const sessionId = typeof sessionData.sessionId === 'string'
+      ? sessionData.sessionId : randomUUID();
+    const presentingConcern = typeof sessionData.presentingConcern === 'string'
+      ? sessionData.presentingConcern : 'Digital wellness concern';
+    const presentingConcernRu = typeof sessionData.presentingConcernRu === 'string'
+      ? sessionData.presentingConcernRu : 'Проблемы цифрового благополучия';
+    const primaryConcern = typeof sessionData.primaryConcern === 'string'
+      ? sessionData.primaryConcern : 'Digital overuse';
+    const riskLevel = typeof sessionData.riskLevel === 'string'
+      ? sessionData.riskLevel : 'low';
+    const reasoning = typeof sessionData.reasoning === 'string'
+      ? sessionData.reasoning : 'Based on user-reported data and interaction patterns';
+    const reasoningRu = typeof sessionData.reasoningRu === 'string'
+      ? sessionData.reasoningRu : 'На основе данных пользователя и паттернов взаимодействия';
+    const selectedIntervention = typeof sessionData.selectedIntervention === 'string'
+      ? sessionData.selectedIntervention : 'Coping technique';
+
     return {
-      patientId: String(sessionData.userId || 'anonymous'),
-      sessionId: String(sessionData.sessionId || randomUUID()),
+      patientId: userId,
+      sessionId: sessionId,
 
       clinicalContext: {
-        presentingConcern: String(sessionData.presentingConcern || 'Digital wellness concern'),
-        presentingConcernRu: String(sessionData.presentingConcernRu || 'Проблемы цифрового благополучия'),
+        presentingConcern: presentingConcern,
+        presentingConcernRu: presentingConcernRu,
         relevantHistory: sessionData.relevantHistory as string[] || [],
         currentSymptoms: sessionData.currentSymptoms as string[] || [],
         riskFactors: sessionData.riskFactors as string[] || [],
@@ -299,18 +320,18 @@ export class ExplainabilityService implements IExplainabilityService {
       },
 
       aiAssessment: {
-        primaryConcern: String(sessionData.primaryConcern || 'Digital overuse'),
+        primaryConcern: primaryConcern,
         severity: sessionData.severity as 'mild' | 'moderate' | 'severe' || 'mild',
-        riskLevel: String(sessionData.riskLevel || 'low'),
+        riskLevel: riskLevel,
         confidence: Number(sessionData.confidence) || 0.7,
-        reasoning: String(sessionData.reasoning || 'Based on user-reported data and interaction patterns'),
-        reasoningRu: String(sessionData.reasoningRu || 'На основе данных пользователя и паттернов взаимодействия'),
+        reasoning: reasoning,
+        reasoningRu: reasoningRu,
         causalFactors: sessionData.causalFactors as string[],
         mechanismHypothesis: sessionData.mechanismHypothesis as string,
       },
 
       interventionRationale: {
-        selectedIntervention: String(sessionData.selectedIntervention || 'Coping technique'),
+        selectedIntervention: selectedIntervention,
         therapeuticApproach: 'CBT-based digital wellness support',
         evidenceBasis: [
           'Beck Cognitive Therapy framework',
@@ -416,7 +437,7 @@ provide clinical diagnosis or treatment recommendations.
     const edges = nodes.slice(0, -1).map((node, index) => ({
       from: node.variable,
       to: nodes[index + 1]?.variable ?? '',
-      strength: 0.6 + Math.random() * 0.3,
+      strength: 0.6 + secureRandom() * 0.3,
       mechanism: 'Прямое влияние',
       mechanismRu: 'Прямое влияние',
     }));
@@ -667,10 +688,10 @@ provide clinical diagnosis or treatment recommendations.
     language: 'en' | 'ru',
     ageGroup: 'child' | 'teen' | 'adult'
   ): string | undefined {
-    if (!localExplanation || ageGroup === 'child') return undefined;
+    if (!localExplanation || ageGroup === 'child') {return undefined;}
 
     const topFactor = localExplanation.topPositiveFeatures[0];
-    if (!topFactor) return undefined;
+    if (!topFactor) {return undefined;}
 
     if (language === 'ru') {
       return ageGroup === 'teen'
@@ -750,7 +771,7 @@ provide clinical diagnosis or treatment recommendations.
 
   private formatForClinician(explanation: IExplanationResponse, _level: ExplanationLevel): string {
     const clinician = explanation.clinicianExplanation;
-    if (!clinician) return 'No clinician explanation available';
+    if (!clinician) {return 'No clinician explanation available';}
 
     return `
 ═══════════════════════════════════════════════
@@ -848,7 +869,7 @@ ${clinician.disclaimer}
   async recordExplanationFeedback(
     feedback: Partial<IExplanationEffectiveness>
   ): Promise<void> {
-    if (!feedback.explanationId) return;
+    if (!feedback.explanationId) {return;}
 
     const existing = this.effectivenessStore.get(feedback.explanationId);
 
@@ -881,7 +902,7 @@ ${clinician.disclaimer}
    */
   getCachedGlobalExplanation(predictionType: string): IGlobalExplanation | null {
     const cached = this.globalExplanationCache.get(predictionType);
-    if (!cached) return null;
+    if (!cached) {return null;}
 
     const age = Date.now() - cached.timestamp;
     if (age > this.config.cacheExpirationMs) {
@@ -914,8 +935,11 @@ ${clinician.disclaimer}
   } {
     if (typeof prediction === 'object' && prediction !== null) {
       const pred = prediction as Record<string, unknown>;
+      // Find first string-like outcome value
+      const outcomeCandidate = pred.outcome ?? pred.result ?? pred.intervention ?? 'unknown';
+      const outcomeStr = typeof outcomeCandidate === 'string' ? outcomeCandidate : 'unknown';
       return {
-        outcome: String(pred.outcome || pred.result || pred.intervention || 'unknown'),
+        outcome: outcomeStr,
         value: Number(pred.value || pred.score || 0.5),
         confidence: Number(pred.confidence || 0.7),
       };
@@ -929,10 +953,10 @@ ${clinician.disclaimer}
   }
 
   private getConfidenceLabel(confidence: number): string {
-    if (confidence >= 0.9) return 'Very High';
-    if (confidence >= 0.7) return 'High';
-    if (confidence >= 0.5) return 'Medium';
-    if (confidence >= 0.3) return 'Low';
+    if (confidence >= 0.9) {return 'Very High';}
+    if (confidence >= 0.7) {return 'High';}
+    if (confidence >= 0.5) {return 'Medium';}
+    if (confidence >= 0.3) {return 'Low';}
     return 'Very Low';
   }
 

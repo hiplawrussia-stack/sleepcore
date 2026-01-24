@@ -31,7 +31,7 @@ interface BenchmarkResult {
  * Calculate MAE between predictions and actuals
  */
 function calculateMAE(predictions: number[], actuals: number[]): number {
-  if (predictions.length === 0) return 0;
+  if (predictions.length === 0) {return 0;}
   let sum = 0;
   for (let i = 0; i < predictions.length; i++) {
     sum += Math.abs((predictions[i] ?? 0) - (actuals[i] ?? 0));
@@ -112,7 +112,7 @@ export async function runPLRNNvsPersistenceBenchmark(
       const obs = participant.observations;
       const testStart = Math.floor(obs.length * 0.8);
 
-      if (testStart + horizon >= obs.length) continue;
+      if (testStart + horizon >= obs.length) {continue;}
 
       // Initialize state
       let state = engine.createState(obs[testStart]!.values, obs[testStart]!.timestamp);
@@ -217,5 +217,8 @@ if (require.main === module) {
     verbose: true,
   }).then(result => {
     process.exit(result.beatsPersistence ? 0 : 1);
+  }).catch((err: unknown) => {
+    console.error('Benchmark failed:', err);
+    process.exit(1);
   });
 }

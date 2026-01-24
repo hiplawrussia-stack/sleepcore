@@ -100,12 +100,12 @@ export interface ClientUtterance {
   readonly confidence: number;
 
   /** Keywords/patterns that triggered detection */
-  readonly evidenceSpans: Array<{
+  readonly evidenceSpans: {
     readonly start: number;
     readonly end: number;
     readonly text: string;
     readonly pattern: string;
-  }>;
+  }[];
 
   /** Link to triggering topic */
   readonly targetBehavior?: string;
@@ -373,10 +373,10 @@ export interface IMotivationalState {
   /**
    * Historical trend of CT ratio
    */
-  readonly ratioTrend: Array<{
+  readonly ratioTrend: {
     readonly date: Date;
     readonly ratio: number;
-  }>;
+  }[];
 
   // ========== Ambivalence ==========
 
@@ -472,7 +472,7 @@ export interface IMotivationalStateFactory {
    * Create from conversation analysis
    */
   fromConversation(
-    messages: Array<{ text: string; timestamp: Date; isUser: boolean }>,
+    messages: { text: string; timestamp: Date; isUser: boolean }[],
     userId: string | number,
     previousState?: IMotivationalState
   ): Promise<IMotivationalState>;

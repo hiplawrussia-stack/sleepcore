@@ -22,98 +22,66 @@
  */
 
 import {
-  IInterventionOptimizer,
-  IIntervention,
-  IInterventionSelection,
-  IContextualFeatures,
-  IDecisionPoint,
-  IInterventionOutcome,
-  IRewardSignal,
-  IRewardShapingComponents,
-  IBanditArm,
-  IContextualBanditArm,
-  IUserInterventionProfile,
-  ICategoryStats,
-  IInterventionStats,
-  IOptimizerConfig,
-  IOptimizerState,
-  IGlobalStats,
-  IAlternativeIntervention,
-  ISelectionReasoning,
+  type IInterventionOptimizer,
+  type IIntervention,
+  type IInterventionSelection,
+  type IContextualFeatures,
+  type IDecisionPoint,
+  type IInterventionOutcome,
+  type IRewardSignal,
+  type IRewardShapingComponents,
+  type IBanditArm,
+  type IContextualBanditArm,
+  type IUserInterventionProfile,
+  type ICategoryStats,
+  type IInterventionStats,
+  type IOptimizerConfig,
+  type IOptimizerState,
+  type IGlobalStats,
+  type IAlternativeIntervention,
+  type ISelectionReasoning,
   DEFAULT_OPTIMIZER_CONFIG,
   INTERVENTION_CATEGORIES,
   TIME_OF_DAY_HOURS,
-  InterventionCategory,
-  DecisionPointType,
-  TimeOfDay,
-  CreateInterventionOptimizer,
+  type InterventionCategory,
+  type DecisionPointType,
+  type TimeOfDay,
+  type CreateInterventionOptimizer,
 } from './IInterventionOptimizer';
+
+import {
+  generateShortSecureId,
+  secureRandomInt,
+  betaSampleSecure,
+  gaussianSecure,
+  randomBooleanSecure,
+  weightedRandomIndexSecure,
+} from '../utils/SecureRandom';
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
 /**
- * Generate unique ID
+ * Generate unique ID using cryptographically secure random
  */
 function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+  return generateShortSecureId();
 }
 
 /**
- * Sample from Beta distribution using Gamma samples
+ * Sample from Beta distribution using cryptographically secure random
  * Thompson Sampling for binary outcomes
  */
 function sampleBeta(alpha: number, beta: number): number {
-  // Use Gamma distribution relationship: Beta(a,b) = Gamma(a,1) / (Gamma(a,1) + Gamma(b,1))
-  const gammaA = sampleGamma(alpha, 1);
-  const gammaB = sampleGamma(beta, 1);
-  return gammaA / (gammaA + gammaB);
+  return betaSampleSecure(alpha, beta);
 }
 
 /**
- * Sample from Gamma distribution using Marsaglia and Tsang's method
- */
-function sampleGamma(shape: number, scale: number): number {
-  if (shape < 1) {
-    // For shape < 1, use: Gamma(shape) = Gamma(shape+1) * U^(1/shape)
-    const u = Math.random();
-    return sampleGamma(shape + 1, scale) * Math.pow(u, 1 / shape);
-  }
-
-  const d = shape - 1 / 3;
-  const c = 1 / Math.sqrt(9 * d);
-
-  while (true) {
-    let x: number;
-    let v: number;
-
-    do {
-      x = sampleNormal(0, 1);
-      v = 1 + c * x;
-    } while (v <= 0);
-
-    v = v * v * v;
-    const u = Math.random();
-
-    if (u < 1 - 0.0331 * (x * x) * (x * x)) {
-      return d * v * scale;
-    }
-
-    if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) {
-      return d * v * scale;
-    }
-  }
-}
-
-/**
- * Sample from Normal distribution using Box-Muller transform
+ * Sample from Normal distribution using cryptographically secure Box-Muller
  */
 function sampleNormal(mean: number, stddev: number): number {
-  const u1 = Math.random();
-  const u2 = Math.random();
-  const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  return mean + stddev * z;
+  return gaussianSecure(mean, stddev);
 }
 
 /**
@@ -142,7 +110,7 @@ function getCurrentTimeOfDay(hour: number): TimeOfDay {
 /**
  * Softmax function for probability distribution
  */
-function softmax(values: number[], temperature: number = 1.0): number[] {
+function softmax(values: number[], temperature = 1.0): number[] {
   const maxVal = Math.max(...values);
   const expValues = values.map(v => Math.exp((v - maxVal) / temperature));
   const sumExp = expValues.reduce((a, b) => a + b, 0);
@@ -150,23 +118,14 @@ function softmax(values: number[], temperature: number = 1.0): number[] {
 }
 
 /**
- * Weighted random selection
+ * Weighted random selection using cryptographically secure random
  */
 function weightedRandomSelect<T>(items: T[], weights: number[]): T {
   if (items.length === 0) {
     throw new Error('Cannot select from empty items array');
   }
-  const totalWeight = weights.reduce((a, b) => a + b, 0);
-  let random = Math.random() * totalWeight;
-
-  for (let i = 0; i < items.length; i++) {
-    random -= weights[i] ?? 0;
-    if (random <= 0) {
-      return items[i]!;
-    }
-  }
-
-  return items[items.length - 1]!;
+  const index = weightedRandomIndexSecure(weights);
+  return items[index]!;
 }
 
 // ============================================================================
@@ -185,7 +144,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
   private arms: Map<string, IBanditArm | IContextualBanditArm>;
   private userProfiles: Map<string, IUserInterventionProfile>;
   private decisionPoints: IDecisionPoint[];
-  private pendingOutcomes: Array<{ decisionPointId: string; expectedOutcomeTime: Date }>;
+  private pendingOutcomes: { decisionPointId: string; expectedOutcomeTime: Date }[];
   private globalStats: IGlobalStats;
   private crisisIntervention: IIntervention | null;
 
@@ -279,8 +238,8 @@ export class InterventionOptimizer implements IInterventionOptimizer {
     let alternatives: IAlternativeIntervention[];
 
     if (shouldExplore && this.config.explorationStrategy === 'epsilon_greedy') {
-      // Random exploration
-      const randomIndex = Math.floor(Math.random() * eligibleInterventions.length);
+      // Random exploration using cryptographically secure random
+      const randomIndex = secureRandomInt(0, eligibleInterventions.length - 1);
       selectedIntervention = eligibleInterventions[randomIndex]!;
       expectedReward = this.getArmMeanReward(selectedIntervention.id);
       probability = 1 / eligibleInterventions.length;
@@ -344,7 +303,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
     probability: number;
     alternatives: IAlternativeIntervention[];
   } {
-    const scores: Array<{ intervention: IIntervention; score: number }> = [];
+    const scores: { intervention: IIntervention; score: number }[] = [];
 
     for (const intervention of interventions) {
       let score: number;
@@ -373,7 +332,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
 
       // Add contextual bonus if enabled
       if (this.config.enableContextualBandit && this.isContextualArm(arm)) {
-        score += this.calculateContextualBonus(arm as IContextualBanditArm, context);
+        score += this.calculateContextualBonus(arm, context);
       }
 
       scores.push({ intervention, score });
@@ -439,26 +398,26 @@ export class InterventionOptimizer implements IInterventionOptimizer {
       }
     }
 
-    // MRT randomization if enabled
+    // MRT randomization if enabled (using cryptographically secure random)
     if (this.config.enableMRTRandomization) {
-      return Math.random() < this.config.mrtRandomizationProbability;
+      return randomBooleanSecure(this.config.mrtRandomizationProbability);
     }
 
     // Check context appropriateness
     if (context.riskLevel > 0.8 && decisionPointType !== 'user_initiated') {
       // High risk - be more cautious about unsolicited interventions
-      return Math.random() < 0.3;
+      return randomBooleanSecure(0.3);
     }
 
     // Check energy level
     if (context.energyLevel < 0.2) {
       // Low energy - less likely to engage
-      return Math.random() < 0.5;
+      return randomBooleanSecure(0.5);
     }
 
     // Default: deliver with probability based on engagement history
     const engagementRate = userProfile.engagementRate || 0.5;
-    return Math.random() < (0.5 + engagementRate * 0.3);
+    return randomBooleanSecure(0.5 + engagementRate * 0.3);
   }
 
   /**
@@ -474,7 +433,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
     const eligible = this.filterEligibleInterventions(availableInterventions, context, userProfile);
 
     // Score all eligible interventions
-    const scored: Array<{ intervention: IIntervention; score: number }> = [];
+    const scored: { intervention: IIntervention; score: number }[] = [];
 
     for (const intervention of eligible) {
       if (!this.arms.has(intervention.id)) {
@@ -487,7 +446,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
         : arm.meanReward;
 
       if (this.config.enableContextualBandit && this.isContextualArm(arm)) {
-        score += this.calculateContextualBonus(arm as IContextualBanditArm, context);
+        score += this.calculateContextualBonus(arm, context);
       }
 
       scored.push({ intervention, score });
@@ -731,7 +690,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
 
     // Update contextual features if applicable
     if (context && this.config.enableContextualBandit && this.isContextualArm(arm)) {
-      this.updateContextualArm(arm as IContextualBanditArm, context, rewardValue);
+      this.updateContextualArm(arm, context, rewardValue);
     }
 
     this.arms.set(interventionId, arm);
@@ -813,7 +772,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
     // Update each intervention
     for (const [interventionId, interventionOutcomes] of grouped) {
       const firstOutcome = interventionOutcomes[0];
-      if (!firstOutcome) continue;
+      if (!firstOutcome) {continue;}
 
       const decisionPoint = this.decisionPoints.find(
         dp => dp.id === firstOutcome.decisionPointId
@@ -1099,56 +1058,56 @@ export class InterventionOptimizer implements IInterventionOptimizer {
   ): IIntervention[] {
     return interventions.filter(intervention => {
       // Must be active
-      if (!intervention.isActive) return false;
+      if (!intervention.isActive) {return false;}
 
       // Check preconditions
       const pre = intervention.preconditions;
 
-      if (pre.minValence !== undefined && context.valence < pre.minValence) return false;
-      if (pre.maxValence !== undefined && context.valence > pre.maxValence) return false;
-      if (pre.minArousal !== undefined && context.arousal < pre.minArousal) return false;
-      if (pre.maxArousal !== undefined && context.arousal > pre.maxArousal) return false;
-      if (pre.minEnergy !== undefined && context.energyLevel < pre.minEnergy) return false;
+      if (pre.minValence !== undefined && context.valence < pre.minValence) {return false;}
+      if (pre.maxValence !== undefined && context.valence > pre.maxValence) {return false;}
+      if (pre.minArousal !== undefined && context.arousal < pre.minArousal) {return false;}
+      if (pre.maxArousal !== undefined && context.arousal > pre.maxArousal) {return false;}
+      if (pre.minEnergy !== undefined && context.energyLevel < pre.minEnergy) {return false;}
 
       // Check risk level
       if (pre.maxRiskLevel !== undefined) {
         const riskOrder = ['none', 'low', 'moderate', 'elevated', 'high', 'crisis'];
         const contextRiskIndex = Math.floor(context.riskLevel * 5);
         const maxRiskIndex = riskOrder.indexOf(pre.maxRiskLevel);
-        if (contextRiskIndex > maxRiskIndex) return false;
+        if (contextRiskIndex > maxRiskIndex) {return false;}
       }
 
       // Check time of day
       if (pre.allowedTimeOfDay && pre.allowedTimeOfDay.length > 0) {
         const currentTimeOfDay = getCurrentTimeOfDay(context.hourOfDay);
-        if (!pre.allowedTimeOfDay.includes(currentTimeOfDay)) return false;
+        if (!pre.allowedTimeOfDay.includes(currentTimeOfDay)) {return false;}
       }
 
       // Check session requirements
       if (pre.minSessionsCompleted !== undefined &&
-          context.sessionsTotalLifetime < pre.minSessionsCompleted) return false;
+          context.sessionsTotalLifetime < pre.minSessionsCompleted) {return false;}
 
       // Check contraindications
       const contra = intervention.contraindications;
 
-      if (contra.crisisState && context.riskLevel > 0.8) return false;
-      if (contra.userDeclined) return false;
+      if (contra.crisisState && context.riskLevel > 0.8) {return false;}
+      if (contra.userDeclined) {return false;}
 
       if (contra.maxDailyInterventions !== undefined) {
         const todayCount = this.countTodayInterventionsForCategory(
           userProfile.userId,
           intervention.category
         );
-        if (todayCount >= contra.maxDailyInterventions) return false;
+        if (todayCount >= contra.maxDailyInterventions) {return false;}
       }
 
       if (contra.minTimeSinceLastIntervention !== undefined && userProfile.lastInterventionAt) {
         const secondsSince = (Date.now() - userProfile.lastInterventionAt.getTime()) / 1000;
-        if (secondsSince < contra.minTimeSinceLastIntervention) return false;
+        if (secondsSince < contra.minTimeSinceLastIntervention) {return false;}
       }
 
       // Check user avoided categories
-      if (userProfile.avoidedCategories.includes(intervention.category)) return false;
+      if (userProfile.avoidedCategories.includes(intervention.category)) {return false;}
 
       return true;
     });
@@ -1395,7 +1354,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
       return false;
     }
 
-    return Math.random() < this.config.epsilon;
+    return randomBooleanSecure(this.config.epsilon);
   }
 
   /**
@@ -1430,7 +1389,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
    * Get average reward across all arms
    */
   private getAverageReward(): number {
-    if (this.arms.size === 0) return 0.5;
+    if (this.arms.size === 0) {return 0.5;}
 
     let totalReward = 0;
     let totalPulls = 0;
@@ -1465,7 +1424,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
    * Create alternatives from scores
    */
   private createAlternativesFromScores(
-    scores: Array<{ intervention: IIntervention; score: number }>,
+    scores: { intervention: IIntervention; score: number }[],
     selectedId: string
   ): IAlternativeIntervention[] {
     const topScore = scores[0]?.score ?? 0;
@@ -1485,7 +1444,7 @@ export class InterventionOptimizer implements IInterventionOptimizer {
    */
   private calculateSelectionConfidence(interventionId: string): number {
     const arm = this.arms.get(interventionId);
-    if (!arm || arm.pullCount === 0) return 0.5;
+    if (!arm || arm.pullCount === 0) {return 0.5;}
 
     // Confidence increases with pulls and decreases with variance
     const pullConfidence = 1 - Math.exp(-arm.pullCount / 10);
@@ -1571,11 +1530,11 @@ export class InterventionOptimizer implements IInterventionOptimizer {
     wasExploration: boolean,
     alternatives: IAlternativeIntervention[]
   ): ISelectionReasoning {
-    const influentialFeatures: Array<{
+    const influentialFeatures: {
       feature: string;
       value: number;
       influence: 'positive' | 'negative' | 'neutral';
-    }> = [];
+    }[] = [];
 
     // Determine influential features
     if (context.valence < 0) {

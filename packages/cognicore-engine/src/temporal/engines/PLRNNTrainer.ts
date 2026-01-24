@@ -16,8 +16,9 @@
  * - Fechtelpeter et al., npj Digital Medicine 2025: PLRNN benchmark
  */
 
-import { PLRNNEngine } from './PLRNNEngine';
+import { type PLRNNEngine } from './PLRNNEngine';
 import type { IPLRNNState } from '../interfaces/IPLRNNEngine';
+import { randomBooleanSecure, secureRandomInt } from '../../utils/SecureRandom';
 import type {
   IPLRNNTrainingConfig,
   IEMATrainingResult,
@@ -181,23 +182,23 @@ export class PLRNNTrainer {
       // Accumulate
       for (let i = 0; i < n; i++) {
         const dAi = gradients.dA[i];
-        if (dAi !== undefined) gradients.dA[i] = dAi + (grads.dA[i] ?? 0);
+        if (dAi !== undefined) {gradients.dA[i] = dAi + (grads.dA[i] ?? 0);}
         const dBLi = gradients.dBiasLatent[i];
-        if (dBLi !== undefined) gradients.dBiasLatent[i] = dBLi + (grads.dBiasLatent[i] ?? 0);
+        if (dBLi !== undefined) {gradients.dBiasLatent[i] = dBLi + (grads.dBiasLatent[i] ?? 0);}
         const dBOi = gradients.dBiasObserved[i];
-        if (dBOi !== undefined) gradients.dBiasObserved[i] = dBOi + (grads.dBiasObserved[i] ?? 0);
+        if (dBOi !== undefined) {gradients.dBiasObserved[i] = dBOi + (grads.dBiasObserved[i] ?? 0);}
         for (let j = 0; j < n; j++) {
           const dWRow = gradients.dW[i];
           const gradsWRow = grads.dW[i];
           if (dWRow && gradsWRow) {
             const dWij = dWRow[j];
-            if (dWij !== undefined) dWRow[j] = dWij + (gradsWRow[j] ?? 0);
+            if (dWij !== undefined) {dWRow[j] = dWij + (gradsWRow[j] ?? 0);}
           }
           const dBRow = gradients.dB[i];
           const gradsBRow = grads.dB[i];
           if (dBRow && gradsBRow) {
             const dBij = dBRow[j];
-            if (dBij !== undefined) dBRow[j] = dBij + (gradsBRow[j] ?? 0);
+            if (dBij !== undefined) {dBRow[j] = dBij + (gradsBRow[j] ?? 0);}
           }
         }
       }
@@ -436,7 +437,7 @@ export class PLRNNTrainer {
         predictions.push(nextState.observedState);
 
         // Teacher forcing: use actual value instead of prediction
-        if (!isValidation && Math.random() < teacherForcingRatio) {
+        if (!isValidation && randomBooleanSecure(teacherForcingRatio)) {
           state = this.engine.createState(values[t + 1]!, sequence.timestamps[t + 1]);
           state.timestep = nextState.timestep;
         } else {
@@ -552,11 +553,11 @@ export class PLRNNTrainer {
 
   private initGradientAccumulator(n: number): IGradientAccumulator {
     return {
-      dA: Array(n).fill(0),
-      dW: Array(n).fill(null).map(() => Array(n).fill(0)),
-      dB: Array(n).fill(null).map(() => Array(n).fill(0)),
-      dBiasLatent: Array(n).fill(0),
-      dBiasObserved: Array(n).fill(0),
+      dA: Array.from({ length: n }, () => 0),
+      dW: Array.from({ length: n }, () => Array.from({ length: n }, () => 0)),
+      dB: Array.from({ length: n }, () => Array.from({ length: n }, () => 0)),
+      dBiasLatent: Array.from({ length: n }, () => 0),
+      dBiasObserved: Array.from({ length: n }, () => 0),
       numSamples: 0,
     };
   }
@@ -577,9 +578,9 @@ export class PLRNNTrainer {
       const dAi = accum.dA[i];
       const dBLi = accum.dBiasLatent[i];
       const dBOi = accum.dBiasObserved[i];
-      if (dAi !== undefined) accum.dA[i] = dAi + (grads.dA[i] ?? 0);
-      if (dBLi !== undefined) accum.dBiasLatent[i] = dBLi + (grads.dBiasLatent[i] ?? 0);
-      if (dBOi !== undefined) accum.dBiasObserved[i] = dBOi + (grads.dBiasObserved[i] ?? 0);
+      if (dAi !== undefined) {accum.dA[i] = dAi + (grads.dA[i] ?? 0);}
+      if (dBLi !== undefined) {accum.dBiasLatent[i] = dBLi + (grads.dBiasLatent[i] ?? 0);}
+      if (dBOi !== undefined) {accum.dBiasObserved[i] = dBOi + (grads.dBiasObserved[i] ?? 0);}
 
       const dWRow = accum.dW[i];
       const dBRow = accum.dB[i];
@@ -587,8 +588,8 @@ export class PLRNNTrainer {
         for (let j = 0; j < n; j++) {
           const dWij = dWRow[j];
           const dBij = dBRow[j];
-          if (dWij !== undefined) dWRow[j] = dWij + (grads.dW[i]?.[j] ?? 0);
-          if (dBij !== undefined) dBRow[j] = dBij + (grads.dB[i]?.[j] ?? 0);
+          if (dWij !== undefined) {dWRow[j] = dWij + (grads.dW[i]?.[j] ?? 0);}
+          if (dBij !== undefined) {dBRow[j] = dBij + (grads.dB[i]?.[j] ?? 0);}
         }
       }
     }
@@ -597,7 +598,7 @@ export class PLRNNTrainer {
   }
 
   private normalizeGradients(accum: IGradientAccumulator): void {
-    if (accum.numSamples <= 1) return;
+    if (accum.numSamples <= 1) {return;}
 
     const n = accum.dA.length;
     const scale = 1 / accum.numSamples;
@@ -606,9 +607,9 @@ export class PLRNNTrainer {
       const dAi = accum.dA[i];
       const dBLi = accum.dBiasLatent[i];
       const dBOi = accum.dBiasObserved[i];
-      if (dAi !== undefined) accum.dA[i] = dAi * scale;
-      if (dBLi !== undefined) accum.dBiasLatent[i] = dBLi * scale;
-      if (dBOi !== undefined) accum.dBiasObserved[i] = dBOi * scale;
+      if (dAi !== undefined) {accum.dA[i] = dAi * scale;}
+      if (dBLi !== undefined) {accum.dBiasLatent[i] = dBLi * scale;}
+      if (dBOi !== undefined) {accum.dBiasObserved[i] = dBOi * scale;}
 
       const dWRow = accum.dW[i];
       const dBRow = accum.dB[i];
@@ -616,8 +617,8 @@ export class PLRNNTrainer {
         for (let j = 0; j < n; j++) {
           const dWij = dWRow[j];
           const dBij = dBRow[j];
-          if (dWij !== undefined) dWRow[j] = dWij * scale;
-          if (dBij !== undefined) dBRow[j] = dBij * scale;
+          if (dWij !== undefined) {dWRow[j] = dWij * scale;}
+          if (dBij !== undefined) {dBRow[j] = dBij * scale;}
         }
       }
     }
@@ -965,10 +966,10 @@ export class PLRNNTrainer {
     return n > 0 ? sum / n : 0;
   }
 
-  private shuffleArray<T>(array: T[]): void {
+  private shuffleArray(array: unknown[]): void {
     for (let i = array.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [array[i], array[j]] = [array[j]!, array[i]!];
+      const j = secureRandomInt(0, i);
+      [array[i], array[j]] = [array[j], array[i]];
     }
   }
 }

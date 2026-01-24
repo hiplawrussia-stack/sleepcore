@@ -126,9 +126,9 @@ export interface IGradientAccumulator {
  */
 export interface IAdamState {
   /** First moment (mean) */
-  m: { [key: string]: number[] | number[][] };
+  m: Record<string, number[] | number[][]>;
   /** Second moment (variance) */
-  v: { [key: string]: number[] | number[][] };
+  v: Record<string, number[] | number[][]>;
   /** Time step counter */
   t: number;
   /** Beta1 for momentum (default: 0.9) */

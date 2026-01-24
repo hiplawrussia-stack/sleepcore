@@ -76,12 +76,12 @@ export interface NarrativeChapter {
  * Personal values and meaning
  */
 export interface PersonalValues {
-  readonly identified: Array<{
+  readonly identified: {
     readonly value: string;
     readonly importance: number;      // 0.0 - 1.0
     readonly currentAlignment: number; // How aligned actions are with value
     readonly examples: string[];      // Moments demonstrating value
-  }>;
+  }[];
   readonly meaningSource: 'relationships' | 'achievement' | 'growth' | 'contribution' | 'experience' | 'mixed';
   readonly purposeClarity: number;    // 0.0 - 1.0
 }
@@ -177,12 +177,12 @@ export interface INarrativeState {
   /**
    * Stage transition history
    */
-  readonly stageHistory: Array<{
+  readonly stageHistory: {
     readonly stage: ChangeStage;
     readonly enteredAt: Date;
     readonly exitedAt?: Date;
     readonly duration: number;  // days
-  }>;
+  }[];
 
   /**
    * Current narrative role
@@ -192,12 +192,12 @@ export interface INarrativeState {
   /**
    * Role evolution history
    */
-  readonly roleHistory: Array<{
+  readonly roleHistory: {
     readonly role: NarrativeRole;
     readonly startedAt: Date;
     readonly endedAt?: Date;
     readonly trigger?: string;
-  }>;
+  }[];
 
   /**
    * Overall progress percentage (0-100)
@@ -290,7 +290,7 @@ export interface INarrativeStateFactory {
    * Create from conversation history analysis
    */
   fromConversationHistory(
-    messages: Array<{ text: string; timestamp: Date }>,
+    messages: { text: string; timestamp: Date }[],
     previousState?: INarrativeState
   ): Promise<INarrativeState>;
 

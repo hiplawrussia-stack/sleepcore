@@ -26,6 +26,7 @@ import type {
   IAttentionWeights,
 } from '../temporal/interfaces/IKalmanFormer';
 import type { IKalmanFilterState } from '../twin/interfaces/IDigitalTwin';
+import { secureRandom } from '../utils/SecureRandom';
 
 /**
  * Dimension mapping from IFullBeliefState to 5D state vector
@@ -62,11 +63,11 @@ export interface IHybridPrediction {
     /** Mean prediction at each horizon step */
     trajectory: number[][];
     /** Bayesian credible intervals */
-    credibleIntervals: Array<{
+    credibleIntervals: {
       lower: number[];
       upper: number[];
       level: number;
-    }>;
+    }[];
     /** Final prediction */
     finalPrediction: number[];
   };
@@ -131,14 +132,14 @@ export function beliefStateToUncertainty(belief: IFullBeliefState): number[] {
  */
 export function beliefStateToPLRNNState(
   belief: IFullBeliefState,
-  hiddenUnits: number = 16
+  hiddenUnits = 16
 ): IPLRNNState {
   const observation = beliefStateToObservation(belief);
   const uncertainty = beliefStateToUncertainty(belief);
 
   return {
     latentState: observation, // Use observation as initial latent state
-    hiddenActivations: new Array(hiddenUnits).fill(0).map(() => Math.random() * 0.1),
+    hiddenActivations: new Array(hiddenUnits).fill(0).map(() => secureRandom() * 0.1),
     observedState: observation,
     uncertainty,
     timestamp: belief.timestamp,
@@ -170,7 +171,7 @@ export function plrnnStateToBeliefUpdate(
  */
 export function beliefStateToKalmanFormerState(
   belief: IFullBeliefState,
-  _contextWindow: number = 24
+  _contextWindow = 24
 ): IKalmanFormerState {
   const observation = beliefStateToObservation(belief);
   const uncertainty = beliefStateToUncertainty(belief);
@@ -192,7 +193,7 @@ export function beliefStateToKalmanFormerState(
     predictedCovariance: covariance,
 
     // Innovation (zero for initial state)
-    innovation: new Array(dim).fill(0),
+    innovation: Array.from({ length: dim }, () => 0),
     innovationCovariance: covariance,
 
     // Kalman gain (identity-like for initial)
@@ -213,7 +214,7 @@ export function beliefStateToKalmanFormerState(
 
   return {
     kalmanState,
-    transformerHidden: [new Array(64).fill(0)], // Placeholder for transformer hidden
+    transformerHidden: [Array.from({ length: 64 }, () => 0)], // Placeholder for transformer hidden
     observationHistory: [{
       observation,
       timestamp: belief.timestamp,
@@ -249,7 +250,7 @@ export function mergeHybridPredictions(
   plrnnPred?: IPLRNNPrediction,
   kfPred?: IKalmanFormerPrediction,
   horizon: 'short' | 'medium' | 'long' = 'medium',
-  confidence: number = 0.5
+  confidence = 0.5
 ): IHybridPrediction {
   // Determine weights based on horizon
   // Short-term: favor KalmanFormer (better for noisy observations)

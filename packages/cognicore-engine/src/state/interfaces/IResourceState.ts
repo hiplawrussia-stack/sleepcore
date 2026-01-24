@@ -125,10 +125,10 @@ export interface EnergyLevel {
   /**
    * Factors affecting energy
    */
-  readonly factors: Array<{
+  readonly factors: {
     readonly factor: 'sleep' | 'nutrition' | 'exercise' | 'stress' | 'illness' | 'emotional_drain' | 'positive_interactions';
     readonly impact: number;  // -1.0 to +1.0
-  }>;
+  }[];
 }
 
 /**
@@ -153,10 +153,10 @@ export interface CognitiveCapacity {
   /**
    * Load sources
    */
-  readonly loadSources: Array<{
+  readonly loadSources: {
     readonly source: string;
     readonly load: number;  // 0.0 - 1.0 contribution
-  }>;
+  }[];
 
   /**
    * Time until recovery
@@ -181,12 +181,12 @@ export interface SelfEfficacy {
   /**
    * Recent mastery experiences
    */
-  readonly masteryExperiences: Array<{
+  readonly masteryExperiences: {
     readonly description: string;
     readonly domain: string;
     readonly impact: number;
     readonly timestamp: Date;
-  }>;
+  }[];
 }
 
 /**
@@ -212,12 +212,12 @@ export interface Resilience {
   /**
    * Bounce-back history
    */
-  readonly recoveryHistory: Array<{
+  readonly recoveryHistory: {
     readonly challenge: string;
     readonly recoveryTime: number;  // days
     readonly lessonsLearned: string[];
     readonly timestamp: Date;
-  }>;
+  }[];
 }
 
 /**
@@ -247,12 +247,12 @@ export interface SocialResources {
   /**
    * Key relationships
    */
-  readonly keyRelationships: Array<{
+  readonly keyRelationships: {
     readonly role: string;              // e.g., "parent", "friend", "mentor"
     readonly quality: number;
     readonly frequency: 'daily' | 'weekly' | 'monthly' | 'rarely';
     readonly supportProvided: ('emotional' | 'instrumental' | 'informational' | 'companionship')[];
-  }>;
+  }[];
 
   /**
    * Isolation indicators
@@ -383,21 +383,21 @@ export interface IResourceState {
   /**
    * Resource depletion warnings
    */
-  readonly depletionWarnings: Array<{
+  readonly depletionWarnings: {
     readonly resource: string;
     readonly severity: 'low' | 'medium' | 'high';
     readonly trend: 'stable' | 'declining' | 'critical';
     readonly recommendedAction: string;
-  }>;
+  }[];
 
   /**
    * Resource strengths
    */
-  readonly strengths: Array<{
+  readonly strengths: {
     readonly resource: string;
     readonly score: number;
     readonly usable: boolean;
-  }>;
+  }[];
 
   /**
    * Overall resource availability (0.0 - 1.0)
@@ -451,7 +451,7 @@ export interface IResourceStateFactory {
    * Create from conversation analysis
    */
   fromConversation(
-    messages: Array<{ text: string; timestamp: Date }>,
+    messages: { text: string; timestamp: Date }[],
     previousState?: IResourceState
   ): Promise<IResourceState>;
 

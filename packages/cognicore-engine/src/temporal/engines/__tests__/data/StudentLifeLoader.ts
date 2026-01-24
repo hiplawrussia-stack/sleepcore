@@ -175,10 +175,10 @@ const PHQ9_SCALE = {
   max: 27,
   normalize: (value: number): number => value / 27,
   severity: (value: number): string => {
-    if (value <= 4) return 'minimal';
-    if (value <= 9) return 'mild';
-    if (value <= 14) return 'moderate';
-    if (value <= 19) return 'moderately_severe';
+    if (value <= 4) {return 'minimal';}
+    if (value <= 9) {return 'mild';}
+    if (value <= 14) {return 'moderate';}
+    if (value <= 19) {return 'moderately_severe';}
     return 'severe';
   },
 };
@@ -277,7 +277,7 @@ export function generateSyntheticStudentLifeData(
 
       for (let t = 0; t < promptsPerDay; t++) {
         // Skip some observations (realistic missing data)
-        if (random() > baseResponseRate) continue;
+        if (random() > baseResponseRate) {continue;}
 
         const hourOfDay = 9 + (t * 12 / promptsPerDay); // 9am to 9pm
         const timestamp = new Date(startDate.getTime() + (d * 24 + hourOfDay) * 3600000);

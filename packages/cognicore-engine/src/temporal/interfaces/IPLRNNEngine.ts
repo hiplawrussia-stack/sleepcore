@@ -208,7 +208,7 @@ export interface IInterventionSimulation {
     /** Duration of effect (hours) */
     duration: number;
     /** Side effects (unintended changes) */
-    sideEffects: Array<{ dimension: string; effect: number }>;
+    sideEffects: { dimension: string; effect: number }[];
   };
 
   /** Confidence in simulation */

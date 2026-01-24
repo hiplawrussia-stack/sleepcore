@@ -330,7 +330,7 @@ export interface IStateVectorFactory {
    */
   fromConversation(
     userId: string | number,
-    messages: Array<{ text: string; timestamp: Date; isUser: boolean }>,
+    messages: { text: string; timestamp: Date; isUser: boolean }[],
     previousState?: IStateVector
   ): Promise<IStateVector>;
 
@@ -410,7 +410,7 @@ export interface IStateVectorService {
     component: 'emotional' | 'cognitive' | 'narrative' | 'risk' | 'resources'
   ): Promise<{
     trend: 'improving' | 'stable' | 'declining' | 'volatile';
-    dataPoints: Array<{ timestamp: Date; value: number }>;
+    dataPoints: { timestamp: Date; value: number }[];
     prediction: { value: number; confidence: number };
   }>;
 
@@ -530,10 +530,10 @@ export type ComponentStatus = 'excellent' | 'good' | 'moderate' | 'concerning' |
  * Calculate component status from score
  */
 export function getComponentStatus(score: number): ComponentStatus {
-  if (score >= 0.8) return 'excellent';
-  if (score >= 0.6) return 'good';
-  if (score >= 0.4) return 'moderate';
-  if (score >= 0.2) return 'concerning';
+  if (score >= 0.8) {return 'excellent';}
+  if (score >= 0.6) {return 'good';}
+  if (score >= 0.4) {return 'moderate';}
+  if (score >= 0.2) {return 'concerning';}
   return 'critical';
 }
 

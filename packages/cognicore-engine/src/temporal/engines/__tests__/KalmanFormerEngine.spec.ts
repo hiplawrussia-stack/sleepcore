@@ -10,7 +10,6 @@ import {
 } from '../KalmanFormerEngine';
 import type {
   IKalmanFormerConfig,
-  IKalmanFormerTrainingSample,
 } from '../../interfaces/IKalmanFormer';
 
 describe('KalmanFormerEngine', () => {

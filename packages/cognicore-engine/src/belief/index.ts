@@ -28,7 +28,5 @@ export {
 export type { IHybridPrediction } from './BeliefStateAdapter';
 
 // Implementation
-// DEPRECATED: BeliefUpdateEngine needs refactoring for new ICognitiveState interface (Phase 6)
-// BeliefUpdateEngine.ts has 7 TypeScript errors due to interface mismatch
-// Tests for BeliefUpdateEngine are skipped pending interface reconciliation
-// export { BeliefUpdateEngine, createBeliefUpdateEngine } from './BeliefUpdateEngine';
+// Restored: BeliefUpdateEngine (Phase 6 interface reconciliation complete)
+export { BeliefUpdateEngine, createBeliefUpdateEngine } from './BeliefUpdateEngine';

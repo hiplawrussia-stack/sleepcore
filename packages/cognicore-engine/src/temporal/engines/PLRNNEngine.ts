@@ -39,6 +39,8 @@ import {
   DEFAULT_PLRNN_CONFIG,
 } from '../interfaces/IPLRNNEngine';
 
+import { secureRandom, randomBooleanSecure } from '../../utils/SecureRandom';
+
 import {
   type IKalmanFormerEngine,
   type IKalmanFormerState,
@@ -68,8 +70,8 @@ export class PLRNNEngine implements IPLRNNEngine {
   // Training state
   private trainingHistory: number[] = [];
   private adamState: {
-    m: { [key: string]: number[][] };
-    v: { [key: string]: number[][] };
+    m: Record<string, number[][]>;
+    v: Record<string, number[][]>;
     t: number;
   } | null = null;
 
@@ -98,7 +100,7 @@ export class PLRNNEngine implements IPLRNNEngine {
 
     // Diagonal autoregression: values < 1 for stability (eigenvalues < 1)
     // Research shows A should be in range [0.8, 0.95] for stable dynamics
-    const A = Array(n).fill(0).map(() => 0.85 + Math.random() * 0.1);
+    const A = Array.from({ length: n }, () => 0.85 + secureRandom() * 0.1);
 
     // Off-diagonal connections: smaller scale for stability
     // Initialize with smaller magnitude to prevent gradient explosion
@@ -110,8 +112,8 @@ export class PLRNNEngine implements IPLRNNEngine {
 
     // Bias vectors: zero initialization for stability
     // Let the model learn appropriate biases during training
-    const biasLatent = Array(n).fill(0).map(() => 0);
-    const biasObserved = Array(n).fill(0).map(() => 0);
+    const biasLatent = Array.from({ length: n }, () => 0);
+    const biasObserved = Array.from({ length: n }, () => 0);
 
     // Dendritic weights if using dendPLRNN
     let dendriticWeights: number[][] | undefined;
@@ -165,7 +167,7 @@ export class PLRNNEngine implements IPLRNNEngine {
   }
 
   loadWeights(weights: IPLRNNWeights): void {
-    this.weights = JSON.parse(JSON.stringify(weights));
+    this.weights = JSON.parse(JSON.stringify(weights)) as IPLRNNWeights;
     if (weights.meta?.config) {
       this.config = weights.meta.config;
     }
@@ -176,7 +178,7 @@ export class PLRNNEngine implements IPLRNNEngine {
     if (!this.weights) {
       throw new Error('PLRNN not initialized. Call initialize() first.');
     }
-    return JSON.parse(JSON.stringify(this.weights));
+    return JSON.parse(JSON.stringify(this.weights)) as IPLRNNWeights;
   }
 
   // ============================================================================
@@ -210,7 +212,7 @@ export class PLRNNEngine implements IPLRNNEngine {
     const WphiZ = this.matVec(W, phiZ);
 
     // Dendritic basis expansion (if dendPLRNN)
-    let dendriticTerm: number[] = Array(n).fill(0);
+    let dendriticTerm: number[] = Array.from({ length: n }, () => 0);
     if (this.config.connectivity === 'dendritic' && dendriticWeights && C) {
       // Dendritic nonlinearity: sum of ReLU basis functions
       const bases = dendriticWeights.map(row =>
@@ -223,7 +225,7 @@ export class PLRNNEngine implements IPLRNNEngine {
     }
 
     // Input term: C * s_t (if external input provided)
-    let inputTerm: number[] = Array(n).fill(0);
+    let inputTerm: number[] = Array.from({ length: n }, () => 0);
     if (input && C) {
       inputTerm = C.map(row =>
         row.reduce((sum, c, i) => sum + c * (input[i] || 0), 0)
@@ -431,7 +433,7 @@ export class PLRNNEngine implements IPLRNNEngine {
    * Call this after each observation to maintain state synchronization
    */
   updateKalmanFormerState(observation: number[], timestamp: Date): void {
-    if (!this.kalmanFormer) return;
+    if (!this.kalmanFormer) {return;}
 
     if (!this.kalmanFormerState) {
       // Initialize with observation
@@ -439,7 +441,7 @@ export class PLRNNEngine implements IPLRNNEngine {
         latentState: [...observation],
         hiddenActivations: observation.map(v => Math.max(0, v)),
         observedState: [...observation],
-        uncertainty: Array(observation.length).fill(0.1),
+        uncertainty: Array.from({ length: observation.length }, () => 0.1),
         timestamp,
         timestep: 0,
       };
@@ -487,7 +489,7 @@ export class PLRNNEngine implements IPLRNNEngine {
 
     for (let i = 0; i < n; i++) {
       const row = W[i];
-      if (!row) continue;
+      if (!row) {continue;}
       for (let j = 0; j < n; j++) {
         const weight = row[j] ?? 0;
         if (i !== j && Math.abs(weight) > significanceThreshold) {
@@ -542,7 +544,7 @@ export class PLRNNEngine implements IPLRNNEngine {
     }
 
     // Create intervention input
-    const input = Array(this.config.latentDim).fill(0);
+    const input = Array.from({ length: this.config.latentDim }, () => 0);
 
     switch (intervention) {
       case 'increase':
@@ -581,7 +583,7 @@ export class PLRNNEngine implements IPLRNNEngine {
     for (let t = 0; t < horizon; t++) {
       const intState = interventionTrajectory.trajectory[t];
       const baseState = baselineTrajectory.trajectory[t];
-      if (!intState || !baseState) continue;
+      if (!intState || !baseState) {continue;}
       const effect = Math.abs(
         (intState.observedState[targetIdx] ?? 0) -
         (baseState.observedState[targetIdx] ?? 0)
@@ -593,7 +595,7 @@ export class PLRNNEngine implements IPLRNNEngine {
     }
 
     // Identify side effects (unintended changes > 0.1)
-    const sideEffects: Array<{ dimension: string; effect: number }> = [];
+    const sideEffects: { dimension: string; effect: number }[] = [];
     effects.forEach((effect, dimension) => {
       if (dimension !== target && Math.abs(effect) > 0.1) {
         sideEffects.push({ dimension, effect });
@@ -605,7 +607,7 @@ export class PLRNNEngine implements IPLRNNEngine {
     for (let t = Math.floor(timeToPeak / this.config.dt); t < horizon; t++) {
       const intState = interventionTrajectory.trajectory[t];
       const baseState = baselineTrajectory.trajectory[t];
-      if (!intState || !baseState) continue;
+      if (!intState || !baseState) {continue;}
       const effect = Math.abs(
         (intState.observedState[targetIdx] ?? 0) -
         (baseState.observedState[targetIdx] ?? 0)
@@ -771,7 +773,7 @@ export class PLRNNEngine implements IPLRNNEngine {
 
       // Calculate loss
       const target = observations[t + 1];
-      if (!target) continue;
+      if (!target) {continue;}
       const loss = this.calculateLoss([predicted.observedState], [target]);
       totalLoss += loss;
 
@@ -779,7 +781,7 @@ export class PLRNNEngine implements IPLRNNEngine {
       this.updateWeightsOnline(state, predicted, target);
 
       // Teacher forcing
-      if (Math.random() < this.config.teacherForcingRatio) {
+      if (randomBooleanSecure(this.config.teacherForcingRatio)) {
         state = this.initializeState(target);
         state.timestep = predicted.timestep;
       } else {
@@ -837,7 +839,7 @@ export class PLRNNEngine implements IPLRNNEngine {
     for (let t = 0; t < predicted.length; t++) {
       const predRow = predicted[t];
       const actualRow = actual[t];
-      if (!predRow || !actualRow) continue;
+      if (!predRow || !actualRow) {continue;}
       for (let i = 0; i < predRow.length; i++) {
         const diff = (predRow[i] ?? 0) - (actualRow[i] ?? 0);
         loss += diff * diff;
@@ -865,9 +867,9 @@ export class PLRNNEngine implements IPLRNNEngine {
     let totalCount = 0;
     for (let i = 0; i < n; i++) {
       const row = W[i];
-      if (!row) continue;
+      if (!row) {continue;}
       for (let j = 0; j < n; j++) {
-        if (Math.abs(row[j] ?? 0) < 0.01) zeroCount++;
+        if (Math.abs(row[j] ?? 0) < 0.01) {zeroCount++;}
         totalCount++;
       }
     }
@@ -907,18 +909,18 @@ export class PLRNNEngine implements IPLRNNEngine {
         } else if (type === 'near_identity') {
           // Near-identity: identity + small perturbation
           // Better for stable training while allowing learning
-          row[j] = i === j ? 1 + (Math.random() - 0.5) * 0.1 : (Math.random() - 0.5) * 0.02;
+          row[j] = i === j ? 1 + (secureRandom() - 0.5) * 0.1 : (secureRandom() - 0.5) * 0.02;
         } else if (type === 'sparse') {
           // Sparse: 80% zeros
-          row[j] = Math.random() < 0.2 ? (Math.random() - 0.5) * 2 * scale : 0;
+          row[j] = randomBooleanSecure(0.2) ? (secureRandom() - 0.5) * 2 * scale : 0;
         } else if (type === 'sparse_stable') {
           // Sparse with smaller scale for stability
           // 70% zeros, smaller magnitude for non-zero entries
           const smallScale = scale * 0.3; // Reduced scale
-          row[j] = Math.random() < 0.3 ? (Math.random() - 0.5) * 2 * smallScale : 0;
+          row[j] = randomBooleanSecure(0.3) ? (secureRandom() - 0.5) * 2 * smallScale : 0;
         } else {
           // Full or normal
-          row[j] = (Math.random() - 0.5) * 2 * scale;
+          row[j] = (secureRandom() - 0.5) * 2 * scale;
         }
       }
       matrix[i] = row;
@@ -944,7 +946,7 @@ export class PLRNNEngine implements IPLRNNEngine {
       latentState: [...obs],
       hiddenActivations: obs.map(v => Math.max(0, v)),
       observedState: [...obs],
-      uncertainty: Array(n).fill(0.1),
+      uncertainty: Array.from({ length: n }, () => 0.1),
       timestamp: new Date(),
       timestep: 0,
     };
@@ -994,10 +996,10 @@ export class PLRNNEngine implements IPLRNNEngine {
     for (let i = 0; i < n; i++) {
       const rowI = W[i];
       const rowJ_check = W;
-      if (!rowI) continue;
+      if (!rowI) {continue;}
       for (let j = i + 1; j < n; j++) {
         const rowJ = rowJ_check[j];
-        if (!rowJ) continue;
+        if (!rowJ) {continue;}
         const wij = rowI[j] ?? 0;
         const wji = rowJ[i] ?? 0;
         if (Math.abs(wij) > threshold && Math.abs(wji) > threshold) {
@@ -1012,7 +1014,7 @@ export class PLRNNEngine implements IPLRNNEngine {
   }
 
   private calculateAutocorrelation(series: number[]): number {
-    if (series.length < 3) return 0;
+    if (series.length < 3) {return 0;}
 
     const mean = series.reduce((a, b) => a + b, 0) / series.length;
     let numerator = 0;
@@ -1033,7 +1035,7 @@ export class PLRNNEngine implements IPLRNNEngine {
   }
 
   private calculateVariance(series: number[]): number {
-    if (series.length < 2) return 0;
+    if (series.length < 2) {return 0;}
 
     const mean = series.reduce((a, b) => a + b, 0) / series.length;
     const variance = series.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (series.length - 1);
@@ -1042,7 +1044,7 @@ export class PLRNNEngine implements IPLRNNEngine {
   }
 
   private detectFlickering(series: number[]): number {
-    if (series.length < 5) return 0;
+    if (series.length < 5) {return 0;}
 
     // Count zero-crossings around mean (indicator of bimodality)
     const mean = series.reduce((a, b) => a + b, 0) / series.length;
@@ -1066,7 +1068,7 @@ export class PLRNNEngine implements IPLRNNEngine {
   }
 
   private estimateTransitionTime(autocorrelation: number): number | null {
-    if (autocorrelation < 0.7) return null;
+    if (autocorrelation < 0.7) {return null;}
 
     // Empirical formula based on critical slowing down theory
     // Time to transition ~ 1 / (1 - AC)
@@ -1103,7 +1105,7 @@ export class PLRNNEngine implements IPLRNNEngine {
 
   private calculateCorrelation(x: number[], y: number[]): number {
     const n = x.length;
-    if (n < 3) return 0;
+    if (n < 3) {return 0;}
 
     const meanX = x.reduce((a, b) => a + b, 0) / n;
     const meanY = y.reduce((a, b) => a + b, 0) / n;
@@ -1129,7 +1131,7 @@ export class PLRNNEngine implements IPLRNNEngine {
     predicted: IPLRNNState,
     target: number[]
   ): void {
-    if (!this.weights || !this.adamState) return;
+    if (!this.weights || !this.adamState) {return;}
 
     const { A, W, B, biasLatent, biasObserved } = this.weights;
     const lr = this.config.learningRate;
@@ -1148,7 +1150,7 @@ export class PLRNNEngine implements IPLRNNEngine {
     // Gradient for B
     for (let i = 0; i < B.length; i++) {
       const rowB = B[i];
-      if (!rowB) continue;
+      if (!rowB) {continue;}
       const errI = outputError[i] ?? 0;
       for (let j = 0; j < rowB.length; j++) {
         let grad = -errI * (predicted.latentState[j] ?? 0);
@@ -1178,7 +1180,7 @@ export class PLRNNEngine implements IPLRNNEngine {
     const phiZ = prevState.latentState.map(v => Math.max(0, v));
     for (let i = 0; i < W.length; i++) {
       const rowW = W[i];
-      if (!rowW) continue;
+      if (!rowW) {continue;}
       const latErr = latentError[i] ?? 0;
       for (let j = 0; j < rowW.length; j++) {
         const phi = phiZ[j] ?? 0;
@@ -1199,17 +1201,17 @@ export class PLRNNEngine implements IPLRNNEngine {
   private approximateMaxEigenvalue(W: number[][]): number {
     // Power iteration for largest eigenvalue
     const n = W.length;
-    let v = Array(n).fill(1 / Math.sqrt(n));
+    let v = Array.from({ length: n }, () => 1 / Math.sqrt(n));
 
     for (let iter = 0; iter < 20; iter++) {
       const Av = this.matVec(W, v);
       const norm = Math.sqrt(Av.reduce((sum, x) => sum + x * x, 0));
-      if (norm < 1e-10) return 0;
+      if (norm < 1e-10) {return 0;}
       v = Av.map(x => x / norm);
     }
 
     const Av = this.matVec(W, v);
-    return Av.reduce((sum, x, i) => sum + x * v[i], 0);
+    return Av.reduce((sum, x, i) => sum + x * (v[i] ?? 0), 0);
   }
 
   // ============================================================================
@@ -1352,9 +1354,9 @@ export class PLRNNEngine implements IPLRNNEngine {
       dBiasObserved: number[];
     },
     learningRate: number,
-    l1Reg: number = 0.01,
-    l2Reg: number = 0.0001,
-    gradClip: number = 1.0
+    l1Reg = 0.01,
+    l2Reg = 0.0001,
+    gradClip = 1.0
   ): void {
     if (!this.weights) {
       throw new Error('PLRNNEngine not initialized');
@@ -1386,17 +1388,17 @@ export class PLRNNEngine implements IPLRNNEngine {
     const clip = (g: number): number => Math.max(-gradClip, Math.min(gradClip, g));
 
     // Update A (diagonal)
-    if (!this.adamState.m['A']) {
-      this.adamState.m['A'] = [Array(n).fill(0)];
-      this.adamState.v['A'] = [Array(n).fill(0)];
+    if (!this.adamState.m.A) {
+      this.adamState.m.A = [Array.from({ length: n }, () => 0)];
+      this.adamState.v.A = [Array.from({ length: n }, () => 0)];
     }
     for (let i = 0; i < n; i++) {
       let grad = gradients.dA[i] ?? 0;
       grad += l2Reg * (A[i] ?? 0); // L2 regularization
       grad = clip(grad);
 
-      const mA = this.adamState.m['A']![0]!;
-      const vA = this.adamState.v['A']![0]!;
+      const mA = this.adamState.m.A[0]!;
+      const vA = this.adamState.v.A![0]!;
 
       mA[i] = beta1 * (mA[i] ?? 0) + (1 - beta1) * grad;
       vA[i] = beta2 * (vA[i] ?? 0) + (1 - beta2) * grad * grad;
@@ -1408,14 +1410,14 @@ export class PLRNNEngine implements IPLRNNEngine {
     }
 
     // Update W
-    if (!this.adamState.m['W']) {
-      this.adamState.m['W'] = Array(n).fill(null).map(() => Array(n).fill(0));
-      this.adamState.v['W'] = Array(n).fill(null).map(() => Array(n).fill(0));
+    if (!this.adamState.m.W) {
+      this.adamState.m.W = Array.from({ length: n }, () => Array.from({ length: n }, () => 0));
+      this.adamState.v.W = Array.from({ length: n }, () => Array.from({ length: n }, () => 0));
     }
     for (let i = 0; i < n; i++) {
       const wRow = W[i];
       const dWRow = gradients.dW[i];
-      if (!wRow || !dWRow) continue;
+      if (!wRow || !dWRow) {continue;}
 
       for (let j = 0; j < n; j++) {
         let grad = dWRow[j] ?? 0;
@@ -1424,8 +1426,8 @@ export class PLRNNEngine implements IPLRNNEngine {
         grad += l2Reg * wij; // L2 regularization
         grad = clip(grad);
 
-        const mW = this.adamState.m['W']! as number[][];
-        const vW = this.adamState.v['W']! as number[][];
+        const mW = this.adamState.m.W;
+        const vW = this.adamState.v.W!;
 
         mW[i]![j] = beta1 * (mW[i]![j] ?? 0) + (1 - beta1) * grad;
         vW[i]![j] = beta2 * (vW[i]![j] ?? 0) + (1 - beta2) * grad * grad;
@@ -1438,22 +1440,22 @@ export class PLRNNEngine implements IPLRNNEngine {
     }
 
     // Update B
-    if (!this.adamState.m['B']) {
-      this.adamState.m['B'] = Array(n).fill(null).map(() => Array(n).fill(0));
-      this.adamState.v['B'] = Array(n).fill(null).map(() => Array(n).fill(0));
+    if (!this.adamState.m.B) {
+      this.adamState.m.B = Array.from({ length: n }, () => Array.from({ length: n }, () => 0));
+      this.adamState.v.B = Array.from({ length: n }, () => Array.from({ length: n }, () => 0));
     }
     for (let i = 0; i < n; i++) {
       const bRow = B[i];
       const dBRow = gradients.dB[i];
-      if (!bRow || !dBRow) continue;
+      if (!bRow || !dBRow) {continue;}
 
       for (let j = 0; j < n; j++) {
         let grad = dBRow[j] ?? 0;
         grad += l2Reg * (bRow[j] ?? 0);
         grad = clip(grad);
 
-        const mB = this.adamState.m['B']! as number[][];
-        const vB = this.adamState.v['B']! as number[][];
+        const mB = this.adamState.m.B;
+        const vB = this.adamState.v.B!;
 
         mB[i]![j] = beta1 * (mB[i]![j] ?? 0) + (1 - beta1) * grad;
         vB[i]![j] = beta2 * (vB[i]![j] ?? 0) + (1 - beta2) * grad * grad;
@@ -1466,15 +1468,15 @@ export class PLRNNEngine implements IPLRNNEngine {
     }
 
     // Update biases
-    if (!this.adamState.m['biasLatent']) {
-      this.adamState.m['biasLatent'] = [Array(n).fill(0)];
-      this.adamState.v['biasLatent'] = [Array(n).fill(0)];
+    if (!this.adamState.m.biasLatent) {
+      this.adamState.m.biasLatent = [Array.from({ length: n }, () => 0)];
+      this.adamState.v.biasLatent = [Array.from({ length: n }, () => 0)];
     }
     for (let i = 0; i < n; i++) {
-      let grad = clip(gradients.dBiasLatent[i] ?? 0);
+      const grad = clip(gradients.dBiasLatent[i] ?? 0);
 
-      const mBL = this.adamState.m['biasLatent']![0]!;
-      const vBL = this.adamState.v['biasLatent']![0]!;
+      const mBL = this.adamState.m.biasLatent[0]!;
+      const vBL = this.adamState.v.biasLatent![0]!;
 
       mBL[i] = beta1 * (mBL[i] ?? 0) + (1 - beta1) * grad;
       vBL[i] = beta2 * (vBL[i] ?? 0) + (1 - beta2) * grad * grad;
@@ -1485,15 +1487,15 @@ export class PLRNNEngine implements IPLRNNEngine {
       biasLatent[i] = (biasLatent[i] ?? 0) - learningRate * mHat / (Math.sqrt(vHat) + epsilon);
     }
 
-    if (!this.adamState.m['biasObserved']) {
-      this.adamState.m['biasObserved'] = [Array(n).fill(0)];
-      this.adamState.v['biasObserved'] = [Array(n).fill(0)];
+    if (!this.adamState.m.biasObserved) {
+      this.adamState.m.biasObserved = [Array.from({ length: n }, () => 0)];
+      this.adamState.v.biasObserved = [Array.from({ length: n }, () => 0)];
     }
     for (let i = 0; i < n; i++) {
-      let grad = clip(gradients.dBiasObserved[i] ?? 0);
+      const grad = clip(gradients.dBiasObserved[i] ?? 0);
 
-      const mBO = this.adamState.m['biasObserved']![0]!;
-      const vBO = this.adamState.v['biasObserved']![0]!;
+      const mBO = this.adamState.m.biasObserved[0]!;
+      const vBO = this.adamState.v.biasObserved![0]!;
 
       mBO[i] = beta1 * (mBO[i] ?? 0) + (1 - beta1) * grad;
       vBO[i] = beta2 * (vBO[i] ?? 0) + (1 - beta2) * grad * grad;

@@ -7,8 +7,7 @@
 
 import { PLRNNTrainer, createPLRNNTrainer } from '../PLRNNTrainer';
 import { PLRNNEngine } from '../PLRNNEngine';
-import { generateSyntheticStudentLifeData, StudentLifeDataset } from './data/StudentLifeLoader';
-import type { IPLRNNTrainingConfig, IEMATrainingResult } from '../../interfaces/IPLRNNTrainer';
+import { generateSyntheticStudentLifeData, type StudentLifeDataset } from './data/StudentLifeLoader';
 
 describe('PLRNNTrainer', () => {
   // Small synthetic dataset for fast tests
@@ -482,7 +481,7 @@ describe('PLRNNTrainer Integration', () => {
       seed: 123,
     });
 
-    const result = await trainer.trainOnEMAData(dataset, {
+    const _result = await trainer.trainOnEMAData(dataset, {
       epochs: 3,
       verbose: false,
     });

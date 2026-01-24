@@ -150,11 +150,11 @@ export interface SupportNetwork {
   readonly quality: number;         // 0.0 - 1.0
   readonly accessibility: number;   // 0.0 - 1.0 (how available)
   readonly diversity: number;       // 0.0 - 1.0 (variety of support types)
-  readonly primarySupports: Array<{
+  readonly primarySupports: {
     readonly relationship: string;
     readonly availability: 'always' | 'usually' | 'sometimes' | 'rarely';
     readonly quality: number;
-  }>;
+  }[];
   readonly lastContacted?: Date;
 }
 
@@ -310,7 +310,7 @@ export interface IRiskStateFactory {
   fromCrisisPipelineAssessment(assessment: {
     riskLevel: string;
     confidence: number;
-    triggers: Array<{ category: string; matches: string[]; confidence: number; severity: number }>;
+    triggers: { category: string; matches: string[]; confidence: number; severity: number }[];
     recommendedAction: string;
     escalationRequired: boolean;
   }): IRiskState;

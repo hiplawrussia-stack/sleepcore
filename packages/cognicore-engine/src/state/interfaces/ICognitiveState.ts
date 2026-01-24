@@ -176,10 +176,10 @@ export interface CognitiveLoad {
   /**
    * Factors contributing to load
    */
-  readonly factors: Array<{
+  readonly factors: {
     readonly factor: 'stress' | 'fatigue' | 'multitasking' | 'emotional' | 'decision_fatigue' | 'information_overload';
     readonly contribution: number;  // 0.0 - 1.0
-  }>;
+  }[];
 
   /**
    * Available cognitive resources (0.0 - 1.0)

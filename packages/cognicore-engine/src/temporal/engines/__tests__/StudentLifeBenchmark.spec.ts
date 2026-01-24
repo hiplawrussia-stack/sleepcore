@@ -15,16 +15,14 @@
  * © БФ "Другой путь", 2025
  */
 
-import { PLRNNEngine, createPLRNNEngine } from '../PLRNNEngine';
-import { KalmanFormerEngine, createKalmanFormerEngine } from '../KalmanFormerEngine';
+import { createPLRNNEngine } from '../PLRNNEngine';
+import { createKalmanFormerEngine } from '../KalmanFormerEngine';
 import type { IPLRNNState } from '../../interfaces/IPLRNNEngine';
 import type { IKalmanFormerState } from '../../interfaces/IKalmanFormer';
 import {
-  StudentLifeLoader,
   createStudentLifeLoader,
   generateSyntheticStudentLifeData,
   type StudentLifeDataset,
-  type ParticipantTimeSeries,
 } from './data/StudentLifeLoader';
 
 // ============================================================================
@@ -98,7 +96,7 @@ function calculateMAE(predicted: number[][], actual: number[][]): number {
   for (let i = 0; i < predicted.length; i++) {
     const predRow = predicted[i];
     const actualRow = actual[i];
-    if (!predRow || !actualRow) continue;
+    if (!predRow || !actualRow) {continue;}
 
     for (let j = 0; j < predRow.length; j++) {
       total += Math.abs((predRow[j] ?? 0) - (actualRow[j] ?? 0));
@@ -116,7 +114,7 @@ function calculateMSE(predicted: number[][], actual: number[][]): number {
   for (let i = 0; i < predicted.length; i++) {
     const predRow = predicted[i];
     const actualRow = actual[i];
-    if (!predRow || !actualRow) continue;
+    if (!predRow || !actualRow) {continue;}
 
     for (let j = 0; j < predRow.length; j++) {
       const diff = (predRow[j] ?? 0) - (actualRow[j] ?? 0);
@@ -135,7 +133,7 @@ function calculateMAPE(predicted: number[][], actual: number[][]): number {
   for (let i = 0; i < predicted.length; i++) {
     const predRow = predicted[i];
     const actualRow = actual[i];
-    if (!predRow || !actualRow) continue;
+    if (!predRow || !actualRow) {continue;}
 
     for (let j = 0; j < predRow.length; j++) {
       const actualVal = actualRow[j] ?? 0;
@@ -156,7 +154,7 @@ function calculateR2(predicted: number[][], actual: number[][]): number {
   for (let i = 0; i < predicted.length; i++) {
     const predRow = predicted[i];
     const actualRow = actual[i];
-    if (!predRow || !actualRow) continue;
+    if (!predRow || !actualRow) {continue;}
 
     for (let j = 0; j < predRow.length; j++) {
       flatPred.push(predRow[j] ?? 0);
@@ -164,7 +162,7 @@ function calculateR2(predicted: number[][], actual: number[][]): number {
     }
   }
 
-  if (flatActual.length === 0) return 0;
+  if (flatActual.length === 0) {return 0;}
 
   const meanActual = flatActual.reduce((s, v) => s + v, 0) / flatActual.length;
   let ssTot = 0;
@@ -211,9 +209,9 @@ async function runStudentLifeBenchmark(
 
   // Run benchmark for each horizon
   for (const horizon of horizonsInSteps) {
-    let plrnnPredictions: number[][] = [];
-    let kalmanPredictions: number[][] = [];
-    let actuals: number[][] = [];
+    const plrnnPredictions: number[][] = [];
+    const kalmanPredictions: number[][] = [];
+    const actuals: number[][] = [];
     let plrnnTotalTime = 0;
     let kalmanTotalTime = 0;
     let samplesProcessed = 0;
@@ -226,7 +224,7 @@ async function runStudentLifeBenchmark(
       const times = timestamps[p]!;
       const pid = participantIds[p]!;
 
-      if (sequence.length <= horizon) continue;
+      if (sequence.length <= horizon) {continue;}
 
       participantErrors[pid] = { plrnn: [], kalman: [] };
 
@@ -307,8 +305,8 @@ async function runStudentLifeBenchmark(
           (sum, v, i) => sum + Math.abs(v - actual[i]!), 0
         ) / actual.length;
 
-        participantErrors[pid]!.plrnn.push(plrnnError);
-        participantErrors[pid]!.kalman.push(kalmanError);
+        participantErrors[pid].plrnn.push(plrnnError);
+        participantErrors[pid].kalman.push(kalmanError);
 
         // Update PLRNN state (teacher forcing)
         plrnnState = {

@@ -122,11 +122,11 @@ export interface PredictionPoint {
   /**
    * Factors contributing to prediction
    */
-  readonly contributingFactors: Array<{
+  readonly contributingFactors: {
     readonly factor: string;
     readonly weight: number;
     readonly direction: 'positive' | 'negative' | 'neutral';
-  }>;
+  }[];
 }
 
 /**
@@ -150,13 +150,13 @@ export interface StateTrajectory {
   /**
    * Detected phase transitions
    */
-  readonly phaseTransitions: Array<{
+  readonly phaseTransitions: {
     readonly type: PhaseTransition;
     readonly predictedTime: Date;
     readonly confidence: number;
     readonly preventable: boolean;
     readonly preventionActions: string[];
-  }>;
+  }[];
 
   /**
    * Vulnerability windows
@@ -209,14 +209,14 @@ export interface CircadianProfile {
   /**
    * Hour-by-hour typical state (0-23)
    */
-  readonly hourlyProfile: Array<{
+  readonly hourlyProfile: {
     readonly hour: number;
     readonly avgWellbeing: number;
     readonly avgRisk: number;
     readonly avgEnergy: number;
     readonly variability: number;
     readonly sampleCount: number;
-  }>;
+  }[];
 
   /**
    * Peak and trough times
@@ -231,12 +231,12 @@ export interface CircadianProfile {
   /**
    * Optimal intervention times
    */
-  readonly optimalInterventionWindows: Array<{
+  readonly optimalInterventionWindows: {
     readonly startHour: number;
     readonly endHour: number;
     readonly interventionType: string;
     readonly rationale: string;
-  }>;
+  }[];
 }
 
 /**

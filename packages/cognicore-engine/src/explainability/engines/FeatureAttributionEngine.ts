@@ -24,11 +24,11 @@
 
 import { randomUUID } from 'crypto';
 import {
-  IFeatureDefinition,
-  IFeatureAttribution,
-  ISHAPExplanation,
-  IFeatureAttributionEngine,
-  FeatureCategory,
+  type IFeatureDefinition,
+  type IFeatureAttribution,
+  type ISHAPExplanation,
+  type IFeatureAttributionEngine,
+  type FeatureCategory,
 } from '../interfaces/IExplainability';
 
 // ============================================================================
@@ -404,7 +404,7 @@ export class FeatureAttributionEngine implements IFeatureAttributionEngine {
     // Calculate attribution for each feature
     for (const [featureId, value] of Object.entries(features)) {
       const definition = this.featureDefinitions.get(featureId);
-      if (!definition) continue;
+      if (!definition) {continue;}
 
       const attribution = this.calculateSingleAttribution(
         featureId,
@@ -573,7 +573,7 @@ export class FeatureAttributionEngine implements IFeatureAttributionEngine {
     definition: IFeatureDefinition
   ): number {
     const featureContributions = CATEGORICAL_CONTRIBUTIONS[featureId];
-    if (featureContributions && featureContributions[value] !== undefined) {
+    if (featureContributions?.[value] !== undefined) {
       return featureContributions[value] * definition.defaultWeight;
     }
     return 0;
@@ -603,7 +603,7 @@ export class FeatureAttributionEngine implements IFeatureAttributionEngine {
     featureId: string,
     definition: IFeatureDefinition
   ): string | undefined {
-    if (!definition.isCausalFactor) return undefined;
+    if (!definition.isCausalFactor) {return undefined;}
 
     const parents = definition.causalParents?.join(', ') || 'root cause';
     const children = definition.causalChildren?.join(', ') || 'outcome';
@@ -620,7 +620,7 @@ export class FeatureAttributionEngine implements IFeatureAttributionEngine {
   ): ISHAPExplanation['causalSummary'] | undefined {
     const causalAttributions = attributions.filter(a => a.isCausallyRelevant);
 
-    if (causalAttributions.length === 0) return undefined;
+    if (causalAttributions.length === 0) {return undefined;}
 
     // Find primary cause (highest absolute causal contribution)
     const primaryCauseAttr = causalAttributions.reduce((max, curr) =>
@@ -655,7 +655,7 @@ export class FeatureAttributionEngine implements IFeatureAttributionEngine {
     // Calculate standard error from attribution confidence intervals
     const standardErrors = attributions.map(a => {
       const interval = a.confidenceInterval;
-      if (!interval) return 0;
+      if (!interval) {return 0;}
       return (interval.upper - interval.lower) / (2 * 1.96);
     });
 
@@ -701,14 +701,14 @@ export class FeatureAttributionEngine implements IFeatureAttributionEngine {
     if (explanation.topPositiveFeatures.length > 0) {
       lines.push('\n✅ Положительные факторы:');
       for (const attr of explanation.topPositiveFeatures) {
-        lines.push(`  ${attr.emoji} ${attr.featureNameRu}: ${attr.featureValue}`);
+        lines.push(`  ${attr.emoji ?? '📌'} ${attr.featureNameRu ?? attr.featureName}: ${attr.featureValue}`);
       }
     }
 
     if (explanation.topNegativeFeatures.length > 0) {
       lines.push('\n⚠️ Учтённые сложности:');
       for (const attr of explanation.topNegativeFeatures) {
-        lines.push(`  ${attr.emoji} ${attr.featureNameRu}: ${attr.featureValue}`);
+        lines.push(`  ${attr.emoji ?? '📌'} ${attr.featureNameRu ?? attr.featureName}: ${attr.featureValue}`);
       }
     }
 
@@ -797,9 +797,9 @@ export class FeatureAttributionEngine implements IFeatureAttributionEngine {
   }
 
   private getConfidenceEmoji(confidence: number): string {
-    if (confidence >= 0.9) return '✅';
-    if (confidence >= 0.7) return '👍';
-    if (confidence >= 0.5) return '🤔';
+    if (confidence >= 0.9) {return '✅';}
+    if (confidence >= 0.7) {return '👍';}
+    if (confidence >= 0.5) {return '🤔';}
     return '⚠️';
   }
 

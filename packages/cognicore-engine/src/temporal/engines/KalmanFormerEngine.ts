@@ -33,6 +33,7 @@ import {
 } from '../interfaces/IKalmanFormer';
 import type { IPLRNNState } from '../interfaces/IPLRNNEngine';
 import type { IKalmanFilterState } from '../../twin/interfaces/IDigitalTwin';
+import { secureRandom } from '../../utils/SecureRandom';
 
 /**
  * State dimension labels
@@ -77,15 +78,15 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
       keyWeights: this.initTransformerWeights(numLayers, numHeads, embedDim, headDim),
       valueWeights: this.initTransformerWeights(numLayers, numHeads, embedDim, headDim),
       outputProjection: this.initRandomMatrix(embedDim, embedDim),
-      feedforward: Array(numLayers).fill(null).map(() => ({
+      feedforward: Array.from({ length: numLayers }, () => ({
         linear1: this.initRandomMatrix(embedDim, embedDim * 4),
         linear2: this.initRandomMatrix(embedDim * 4, embedDim),
-        bias1: new Array(embedDim * 4).fill(0),
-        bias2: new Array(embedDim).fill(0),
+        bias1: Array.from({ length: embedDim * 4 }, () => 0),
+        bias2: Array.from({ length: embedDim }, () => 0),
       })),
-      layerNorm: Array(numLayers * 2).fill(null).map(() => ({
-        gamma: new Array(embedDim).fill(1),
-        beta: new Array(embedDim).fill(0),
+      layerNorm: Array.from({ length: numLayers * 2 }, () => ({
+        gamma: Array.from({ length: embedDim }, () => 1),
+        beta: Array.from({ length: embedDim }, () => 0),
       })),
     };
 
@@ -101,12 +102,12 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     // Gain predictor (learned Kalman Gain)
     const gainPredictor = this.config.learnedGain ? {
       weights: this.initRandomMatrix(embedDim, stateDim * obsDim),
-      bias: new Array(stateDim * obsDim).fill(0),
+      bias: Array.from({ length: stateDim * obsDim }, () => 0),
     } : undefined;
 
     // Blend ratio predictor
     const blendPredictor = {
-      weights: new Array(embedDim).fill(0).map(() => Math.random() * 0.1),
+      weights: Array.from({ length: embedDim }, () => secureRandom() * 0.1),
       bias: 0.5, // Start with equal blend
     };
 
@@ -395,7 +396,7 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     for (let t = 0; t < predictions.length; t++) {
       const predRow = predictions[t];
       const actualRow = actuals[t];
-      if (!predRow || !actualRow) continue;
+      if (!predRow || !actualRow) {continue;}
       for (let i = 0; i < predRow.length; i++) {
         totalError += Math.pow((predRow[i] ?? 0) - (actualRow[i] ?? 0), 2);
       }
@@ -441,14 +442,14 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
       // Initialize state
       const firstObs = sample.observations[0];
       const firstTimestamp = sample.timestamps[0];
-      if (!firstObs || !firstTimestamp) continue;
+      if (!firstObs || !firstTimestamp) {continue;}
       let state = this.initializeState(firstObs, firstTimestamp);
 
       for (let t = 1; t < sample.observations.length; t++) {
         // Update with observation
         const obs = sample.observations[t];
         const ts = sample.timestamps[t];
-        if (!obs || !ts) continue;
+        if (!obs || !ts) {continue;}
         state = this.update(state, obs, ts);
 
         // Compute losses if ground truth available
@@ -512,7 +513,7 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
         errorCovariance: this.initDiagonalMatrix(n, 0.1),
         predictedState: [...plrnnState.latentState],
         predictedCovariance: this.initDiagonalMatrix(n, 0.1),
-        innovation: new Array(n).fill(0),
+        innovation: Array.from({ length: n }, () => 0),
         innovationCovariance: this.initDiagonalMatrix(n, 0.1),
         kalmanGain: this.initIdentityMatrix(n),
         normalized_innovation_squared: 0,
@@ -578,7 +579,7 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
         errorCovariance: this.initDiagonalMatrix(n, 0.1),
         predictedState: [...observation],
         predictedCovariance: this.initDiagonalMatrix(n, 0.1),
-        innovation: new Array(n).fill(0),
+        innovation: Array.from({ length: n }, () => 0),
         innovationCovariance: this.initDiagonalMatrix(n, 0.1),
         kalmanGain: this.initIdentityMatrix(n),
         normalized_innovation_squared: 0,
@@ -674,7 +675,7 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
     // Use last context embedding to predict gain
     const lastContext = contextEncoding[contextEncoding.length - 1] ||
-      new Array(this.config.embedDim).fill(0);
+      Array.from({ length: this.config.embedDim }, () => 0);
 
     // Linear transformation
     const gainVector = this.matVec(
@@ -739,10 +740,10 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
   }
 
   private encodeContext(
-    history: Array<{ observation: number[]; timestamp: Date; embedding?: number[] }>
+    history: { observation: number[]; timestamp: Date; embedding?: number[] }[]
   ): number[][] {
     if (history.length === 0) {
-      return [new Array(this.config.embedDim).fill(0)];
+      return [Array.from({ length: this.config.embedDim }, () => 0)];
     }
 
     // Get embeddings
@@ -790,11 +791,11 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
       for (let i = 0; i < seqLen; i++) {
         const scoreRow: number[] = [];
         const Qi = Q[i];
-        if (!Qi) continue;
+        if (!Qi) {continue;}
         for (let j = 0; j < seqLen; j++) {
           let score = 0;
           const Kj = K[j];
-          if (!Kj) continue;
+          if (!Kj) {continue;}
           for (let k = 0; k < headDim; k++) {
             score += (Qi[k] ?? 0) * (Kj[k] ?? 0);
           }
@@ -809,17 +810,17 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
       // Attended values
       for (let i = 0; i < seqLen; i++) {
-        const attended = new Array(headDim).fill(0);
+        const attended: number[] = Array.from({ length: headDim }, () => 0);
         const scoresI = scores[i];
-        if (!scoresI) continue;
+        if (!scoresI) {continue;}
         for (let j = 0; j < seqLen; j++) {
           const Vj = V[j];
-          if (!Vj) continue;
+          if (!Vj) {continue;}
           for (let k = 0; k < headDim; k++) {
-            attended[k] += (scoresI[j] ?? 0) * (Vj[k] ?? 0);
+            attended[k] = (attended[k] ?? 0) + (scoresI[j] ?? 0) * (Vj[k] ?? 0);
           }
         }
-        if (!headOutputs[i]) headOutputs[i] = [];
+        if (!headOutputs[i]) {headOutputs[i] = [];}
         headOutputs[i]!.push(...attended);
       }
     }
@@ -872,17 +873,17 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
   }
 
   private transformerPredict(
-    _history: Array<{ observation: number[]; timestamp: Date; embedding?: number[] }>,
+    _history: { observation: number[]; timestamp: Date; embedding?: number[] }[],
     contextEncoding: number[][]
   ): number[] {
     if (contextEncoding.length === 0) {
-      return new Array(this.config.stateDim).fill(0);
+      return Array.from({ length: this.config.stateDim }, () => 0);
     }
 
     // Use last encoding for prediction
     const lastEncoding = contextEncoding[contextEncoding.length - 1];
     if (!lastEncoding) {
-      return new Array(this.config.stateDim).fill(0);
+      return Array.from({ length: this.config.stateDim }, () => 0);
     }
 
     // Project to state space
@@ -900,11 +901,11 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
     // Use context to predict optimal blend
     const lastContext = contextEncoding[contextEncoding.length - 1] ??
-      new Array(this.config.embedDim).fill(0);
+      Array.from({ length: this.config.embedDim }, () => 0);
 
     const logit = lastContext.reduce((sum, v, i) =>
       sum + v * (this.weights!.blendPredictor!.weights[i] ?? 0), 0
-    ) + this.weights!.blendPredictor!.bias;
+    ) + this.weights!.blendPredictor.bias;
 
     // Sigmoid to get ratio between 0 and 1
     return this.sigmoid(logit);
@@ -950,11 +951,11 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     for (let i = 0; i < seqLen; i++) {
       const weightRow: number[] = [];
       const embI = embeddings[i];
-      if (!embI) continue;
+      if (!embI) {continue;}
       for (let j = 0; j < seqLen; j++) {
         let score = 0;
         const embJ = embeddings[j];
-        if (!embJ) continue;
+        if (!embJ) {continue;}
         for (let k = 0; k < embedDim; k++) {
           score += (embI[k] ?? 0) * (embJ[k] ?? 0);
         }
@@ -972,7 +973,7 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
   }
 
   private findMostInfluentialDimension(observation: number[]): string {
-    if (observation.length === 0) return 'unknown';
+    if (observation.length === 0) {return 'unknown';}
     let maxIdx = 0;
     let maxVal = Math.abs(observation[0] ?? 0);
 
@@ -989,10 +990,10 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
   private detectPatternMatching(attentionWeights: number[][]): boolean {
     // Check if attention focuses on non-adjacent tokens (pattern matching)
-    if (attentionWeights.length < 3) return false;
+    if (attentionWeights.length < 3) {return false;}
 
     const lastRow = attentionWeights[attentionWeights.length - 1];
-    if (!lastRow || lastRow.length < 2) return false;
+    if (!lastRow || lastRow.length < 2) {return false;}
     const adjacentWeight = (lastRow[lastRow.length - 2] ?? 0) + (lastRow[lastRow.length - 1] ?? 0);
     const totalWeight = lastRow.reduce((a, b) => a + b, 0);
 
@@ -1002,21 +1003,21 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
 
   // Matrix operations
   private initIdentityMatrix(n: number): number[][] {
-    return Array(n).fill(null).map((_, i) =>
-      Array(n).fill(0).map((_, j) => i === j ? 1 : 0)
+    return Array.from({ length: n }, (_, i) =>
+      Array.from({ length: n }, (_, j) => i === j ? 1 : 0)
     );
   }
 
   private initDiagonalMatrix(n: number, value: number): number[][] {
-    return Array(n).fill(null).map((_, i) =>
-      Array(n).fill(0).map((_, j) => i === j ? value : 0)
+    return Array.from({ length: n }, (_, i) =>
+      Array.from({ length: n }, (_, j) => i === j ? value : 0)
     );
   }
 
   private initRandomMatrix(rows: number, cols: number): number[][] {
     const scale = Math.sqrt(2.0 / (rows + cols));
-    return Array(rows).fill(null).map(() =>
-      Array(cols).fill(0).map(() => (Math.random() - 0.5) * 2 * scale)
+    return Array.from({ length: rows }, () =>
+      Array.from({ length: cols }, () => (secureRandom() - 0.5) * 2 * scale)
     );
   }
 
@@ -1041,10 +1042,10 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     embedDim: number,
     headDim: number
   ): number[][][] {
-    return Array(numLayers).fill(null).map(() =>
-      Array(numHeads).fill(null).map(() => {
+    return Array.from({ length: numLayers }, () =>
+      Array.from({ length: numHeads }, () => {
         const matrix = this.initRandomMatrix(embedDim, headDim);
-        return matrix[0] ?? new Array(headDim).fill(0);
+        return matrix[0] ?? Array.from({ length: headDim }, () => 0);
       })
     );
   }
@@ -1058,20 +1059,22 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
     const colsB = B[0]?.length || 0;
     const colsA = A[0]?.length || 0;
 
-    return Array(rowsA).fill(null).map((_, i) =>
-      Array(colsB).fill(0).map((_, j) =>
-        Array(colsA).fill(0).reduce((sum, _, k) =>
-          sum + (A[i]?.[k] ?? 0) * (B[k]?.[j] ?? 0), 0
-        )
-      )
+    return Array.from({ length: rowsA }, (_, i) =>
+      Array.from({ length: colsB }, (_, j) => {
+        let sum = 0;
+        for (let k = 0; k < colsA; k++) {
+          sum += (A[i]?.[k] ?? 0) * (B[k]?.[j] ?? 0);
+        }
+        return sum;
+      })
     );
   }
 
   private transpose(A: number[][]): number[][] {
     const rows = A.length;
     const cols = A[0]?.length || 0;
-    return Array(cols).fill(null).map((_, i) =>
-      Array(rows).fill(0).map((_, j) => A[j]?.[i] || 0)
+    return Array.from({ length: cols }, (_, i) =>
+      Array.from({ length: rows }, (_, j) => A[j]?.[i] || 0)
     );
   }
 
@@ -1086,17 +1089,17 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
   private matInverse(A: number[][]): number[][] {
     const n = A.length;
     const identity = this.initIdentityMatrix(n);
-    const augmented = A.map((row, i) => [...row, ...(identity[i] ?? Array(n).fill(0))]);
+    const augmented = A.map((row, i) => [...row, ...(identity[i] ?? Array.from({ length: n }, () => 0))]);
 
     for (let i = 0; i < n; i++) {
       let maxRow = i;
       const rowI = augmented[i];
-      if (!rowI) continue;
+      if (!rowI) {continue;}
 
       for (let k = i + 1; k < n; k++) {
         const rowK = augmented[k];
         const rowMax = augmented[maxRow];
-        if (!rowK || !rowMax) continue;
+        if (!rowK || !rowMax) {continue;}
         if (Math.abs(rowK[i] ?? 0) > Math.abs(rowMax[i] ?? 0)) {
           maxRow = k;
         }
@@ -1109,7 +1112,7 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
       }
 
       const currentRow = augmented[i];
-      if (!currentRow) continue;
+      if (!currentRow) {continue;}
 
       const pivotVal = currentRow[i] ?? 0;
       if (Math.abs(pivotVal) < 1e-10) {
@@ -1119,7 +1122,7 @@ export class KalmanFormerEngine implements IKalmanFormerEngine {
       for (let k = 0; k < n; k++) {
         if (k !== i) {
           const rowK = augmented[k];
-          if (!rowK) continue;
+          if (!rowK) {continue;}
           const factor = (rowK[i] ?? 0) / pivotVal;
           for (let j = 0; j < 2 * n; j++) {
             rowK[j] = (rowK[j] ?? 0) - factor * (currentRow[j] ?? 0);

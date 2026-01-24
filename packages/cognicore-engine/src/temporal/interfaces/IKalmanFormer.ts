@@ -93,12 +93,12 @@ export interface IAttentionWeights {
   crossAttention?: number[][][];
 
   /** Which historical observations influenced prediction most */
-  topInfluentialObservations: Array<{
+  topInfluentialObservations: {
     index: number;
     timestamp: Date;
     weight: number;
     dimension: string;
-  }>;
+  }[];
 
   /** Temporal attention pattern (recency vs. relevance) */
   temporalPattern: 'recency_bias' | 'pattern_matching' | 'uniform';
@@ -116,11 +116,11 @@ export interface IKalmanFormerState {
   transformerHidden: number[][];
 
   /** Historical observation buffer */
-  observationHistory: Array<{
+  observationHistory: {
     observation: number[];
     timestamp: Date;
     embedding?: number[];
-  }>;
+  }[];
 
   /** Learned Kalman Gain (if enabled) */
   learnedGain?: number[][];
@@ -249,11 +249,11 @@ export interface IKalmanFormerTrainingSample {
   userId: string | number;
 
   /** Context information (external factors) */
-  context?: Array<{
+  context?: {
     timeOfDay: number; // 0-23
     dayOfWeek: number; // 0-6
     eventType?: string;
-  }>;
+  }[];
 }
 
 /**

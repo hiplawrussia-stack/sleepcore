@@ -153,11 +153,11 @@ export interface MIResponseContext {
   readonly lastUtterance: ClientUtterance;
 
   /** Conversation history (last N exchanges) */
-  readonly recentExchanges: Array<{
+  readonly recentExchanges: {
     readonly clientText: string;
     readonly therapistResponse: string;
     readonly timestamp: Date;
-  }>;
+  }[];
 
   /** Current therapeutic strategy */
   readonly currentStrategy: MIStrategy;
@@ -224,11 +224,11 @@ export interface ReflectionTemplate {
   readonly patternRu: string;
   readonly complexity: 'simple' | 'complex';
   readonly target: 'change_talk' | 'sustain_talk' | 'ambivalence' | 'feeling' | 'meaning';
-  readonly examples: Array<{
+  readonly examples: {
     readonly input: string;
     readonly output: string;
     readonly outputRu: string;
-  }>;
+  }[];
 }
 
 /**
@@ -239,7 +239,7 @@ export interface SummaryTemplate {
   readonly type: SummaryType;
   readonly structure: string;
   readonly structureRu: string;
-  readonly includeSections: Array<'change_talk' | 'sustain_talk' | 'values' | 'goals' | 'strengths' | 'next_steps'>;
+  readonly includeSections: ('change_talk' | 'sustain_talk' | 'values' | 'goals' | 'strengths' | 'next_steps')[];
   readonly transitionPhrase?: string;
   readonly transitionPhraseRu?: string;
 }

@@ -17,10 +17,7 @@ import {
   CrisisDetector,
   createCrisisDetector,
   defaultCrisisDetector,
-  CrisisSeverity,
-  CrisisType,
-  StateRiskData,
-  CrisisDetectionResult,
+  type StateRiskData,
 } from '../CrisisDetector';
 
 // ============================================================================
@@ -534,7 +531,7 @@ describe('CrisisDetector', () => {
       // This is a known challenge - may need context-aware detection
       // For now, keyword-based will trigger, which is safer (false positive > false negative)
       const text = 'We should talk more about suicide prevention';
-      const result = detector.detect(text);
+      const _result = detector.detect(text);
       // May trigger - that's acceptable for safety
       // The key is that it's flagged for review
     });
@@ -553,7 +550,7 @@ describe('CrisisDetector', () => {
 
     it('should handle special characters', () => {
       const text = 'Хочу 🔪 себя...';
-      const result = detector.detect(text);
+      const _result = detector.detect(text);
       // May or may not trigger depending on exact keywords
     });
 

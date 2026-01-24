@@ -239,8 +239,18 @@ const PROTECTIVE_FACTORS = [
 
   // English - more specific patterns
   // CRITICAL: Use negative lookbehind to avoid "don't want to live" as protective
-  /but\s+(?:i\s+)?(?:want to|will|trying|there's hope)/i,
-  /(?:i\s+)?don'?t\s+(?:want to die|going to|actually)/i,
+  // Fixed: Avoid nested optional groups with quantifiers (ReDoS prevention)
+  /but i want to/i,
+  /but want to/i,
+  /but i will/i,
+  /but will/i,
+  /but i'?m trying/i,
+  /but trying/i,
+  /but there'?s hope/i,
+  /i don'?t want to die/i,
+  /don'?t want to die/i,
+  /i'?m not going to/i,
+  /not actually/i,
   /help me/i,
   /need help/i,
   /(?<!don'?t\s)want to\s+(?:live|change|get help)/i,
@@ -394,15 +404,15 @@ export class CrisisDetector {
   }
 
   private calculateLayer1Confidence(indicators: string[]): number {
-    if (indicators.length === 0) return 0;
+    if (indicators.length === 0) {return 0;}
 
     // Weight by indicator type
     let score = 0;
     for (const indicator of indicators) {
-      if (indicator.includes('suicidal')) score += 0.4;
-      else if (indicator.includes('selfharm')) score += 0.3;
-      else if (indicator.includes('hopeless')) score += 0.2;
-      else score += 0.1;
+      if (indicator.includes('suicidal')) {score += 0.4;}
+      else if (indicator.includes('selfharm')) {score += 0.3;}
+      else if (indicator.includes('hopeless')) {score += 0.2;}
+      else {score += 0.1;}
     }
 
     return Math.min(1, score);
@@ -441,17 +451,17 @@ export class CrisisDetector {
   }
 
   private calculateLayer2Confidence(indicators: string[]): number {
-    if (indicators.length === 0) return 0;
+    if (indicators.length === 0) {return 0;}
 
     // Weight by pattern type
     let score = 0;
     for (const indicator of indicators) {
-      if (indicator.includes('planning')) score += 0.5;
-      else if (indicator.includes('farewell')) score += 0.4;
-      else if (indicator.includes('giving_away')) score += 0.3;
-      else if (indicator.includes('urgency')) score += 0.4;
-      else if (indicator.includes('absolutes')) score += 0.2;
-      else score += 0.1;
+      if (indicator.includes('planning')) {score += 0.5;}
+      else if (indicator.includes('farewell')) {score += 0.4;}
+      else if (indicator.includes('giving_away')) {score += 0.3;}
+      else if (indicator.includes('urgency')) {score += 0.4;}
+      else if (indicator.includes('absolutes')) {score += 0.2;}
+      else {score += 0.1;}
     }
 
     return Math.min(1, score);
@@ -503,7 +513,7 @@ export class CrisisDetector {
   }
 
   private calculateLayer3Confidence(stateRisk: StateRiskData, indicators: string[]): number {
-    if (indicators.length === 0) return 0;
+    if (indicators.length === 0) {return 0;}
 
     // Weighted combination of risk factors
     const riskScore = (
@@ -753,8 +763,8 @@ export class CrisisDetector {
     const hasCyrillic = cyrillicPattern.test(text);
     const hasLatin = latinPattern.test(text);
 
-    if (hasCyrillic && hasLatin) return 'both';
-    if (hasCyrillic) return 'ru';
+    if (hasCyrillic && hasLatin) {return 'both';}
+    if (hasCyrillic) {return 'ru';}
     return 'en';
   }
 

@@ -23,12 +23,74 @@
  */
 
 import {
-  INarrativeExplanation,
-  INarrativeGenerator,
-  IExplanationResponse,
-  NarrativeStructure,
-  CognitiveStyle,
+  type INarrativeExplanation,
+  type INarrativeGenerator,
+  type IExplanationResponse,
+  type NarrativeStructure,
+  type CognitiveStyle,
 } from '../interfaces/IExplainability';
+
+// ============================================================================
+// EMOJI HELPERS (ReDoS-safe alternatives to large Unicode ranges)
+// ============================================================================
+
+/**
+ * Common emoji code points for detection (subset of Miscellaneous Symbols and Pictographs).
+ * Using a Set for O(1) lookup instead of regex with large Unicode ranges.
+ */
+const COMMON_EMOJI_CODEPOINTS = new Set([
+  // Common narrative emojis used in templates
+  0x1F31F, // 🌟
+  0x1F680, // 🚀
+  0x1F4A1, // 💡
+  0x2728,  // ✨
+  0x1F3AF, // 🎯
+  0x1F4D6, // 📖
+  0x1F914, // 🤔
+  0x1F4DD, // 📝
+  0x2705,  // ✅
+  0x1F44D, // 👍
+  0x1F64C, // 🙌
+  0x1F31E, // 🌞
+  0x1F308, // 🌈
+  0x1F4AA, // 💪
+  0x2764,  // ❤
+  0x1F642, // 🙂
+]);
+
+/**
+ * Checks if a string contains any emoji characters.
+ * Uses codepoint checking instead of regex for ReDoS safety.
+ */
+function containsEmoji(str: string): boolean {
+  for (const char of str) {
+    const codePoint = char.codePointAt(0);
+    if (codePoint !== undefined && (
+      COMMON_EMOJI_CODEPOINTS.has(codePoint) ||
+      (codePoint >= 0x1F300 && codePoint <= 0x1F9FF) // Extended range check
+    )) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Removes emoji characters from a string.
+ * Uses codepoint filtering instead of regex for ReDoS safety.
+ */
+function removeEmojis(str: string): string {
+  let result = '';
+  for (const char of str) {
+    const codePoint = char.codePointAt(0);
+    if (codePoint === undefined ||
+        (codePoint < 0x1F300 || codePoint > 0x1F9FF) &&
+        !COMMON_EMOJI_CODEPOINTS.has(codePoint)) {
+      result += char;
+    }
+  }
+  return result;
+}
 
 // ============================================================================
 // NARRATIVE TEMPLATES
@@ -578,14 +640,14 @@ export class NarrativeGenerator implements INarrativeGenerator {
       const topPositive = explanation.localExplanation.topPositiveFeatures[0];
       const topNegative = explanation.localExplanation.topNegativeFeatures[0];
 
-      variables['key_factor'] = topPositive?.featureNameRu || 'настроение';
-      variables['key_factor_value'] = String(topPositive?.featureValue || '');
-      variables['challenge'] = topNegative?.featureNameRu || '';
+      variables.key_factor = topPositive?.featureNameRu || 'настроение';
+      variables.key_factor_value = String(topPositive?.featureValue || '');
+      variables.challenge = topNegative?.featureNameRu || '';
 
       // Initial state (baseline)
-      variables['initial_state'] = 'нейтральное состояние';
-      variables['current_state'] = explanation.localExplanation.prediction;
-      variables['key_change'] = `изменение ${variables['key_factor']}`;
+      variables.initial_state = 'нейтральное состояние';
+      variables.current_state = explanation.localExplanation.prediction;
+      variables.key_change = `изменение ${variables.key_factor}`;
     }
 
     // From counterfactual explanation
@@ -593,52 +655,52 @@ export class NarrativeGenerator implements INarrativeGenerator {
       const easiest = explanation.counterfactualExplanation.easiestCounterfactual;
       const firstChange = easiest?.changes?.[0];
       if (firstChange) {
-        variables['action'] = firstChange.changeDescriptionRu || firstChange.changeDescription;
+        variables.action = firstChange.changeDescriptionRu || firstChange.changeDescription;
       }
     }
 
     // From causal explanation
     if (explanation.causalExplanation) {
       const primaryChain = explanation.causalExplanation.primaryChain;
-      if (primaryChain && primaryChain.nodes && primaryChain.nodes.length >= 2) {
+      if (primaryChain?.nodes && primaryChain.nodes.length >= 2) {
         const firstNode = primaryChain.nodes[0];
         const lastNode = primaryChain.nodes[primaryChain.nodes.length - 1];
         if (firstNode) {
-          variables['cause'] = firstNode.variableRu || firstNode.variable;
+          variables.cause = firstNode.variableRu || firstNode.variable;
         }
         if (lastNode) {
-          variables['effect'] = lastNode.variableRu || lastNode.variable;
+          variables.effect = lastNode.variableRu || lastNode.variable;
         }
       }
 
       const firstEdge = primaryChain?.edges?.[0];
       if (firstEdge) {
-        variables['mechanism'] = firstEdge.mechanismRu ||
+        variables.mechanism = firstEdge.mechanismRu ||
           firstEdge.mechanism ||
           'прямое влияние';
-        variables['strength'] = `${Math.round(firstEdge.strength * 100)}%`;
+        variables.strength = `${Math.round(firstEdge.strength * 100)}%`;
       }
     }
 
     // From user explanation
     if (explanation.userExplanation) {
-      variables['observation'] = explanation.userExplanation.summaryRu || explanation.userExplanation.summary;
-      variables['recommendation'] = explanation.userExplanation.actionableAdviceRu?.[0] ||
+      variables.observation = explanation.userExplanation.summaryRu || explanation.userExplanation.summary;
+      variables.recommendation = explanation.userExplanation.actionableAdviceRu?.[0] ||
         explanation.userExplanation.actionableAdvice?.[0] ||
         'продолжить практику';
-      variables['reasoning'] = explanation.userExplanation.reasoningRu || explanation.userExplanation.reasoning;
+      variables.reasoning = explanation.userExplanation.reasoningRu || explanation.userExplanation.reasoning;
     }
 
     // Defaults
-    variables['feeling'] = variables['key_factor'] || 'текущее состояние';
-    variables['technique'] = variables['recommendation'] || 'рекомендуемая техника';
-    variables['stats'] = 'эффективность 70%+';
-    variables['analogy'] = 'домино - одно толкает другое';
-    variables['expected_effect'] = 'улучшение состояния';
+    variables.feeling = variables.key_factor || 'текущее состояние';
+    variables.technique = variables.recommendation || 'рекомендуемая техника';
+    variables.stats = 'эффективность 70%+';
+    variables.analogy = 'домино - одно толкает другое';
+    variables.expected_effect = 'улучшение состояния';
 
     // Ensure action is set
-    if (!variables['action']) {
-      variables['action'] = variables['recommendation'] || 'начать практику';
+    if (!variables.action) {
+      variables.action = variables.recommendation || 'начать практику';
     }
 
     return variables;
@@ -675,8 +737,8 @@ export class NarrativeGenerator implements INarrativeGenerator {
           break;
         case 'visual':
           // Prefer templates with emojis
-          templateIndex = templates.findIndex(t => /[\u{1F300}-\u{1F9FF}]/u.test(t));
-          if (templateIndex === -1) templateIndex = 0;
+          templateIndex = templates.findIndex(t => containsEmoji(t));
+          if (templateIndex === -1) {templateIndex = 0;}
           break;
       }
     }
@@ -791,7 +853,7 @@ export class NarrativeGenerator implements INarrativeGenerator {
     };
 
     // Remove emojis for lookup
-    const cleanTitle = title.replace(/[\u{1F300}-\u{1F9FF}]/gu, '').trim();
+    const cleanTitle = removeEmojis(title).trim();
 
     return translations[cleanTitle] || title;
   }
@@ -858,7 +920,7 @@ export class NarrativeGenerator implements INarrativeGenerator {
 
     const truncateToWords = (text: string, maxW: number): string => {
       const words = text.split(/\s+/);
-      if (words.length <= maxW) return text;
+      if (words.length <= maxW) {return text;}
       return words.slice(0, maxW).join(' ') + '...';
     };
 

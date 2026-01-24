@@ -25,12 +25,12 @@
 
 import { randomUUID } from 'crypto';
 import {
-  ICounterfactualExplanation,
-  ICounterfactualScenario,
-  ICounterfactualChange,
-  ICounterfactualExplainer,
-  CounterfactualFeasibility,
-  IFeatureDefinition,
+  type ICounterfactualExplanation,
+  type ICounterfactualScenario,
+  type ICounterfactualChange,
+  type ICounterfactualExplainer,
+  type CounterfactualFeasibility,
+  type IFeatureDefinition,
 } from '../interfaces/IExplainability';
 import { INTERVENTION_FEATURES } from './FeatureAttributionEngine';
 
@@ -352,7 +352,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
     currentFeatures: Record<string, unknown>,
     currentOutcome: string,
     desiredOutcome?: string,
-    maxCounterfactuals: number = 3,
+    maxCounterfactuals = 3,
     options?: {
       requireRobust?: boolean;
       minRobustness?: number;
@@ -374,7 +374,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
       if (scenario) {
         // Apply robustness filter if required
         if (options?.requireRobust && options.minRobustness) {
-          if (scenario.robustness < options.minRobustness) continue;
+          if (scenario.robustness < options.minRobustness) {continue;}
         }
 
         // Apply feasibility filter
@@ -382,7 +382,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
           if (!this.meetsFeasibilityThreshold(
             scenario.feasibility,
             options.feasibilityThreshold
-          )) continue;
+          )) {continue;}
         }
 
         scenarios.push(scenario);
@@ -519,7 +519,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
       }
     }
 
-    if (changes.length === 0) return null;
+    if (changes.length === 0) {return null;}
 
     // Calculate risk-sensitive metrics
     const robustness = this.calculateRobustness({
@@ -629,7 +629,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
 
     // Take the smallest change (first one found)
     const smallestChange = singleChanges[0];
-    if (!smallestChange) return null;
+    if (!smallestChange) {return null;}
 
     const robustness = 0.85; // High robustness for minimal changes
     const plausibility = 0.90;
@@ -669,7 +669,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
    * Higher = more robust to perturbations
    */
   calculateRobustness(scenario: ICounterfactualScenario): number {
-    if (!scenario.changes || scenario.changes.length === 0) return 0;
+    if (!scenario.changes || scenario.changes.length === 0) {return 0;}
 
     // Factors affecting robustness:
     // 1. Fewer changes = more robust
@@ -710,7 +710,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
     scenario: ICounterfactualScenario,
     _contextFeatures: Record<string, unknown>
   ): number {
-    if (!scenario.changes || scenario.changes.length === 0) return 0;
+    if (!scenario.changes || scenario.changes.length === 0) {return 0;}
 
     // Plausibility factors:
     // 1. How far is the suggested value from current value
@@ -719,7 +719,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
 
     const plausibilityScores = scenario.changes.map(change => {
       const definition = this.featureDefinitions.get(change.featureId);
-      if (!definition) return 0.5;
+      if (!definition) {return 0.5;}
 
       // Distance factor
       const currentNum = typeof change.currentValue === 'number' ? change.currentValue : 0;
@@ -781,14 +781,14 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
     scenarios: ICounterfactualScenario[],
     maxCount: number
   ): ICounterfactualScenario[] {
-    if (scenarios.length <= maxCount) return scenarios;
+    if (scenarios.length <= maxCount) {return scenarios;}
 
     const selected: ICounterfactualScenario[] = [];
     const usedCategories = new Set<string>();
 
     // First pass: select best from each category
     for (const scenario of scenarios) {
-      if (selected.length >= maxCount) break;
+      if (selected.length >= maxCount) {break;}
 
       const category = this.getScenarioCategory(scenario);
       if (!usedCategories.has(category)) {
@@ -799,7 +799,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
 
     // Second pass: fill remaining slots with highest recourse scores
     for (const scenario of scenarios) {
-      if (selected.length >= maxCount) break;
+      if (selected.length >= maxCount) {break;}
       if (!selected.includes(scenario)) {
         selected.push(scenario);
       }
@@ -813,7 +813,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
    */
   private getScenarioCategory(scenario: ICounterfactualScenario): string {
     const firstChange = scenario.changes[0];
-    if (!firstChange) return 'unknown';
+    if (!firstChange) {return 'unknown';}
 
     const featureId = firstChange.featureId;
     const definition = this.featureDefinitions.get(featureId);
@@ -825,7 +825,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
    * Calculate diversity score for selected scenarios
    */
   private calculateDiversityScore(scenarios: ICounterfactualScenario[]): number {
-    if (scenarios.length <= 1) return 0;
+    if (scenarios.length <= 1) {return 0;}
 
     const categories = scenarios.map(s => this.getScenarioCategory(s));
     const uniqueCategories = new Set(categories);
@@ -837,7 +837,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
    * Calculate overall robustness of explanation
    */
   private calculateOverallRobustness(scenarios: ICounterfactualScenario[]): number {
-    if (scenarios.length === 0) return 0;
+    if (scenarios.length === 0) {return 0;}
 
     const robustnessValues = scenarios.map(s => s.robustness);
     return robustnessValues.reduce((a, b) => a + b, 0) / robustnessValues.length;
@@ -853,7 +853,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
   private findClosestCounterfactual(
     scenarios: ICounterfactualScenario[]
   ): ICounterfactualScenario | undefined {
-    if (scenarios.length === 0) return undefined;
+    if (scenarios.length === 0) {return undefined;}
 
     return [...scenarios].sort((a, b) => {
       const feasibilityOrder: Record<CounterfactualFeasibility, number> = {
@@ -863,7 +863,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
       const feasibilityDiff =
         feasibilityOrder[a.feasibility] - feasibilityOrder[b.feasibility];
 
-      if (feasibilityDiff !== 0) return feasibilityDiff;
+      if (feasibilityDiff !== 0) {return feasibilityDiff;}
       return a.changes.length - b.changes.length;
     })[0];
   }
@@ -874,7 +874,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
   private findMostRobust(
     scenarios: ICounterfactualScenario[]
   ): ICounterfactualScenario | undefined {
-    if (scenarios.length === 0) return undefined;
+    if (scenarios.length === 0) {return undefined;}
 
     return [...scenarios].sort((a, b) => b.robustness - a.robustness)[0];
   }
@@ -885,7 +885,7 @@ export class CounterfactualExplainer implements ICounterfactualExplainer {
   private findEasiest(
     scenarios: ICounterfactualScenario[]
   ): ICounterfactualScenario | undefined {
-    if (scenarios.length === 0) return undefined;
+    if (scenarios.length === 0) {return undefined;}
 
     const easyScenarios = scenarios.filter(s => s.feasibility === 'easy');
     if (easyScenarios.length > 0) {

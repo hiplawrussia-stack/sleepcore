@@ -21,7 +21,6 @@ import type {
   IMIResponseGenerator,
   MIResponseContext,
   MIGenerationConstraints,
-  MITIBehaviorCode,
   OpenQuestionTemplate,
   AffirmationTemplate,
   ReflectionTemplate,
@@ -89,16 +88,16 @@ export class MIResponseGenerator implements IMIResponseGenerator {
     // Handle different template types
     if ('targetChangeTalk' in template) {
       // OpenQuestionTemplate
-      return this.fillOpenQuestionTemplate(template as OpenQuestionTemplate, context);
+      return this.fillOpenQuestionTemplate(template, context);
     } else if ('appropriateFor' in template) {
       // AffirmationTemplate
-      return this.fillAffirmationTemplate(template as AffirmationTemplate, context);
+      return this.fillAffirmationTemplate(template, context);
     } else if ('complexity' in template) {
       // ReflectionTemplate
-      return this.fillReflectionTemplate(template as ReflectionTemplate, context);
+      return this.fillReflectionTemplate(template, context);
     } else if ('includeSections' in template) {
       // SummaryTemplate
-      return this.fillSummaryTemplate(template as SummaryTemplate, context);
+      return this.fillSummaryTemplate(template, context);
     }
 
     // Fallback
@@ -115,11 +114,13 @@ export class MIResponseGenerator implements IMIResponseGenerator {
     context: MIResponseContext,
     constraints: MIGenerationConstraints
   ): Promise<string> {
-    // Build MI-compliant system prompt
-    const systemPrompt = this.buildMISystemPrompt(constraints, context);
+    // Build MI-compliant system prompt (reserved for LLM integration)
+     
+    void this.buildMISystemPrompt(constraints, context);
 
-    // Build user prompt with context
-    const userPrompt = this.buildUserPrompt(prompt, context);
+    // Build user prompt with context (reserved for LLM integration)
+     
+    void this.buildUserPrompt(prompt, context);
 
     // In production, this would call the LLM API
     // For now, return a template-based response as fallback
@@ -376,16 +377,17 @@ export class MIResponseGenerator implements IMIResponseGenerator {
         .slice(-3)
         .map(u => u.text);
 
-      sections['change_talk_summary'] = ctUtterances.length > 0
+      sections.change_talk_summary = ctUtterances.length > 0
         ? ctUtterances.join('; ')
         : (lang === 'ru' ? 'некоторые мысли об изменениях' : 'some thoughts about change');
     }
 
     if (template.includeSections.includes('values')) {
-      sections['values_connection'] = context.userValues?.length
+      const firstValue = context.userValues?.[0] ?? '';
+      sections.values_connection = context.userValues?.length
         ? (lang === 'ru'
-          ? `Это связано с тем, что для вас важно: ${context.userValues[0]}.`
-          : `This connects to what matters to you: ${context.userValues[0]}.`)
+          ? `Это связано с тем, что для вас важно: ${firstValue}.`
+          : `This connects to what matters to you: ${firstValue}.`)
         : '';
     }
 
@@ -396,7 +398,7 @@ export class MIResponseGenerator implements IMIResponseGenerator {
 
     // Add transition phrase if present
     if (template.transitionPhrase) {
-      const transition = lang === 'ru' ? template.transitionPhraseRu : template.transitionPhrase;
+      const transition = (lang === 'ru' ? template.transitionPhraseRu : template.transitionPhrase) ?? '';
       text = `${text} ${transition}`;
     }
 
@@ -551,7 +553,7 @@ export class MIResponseGenerator implements IMIResponseGenerator {
 
   private buildMISystemPrompt(
     constraints: MIGenerationConstraints,
-    context: MIResponseContext
+    _context: MIResponseContext
   ): string {
     const lang = constraints.language;
 

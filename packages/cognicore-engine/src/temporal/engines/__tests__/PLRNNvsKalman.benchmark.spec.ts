@@ -17,8 +17,8 @@
  * © БФ "Другой путь", 2025
  */
 
-import { PLRNNEngine, createPLRNNEngine } from '../PLRNNEngine';
-import { KalmanFormerEngine, createKalmanFormerEngine } from '../KalmanFormerEngine';
+import { createPLRNNEngine } from '../PLRNNEngine';
+import { createKalmanFormerEngine } from '../KalmanFormerEngine';
 import type { IPLRNNState } from '../../interfaces/IPLRNNEngine';
 import type { IKalmanFormerState } from '../../interfaces/IKalmanFormer';
 
@@ -94,7 +94,7 @@ function calculateMAE(predicted: number[][], actual: number[][]): number {
   for (let i = 0; i < predicted.length; i++) {
     const predRow = predicted[i];
     const actualRow = actual[i];
-    if (!predRow || !actualRow) continue;
+    if (!predRow || !actualRow) {continue;}
 
     for (let j = 0; j < predRow.length; j++) {
       total += Math.abs((predRow[j] ?? 0) - (actualRow[j] ?? 0));
@@ -112,7 +112,7 @@ function calculateMSE(predicted: number[][], actual: number[][]): number {
   for (let i = 0; i < predicted.length; i++) {
     const predRow = predicted[i];
     const actualRow = actual[i];
-    if (!predRow || !actualRow) continue;
+    if (!predRow || !actualRow) {continue;}
 
     for (let j = 0; j < predRow.length; j++) {
       const diff = (predRow[j] ?? 0) - (actualRow[j] ?? 0);
@@ -261,9 +261,9 @@ async function runBenchmark(
   const horizonResults: HorizonMetrics[] = [];
 
   for (const horizon of config.horizons) {
-    let plrnnPredictions: number[][] = [];
-    let kalmanPredictions: number[][] = [];
-    let actuals: number[][] = [];
+    const plrnnPredictions: number[][] = [];
+    const kalmanPredictions: number[][] = [];
+    const actuals: number[][] = [];
 
     let plrnnTotalTime = 0;
     let kalmanTotalTime = 0;
@@ -274,7 +274,7 @@ async function runBenchmark(
       const times = timestamps[p]!;
 
       // Skip if sequence too short
-      if (sequence.length <= horizon) continue;
+      if (sequence.length <= horizon) {continue;}
 
       // Initialize states
       const firstObs = sequence[0]!;
