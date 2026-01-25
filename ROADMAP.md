@@ -256,4 +256,16 @@
 | Янв 2025 | v1.0 | Начальная версия |
 | Янв 2026 | v2.0 | Sprint 1-4 выполнены |
 | Янв 2026 | v2.1 | Sprint 5 (Proactive Intelligence) выполнен |
+| Янв 2026 | v2.2 | Консолидация документации, Sprint 6-10 план |
+
+---
+
+## Связанные документы
+
+| Документ | Описание |
+|----------|----------|
+| [docs/production/launch-plan.md](docs/production/launch-plan.md) | План запуска в продакшен |
+| [docs/research/](docs/research/) | Исследования по спринтам |
+| [docs/archive/SPRINT_COMPLETION_REPORTS.md](docs/archive/SPRINT_COMPLETION_REPORTS.md) | Отчёты Sprint 2-3 |
+| [docs/archive/INTEGRATION_ROADMAP.md](docs/archive/INTEGRATION_ROADMAP.md) | CogniCore интеграция (98%) |
 
