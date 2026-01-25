@@ -397,7 +397,7 @@ ${formatter.tip('Начните с /start для регистрации в пр�
     const sessionLines: string[] = [];
 
     for (const core of CORE_SESSIONS) {
-      const isUnlocked = core.weekNumber <= currentWeek;
+      const _isUnlocked = core.weekNumber <= currentWeek;
       const isCompleted = core.weekNumber < currentWeek;
       const isCurrent = core.weekNumber === currentWeek;
 
@@ -518,7 +518,24 @@ ${sonya.tip('Устройтесь поудобнее. Эта сессия зал
     }
 
     // Get detailed content for this core
-    const content = this.getCoreContent(core);
+    // For SRT session (sleep_behavior_1), add personalized sleep window
+    let content = this.getCoreContent(core);
+
+    // Integrate with real CBT-I engines for personalized content
+    if (coreId === 'sleep_behavior_1' || coreId === 'sleep_behavior_2') {
+      const personalizedSRT = this.getPersonalizedSRTContent(ctx);
+      if (personalizedSRT) {
+        content += '\n\n' + personalizedSRT;
+      }
+    }
+
+    // For cognitive therapy session, add personalized belief analysis
+    if (coreId === 'sleep_thoughts') {
+      const personalizedCR = this.getPersonalizedCRContent(ctx);
+      if (personalizedCR) {
+        content += '\n\n' + personalizedCR;
+      }
+    }
 
     const componentsList = core.components
       .map((comp) => `• ${comp}`)
@@ -739,10 +756,10 @@ ${isiTrend}
 ${formatter.divider()}
 
 🎯 *Клинические цели:*
-• ISI < 7 (ремиссия) — ${this.getGoalStatus('isi')}
-• SE ≥ 85% — ${this.getGoalStatus('se')}
-• SOL < 20 мин — ${this.getGoalStatus('sol')}
-• WASO < 30 мин — ${this.getGoalStatus('waso')}
+• ISI < 7 (ремиссия) — ${this.getGoalStatus('isi', ctx)}
+• SE ≥ 85% — ${this.getGoalStatus('se', ctx)}
+• SOL < 20 мин — ${this.getGoalStatus('sol', ctx)}
+• WASO < 30 мин — ${this.getGoalStatus('waso', ctx)}
 
 ${formatter.tip('Регулярное прохождение ISI каждые 2 недели помогает отслеживать прогресс')}
     `.trim();
@@ -791,6 +808,123 @@ ${formatter.tip('Последовательное прохождение про�
   }
 
   // ==================== Content Helpers ====================
+
+  /**
+   * Get personalized Sleep Restriction content from treatment plan
+   * Uses SleepRestrictionEngine calculations via SleepCoreAPI
+   *
+   * Research basis (2025-2026):
+   * - Initial TIB = Average TST (min 5-5.5h) [AASM 2021, HIGH confidence]
+   * - Weekly titration: SE ≥90% → +15min, SE <85% → -15min [HIGH confidence]
+   * - Fixed wake time as anchor [Bootzin, HIGH confidence]
+   *
+   * @param ctx - Sleep core context with user session
+   * @returns Personalized SRT content or null if no plan
+   */
+  private getPersonalizedSRTContent(ctx: ISleepCoreContext): string | null {
+    const session = ctx.sleepCore.getSession(ctx.userId);
+    if (!session?.plan?.activeComponents.sleepRestriction) {
+      return null;
+    }
+
+    const sr = session.plan.activeComponents.sleepRestriction;
+
+    // Format times for display
+    const bedtime = sr.prescribedBedtime || 'не определено';
+    const wakeTime = sr.prescribedWakeTime || 'не определено';
+    const tibMinutes = sr.prescribedTIB || 0;
+    const tibHours = Math.floor(tibMinutes / 60);
+    const tibMins = tibMinutes % 60;
+    const tibDisplay = tibMins > 0 ? `${tibHours}ч ${tibMins}мин` : `${tibHours}ч`;
+
+    // Get current SE from progress
+    const progress = ctx.sleepCore.getProgressReport(ctx.userId);
+    const currentSE = progress?.currentSleepEfficiency
+      ? `${progress.currentSleepEfficiency.toFixed(1)}%`
+      : 'рассчитывается...';
+
+    // Determine titration recommendation
+    let titrationAdvice: string;
+    if (progress?.currentSleepEfficiency) {
+      const se = progress.currentSleepEfficiency;
+      if (se >= 90) {
+        titrationAdvice = '📈 SE ≥ 90%: можно увеличить TIB на 15 минут';
+      } else if (se >= 85) {
+        titrationAdvice = '📊 SE 85-90%: поддерживайте текущее окно';
+      } else {
+        titrationAdvice = '📉 SE < 85%: сохраняйте текущее окно (или сократите на 15 мин)';
+      }
+    } else {
+      titrationAdvice = 'Титрация будет доступна после недели данных';
+    }
+
+    return `
+${formatter.header('Ваш персональный режим сна')}
+
+🛏 *Время отбоя:* ${bedtime}
+⏰ *Время подъёма:* ${wakeTime}
+⏱ *Время в кровати (TIB):* ${tibDisplay}
+
+📊 *Текущая эффективность сна (SE):* ${currentSE}
+
+${formatter.divider()}
+
+*Рекомендация по титрации:*
+${titrationAdvice}
+
+⚠️ *Важно:* Минимальный безопасный TIB = 5.5 часов
+    `.trim();
+  }
+
+  /**
+   * Get personalized Cognitive Restructuring content from treatment plan
+   * Uses CognitiveRestructuringEngine via session plan data
+   *
+   * Research basis (2025-2026):
+   * - DBAS-16 identifies 5 categories of dysfunctional beliefs [Harvey 2002, HIGH confidence]
+   * - Socratic questioning most effective for sleep-specific beliefs [HIGH confidence]
+   * - Cognitive defusion (ACT) effective for rumination [MEDIUM confidence]
+   *
+   * @param ctx - Sleep core context with user session
+   * @returns Personalized CR content or null if no plan
+   */
+  private getPersonalizedCRContent(ctx: ISleepCoreContext): string | null {
+    const session = ctx.sleepCore.getSession(ctx.userId);
+    // cognitiveTargets contains IDysfunctionalBelief[] per ICBTIPlan interface
+    const cognitiveTargets = session?.plan?.activeComponents.cognitiveTargets;
+    if (!cognitiveTargets || cognitiveTargets.length === 0) {
+      return null;
+    }
+
+    // Build personalized content based on identified beliefs
+    const beliefLines: string[] = [];
+
+    for (const belief of cognitiveTargets.slice(0, 3)) {
+      beliefLines.push(`• *${belief.category || 'Убеждение'}:* ${belief.belief}`);
+      if (belief.alternativeThought) {
+        beliefLines.push(`  ↳ Альтернатива: ${belief.alternativeThought}`);
+      }
+    }
+
+    // DBAS score would come from session assessment, not from plan
+    const dbasScore = 'оцените в упражнении';
+    const dbasTarget = 'снижение на 20%+';
+
+    return `
+${formatter.header('Ваши выявленные убеждения')}
+
+${beliefLines.join('\n')}
+
+${formatter.divider()}
+
+📊 *DBAS-16 Score:* ${dbasScore}
+🎯 *Цель:* ${dbasTarget}
+
+💡 *Практика на эту неделю:*
+Работайте над одним убеждением в день, используя
+технику реструктуризации (см. упражнение).
+    `.trim();
+  }
 
   private getCoreContent(core: ICoreSession): string {
     const contentMap: Record<TherapyCore, string> = {
@@ -1149,25 +1283,121 @@ _________________________________
     return 1;
   }
 
-  private getISITrend(_ctx: ISleepCoreContext): string {
-    // In production, fetch actual ISI history from database
-    // Mock data for now
-    return `
-Неделя 0: ISI 18 (умеренная)
-Неделя 2: ISI 14 (субклиническая)
-Неделя 4: — ожидается —
-    `.trim();
+  /**
+   * Get ISI trend from real user data
+   * Uses SleepCoreAPI.getProgressReport() for actual ISI values
+   *
+   * Research basis (2025-2026):
+   * - MCID for ISI: 6-8 points (Morin et al.)
+   * - Target remission: ISI ≤ 7
+   * - Response: ISI reduction ≥ 8 points
+   */
+  private getISITrend(ctx: ISleepCoreContext): string {
+    const session = ctx.sleepCore.getSession(ctx.userId);
+    if (!session) {
+      return 'Данные недоступны. Пройдите ISI-опросник для начала.';
+    }
+
+    // Get progress report with real ISI data
+    const progress = ctx.sleepCore.getProgressReport(ctx.userId);
+
+    if (!progress) {
+      // Estimate ISI from diary if no full progress yet
+      const estimatedISI = ctx.sleepCore.estimateISI(ctx.userId);
+      if (estimatedISI > 0) {
+        const severity = this.getISISeverity(estimatedISI);
+        return `Оценка ISI по дневнику: ${estimatedISI} (${severity})`;
+      }
+      return 'Заполните дневник сна минимум 7 дней для оценки.';
+    }
+
+    const currentISI = progress.currentISI;
+    const baselineISI = currentISI + progress.isiChange; // Reconstruct baseline
+    const change = progress.isiChange;
+
+    const lines: string[] = [];
+
+    // Baseline
+    lines.push(`Неделя 0: ISI ${baselineISI} (${this.getISISeverity(baselineISI)})`);
+
+    // Current week
+    const weekLabel = `Неделя ${progress.currentWeek}`;
+    const changeStr = change > 0 ? `↓${change}` : change < 0 ? `↑${Math.abs(change)}` : '→';
+    lines.push(`${weekLabel}: ISI ${currentISI} (${this.getISISeverity(currentISI)}) ${changeStr}`);
+
+    // Add clinical interpretation
+    if (currentISI <= 7) {
+      lines.push('🎉 Ремиссия достигнута!');
+    } else if (change >= 8) {
+      lines.push('✅ Значимый клинический ответ');
+    } else if (change >= 4) {
+      lines.push('🔄 Положительная динамика');
+    }
+
+    return lines.join('\n');
   }
 
-  private getGoalStatus(metric: 'isi' | 'se' | 'sol' | 'waso'): string {
-    // In production, fetch from user data
-    const statuses: Record<string, string> = {
-      isi: '🔄 в процессе',
-      se: '🔄 в процессе',
-      sol: '🔄 в процессе',
-      waso: '🔄 в процессе',
-    };
-    return statuses[metric];
+  /**
+   * Get ISI severity label (Russian)
+   * Based on Morin et al. cutoffs
+   */
+  private getISISeverity(isi: number): string {
+    if (isi <= 7) return 'норма';
+    if (isi <= 14) return 'субклиническая';
+    if (isi <= 21) return 'умеренная';
+    return 'тяжёлая';
+  }
+
+  /**
+   * Get goal status from real user progress
+   * Uses SleepCoreAPI.getProgressReport() for actual metrics
+   *
+   * Clinical targets (AASM 2025):
+   * - ISI < 7 (remission)
+   * - SE ≥ 85% (acceptable), ≥ 90% (excellent)
+   * - SOL < 20 min (normal)
+   * - WASO < 30 min (normal)
+   */
+  private getGoalStatus(
+    metric: 'isi' | 'se' | 'sol' | 'waso',
+    ctx?: ISleepCoreContext
+  ): string {
+    // If no context provided, return default
+    if (!ctx) {
+      return '🔄 в процессе';
+    }
+
+    const progress = ctx.sleepCore.getProgressReport(ctx.userId);
+
+    if (!progress) {
+      return '⏳ нет данных';
+    }
+
+    switch (metric) {
+      case 'isi': {
+        const isi = progress.currentISI;
+        if (isi <= 7) return '✅ достигнуто';
+        if (isi <= 14) return '🔄 улучшается';
+        return '⏳ в процессе';
+      }
+      case 'se': {
+        const se = progress.currentSleepEfficiency;
+        if (se >= 90) return '✅ отлично';
+        if (se >= 85) return '✅ достигнуто';
+        if (se >= 80) return '🔄 близко';
+        return '⏳ в процессе';
+      }
+      case 'sol':
+      case 'waso': {
+        // These require diary metrics, not in progress report
+        // Return status based on overall response
+        if (progress.responseStatus === 'responding') return '🔄 улучшается';
+        if (progress.responseStatus === 'partial') return '⏳ в процессе';
+        return '⏳ в процессе';
+      }
+      default:
+        return '🔄 в процессе';
+    }
   }
 }
 
