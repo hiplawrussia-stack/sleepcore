@@ -24,6 +24,7 @@ import type {
   IInlineButton,
 } from './interfaces/ICommand';
 import type { ISleepDiaryEntry } from '../../sleep/interfaces/ISleepState';
+import type { ICBTIIntervention } from '../../cbt-i/interfaces/ICBTIComponents';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
 
@@ -40,6 +41,17 @@ type DiaryStep =
   | 'summary';
 
 /**
+ * Processing result from SleepCoreAPI
+ */
+interface ProcessingResult {
+  metrics: import('../../sleep/interfaces/ISleepState').ISleepMetrics | null;
+  entriesCount: number;
+  planCreated: boolean;
+  intervention: ICBTIIntervention | null;
+  message: string;
+}
+
+/**
  * Diary entry data
  */
 interface DiaryData {
@@ -49,6 +61,7 @@ interface DiaryData {
   waketimeHour?: number;
   waketimeMinute?: number;
   sleepQuality?: number;
+  processingResult?: ProcessingResult;
   [key: string]: unknown; // Index signature for Record compatibility
 }
 
@@ -410,34 +423,51 @@ ${formatter.header('Шаг 3/3: Качество сна')}
     const waketime = this.formatTime(data.waketimeHour, data.waketimeMinute);
     const durationMinutes = this.calculateDuration(data);
 
-    // Calculate approximate time in bed and estimate sleep time
-    // (In real app, would ask about time to fall asleep and awakenings)
-    const estimatedSleepMinutes = Math.round(durationMinutes * 0.85); // Assume 85% SE
-    const _sleepEfficiency = (estimatedSleepMinutes / durationMinutes) * 100;
+    // Build full diary entry
+    const qualityMap = ['very_poor', 'poor', 'fair', 'good', 'excellent'] as const;
+    const entry: ISleepDiaryEntry = {
+      userId: ctx.userId,
+      date: data.date,
+      bedtime,
+      lightsOffTime: bedtime,
+      sleepOnsetLatency: 15, // Default estimate
+      numberOfAwakenings: 1,
+      wakeAfterSleepOnset: Math.round(durationMinutes * 0.1),
+      finalAwakening: waketime,
+      outOfBedTime: waketime,
+      subjectiveQuality: qualityMap[data.sleepQuality! - 1] || 'fair',
+      morningAlertness: data.sleepQuality!,
+    };
 
-    // Add entry to SleepCoreAPI
-    // Note: Using simplified entry for bot - full entry would include all ISleepDiaryEntry fields
+    // CRITICAL FIX (January 2026 Audit):
+    // Use processNewDiaryEntry() instead of addDiaryEntry()
+    // This connects the diary → plan → intervention pipeline
     try {
-      const qualityMap = ['very_poor', 'poor', 'fair', 'good', 'excellent'] as const;
-      const entry = {
-        userId: ctx.userId,
-        date: data.date,
-        bedtime,
-        lightsOffTime: bedtime,
-        sleepOnsetLatency: 15, // Default estimate
-        numberOfAwakenings: 1,
-        wakeAfterSleepOnset: Math.round(durationMinutes * 0.1),
-        finalAwakening: waketime,
-        outOfBedTime: waketime,
-        subjectiveQuality: qualityMap[data.sleepQuality! - 1] || 'fair',
-        morningAlertness: data.sleepQuality!,
-      };
+      const result = await ctx.sleepCore.processNewDiaryEntry(entry);
 
-      // Use type assertion since we're providing a simplified entry
-      ctx.sleepCore.addDiaryEntry(entry as ISleepDiaryEntry);
+      // Store processing result for summary display
+      data.processingResult = {
+        metrics: result.metrics,
+        entriesCount: result.entriesCount,
+        planCreated: result.planCreated,
+        intervention: result.intervention,
+        message: result.message,
+      };
     } catch (error) {
-      // Log error but continue to show summary
-      console.error('Failed to save diary entry:', error);
+      console.error('Failed to process diary entry:', error);
+      // Fallback to simple add if integration fails
+      try {
+        ctx.sleepCore.addDiaryEntry(entry);
+        data.processingResult = {
+          metrics: null,
+          entriesCount: 0,
+          planCreated: false,
+          intervention: null,
+          message: 'Запись сохранена.',
+        };
+      } catch (e) {
+        console.error('Failed to save diary entry:', e);
+      }
     }
 
     return this.handleStep(ctx, 'summary', data);
@@ -454,18 +484,82 @@ ${formatter.header('Шаг 3/3: Качество сна')}
     // Quality emoji
     const qualityEmoji = ['', '😫', '😕', '😐', '🙂', '😊'][data.sleepQuality!];
 
-    // Estimate sleep efficiency (simplified)
-    const estimatedSE = 85; // Would calculate from actual data
+    // Get processing result (from integration)
+    const result = data.processingResult;
+    const sleepEfficiency = result?.metrics?.sleepEfficiency ?? 85;
+    const entriesCount = result?.entriesCount ?? 1;
 
-    // Get streak (would come from database)
-    const streak = 1; // Demo value
+    // Build main message based on treatment status
+    let statusSection = '';
+    let interventionSection = '';
 
-    // Sonya's response based on sleep quality
-    const sonyaResponse = data.sleepQuality! >= 4
-      ? sonya.celebrate('Запись сохранена! Отличный сон!')
-      : data.sleepQuality! >= 3
-        ? sonya.say('Запись сохранена! Продолжай отслеживать.')
-        : sonya.respondToEmotion('tired').text;
+    if (result?.planCreated) {
+      // Plan was just created!
+      statusSection = `
+${formatter.divider()}
+
+🎉 *Базовый период завершён!*
+
+Собрано данных: *${entriesCount} дней*
+Ваш персональный план КПТ-И готов.
+      `.trim();
+    } else if (entriesCount < 7) {
+      // Still collecting baseline
+      const remaining = 7 - entriesCount;
+      statusSection = `
+${formatter.divider()}
+
+📊 *Сбор базовых данных*
+
+День: ${entriesCount}/7
+${formatter.progressBar((entriesCount / 7) * 100, 7)}
+
+Ещё ${remaining} ${this.pluralizeDays(remaining)} до начала терапии.
+      `.trim();
+    } else {
+      // Active treatment
+      statusSection = `
+${formatter.divider()}
+
+${formatter.sleepEfficiency(sleepEfficiency)}
+${result?.message || ''}
+      `.trim();
+    }
+
+    // Show intervention if available
+    if (result?.intervention) {
+      const intervention = result.intervention;
+      const componentEmoji: Record<string, string> = {
+        sleep_restriction: '⏰',
+        stimulus_control: '🛏',
+        cognitive_restructuring: '💭',
+        sleep_hygiene: '🌙',
+        relaxation: '🧘',
+      };
+      const emoji = componentEmoji[intervention.component] || '💡';
+
+      interventionSection = `
+${formatter.divider()}
+
+${emoji} *Рекомендация на сегодня*
+
+${intervention.action}
+
+_${intervention.rationale}_
+      `.trim();
+    }
+
+    // Sonya's response based on context
+    let sonyaResponse: string;
+    if (result?.planCreated) {
+      sonyaResponse = sonya.celebrate('План терапии готов! Начинаем лечение.');
+    } else if (data.sleepQuality! >= 4) {
+      sonyaResponse = sonya.celebrate('Отличный сон! Продолжай в том же духе.');
+    } else if (data.sleepQuality! >= 3) {
+      sonyaResponse = sonya.say('Запись сохранена! Продолжай отслеживать.');
+    } else {
+      sonyaResponse = sonya.respondToEmotion('tired').text;
+    }
 
     const message = `
 ${sonya.emoji} *${sonya.name}*
@@ -479,18 +573,24 @@ ${formatter.header('Твой сон')}
 ⏱ В постели: ${formatter.duration(durationMinutes)}
 ${qualityEmoji} Качество: ${data.sleepQuality}/5
 
-${formatter.divider()}
+${statusSection}
+${interventionSection}
 
-${formatter.sleepEfficiency(estimatedSE)}
-${formatter.streakBadge(streak)}
-
-${sonya.tip('Заполняй дневник каждое утро для лучших результатов')}
+${sonya.tip(entriesCount < 7 ? 'Заполняй дневник каждое утро — осталось совсем немного!' : 'Следуй рекомендациям для улучшения сна')}
     `.trim();
 
-    const keyboard: IInlineButton[][] = [
-      [{ text: '📅 Задание на сегодня', callbackData: 'today:show' }],
-      [{ text: '📊 Мой прогресс', callbackData: 'progress:show' }],
-    ];
+    // Dynamic keyboard based on treatment status
+    const keyboard: IInlineButton[][] = [];
+
+    if (result?.intervention) {
+      keyboard.push([{ text: '✅ Понятно', callbackData: 'intervention:ack' }]);
+    }
+
+    keyboard.push([{ text: '📊 Мой прогресс', callbackData: 'progress:show' }]);
+
+    if (entriesCount >= 7) {
+      keyboard.push([{ text: '🧘 Релаксация', callbackData: 'relax:start' }]);
+    }
 
     return {
       success: true,
@@ -498,6 +598,18 @@ ${sonya.tip('Заполняй дневник каждое утро для луч
       keyboard,
       metadata: { step: 'summary', ...data, saved: true },
     };
+  }
+
+  /**
+   * Helper for Russian day pluralization
+   */
+  private pluralizeDays(n: number): string {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 19) return 'дней';
+    if (mod10 === 1) return 'день';
+    if (mod10 >= 2 && mod10 <= 4) return 'дня';
+    return 'дней';
   }
 
   // ==================== Helpers ====================

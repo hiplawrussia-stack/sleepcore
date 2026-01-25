@@ -189,7 +189,8 @@ describe('DiaryCommand', () => {
       });
 
       assertSuccessWithMessage(result);
-      assertContainsText(result, 'сохранена');
+      // Updated: Now shows baseline collection status or therapy recommendation
+      assertContainsText(result, 'Твой сон');
     });
 
     it('should return error for unknown step', async () => {

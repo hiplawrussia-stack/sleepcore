@@ -26,7 +26,7 @@ import {
   type ISleepInterventionSelection,
   type ISleepInterventionExplanation,
 } from './platform/SleepCoreAdapter';
-import type { ISleepObservation, SleepAction } from './platform/SleepCorePOMDP';
+import type { SleepAction } from './platform/SleepCorePOMDP';
 import { ThirdWaveCoordinator } from './third-wave/engines/ThirdWaveCoordinator';
 import type {
   ISleepState,
@@ -278,6 +278,197 @@ export class SleepCoreAPI {
   addDiaryEntry(entry: ISleepDiaryEntry): ISleepMetrics {
     const metrics = this.diaryService.addEntry(entry);
     return metrics;
+  }
+
+  /**
+   * Process a new diary entry with full treatment integration
+   *
+   * This is the MAIN entry point for diary data - it:
+   * 1. Adds the diary entry
+   * 2. Checks if baseline (7+ days) is complete
+   * 3. Initializes treatment plan if ready
+   * 4. Returns next intervention via Thompson Sampling
+   *
+   * CRITICAL: This method connects the diary → plan → intervention pipeline
+   * that was previously missing (audit January 2026)
+   *
+   * @param entry - Sleep diary entry
+   * @returns Processing result with metrics and optional intervention
+   */
+  async processNewDiaryEntry(entry: ISleepDiaryEntry): Promise<{
+    metrics: ISleepMetrics;
+    entriesCount: number;
+    planCreated: boolean;
+    intervention: ICBTIIntervention | null;
+    message: string;
+  }> {
+    // Step 1: Add diary entry and calculate metrics
+    const metrics = this.diaryService.addEntry(entry);
+
+    // Step 2: Get all entries for this user
+    const allEntries = this.diaryService.getEntries(entry.userId);
+    const entriesCount = allEntries.length;
+
+    // Step 3: Ensure session exists
+    let session = this.sessions.get(entry.userId);
+    if (!session) {
+      session = this.startSession(entry.userId);
+    }
+
+    // Step 4: Build sleep state from diary entry
+    const sleepState = this.buildSleepStateFromDiary(entry, metrics);
+
+    // Store sleep state for this user
+    const userStates = this.sleepStates.get(entry.userId) || [];
+    userStates.push(sleepState);
+    this.sleepStates.set(entry.userId, userStates);
+
+    // Step 5: Check if we have enough data for treatment plan
+    let planCreated = false;
+    let intervention: ICBTIIntervention | null = null;
+    let message: string;
+
+    if (entriesCount < 7) {
+      // Still collecting baseline data
+      const remaining = 7 - entriesCount;
+      message = `Запись сохранена. Ещё ${remaining} ${this.pluralize(remaining, 'день', 'дня', 'дней')} до начала терапии.`;
+    } else if (!session.plan) {
+      // We have 7+ entries but no plan - create it!
+      try {
+        // Get last 7 sleep states for baseline
+        const baselineStates = userStates.slice(-7);
+        await this.initializeTreatment(entry.userId, baselineStates);
+        planCreated = true;
+
+        // Get first intervention
+        intervention = await this.getNextIntervention(entry.userId);
+        message = '🎉 Базовый период завершён! Ваш персональный план терапии готов.';
+      } catch (error) {
+        console.error('Failed to initialize treatment:', error);
+        message = 'Запись сохранена. Возникла ошибка при создании плана терапии.';
+      }
+    } else {
+      // Plan exists - get next intervention
+      try {
+        intervention = await this.getNextIntervention(entry.userId);
+
+        // Check progress
+        const progress = this.getProgressReport(entry.userId);
+        if (progress) {
+          if (progress.responseStatus === 'responding') {
+            message = `Запись сохранена. Вы на верном пути! ISI: ${progress.currentISI} (снижение на ${progress.isiChange})`;
+          } else {
+            message = 'Запись сохранена. Продолжайте следовать рекомендациям.';
+          }
+        } else {
+          message = 'Запись сохранена.';
+        }
+      } catch (error) {
+        console.error('Failed to get intervention:', error);
+        message = 'Запись сохранена.';
+      }
+    }
+
+    return {
+      metrics,
+      entriesCount,
+      planCreated,
+      intervention,
+      message,
+    };
+  }
+
+  /**
+   * Build ISleepState from diary entry (simplified version)
+   */
+  private buildSleepStateFromDiary(entry: ISleepDiaryEntry, metrics: ISleepMetrics): ISleepState {
+    const userId = entry.userId;
+    const isiScore = this.diaryService.getEntries(userId).length >= 7
+      ? this.estimateISI(userId)
+      : 15; // Default moderate if not enough data
+
+    const qualityMap: Record<string, number> = {
+      very_poor: 1, poor: 2, fair: 3, good: 4, excellent: 5
+    };
+    const qualityNum = qualityMap[entry.subjectiveQuality] || 3;
+
+    return {
+      userId,
+      timestamp: new Date(),
+      date: entry.date,
+      metrics,
+      circadian: {
+        chronotype: 'intermediate',
+        circadianPhase: 0,
+        phaseDeviation: 0,
+        lightExposure: 0,
+        estimatedMelatoninOnset: '21:00',
+        socialJetLag: 0,
+        isStable: true,
+      },
+      homeostasis: {
+        sleepDebt: Math.max(0, 420 - metrics.totalSleepTime), // 7h target
+        debtDuration: 1,
+        homeostaticPressure: 0.5,
+        optimalSleepDuration: 7.5,
+        isRecoverable: true,
+      },
+      insomnia: {
+        isiScore,
+        severity: isiScore <= 7 ? 'none' : isiScore <= 14 ? 'subthreshold' : isiScore <= 21 ? 'moderate' : 'severe',
+        subtype: metrics.sleepOnsetLatency > 30
+          ? (metrics.wakeAfterSleepOnset > 30 ? 'mixed' : 'sleep_onset')
+          : (metrics.wakeAfterSleepOnset > 30 ? 'sleep_maintenance' : 'none'),
+        durationWeeks: 4,
+        daytimeImpact: (5 - entry.morningAlertness) / 5,
+        sleepDistress: (5 - qualityNum) / 5,
+      },
+      behaviors: {
+        caffeine: { dailyMg: 200, lastIntakeTime: '14:00', hoursBeforeBed: 8 },
+        alcohol: { drinksToday: 0, lastDrinkTime: '' },
+        screenTimeBeforeBed: 30,
+        exercise: { didExercise: false, durationMinutes: 0, hoursBeforeBed: 0 },
+        naps: { count: 0, totalMinutes: 0, lastNapTime: '' },
+        environment: {
+          temperatureCelsius: 18,
+          isQuiet: true,
+          isDark: true,
+          isComfortable: true,
+        },
+      },
+      cognitions: {
+        dbasScore: 3,
+        beliefs: {
+          unrealisticExpectations: false,
+          catastrophizing: false,
+          helplessness: false,
+          effortfulSleep: false,
+          healthWorries: false,
+        },
+        sleepAnxiety: metrics.sleepOnsetLatency > 30 ? 0.6 : 0.3,
+        preSleepArousal: metrics.sleepOnsetLatency > 30 ? 0.5 : 0.3,
+        sleepSelfEfficacy: metrics.sleepEfficiency > 85 ? 0.8 : 0.5,
+      },
+      subjectiveQuality: entry.subjectiveQuality,
+      morningAlertness: entry.morningAlertness / 5,
+      daytimeSleepiness: (5 - entry.morningAlertness) / 5,
+      sleepHealthScore: Math.round(metrics.sleepEfficiency * 0.8 + qualityNum * 4),
+      trend: 'stable',
+      dataQuality: 0.8,
+      source: 'diary',
+    };
+  }
+
+  /**
+   * Helper for Russian pluralization
+   */
+  private pluralize(n: number, one: string, few: string, many: string): string {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 19) return many;
+    if (mod10 === 1) return one;
+    if (mod10 >= 2 && mod10 <= 4) return few;
+    return many;
   }
 
   /**
