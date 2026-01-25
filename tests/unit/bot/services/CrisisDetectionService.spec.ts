@@ -3,6 +3,9 @@
  * ==================================
  * Tests for crisis detection integration with SleepCore.
  *
+ * UPDATED: Per FDA DHAC Nov 2025, crisis detection is ALWAYS active
+ * and cannot be disabled. The 'enabled' config field has been removed.
+ *
  * Covers:
  * - Factory function and default configuration
  * - Message analysis and crisis detection
@@ -10,7 +13,6 @@
  * - Language detection (Russian/English)
  * - Event logging and retrieval
  * - Crisis resources
- * - Disabled mode behavior
  */
 
 import {
@@ -38,7 +40,6 @@ describe('CrisisDetectionService', () => {
 
     it('should accept custom configuration', () => {
       const customService = createCrisisDetectionService({
-        enabled: false,
         sensitivityLevel: 'low',
       });
       expect(customService).toBeInstanceOf(CrisisDetectionService);
@@ -47,12 +48,17 @@ describe('CrisisDetectionService', () => {
 
   describe('DEFAULT_CRISIS_SERVICE_CONFIG', () => {
     it('should have sensible defaults', () => {
-      expect(DEFAULT_CRISIS_SERVICE_CONFIG.enabled).toBe(true);
+      // NOTE: 'enabled' field removed per FDA DHAC Nov 2025 - crisis detection is ALWAYS active
       expect(DEFAULT_CRISIS_SERVICE_CONFIG.sensitivityLevel).toBe('high');
       expect(DEFAULT_CRISIS_SERVICE_CONFIG.language).toBe('auto');
       expect(DEFAULT_CRISIS_SERVICE_CONFIG.logAllDetections).toBe(true);
       expect(DEFAULT_CRISIS_SERVICE_CONFIG.notifyOnHighSeverity).toBe(true);
       expect(DEFAULT_CRISIS_SERVICE_CONFIG.adminUserIds).toEqual([]);
+    });
+
+    it('should NOT have enabled field (crisis detection always active)', () => {
+      // FDA DHAC Nov 2025: Crisis detection must be always-on for AI mental health devices
+      expect('enabled' in DEFAULT_CRISIS_SERVICE_CONFIG).toBe(false);
     });
   });
 
@@ -123,21 +129,24 @@ describe('CrisisDetectionService', () => {
     });
   });
 
-  describe('analyzeMessage() with disabled service', () => {
-    it('should return continue response when disabled', () => {
-      const disabledService = createCrisisDetectionService({
-        enabled: false,
+  describe('SAFETY: Crisis detection cannot be disabled', () => {
+    it('should ALWAYS detect crisis regardless of config', () => {
+      // FDA DHAC Nov 2025: Crisis detection must be always-on
+      // This test verifies the safety-critical behavior
+      const lowSensitivityService = createCrisisDetectionService({
+        sensitivityLevel: 'low',
       });
 
-      const result = disabledService.analyzeMessage(
+      const result = lowSensitivityService.analyzeMessage(
         'I want to kill myself',
         'user-123',
         'chat-456'
       );
 
-      expect(result.shouldInterrupt).toBe(false);
-      expect(result.action).toBe('continue');
-      expect(result.severity).toBe('none');
+      // MUST still detect and interrupt for critical crisis phrases
+      expect(result.shouldInterrupt).toBe(true);
+      expect(['interrupt', 'emergency']).toContain(result.action);
+      expect(['high', 'critical']).toContain(result.severity);
     });
   });
 
@@ -152,13 +161,15 @@ describe('CrisisDetectionService', () => {
       expect(result).toBe(true);
     });
 
-    it('should return false when service is disabled', () => {
-      const disabledService = createCrisisDetectionService({
-        enabled: false,
+    it('should ALWAYS return true for crisis indicators (cannot be disabled)', () => {
+      // FDA DHAC Nov 2025: Crisis detection must be always-on
+      const lowSensitivityService = createCrisisDetectionService({
+        sensitivityLevel: 'low',
       });
 
-      const result = disabledService.quickCheck('хочу умереть');
-      expect(result).toBe(false);
+      const result = lowSensitivityService.quickCheck('хочу умереть');
+      // MUST still detect crisis keywords regardless of sensitivity
+      expect(result).toBe(true);
     });
   });
 

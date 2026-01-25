@@ -79,9 +79,17 @@ export interface ICrisisResponse {
 
 /**
  * Service configuration
+ *
+ * SAFETY NOTE: Crisis detection is ALWAYS enabled and cannot be disabled.
+ * This is a regulatory requirement per:
+ * - FDA DHAC Nov 2025: Crisis escalation mandatory for AI mental health devices
+ * - ICH E6(R3): Real-time safety monitoring required
+ * - ISO 14971: Risk controls cannot be bypassed
+ *
+ * Reference: https://www.fda.gov/media/189835/download
  */
 export interface ICrisisDetectionServiceConfig {
-  readonly enabled: boolean;
+  // NOTE: 'enabled' field intentionally removed - crisis detection is ALWAYS active
   readonly sensitivityLevel: 'low' | 'medium' | 'high';
   readonly language: 'ru' | 'en' | 'auto';
   readonly logAllDetections: boolean;
@@ -94,7 +102,7 @@ export interface ICrisisDetectionServiceConfig {
 // ============================================================================
 
 export const DEFAULT_CRISIS_SERVICE_CONFIG: ICrisisDetectionServiceConfig = {
-  enabled: true,
+  // NOTE: Crisis detection is ALWAYS enabled - no 'enabled' flag exists
   sensitivityLevel: 'high',
   language: 'auto',
   logAllDetections: true,
@@ -222,9 +230,8 @@ export class CrisisDetectionService {
     chatId: string,
     stateRiskData?: StateRiskData
   ): ICrisisResponse {
-    if (!this.config.enabled) {
-      return this.createContinueResponse(userId, chatId, text);
-    }
+    // SAFETY: Crisis detection is ALWAYS active - no bypass allowed
+    // Reference: FDA DHAC Nov 2025, ICH E6(R3)
 
     // Run crisis detection
     const result = this.detector.detect(text, stateRiskData);
@@ -260,11 +267,11 @@ export class CrisisDetectionService {
   /**
    * Quick check for crisis indicators
    * Use for fast pre-screening before full analysis
+   *
+   * SAFETY: Always active - cannot be disabled
    */
   quickCheck(text: string): boolean {
-    if (!this.config.enabled) {
-      return false;
-    }
+    // SAFETY: Crisis detection is ALWAYS active - no bypass allowed
     return this.detector.quickCheck(text);
   }
 

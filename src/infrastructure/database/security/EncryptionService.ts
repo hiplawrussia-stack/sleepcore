@@ -36,7 +36,16 @@ const KEY_LENGTH = 32; // 256 bits
 const IV_LENGTH = 12; // 96 bits (recommended for GCM)
 const AUTH_TAG_LENGTH = 16; // 128 bits
 const SALT_LENGTH = 16; // 128 bits
-const PBKDF2_ITERATIONS = 100000; // NIST recommended minimum
+
+/**
+ * PBKDF2 iterations per OWASP 2023/2025 recommendations
+ * - 2023: 600,000 for PBKDF2-HMAC-SHA256
+ * - 2025 projection: 800,000+
+ * Using 600,000 as current standard
+ *
+ * Reference: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+ */
+const PBKDF2_ITERATIONS = 600000;
 
 /**
  * Encrypted data structure
@@ -66,13 +75,28 @@ export interface IEncryptionServiceConfig {
   /** Environment variable name for master key */
   masterKeyEnvVar?: string;
 
+  /**
+   * Salt for master key derivation (16 bytes / 128 bits)
+   * SECURITY: Must be unique per installation. Generate with:
+   * crypto.randomBytes(16).toString('hex')
+   *
+   * If not provided, will be read from ENCRYPTION_MASTER_KEY_SALT env var.
+   * If neither is set, service will throw an error.
+   *
+   * Reference: NIST SP 800-132, OWASP Password Storage Cheat Sheet 2025
+   */
+  masterKeySalt?: string | Buffer;
+
+  /** Environment variable name for master key salt */
+  masterKeySaltEnvVar?: string;
+
   /** Current key version (for rotation) */
   keyVersion?: number;
 
   /** Use key derivation (recommended for password-based keys) */
   useKeyDerivation?: boolean;
 
-  /** PBKDF2 iterations (default: 100000) */
+  /** PBKDF2 iterations (default: 600000 per OWASP 2023/2025) */
   pbkdf2Iterations?: number;
 }
 
@@ -122,7 +146,40 @@ export class EncryptionService {
         this.masterKey = Buffer.from(keySource, 'hex');
       } else {
         // Derive key from passphrase using PBKDF2
-        const salt = crypto.createHash('sha256').update('sleepcore-static-salt').digest();
+        // SECURITY FIX: Use unique salt per installation instead of static salt
+        // Reference: NIST SP 800-132, OWASP Password Storage Cheat Sheet 2025
+        const saltSource = config.masterKeySalt ??
+          process.env[config.masterKeySaltEnvVar ?? 'ENCRYPTION_MASTER_KEY_SALT'];
+
+        if (!saltSource) {
+          throw new Error(
+            'Master key salt required for passphrase-based keys. ' +
+            'Set ENCRYPTION_MASTER_KEY_SALT environment variable (32 hex chars) ' +
+            'or provide masterKeySalt in config. ' +
+            'Generate with: node -e "console.log(require(\'crypto\').randomBytes(16).toString(\'hex\'))"'
+          );
+        }
+
+        // Convert salt to buffer
+        let salt: Buffer;
+        if (typeof saltSource === 'string') {
+          // If hex string (32 chars for 128 bits)
+          if (/^[0-9a-fA-F]{32}$/.test(saltSource)) {
+            salt = Buffer.from(saltSource, 'hex');
+          } else {
+            throw new Error(
+              'Master key salt must be a 32-character hex string (128 bits). ' +
+              'Generate with: node -e "console.log(require(\'crypto\').randomBytes(16).toString(\'hex\'))"'
+            );
+          }
+        } else {
+          salt = saltSource;
+        }
+
+        if (salt.length !== SALT_LENGTH) {
+          throw new Error(`Master key salt must be ${SALT_LENGTH} bytes (${SALT_LENGTH * 8} bits)`);
+        }
+
         this.masterKey = crypto.pbkdf2Sync(
           keySource,
           salt,
@@ -138,8 +195,6 @@ export class EncryptionService {
     if (this.masterKey.length !== KEY_LENGTH) {
       throw new Error(`Master key must be ${KEY_LENGTH} bytes (${KEY_LENGTH * 8} bits)`);
     }
-
-    console.log('[EncryptionService] Initialized with AES-256-GCM');
   }
 
   /**
