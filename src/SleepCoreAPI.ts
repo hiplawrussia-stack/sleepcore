@@ -295,12 +295,23 @@ export class SleepCoreAPI {
    * @param entry - Sleep diary entry
    * @returns Processing result with metrics and optional intervention
    */
+  /**
+   * Process new diary entry result type
+   * Extended in January 2026 to include third-wave therapy recommendations
+   * for CBT-I non-responders (European Guideline 2023 stepped care model)
+   */
   async processNewDiaryEntry(entry: ISleepDiaryEntry): Promise<{
     metrics: ISleepMetrics;
     entriesCount: number;
     planCreated: boolean;
     intervention: ICBTIIntervention | null;
     message: string;
+    /** Third-wave therapy recommendation when CBT-I non-response detected */
+    thirdWaveRecommendation: IThirdWaveRecommendation | null;
+    /** True if non-response detected after Week 6 (ISI reduction < 8 points) */
+    isNonResponding: boolean;
+    /** Current treatment week (1-based) */
+    currentWeek: number;
   }> {
     // Step 1: Add diary entry and calculate metrics
     const metrics = this.diaryService.addEntry(entry);
@@ -327,6 +338,9 @@ export class SleepCoreAPI {
     let planCreated = false;
     let intervention: ICBTIIntervention | null = null;
     let message: string;
+    let thirdWaveRecommendation: IThirdWaveRecommendation | null = null;
+    let isNonResponding = false;
+    let currentWeek = 0;
 
     if (entriesCount < 7) {
       // Still collecting baseline data
@@ -339,6 +353,7 @@ export class SleepCoreAPI {
         const baselineStates = userStates.slice(-7);
         await this.initializeTreatment(entry.userId, baselineStates);
         planCreated = true;
+        currentWeek = 1;
 
         // Get first intervention
         intervention = await this.getNextIntervention(entry.userId);
@@ -351,14 +366,64 @@ export class SleepCoreAPI {
       // Plan exists - get next intervention
       try {
         intervention = await this.getNextIntervention(entry.userId);
+        currentWeek = session.plan.currentWeek;
 
         // Check progress
         const progress = this.getProgressReport(entry.userId);
         if (progress) {
+          currentWeek = progress.currentWeek;
+
           if (progress.responseStatus === 'responding') {
             message = `Запись сохранена. Вы на верном пути! ISI: ${progress.currentISI} (снижение на ${progress.isiChange})`;
           } else {
-            message = 'Запись сохранена. Продолжайте следовать рекомендациям.';
+            // ===============================================================
+            // CRITICAL FIX (January 2026 Audit):
+            // Third-Wave Therapy Integration for CBT-I Non-Responders
+            //
+            // Scientific Basis:
+            // - European Insomnia Guideline 2023: CBT-I first-line (Grade A)
+            // - Non-response rate: 25-40% (PMC10002474)
+            // - Stepped care: Week 6 evaluation (JCSM stepped care model)
+            // - MBT-I for cognitive arousal: 70% → 21% reduction (Ong 2023)
+            // - ACT-I for adherence issues: effective long-term (El Rafihi-Ferreira 2024)
+            // - MCT for rumination: g=1.64 effect size (ScienceDirect 2025)
+            //
+            // Non-Response Criteria (Morin et al., 2011):
+            // - ISI reduction < 8 points after 6+ weeks
+            // - ISI >= 8 (not in remission)
+            // ===============================================================
+            const NON_RESPONSE_WEEK_THRESHOLD = 6;
+            const ISI_RESPONSE_THRESHOLD = 8; // points reduction required
+            const ISI_REMISSION_THRESHOLD = 8; // ISI < 8 = remission
+
+            isNonResponding =
+              progress.currentWeek >= NON_RESPONSE_WEEK_THRESHOLD &&
+              progress.isiChange < ISI_RESPONSE_THRESHOLD &&
+              progress.currentISI >= ISI_REMISSION_THRESHOLD;
+
+            if (isNonResponding) {
+              // Check if third-wave therapy is indicated
+              if (this.isThirdWaveIndicated(entry.userId)) {
+                thirdWaveRecommendation = this.recommendThirdWaveApproach(
+                  entry.userId,
+                  { failedCBTI: true, preferences: [] }
+                );
+
+                if (thirdWaveRecommendation && thirdWaveRecommendation.recommendedApproach !== 'none') {
+                  message = this.buildThirdWaveMessage(progress, thirdWaveRecommendation);
+                } else {
+                  message = `Запись сохранена. Неделя ${progress.currentWeek}: ` +
+                    'CBT-I требует больше времени. Рассмотрите консультацию со специалистом.';
+                }
+              } else {
+                message = `Запись сохранена. Неделя ${progress.currentWeek}: ` +
+                  'Продолжайте терапию. Рассмотрите консультацию со специалистом для коррекции плана.';
+              }
+            } else if (progress.responseStatus === 'partial') {
+              message = `Запись сохранена. Частичный ответ на терапию (ISI снижение: ${progress.isiChange}). Продолжайте рекомендации.`;
+            } else {
+              message = 'Запись сохранена. Продолжайте следовать рекомендациям.';
+            }
           }
         } else {
           message = 'Запись сохранена.';
@@ -375,7 +440,39 @@ export class SleepCoreAPI {
       planCreated,
       intervention,
       message,
+      thirdWaveRecommendation,
+      isNonResponding,
+      currentWeek,
     };
+  }
+
+  /**
+   * Build user-facing message for third-wave therapy recommendation
+   * Based on European Guideline 2023 stepped care model
+   *
+   * @private
+   */
+  private buildThirdWaveMessage(
+    progress: IProgressReport,
+    recommendation: IThirdWaveRecommendation
+  ): string {
+    const approachNames: Record<string, string> = {
+      mbti: 'Терапия осознанности для бессонницы (MBT-I)',
+      acti: 'Терапия принятия и ответственности (ACT-I)',
+      mct: 'Метакогнитивная терапия (MCT)',
+      hybrid: 'Комбинированный подход (MBT-I + ACT-I)',
+      none: '',
+    };
+
+    const approachName = approachNames[recommendation.recommendedApproach] || 'альтернативный подход';
+
+    return (
+      `📊 Неделя ${progress.currentWeek}: CBT-I показывает ограниченный эффект ` +
+      `(ISI снижение: ${progress.isiChange} баллов).\n\n` +
+      `💡 Рекомендуется: ${approachName}.\n` +
+      `${recommendation.rationale}\n\n` +
+      'Используйте /therapy для перехода к новому методу.'
+    );
   }
 
   /**
