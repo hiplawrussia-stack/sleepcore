@@ -188,8 +188,31 @@ See `.env.prod.example` for all required variables:
 | `BOT_TOKEN` | Yes | Telegram Bot Token |
 | `POSTGRES_PASSWORD` | Yes | Database password |
 | `JWT_SECRET` | Yes | API JWT secret (32+ chars) |
+| `ENCRYPTION_MASTER_KEY` | **Yes** | PHI encryption key (64 hex chars) |
+| `ENCRYPTION_MASTER_KEY_SALT` | **Yes** | Key derivation salt (32 hex chars) |
 | `TRAEFIK_DASHBOARD_AUTH` | Yes | Dashboard htpasswd |
 | `GRAFANA_ADMIN_PASSWORD` | No | Grafana password |
+
+### PHI Encryption Setup (HIPAA/GDPR Compliance)
+
+**⚠️ CRITICAL: These variables are required for production deployment!**
+
+Generate the encryption key and salt:
+
+```bash
+# Generate master key (256-bit / 64 hex characters)
+openssl rand -hex 32
+
+# Generate salt (128-bit / 32 hex characters)
+node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+```
+
+**Security Requirements:**
+- Store keys in a secure secrets manager (AWS Secrets Manager, HashiCorp Vault)
+- Never commit keys to version control
+- Each installation MUST have a unique salt (NIST SP 800-132)
+- Backup keys securely - losing them = losing all encrypted PHI data
+- **WARNING:** Changing salt after deployment invalidates all encrypted data!
 
 ## Scaling
 
@@ -263,6 +286,13 @@ docker system prune -a --volumes
 
 ## Security Checklist
 
+### HIPAA/GDPR Compliance (Required)
+- [ ] `ENCRYPTION_MASTER_KEY` generated and configured (64 hex chars)
+- [ ] `ENCRYPTION_MASTER_KEY_SALT` generated and configured (32 hex chars)
+- [ ] Encryption keys backed up to secure location
+- [ ] Keys NOT committed to version control
+
+### Infrastructure Security
 - [ ] Changed default passwords in `.env`
 - [ ] Firewall configured (ports 80, 443, 22 only)
 - [ ] SSH key authentication enabled
