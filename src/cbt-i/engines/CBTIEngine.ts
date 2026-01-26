@@ -144,6 +144,55 @@ export class CBTIEngine implements ICBTIEngine {
     }
   }
 
+  // ============= Component Engine Accessors =============
+  // Added January 2026: Expose component engines for direct API integration
+  // Based on Furukawa 2024 JAMA Psychiatry NMA findings:
+  // - SRT most effective (d = −0.45)
+  // - SCT consistently effective for bed-sleep association
+  // - Cognitive Restructuring effective for sleep-related anxiety
+  // - Sleep Hygiene/Relaxation should be adjunctive, not standalone
+
+  /**
+   * Get Stimulus Control Engine for direct access to SCT functionality
+   * Implements Bootzin's 6 rules (1972)
+   */
+  getStimulusControlEngine(): StimulusControlEngine {
+    return this.stimulusControl;
+  }
+
+  /**
+   * Get Sleep Hygiene Engine for direct access to SHE functionality
+   * Implements Hauri's sleep hygiene education (1977)
+   * Note: Not effective as standalone (Furukawa 2024), use as adjunct
+   */
+  getSleepHygieneEngine(): SleepHygieneEngine {
+    return this.sleepHygiene;
+  }
+
+  /**
+   * Get Cognitive Restructuring Engine for direct access to CR functionality
+   * Implements Beck/Morin cognitive model
+   */
+  getCognitiveRestructuringEngine(): CognitiveRestructuringEngine {
+    return this.cognitiveRestructuring;
+  }
+
+  /**
+   * Get Relaxation Engine for direct access to RT functionality
+   * Note: Not effective as standalone (Furukawa 2024), use as adjunct
+   */
+  getRelaxationEngine(): RelaxationEngine {
+    return this.relaxation;
+  }
+
+  /**
+   * Get Sleep Restriction Engine for direct access to SRT functionality
+   * Most effective CBT-I component (Furukawa 2024: d = −0.45)
+   */
+  getSleepRestrictionEngine(): SleepRestrictionEngine {
+    return this.sleepRestriction;
+  }
+
   /**
    * Initialize a new CBT-I treatment plan
    */

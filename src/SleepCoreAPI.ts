@@ -42,10 +42,12 @@ import type {
   IThirdWaveRecommendation,
   IMBTIPlan,
   IACTIPlan,
+  IMCTPlan,
   MindfulnessPractice,
   IDefusionTechnique,
   IUnwantedExperience,
   SessionLevel,
+  IWorryPattern,
 } from './third-wave/interfaces/IThirdWaveTherapies';
 
 // ============= NEW: Circadian & Cultural Adaptations =============
@@ -84,6 +86,7 @@ export interface ISleepCoreSession {
   readonly plan: ICBTIPlan | null;
   readonly mbtiPlan: IMBTIPlan | null;
   readonly actiPlan: IACTIPlan | null;
+  readonly mctPlan: IMCTPlan | null;
   readonly isActive: boolean;
 
   // NEW: Circadian & Cultural Adaptations
@@ -238,6 +241,7 @@ export class SleepCoreAPI {
       plan: null,
       mbtiPlan: null,
       actiPlan: null,
+      mctPlan: null,
       isActive: true,
       // NEW: Circadian & Cultural Adaptations
       circadianAssessment: null,
@@ -258,6 +262,19 @@ export class SleepCoreAPI {
    */
   getSession(userId: string): ISleepCoreSession | null {
     return this.sessions.get(userId) || null;
+  }
+
+  /**
+   * Get user's sleep states history
+   * @param userId - User ID
+   * @param days - Optional: number of recent days to return (default: all)
+   */
+  getSleepStates(userId: string, days?: number): ISleepState[] {
+    const allStates = this.sleepStates.get(userId) || [];
+    if (days !== undefined && days > 0) {
+      return allStates.slice(-days);
+    }
+    return allStates;
   }
 
   /**
@@ -740,23 +757,259 @@ export class SleepCoreAPI {
     return this.cbtiEngine.assessResponse(session.plan);
   }
 
+  // ============= Stimulus Control (SCT) =============
+  // Added January 2026: Direct access to Bootzin's SCT (1972)
+  // Based on Furukawa 2024 JAMA NMA: SCT consistently effective for bed-sleep association
+
+  /**
+   * Get personalized stimulus control rules for user
+   * Implements Bootzin's 6 rules (1972)
+   *
+   * Scientific basis (HIGH confidence):
+   * - Bootzin (1972): Original SCT protocol
+   * - Furukawa 2024 JAMA Psychiatry NMA: SCT effective as CBT-I component
+   *
+   * @param userId - User ID
+   * @returns Personalized SCT rules or null if no sleep state data
+   */
+  getStimulusControlRules(userId: string): import('./cbt-i/interfaces/ICBTIComponents').IStimulusControlRules | null {
+    const userStates = this.sleepStates.get(userId) || [];
+    if (userStates.length === 0) return null;
+
+    const lastState = userStates[userStates.length - 1];
+    return this.cbtiEngine.getStimulusControlEngine().getRules(lastState);
+  }
+
+  /**
+   * Generate leave-bed reminder based on minutes awake
+   *
+   * @param minutesAwake - Minutes spent awake in bed
+   * @returns Reminder message with urgency level
+   */
+  getLeaveReminder(minutesAwake: number): string {
+    return this.cbtiEngine.getStimulusControlEngine().generateLeaveReminder(minutesAwake);
+  }
+
+  /**
+   * Track stimulus control adherence for a night
+   *
+   * @param userId - User ID
+   * @returns Adherence report or null if no data
+   */
+  trackStimulusControlAdherence(
+    userId: string
+  ): import('./cbt-i/interfaces/ICBTIComponents').IStimulusControlAdherence | null {
+    const session = this.sessions.get(userId);
+    const userStates = this.sleepStates.get(userId) || [];
+
+    if (!session?.plan?.activeComponents.stimulusControl || userStates.length === 0) {
+      return null;
+    }
+
+    const lastState = userStates[userStates.length - 1];
+    return this.cbtiEngine.getStimulusControlEngine().trackAdherence(
+      session.plan.activeComponents.stimulusControl,
+      lastState.metrics
+    );
+  }
+
+  // ============= Sleep Hygiene Education (SHE) =============
+  // Added January 2026: Direct access to Hauri's SHE (1977)
+  // IMPORTANT: Not effective as standalone (Furukawa 2024), use as adjunct
+
+  /**
+   * Assess sleep hygiene from current sleep state
+   *
+   * Scientific basis (MEDIUM confidence):
+   * - Hauri (1977): Sleep hygiene recommendations
+   * - Furukawa 2024 JAMA NMA: NOT effective as standalone, adjunct only
+   *
+   * @param userId - User ID
+   * @returns Assessment with scores and recommendations
+   */
+  assessSleepHygiene(userId: string): import('./cbt-i/interfaces/ICBTIComponents').ISleepHygieneAssessment | null {
+    const userStates = this.sleepStates.get(userId) || [];
+    if (userStates.length === 0) return null;
+
+    const lastState = userStates[userStates.length - 1];
+    return this.cbtiEngine.getSleepHygieneEngine().assess(lastState);
+  }
+
+  /**
+   * Get educational content for sleep hygiene category
+   *
+   * @param category - Sleep hygiene category
+   * @returns Educational content with tips and myths
+   */
+  getHygieneEducation(category: import('./cbt-i/interfaces/ICBTIComponents').SleepHygieneCategory): {
+    title: string;
+    content: string;
+    tips: string[];
+    myths: string[];
+  } {
+    return this.cbtiEngine.getSleepHygieneEngine().getEducationalContent(category);
+  }
+
+  /**
+   * Track sleep hygiene improvement over time
+   *
+   * @param userId - User ID
+   * @returns Improvement analysis or empty result if insufficient data
+   */
+  trackHygieneImprovement(userId: string): {
+    improved: import('./cbt-i/interfaces/ICBTIComponents').SleepHygieneCategory[];
+    declined: import('./cbt-i/interfaces/ICBTIComponents').SleepHygieneCategory[];
+  } {
+    const userStates = this.sleepStates.get(userId) || [];
+    if (userStates.length < 2) {
+      return { improved: [], declined: [] };
+    }
+
+    // Build assessment history from sleep states
+    const assessmentHistory = userStates.map(state =>
+      this.cbtiEngine.getSleepHygieneEngine().assess(state)
+    );
+
+    return this.cbtiEngine.getSleepHygieneEngine().trackImprovement(assessmentHistory);
+  }
+
+  // ============= Cognitive Restructuring (CR) =============
+  // Added January 2026: Direct access to Beck/Morin cognitive model
+  // Based on European Guideline 2023: CBT-I includes cognitive component
+
+  /**
+   * Identify dysfunctional beliefs about sleep from user text
+   *
+   * Scientific basis (HIGH confidence):
+   * - Beck (1976): Cognitive Therapy and the Emotional Disorders
+   * - Morin: Cognitive model of insomnia
+   * - Harvey (2002): Cognitive model of insomnia
+   *
+   * @param userId - User ID
+   * @param userText - Text input from user
+   * @returns Array of identified dysfunctional beliefs with emotions
+   */
+  identifyCognitiveBeliefs(
+    userId: string,
+    userText: string
+  ): import('./cbt-i/interfaces/ICBTIComponents').IDysfunctionalBelief[] {
+    const userStates = this.sleepStates.get(userId) || [];
+    if (userStates.length === 0) {
+      // Create minimal state for belief identification
+      return [];
+    }
+
+    const lastState = userStates[userStates.length - 1];
+    return this.cbtiEngine.getCognitiveRestructuringEngine().identifyBeliefs(userText, lastState);
+  }
+
+  /**
+   * Generate Socratic questions for a dysfunctional belief
+   *
+   * @param belief - The dysfunctional belief to challenge
+   * @returns Array of Socratic questions
+   */
+  getSocraticQuestions(
+    belief: import('./cbt-i/interfaces/ICBTIComponents').IDysfunctionalBelief
+  ): string[] {
+    return this.cbtiEngine.getCognitiveRestructuringEngine().generateSocraticQuestions(belief);
+  }
+
+  /**
+   * Generate alternative balanced thought for a belief
+   *
+   * @param belief - The dysfunctional belief
+   * @param evidence - Evidence for and against the belief
+   * @returns Alternative balanced thought
+   */
+  generateAlternativeThought(
+    belief: import('./cbt-i/interfaces/ICBTIComponents').IDysfunctionalBelief,
+    evidence: { for: string[]; against: string[] }
+  ): string {
+    return this.cbtiEngine.getCognitiveRestructuringEngine().generateAlternativeThought(belief, evidence);
+  }
+
+  /**
+   * Design a behavioral experiment to test a belief
+   *
+   * @param belief - The belief to test
+   * @returns Experiment design with hypothesis and predicted outcome
+   */
+  designBehavioralExperiment(
+    belief: import('./cbt-i/interfaces/ICBTIComponents').IDysfunctionalBelief
+  ): {
+    hypothesis: string;
+    experiment: string;
+    predictedOutcome: string;
+  } {
+    return this.cbtiEngine.getCognitiveRestructuringEngine().designExperiment(belief);
+  }
+
+  /**
+   * Generate cognitive progress report for user
+   *
+   * @param userId - User ID
+   * @returns Progress report with markdown table or null if no data
+   */
+  getCognitiveProgressReport(
+    userId: string
+  ): import('./cbt-i/interfaces/ICBTIComponents').ICognitiveProgressReport | null {
+    // This would need belief history storage - for now return null
+    // TODO: Implement belief history storage in session
+    return null;
+  }
+
   // ============= Relaxation =============
+  // Enhanced January 2026: Direct RelaxationEngine integration
+  // IMPORTANT: Not effective as standalone (Furukawa 2024), use as adjunct
 
   /**
    * Get recommended relaxation technique
+   *
+   * Enhanced to use RelaxationEngine's state-aware recommendation.
+   *
+   * Scientific basis (MEDIUM confidence):
+   * - Furukawa 2024 JAMA NMA: NOT effective as standalone
+   * - European Guideline 2023: Included as adjunct to CBT-I
+   *
+   * @param userId - User ID
+   * @param context - Context for relaxation
+   * @returns Technique with instructions and duration
    */
   getRelaxationRecommendation(
     userId: string,
-    _context: 'bedtime' | 'daytime' | 'wakeup' = 'bedtime'
+    context: 'bedtime' | 'daytime' | 'wakeup' = 'bedtime'
   ): {
     technique: RelaxationTechnique;
     instructions: string[];
     duration: number;
   } {
     const userStates = this.sleepStates.get(userId) || [];
-    const _lastState = userStates[userStates.length - 1];
+    const lastState = userStates[userStates.length - 1];
 
-    // Get from CBT-I engine's relaxation component
+    // Use RelaxationEngine for state-aware recommendation
+    if (lastState) {
+      const relaxEngine = this.cbtiEngine.getRelaxationEngine();
+      const technique = relaxEngine.recommendTechnique(lastState, context);
+      const session = this.sessions.get(userId);
+
+      // Determine user level from session progress
+      const userLevel: 'beginner' | 'intermediate' | 'advanced' =
+        session?.plan?.currentWeek && session.plan.currentWeek > 4 ? 'intermediate' :
+        session?.plan?.currentWeek && session.plan.currentWeek > 7 ? 'advanced' :
+        'beginner';
+
+      const protocol = relaxEngine.getProtocol(userLevel, context);
+      const instructions = relaxEngine.generateInstructions(technique, protocol.totalDuration);
+
+      return {
+        technique,
+        instructions,
+        duration: protocol.totalDuration,
+      };
+    }
+
+    // Fallback for users without sleep state data
     const session = this.sessions.get(userId);
     const protocol = session?.plan?.activeComponents.relaxationProtocol;
 
@@ -781,6 +1034,31 @@ export class SleepCoreAPI {
       instructions: this.getRelaxationInstructions(technique),
       duration: protocol.totalDuration / protocol.techniques.length,
     };
+  }
+
+  /**
+   * Get full relaxation protocol for user level and context
+   *
+   * @param userLevel - User's experience level
+   * @param targetContext - When relaxation will be used
+   * @returns Full relaxation protocol
+   */
+  getRelaxationProtocol(
+    userLevel: 'beginner' | 'intermediate' | 'advanced',
+    targetContext: 'bedtime' | 'daytime' | 'wakeup'
+  ): import('./cbt-i/interfaces/ICBTIComponents').IRelaxationProtocol {
+    return this.cbtiEngine.getRelaxationEngine().getProtocol(userLevel, targetContext);
+  }
+
+  /**
+   * Get detailed instructions for a specific relaxation technique
+   *
+   * @param technique - The relaxation technique
+   * @param duration - Target duration in minutes
+   * @returns Step-by-step instructions
+   */
+  getRelaxationTechniqueInstructions(technique: RelaxationTechnique, duration: number): string[] {
+    return this.cbtiEngine.getRelaxationEngine().generateInstructions(technique, duration);
   }
 
   // ============= Progress Tracking =============
@@ -910,6 +1188,114 @@ export class SleepCoreAPI {
     }
 
     return plan;
+  }
+
+  /**
+   * Initialize MCT (Metacognitive Therapy) treatment plan
+   * Requires baseline assessment (7+ days)
+   *
+   * Scientific basis:
+   * - Wells (2009): Metacognitive Therapy for Anxiety and Depression
+   * - First RCT for insomnia: 57% remission (2025)
+   * - Core techniques: ATT, Detached Mindfulness, Worry Postponement
+   *
+   * IMPORTANT: MCT-I is experimental. No digital protocols exist yet (as of 2025).
+   * This implementation adapts Wells' face-to-face protocol for digital delivery.
+   *
+   * Contraindications:
+   * - Active psychosis
+   * - Severe depression with suicidal ideation
+   * - Cognitive impairment affecting metacognitive capacity
+   */
+  initializeMCT(userId: string, baselineData: ISleepState[]): IMCTPlan {
+    if (baselineData.length < 7) {
+      throw new Error('Need at least 7 days of baseline data for MCT');
+    }
+
+    const mctEngine = this.thirdWave.getMCTEngine();
+    const plan = mctEngine.initializePlan(userId, baselineData);
+
+    // Update session
+    const session = this.sessions.get(userId);
+    if (session) {
+      this.sessions.set(userId, { ...session, mctPlan: plan });
+    }
+
+    return plan;
+  }
+
+  /**
+   * Get worry postponement exercise for MCT
+   */
+  getWorryPostponementExercise(
+    userId: string,
+    worryContent?: string
+  ): {
+    instructions: string[];
+    postponeToTime: string;
+    worryPeriodDuration: number;
+    tips: string[];
+  } | null {
+    const session = this.sessions.get(userId);
+    if (!session?.mctPlan) return null;
+
+    const mctEngine = this.thirdWave.getMCTEngine();
+    const pattern: IWorryPattern = {
+      content: worryContent || 'sleep-related worry',
+      context: 'pre_sleep',
+      frequency: 1,
+      duration: 30,
+      controllability: 0.3,
+      distress: 0.7,
+      type: 'worry',
+    };
+
+    return mctEngine.getWorryPostponementExercise(pattern);
+  }
+
+  /**
+   * Get detached mindfulness exercise for MCT
+   */
+  getDetachedMindfulnessExercise(
+    trigger: 'racing_thoughts' | 'worry' | 'rumination' | 'sleep_anxiety'
+  ): {
+    instructions: string[];
+    metaphor: string;
+    duration: number;
+  } {
+    const mctEngine = this.thirdWave.getMCTEngine();
+    return mctEngine.getDetachedMindfulnessExercise(trigger);
+  }
+
+  /**
+   * Get ATT (Attention Training Technique) session
+   */
+  getATTSession(
+    phase: 'selective' | 'switching' | 'divided' = 'selective',
+    duration: number = 12
+  ): {
+    instructions: string[];
+    audioUrl?: string;
+    tips: string[];
+  } {
+    const mctEngine = this.thirdWave.getMCTEngine();
+    return mctEngine.getATTSession(phase, duration);
+  }
+
+  /**
+   * Get MCT session summary
+   */
+  getMCTSessionSummary(userId: string): {
+    keyTakeaways: string[];
+    homeExperiments: string[];
+    nextSessionPreview: string;
+    progressHighlights: string[];
+  } | null {
+    const session = this.sessions.get(userId);
+    if (!session?.mctPlan) return null;
+
+    const mctEngine = this.thirdWave.getMCTEngine();
+    return mctEngine.generateSessionSummary(session.mctPlan);
   }
 
   /**

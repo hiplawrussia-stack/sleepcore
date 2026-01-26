@@ -43,13 +43,25 @@ export class RelaxCommand implements ICommand, Partial<IConversationCommand> {
 
   /**
    * Execute the command
-   * Uses Content Library for dynamic content delivery
+   * Uses Content Library + RelaxationEngine for dynamic, evidence-based content
+   *
+   * Research basis (2025-2026):
+   * - Furukawa 2024 JAMA: Relaxation NOT effective as standalone for insomnia
+   *   BUT useful for sleep onset when combined with SRT/SCT [HIGH confidence]
+   * - PMR/AT most evidence-based techniques [HIGH confidence]
+   * - Breathing exercises effective for acute anxiety [MEDIUM confidence]
    */
   async execute(ctx: ISleepCoreContext, args?: string): Promise<ICommandResult> {
     // Determine user's age group (default to adult)
     const ageGroup = this.getUserAgeGroup(ctx);
 
     if (args) {
+      // Check if requesting detailed protocol
+      if (args.startsWith('protocol:')) {
+        const technique = args.replace('protocol:', '');
+        return this.showDetailedProtocol(ctx, technique);
+      }
+
       // Show specific technique by ID
       const content = await this.contentService.getContent(args.toLowerCase());
       if (content) {
@@ -90,51 +102,103 @@ export class RelaxCommand implements ICommand, Partial<IConversationCommand> {
     // Fetch relaxation content from Content Library
     const content = await this.contentService.getRelaxationContent(ageGroup);
 
-    // Get personalized recommendation if available
+    // Get personalized recommendation using enhanced RelaxationEngine
+    // Uses JITAI pattern for just-in-time delivery
     let recommendation = '';
+    let recommendedTechniqueId: string | null = null;
     try {
-      const rec = ctx.sleepCore.getRelaxationRecommendation(ctx.userId, 'bedtime');
-      recommendation = `\n${sonya.tip(`Рекомендую: ${rec.technique}`)}`;
+      // Determine context from time of day
+      const hour = new Date().getHours();
+      const timeContext = hour >= 20 || hour < 6 ? 'bedtime' : hour >= 6 && hour < 12 ? 'morning' : 'general';
+
+      const rec = ctx.sleepCore.getRelaxationRecommendation(ctx.userId, timeContext);
+      if (rec) {
+        recommendedTechniqueId = this.mapTechniqueToContentId(rec.technique);
+        const rationale = rec.rationale || 'Подходит для вашего профиля';
+        recommendation = `
+${formatter.header('Персональная рекомендация')}
+${rec.technique === 'pmr' ? '💪' : rec.technique === 'breathing' ? '🌬️' : '🧘'} *${this.getTechniqueName(rec.technique)}*
+_${rationale}_
+        `.trim();
+      }
     } catch {
       // No personalized recommendation available
     }
 
     // Build content list (max 5 for progressive disclosure)
+    // Mark recommended technique with ⭐ if available
     const displayContent = content.slice(0, 5);
     const contentList = displayContent
-      .map(item => `${item.icon} *${item.title}* — ${item.durationMinutes} мин`)
+      .map(item => {
+        const isRecommended = recommendedTechniqueId && item.id === recommendedTechniqueId;
+        const recMark = isRecommended ? ' ⭐' : '';
+        return `${item.icon} *${item.title}*${recMark} — ${item.durationMinutes} мин`;
+      })
       .join('\n');
 
     const message = `
 ${sonya.emoji} *${sonya.name}*
 
-Расслабление — важная часть подготовки ко сну.
+Расслабление помогает подготовиться ко сну.
 
 ${formatter.header('Техники релаксации')}
 
 Выбери технику для практики:
 
 ${contentList}
-${recommendation}
 
+${formatter.divider()}
+${recommendation ? '\n' + recommendation + '\n' : ''}
 ${sonya.tip('Практикуй за 30-60 минут до сна')}
+
+⚠️ _Релаксация эффективна как дополнение к SRT/SCT,
+но не как самостоятельное лечение инсомнии (Furukawa 2024)._
     `.trim();
 
     // Build keyboard dynamically (max 2 buttons per row)
     const keyboard: IInlineButton[][] = [];
+
+    // Add recommended technique button first if available
+    if (recommendedTechniqueId) {
+      const recContent = displayContent.find(c => c.id === recommendedTechniqueId);
+      if (recContent) {
+        keyboard.push([{
+          text: `⭐ ${recContent.icon} ${this.shortenTitle(recContent.title)} (рекомендовано)`,
+          callbackData: `relax:show:${recContent.id}`,
+        }]);
+      }
+    }
+
     for (let i = 0; i < displayContent.length; i += 2) {
+      // Skip if this is the recommended content (already added above)
+      const item1 = displayContent[i];
+      const item2 = displayContent[i + 1];
+
+      if (recommendedTechniqueId && item1.id === recommendedTechniqueId && !item2) {
+        continue; // Skip row if only item is recommended
+      }
+
       const row: IInlineButton[] = [];
-      row.push({
-        text: `${displayContent[i].icon} ${this.shortenTitle(displayContent[i].title)} (${displayContent[i].durationMinutes}м)`,
-        callbackData: `relax:show:${displayContent[i].id}`,
-      });
-      if (displayContent[i + 1]) {
+
+      // Add first item if not recommended (already shown above)
+      if (!recommendedTechniqueId || item1.id !== recommendedTechniqueId) {
         row.push({
-          text: `${displayContent[i + 1].icon} ${this.shortenTitle(displayContent[i + 1].title)} (${displayContent[i + 1].durationMinutes}м)`,
-          callbackData: `relax:show:${displayContent[i + 1].id}`,
+          text: `${item1.icon} ${this.shortenTitle(item1.title)} (${item1.durationMinutes}м)`,
+          callbackData: `relax:show:${item1.id}`,
         });
       }
-      keyboard.push(row);
+
+      // Add second item if exists and not recommended
+      if (item2 && (!recommendedTechniqueId || item2.id !== recommendedTechniqueId)) {
+        row.push({
+          text: `${item2.icon} ${this.shortenTitle(item2.title)} (${item2.durationMinutes}м)`,
+          callbackData: `relax:show:${item2.id}`,
+        });
+      }
+
+      if (row.length > 0) {
+        keyboard.push(row);
+      }
     }
 
     // Add "More content" button if there's more available
@@ -151,6 +215,7 @@ ${sonya.tip('Практикуй за 30-60 минут до сна')}
 
   /**
    * Show specific technique from Content Library
+   * Enhanced January 2026 with RelaxationEngine protocol option
    */
   private async showTechnique(
     ctx: ISleepCoreContext,
@@ -160,6 +225,9 @@ ${sonya.tip('Практикуй за 30-60 минут до сна')}
     const formattedContent = content.steps && content.steps.length > 0
       ? this.contentService.formatStepsForTelegram(content)
       : this.contentService.formatForTelegram(content);
+
+    // Map content ID to technique for protocol lookup
+    const techniqueId = this.mapContentIdToTechnique(content.id);
 
     const message = `
 ${sonya.emoji} *${sonya.name}*
@@ -171,13 +239,25 @@ ${formattedContent}
 ${formatter.divider()}
 
 ${sonya.tip('Используй эту технику каждый вечер для закрепления навыка')}
+
+⚠️ *Напоминание:* Релаксация эффективна как дополнение к SRT/SCT,
+но не как самостоятельное лечение инсомнии (Furukawa 2024).
     `.trim();
 
     const keyboard: IInlineButton[][] = [
       [{ text: '⏱ Запустить таймер', callbackData: `relax:timer:${content.id}:${content.durationMinutes}` }],
-      [{ text: '✅ Выполнено', callbackData: `relax:done:${content.id}` }],
-      [{ text: '◀️ К списку', callbackData: 'relax:menu' }],
     ];
+
+    // Add protocol button if technique is supported by RelaxationEngine
+    if (techniqueId) {
+      keyboard.push([{
+        text: '📋 Детальный протокол',
+        callbackData: `relax:protocol:${techniqueId}`,
+      }]);
+    }
+
+    keyboard.push([{ text: '✅ Выполнено', callbackData: `relax:done:${content.id}` }]);
+    keyboard.push([{ text: '◀️ К списку', callbackData: 'relax:menu' }]);
 
     return {
       success: true,
@@ -187,8 +267,25 @@ ${sonya.tip('Используй эту технику каждый вечер д
         contentId: content.id,
         category: content.category,
         xpReward: content.reward.xp,
+        techniqueId,
       },
     };
+  }
+
+  /**
+   * Map Content Library ID to RelaxationEngine technique ID
+   */
+  private mapContentIdToTechnique(contentId: string): string | null {
+    const mapping: Record<string, string> = {
+      'pmr-progressive': 'pmr',
+      'breathing-478': 'breathing',
+      'autogenic-training': 'autogenic',
+      'visualization-beach': 'visualization',
+      'body-scan': 'body_scan',
+      'mindfulness-basic': 'mindfulness',
+      'biofeedback-intro': 'biofeedback',
+    };
+    return mapping[contentId] || null;
   }
 
   /**
@@ -199,11 +296,139 @@ ${sonya.tip('Используй эту технику каждый вечер д
     return title.slice(0, 10) + '...';
   }
 
+  /**
+   * Map RelaxationEngine technique ID to Content Library ID
+   */
+  private mapTechniqueToContentId(technique: string): string | null {
+    const mapping: Record<string, string> = {
+      'pmr': 'pmr-progressive',
+      'breathing': 'breathing-478',
+      'autogenic': 'autogenic-training',
+      'visualization': 'visualization-beach',
+      'body_scan': 'body-scan',
+      'mindfulness': 'mindfulness-basic',
+      'biofeedback': 'biofeedback-intro',
+    };
+    return mapping[technique] || null;
+  }
+
+  /**
+   * Get Russian technique name from ID
+   */
+  private getTechniqueName(technique: string): string {
+    const names: Record<string, string> = {
+      'pmr': 'Прогрессивная мышечная релаксация (PMR)',
+      'breathing': 'Дыхательные упражнения',
+      'autogenic': 'Аутогенная тренировка',
+      'visualization': 'Визуализация',
+      'body_scan': 'Сканирование тела',
+      'mindfulness': 'Осознанность',
+      'biofeedback': 'Биологическая обратная связь',
+    };
+    return names[technique] || technique;
+  }
+
+  /**
+   * Show detailed protocol from RelaxationEngine
+   * Uses SleepCoreAPI.getRelaxationProtocol() for evidence-based protocols
+   *
+   * Research basis (2025-2026):
+   * - Jacobson PMR: 16 muscle groups → 7 groups → 4 groups progression [HIGH]
+   * - 4-7-8 breathing: Evidence for acute anxiety reduction [MEDIUM]
+   * - Autogenic Training: 6 standard exercises (Schultz) [HIGH]
+   */
+  private async showDetailedProtocol(
+    ctx: ISleepCoreContext,
+    technique: string
+  ): Promise<ICommandResult> {
+    try {
+      // Get user's experience level (default to beginner)
+      const session = ctx.sleepCore.getSession(ctx.userId);
+      const userLevel = (session as { relaxationLevel?: string })?.relaxationLevel || 'beginner';
+
+      // Get protocol from RelaxationEngine via SleepCoreAPI
+      const protocol = ctx.sleepCore.getRelaxationProtocol(
+        userLevel as 'beginner' | 'intermediate' | 'advanced',
+        'bedtime'
+      );
+
+      if (!protocol) {
+        return {
+          success: false,
+          error: 'Протокол не найден',
+        };
+      }
+
+      // Get step-by-step instructions
+      const instructions = ctx.sleepCore.getRelaxationTechniqueInstructions(
+        technique,
+        protocol.duration || 15
+      );
+
+      // Build formatted protocol content
+      const stepsContent = instructions.length > 0
+        ? instructions.map((step, i) => `${i + 1}. ${step}`).join('\n')
+        : 'Следуйте общим инструкциям техники.';
+
+      const message = `
+${sonya.emoji} *${sonya.name}*
+
+${formatter.header(`Протокол: ${this.getTechniqueName(technique)}`)}
+
+${formatter.divider()}
+
+📋 *Уровень:* ${userLevel === 'beginner' ? 'Начальный' : userLevel === 'intermediate' ? 'Средний' : 'Продвинутый'}
+⏱ *Длительность:* ${protocol.duration || 15} минут
+
+${formatter.divider()}
+
+*Пошаговая инструкция:*
+
+${stepsContent}
+
+${formatter.divider()}
+
+${sonya.tip('Практикуйте ежедневно за 30-60 минут до сна для максимального эффекта')}
+
+⚠️ *Важно:* Релаксация наиболее эффективна в сочетании с
+поведенческими техниками (SRT, SCT). Сама по себе не лечит
+хроническую инсомнию (Furukawa 2024, JAMA).
+      `.trim();
+
+      const keyboard: IInlineButton[][] = [
+        [{ text: '⏱ Запустить практику', callbackData: `relax:timer:${technique}:${protocol.duration || 15}` }],
+        [{ text: '✅ Выполнено', callbackData: `relax:done:${technique}` }],
+        [{ text: '◀️ К списку', callbackData: 'relax:menu' }],
+      ];
+
+      return {
+        success: true,
+        message,
+        keyboard,
+        metadata: {
+          technique,
+          level: userLevel,
+          duration: protocol.duration,
+        },
+      };
+    } catch {
+      // Fallback to content library if engine unavailable
+      const content = await this.contentService.getContent(technique);
+      if (content) {
+        return this.showTechnique(ctx, content);
+      }
+      return {
+        success: false,
+        error: 'Техника не найдена',
+      };
+    }
+  }
+
   // ==================== Callback Handlers ====================
 
   /**
    * Handle callback queries for relax command
-   * Callbacks: relax:menu, relax:show:{id}, relax:more, relax:done:{id}, relax:timer:{id}:{duration}
+   * Callbacks: relax:menu, relax:show:{id}, relax:more, relax:done:{id}, relax:timer:{id}:{duration}, relax:protocol:{technique}
    */
   async handleCallback(
     ctx: ISleepCoreContext,
@@ -239,6 +464,12 @@ ${sonya.tip('Используй эту технику каждый вечер д
         const contentId = parts[2];
         const duration = parseInt(parts[3]) || 5;
         return this.startTimer(ctx, contentId, duration);
+      }
+
+      // January 2026: Enhanced protocol from RelaxationEngine
+      case 'protocol': {
+        const technique = parts[2];
+        return this.showDetailedProtocol(ctx, technique);
       }
 
       default:

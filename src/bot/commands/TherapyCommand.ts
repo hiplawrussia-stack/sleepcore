@@ -50,6 +50,82 @@ type TherapyCore =
   | 'problem_prevention';// Core 6: Relapse prevention
 
 /**
+ * Third-Wave Therapy Types (for non-responders at Week 6+)
+ *
+ * Scientific basis (2025-2026):
+ * - MBT-I (Ong 2014, 2018): For cognitive/somatic arousal [HIGH]
+ * - ACT-I (Dalrymple 2010): For experiential avoidance [HIGH]
+ * - MCT (Wells 2009, first RCT 2025): For rumination/worry [MEDIUM]
+ *
+ * Stepped care model:
+ * - Week 6-8 evaluation: ISI reduction < 7-8 points = non-response
+ * - Non-responders offered third-wave options
+ */
+type ThirdWaveTherapy = 'mbti' | 'acti' | 'mct';
+
+/**
+ * Third-wave therapy session info
+ */
+interface IThirdWaveSession {
+  readonly id: ThirdWaveTherapy;
+  readonly title: string;
+  readonly titleRu: string;
+  readonly description: string;
+  readonly sessions: number;
+  readonly icon: string;
+  readonly bestFor: string[];
+  readonly contraindications: string[];
+}
+
+/**
+ * Third-wave therapy options
+ */
+const THIRD_WAVE_SESSIONS: readonly IThirdWaveSession[] = [
+  {
+    id: 'mbti',
+    title: 'MBT-I (Mindfulness-Based Therapy)',
+    titleRu: 'Осознанность для сна (MBT-I)',
+    description: 'Терапия на основе осознанности, разработанная Jason Ong. Интегрирует медитацию с поведенческими техниками сна.',
+    sessions: 8,
+    icon: '🧘',
+    bestFor: [
+      'Когнитивное возбуждение (racing thoughts)',
+      'Соматическое напряжение',
+      'Усилие уснуть (trying too hard)',
+    ],
+    contraindications: ['Психоз', 'Тяжёлая депрессия', 'Острое ПТСР'],
+  },
+  {
+    id: 'acti',
+    title: 'ACT-I (Acceptance & Commitment Therapy)',
+    titleRu: 'Принятие и приверженность (ACT-I)',
+    description: 'Терапия принятия и приверженности для инсомнии. Фокус на психологической гибкости вместо контроля сна.',
+    sessions: 6,
+    icon: '🌿',
+    bestFor: [
+      'Избегающее поведение',
+      'Борьба с мыслями',
+      'Трудности с приверженностью CBT-I',
+    ],
+    contraindications: ['Острое суицидальное состояние'],
+  },
+  {
+    id: 'mct',
+    title: 'MCT (Metacognitive Therapy)',
+    titleRu: 'Метакогнитивная терапия (MCT)',
+    description: 'Терапия Adrian Wells, направленная на изменение отношения к мыслям. Включает откладывание беспокойства и тренировку внимания.',
+    sessions: 8,
+    icon: '🎯',
+    bestFor: [
+      'Хроническое беспокойство',
+      'Руминация о последствиях бессонницы',
+      'Метакогнитивные убеждения ("я должен контролировать мысли")',
+    ],
+    contraindications: ['Когнитивные нарушения', 'Психоз', 'Тяжёлая депрессия'],
+  },
+];
+
+/**
  * Therapy command steps
  */
 type TherapyStep =
@@ -59,7 +135,9 @@ type TherapyStep =
   | 'core_exercise'
   | 'core_homework'
   | 'core_complete'
-  | 'progress_review';
+  | 'progress_review'
+  | 'third_wave_intro'
+  | 'third_wave_menu';
 
 /**
  * Core session structure
@@ -353,6 +431,25 @@ export class TherapyCommand implements IConversationCommand {
       case 'locked':
         return this.showLockedCore(ctx, coreId);
 
+      // ==================== Third-Wave Therapy Handlers ====================
+      case 'third_wave_menu':
+        return this.showThirdWaveMenu(ctx, conversationData);
+
+      case 'start_mbti':
+        return this.initializeThirdWaveTherapy(ctx, 'mbti', conversationData);
+
+      case 'start_acti':
+        return this.initializeThirdWaveTherapy(ctx, 'acti', conversationData);
+
+      case 'start_mct':
+        return this.initializeThirdWaveTherapy(ctx, 'mct', conversationData);
+
+      case 'third_wave_info': {
+        const therapyId = parts[2] as ThirdWaveTherapy | undefined;
+        if (!therapyId) return { success: false, error: 'Therapy ID required' };
+        return this.showThirdWaveInfo(ctx, therapyId, conversationData);
+      }
+
       default:
         return { success: false, error: `Unknown action: ${action}` };
     }
@@ -453,12 +550,304 @@ ${formatter.tip('Каждая сессия занимает 30-60 минут. П
       { text: '📊 Обзор прогресса', callbackData: 'therapy:progress' },
     ]);
 
+    // Add third-wave therapy option when indicated (Week 6+ or non-responding)
+    // Based on stepped care model (JCSM guidelines)
+    const isThirdWaveIndicated = this.checkThirdWaveIndication(ctx, currentWeek);
+    if (isThirdWaveIndicated) {
+      keyboard.push([
+        { text: '🌿 Альтернативные подходы (Third-Wave)', callbackData: 'therapy:third_wave_menu' },
+      ]);
+    }
+
     return {
       success: true,
       message,
       keyboard,
       metadata: { step: 'menu', currentWeek },
     };
+  }
+
+  /**
+   * Check if third-wave therapy is indicated
+   * Based on stepped care model:
+   * - Week 6+ evaluation point
+   * - Non-response: ISI reduction < 7-8 points OR ISI still >= 8
+   *
+   * Research basis (2025-2026):
+   * - European Insomnia Guideline 2023: Third-wave after CBT-I non-response [HIGH]
+   * - 20-35% non-response rate to CBT-I [HIGH]
+   * - Week 6-8 optimal evaluation point [HIGH]
+   */
+  private checkThirdWaveIndication(
+    ctx: ISleepCoreContext,
+    currentWeek: number
+  ): boolean {
+    // Only available from Week 6 (stepped care evaluation point)
+    if (currentWeek < 6) return false;
+
+    // Check if user has ISI still above threshold
+    const session = ctx.sleepCore.getSession(ctx.userId);
+    if (!session) return false;
+
+    // Check via SleepCoreAPI method
+    try {
+      const isIndicated = ctx.sleepCore.isThirdWaveIndicated(ctx.userId);
+      return isIndicated;
+    } catch {
+      // Fallback: show option if Week 6+ regardless of ISI
+      return currentWeek >= 6;
+    }
+  }
+
+  /**
+   * Show third-wave therapy menu
+   * Displayed when user is a non-responder at Week 6+
+   */
+  private async showThirdWaveMenu(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const session = ctx.sleepCore.getSession(ctx.userId);
+    const currentWeek = this.getCurrentWeek(session);
+
+    // Get recommendation from SleepCoreAPI
+    let recommendation = null;
+    try {
+      recommendation = ctx.sleepCore.recommendThirdWaveApproach(ctx.userId, {
+        failedCBTI: currentWeek >= 6,
+        preferences: [],
+      });
+    } catch {
+      // Continue without recommendation
+    }
+
+    const therapyOptions = THIRD_WAVE_SESSIONS.map((t) => {
+      const isRecommended = recommendation?.recommendedApproach === t.id;
+      const recommendedMark = isRecommended ? ' ⭐' : '';
+      return `${t.icon} *${t.titleRu}*${recommendedMark}
+   └ ${t.sessions} сессий • ${t.description.slice(0, 60)}...`;
+    }).join('\n\n');
+
+    const message = `
+${formatter.header('Альтернативные подходы (Third-Wave)')}
+
+${formatter.warning('Важно')}
+Эти терапии рекомендованы при недостаточном ответе на стандартную КПТ-И.
+Они _дополняют_, а не заменяют базовые техники.
+
+${formatter.divider()}
+
+${therapyOptions}
+
+${formatter.divider()}
+
+${recommendation ? `
+🎯 *Рекомендация на основе вашего профиля:*
+${recommendation.rationale}
+` : ''}
+
+${formatter.tip('Выберите терапию для подробной информации. Рекомендуемые отмечены ⭐')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [];
+
+    for (const therapy of THIRD_WAVE_SESSIONS) {
+      const isRecommended = recommendation?.recommendedApproach === therapy.id;
+      keyboard.push([{
+        text: `${therapy.icon} ${therapy.titleRu}${isRecommended ? ' ⭐' : ''}`,
+        callbackData: `therapy:third_wave_info:${therapy.id}`,
+      }]);
+    }
+
+    keyboard.push([
+      { text: '⬅️ Назад к меню КПТ-И', callbackData: 'therapy:menu' },
+    ]);
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'third_wave_menu', currentWeek },
+    };
+  }
+
+  /**
+   * Show detailed info about a specific third-wave therapy
+   */
+  private async showThirdWaveInfo(
+    ctx: ISleepCoreContext,
+    therapyId: ThirdWaveTherapy,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const therapy = THIRD_WAVE_SESSIONS.find((t) => t.id === therapyId);
+    if (!therapy) {
+      return { success: false, error: 'Therapy not found' };
+    }
+
+    const bestForList = therapy.bestFor.map((b) => `• ${b}`).join('\n');
+    const contraindicationsList = therapy.contraindications.map((c) => `• ${c}`).join('\n');
+
+    const message = `
+${therapy.icon} *${therapy.titleRu}*
+_(${therapy.title})_
+
+${formatter.divider()}
+
+📝 *Описание:*
+${therapy.description}
+
+${formatter.divider()}
+
+📊 *Структура:* ${therapy.sessions} сессий
+
+${formatter.header('Лучше всего подходит при')}
+${bestForList}
+
+${formatter.divider()}
+
+${formatter.warning('Противопоказания')}
+${contraindicationsList}
+
+${formatter.divider()}
+
+${formatter.tip('Нажмите "Начать", чтобы инициализировать план терапии. Вы сможете вернуться к КПТ-И в любой момент.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: `🚀 Начать ${therapy.titleRu}`, callbackData: `therapy:start_${therapy.id}` }],
+      [{ text: '⬅️ Назад к выбору', callbackData: 'therapy:third_wave_menu' }],
+      [{ text: '📋 К меню КПТ-И', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+    };
+  }
+
+  /**
+   * Initialize a third-wave therapy plan
+   *
+   * IMPORTANT: This is a significant therapeutic decision.
+   * - Framed as enhancement, not failure (UX research: reduces dropout)
+   * - User retains autonomy to return to CBT-I
+   * - Requires 7+ days of baseline data
+   */
+  private async initializeThirdWaveTherapy(
+    ctx: ISleepCoreContext,
+    therapyId: ThirdWaveTherapy,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const therapy = THIRD_WAVE_SESSIONS.find((t) => t.id === therapyId);
+    if (!therapy) {
+      return { success: false, error: 'Therapy not found' };
+    }
+
+    const session = ctx.sleepCore.getSession(ctx.userId);
+    if (!session) {
+      return {
+        success: false,
+        error: 'Сессия не найдена. Пожалуйста, начните с /start',
+      };
+    }
+
+    // Get baseline data
+    const sleepStates = ctx.sleepCore.getSleepStates(ctx.userId);
+    if (!sleepStates || sleepStates.length < 7) {
+      return {
+        success: false,
+        message: `
+${formatter.warning('Недостаточно данных')}
+
+Для начала ${therapy.titleRu} необходимо минимум 7 дней данных в дневнике сна.
+
+Текущее количество записей: ${sleepStates?.length || 0}
+
+${formatter.tip('Продолжайте вести дневник сна (/diary) ежедневно')}
+        `.trim(),
+        keyboard: [[{ text: '⬅️ Назад', callbackData: 'therapy:third_wave_menu' }]],
+      };
+    }
+
+    try {
+      let planInfo: string;
+
+      switch (therapyId) {
+        case 'mbti': {
+          const mbtiPlan = ctx.sleepCore.initializeMBTI(ctx.userId, sleepStates);
+          planInfo = `
+📅 *Начало:* ${mbtiPlan.startDate}
+📊 *Текущая неделя:* ${mbtiPlan.currentWeek} из ${mbtiPlan.totalWeeks}
+🎯 *Ежедневная практика:* ${mbtiPlan.dailyPracticeTarget} минут медитации
+          `.trim();
+          break;
+        }
+        case 'acti': {
+          const actiPlan = ctx.sleepCore.initializeACTI(ctx.userId, sleepStates);
+          planInfo = `
+📅 *Начало:* ${actiPlan.startDate}
+📊 *Сессия:* ${actiPlan.currentSession} из ${actiPlan.totalSessions}
+🎯 *Фокус:* Психологическая гибкость
+          `.trim();
+          break;
+        }
+        case 'mct': {
+          const mctPlan = ctx.sleepCore.initializeMCT(ctx.userId, sleepStates);
+          planInfo = `
+📅 *Начало:* ${mctPlan.startDate}
+📊 *Сессия:* ${mctPlan.currentSession} из ${mctPlan.totalSessions}
+🎯 *Фокус:* Метакогнитивные стратегии
+          `.trim();
+          break;
+        }
+        default:
+          return { success: false, error: 'Unknown therapy type' };
+      }
+
+      const message = `
+${formatter.header(`${therapy.icon} План ${therapy.titleRu} создан!`)}
+
+🎉 *Поздравляем!*
+
+Вы сделали важный шаг к улучшению сна. Этот подход _дополняет_ ваш опыт с КПТ-И.
+
+${formatter.divider()}
+
+${planInfo}
+
+${formatter.divider()}
+
+${formatter.tip('Техники третьей волны требуют регулярной практики. Выделите 15-30 минут ежедневно.')}
+      `.trim();
+
+      const keyboard: IInlineButton[][] = [
+        [{ text: '📋 К меню терапии', callbackData: 'therapy:menu' }],
+      ];
+
+      return {
+        success: true,
+        message,
+        keyboard,
+        metadata: {
+          thirdWaveInitialized: therapyId,
+          initializedAt: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      return {
+        success: false,
+        message: `
+${formatter.warning('Ошибка инициализации')}
+
+Не удалось создать план терапии: ${errorMessage}
+
+${formatter.tip('Попробуйте позже или обратитесь в поддержку')}
+        `.trim(),
+        keyboard: [[{ text: '⬅️ Назад', callbackData: 'therapy:third_wave_menu' }]],
+      };
+    }
   }
 
   private async showCoreIntro(
@@ -522,10 +911,28 @@ ${sonya.tip('Устройтесь поудобнее. Эта сессия зал
     let content = this.getCoreContent(core);
 
     // Integrate with real CBT-I engines for personalized content
+    // January 2026: Enhanced integration based on Furukawa 2024 JAMA NMA findings
     if (coreId === 'sleep_behavior_1' || coreId === 'sleep_behavior_2') {
+      // Add SRT content (most effective: d = −0.45) [HIGH confidence]
       const personalizedSRT = this.getPersonalizedSRTContent(ctx);
       if (personalizedSRT) {
         content += '\n\n' + personalizedSRT;
+      }
+
+      // Add SCT content (consistently effective) [HIGH confidence]
+      const personalizedSCT = this.getPersonalizedSCTContent(ctx);
+      if (personalizedSCT) {
+        content += '\n\n' + personalizedSCT;
+      }
+    }
+
+    // For sleep hygiene session, add personalized assessment
+    // Note: Sleep hygiene NOT effective as standalone (Furukawa 2024)
+    // but useful as adjunct to SRT/SCT [HIGH confidence]
+    if (coreId === 'sleep_education') {
+      const personalizedHygiene = this.getPersonalizedHygieneContent(ctx);
+      if (personalizedHygiene) {
+        content += '\n\n' + personalizedHygiene;
       }
     }
 
@@ -877,38 +1284,152 @@ ${titrationAdvice}
   }
 
   /**
-   * Get personalized Cognitive Restructuring content from treatment plan
-   * Uses CognitiveRestructuringEngine via session plan data
+   * Get personalized Cognitive Restructuring content from CognitiveRestructuringEngine
+   * Uses SleepCoreAPI methods for belief identification and Socratic questioning
    *
    * Research basis (2025-2026):
    * - DBAS-16 identifies 5 categories of dysfunctional beliefs [Harvey 2002, HIGH confidence]
    * - Socratic questioning most effective for sleep-specific beliefs [HIGH confidence]
+   * - Beck/Morin cognitive model: Situation → Automatic Thought → Emotion → Behavior
    * - Cognitive defusion (ACT) effective for rumination [MEDIUM confidence]
    *
    * @param ctx - Sleep core context with user session
    * @returns Personalized CR content or null if no plan
    */
   private getPersonalizedCRContent(ctx: ISleepCoreContext): string | null {
+    try {
+      const session = ctx.sleepCore.getSession(ctx.userId);
+      if (!session) {
+        return null;
+      }
+
+      // Get cognitive targets from plan
+      const cognitiveTargets = session?.plan?.activeComponents.cognitiveTargets;
+
+      // If no plan targets, try to identify beliefs from recent user text
+      // This uses the CognitiveRestructuringEngine directly
+      let beliefs = cognitiveTargets || [];
+
+      if (beliefs.length === 0) {
+        // Try to get beliefs from recent diary entries or user inputs
+        const recentText = this.getRecentUserText(ctx);
+        if (recentText) {
+          beliefs = ctx.sleepCore.identifyCognitiveBeliefs(ctx.userId, recentText);
+        }
+      }
+
+      if (!beliefs || beliefs.length === 0) {
+        return null;
+      }
+
+      // Build personalized content with Socratic questions
+      const beliefSections: string[] = [];
+
+      for (const belief of beliefs.slice(0, 2)) {
+        // Get Socratic questions for this belief
+        const questions = ctx.sleepCore.getSocraticQuestions(belief);
+
+        // Generate alternative thought
+        const alternative = ctx.sleepCore.generateAlternativeThought(
+          belief,
+          ['Реальные доказательства из вашего опыта']
+        );
+
+        beliefSections.push(`
+*🔴 ${belief.category || 'Убеждение'}:*
+"${belief.belief}"
+
+*Сократические вопросы:*
+${questions.slice(0, 3).map((q, i) => `${i + 1}. ${q}`).join('\n')}
+
+*💚 Альтернативная мысль:*
+"${alternative || belief.alternativeThought || 'Определите вместе с терапевтом'}"
+        `.trim());
+      }
+
+      // Get cognitive progress report if available
+      const progressReport = ctx.sleepCore.getCognitiveProgressReport(ctx.userId);
+      const progressSection = progressReport
+        ? `
+📊 *Прогресс когнитивной терапии:*
+• Проработано убеждений: ${progressReport.beliefsWorkedOn || 0}
+• Сформулировано альтернатив: ${progressReport.alternativesGenerated || 0}`
+        : '';
+
+      // DBAS score from session assessment
+      const dbasScore = progressReport?.dbasScore
+        ? `${progressReport.dbasScore} (${this.getDBASSeverity(progressReport.dbasScore)})`
+        : 'оцените в упражнении';
+      const dbasTarget = 'снижение на 20%+';
+
+      return `
+${formatter.header('Когнитивная реструктуризация')}
+
+${formatter.divider()}
+
+${beliefSections.join('\n\n' + formatter.divider() + '\n\n')}
+
+${formatter.divider()}
+
+📊 *DBAS-16 Score:* ${dbasScore}
+🎯 *Цель:* ${dbasTarget}
+${progressSection}
+
+💡 *Практика на эту неделю:*
+Работайте над одним убеждением в день:
+1. Заметьте автоматическую мысль
+2. Задайте себе сократические вопросы
+3. Сформулируйте альтернативу
+4. Оцените изменение эмоций (0-100)
+      `.trim();
+    } catch {
+      // Fallback to simple content if engine unavailable
+      return this.getSimpleCRContent(ctx);
+    }
+  }
+
+  /**
+   * Get recent user text for cognitive belief analysis
+   * Extracts text from diary entries, assessments, or conversation
+   */
+  private getRecentUserText(ctx: ISleepCoreContext): string | null {
+    try {
+      // Get recent diary entries with notes
+      const sleepStates = ctx.sleepCore.getSleepStates(ctx.userId);
+      if (sleepStates && sleepStates.length > 0) {
+        // Extract notes from recent entries
+        const recentNotes = sleepStates
+          .slice(0, 7)
+          .map((s) => (s as { notes?: string }).notes)
+          .filter(Boolean)
+          .join(' ');
+        if (recentNotes.length > 20) {
+          return recentNotes;
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Simple CR content fallback when engine unavailable
+   */
+  private getSimpleCRContent(ctx: ISleepCoreContext): string | null {
     const session = ctx.sleepCore.getSession(ctx.userId);
-    // cognitiveTargets contains IDysfunctionalBelief[] per ICBTIPlan interface
     const cognitiveTargets = session?.plan?.activeComponents.cognitiveTargets;
     if (!cognitiveTargets || cognitiveTargets.length === 0) {
       return null;
     }
 
-    // Build personalized content based on identified beliefs
     const beliefLines: string[] = [];
-
     for (const belief of cognitiveTargets.slice(0, 3)) {
       beliefLines.push(`• *${belief.category || 'Убеждение'}:* ${belief.belief}`);
       if (belief.alternativeThought) {
         beliefLines.push(`  ↳ Альтернатива: ${belief.alternativeThought}`);
       }
     }
-
-    // DBAS score would come from session assessment, not from plan
-    const dbasScore = 'оцените в упражнении';
-    const dbasTarget = 'снижение на 20%+';
 
     return `
 ${formatter.header('Ваши выявленные убеждения')}
@@ -917,13 +1438,168 @@ ${beliefLines.join('\n')}
 
 ${formatter.divider()}
 
-📊 *DBAS-16 Score:* ${dbasScore}
-🎯 *Цель:* ${dbasTarget}
-
 💡 *Практика на эту неделю:*
 Работайте над одним убеждением в день, используя
 технику реструктуризации (см. упражнение).
     `.trim();
+  }
+
+  /**
+   * Get DBAS-16 severity label (Russian)
+   * Based on Morin et al. cutoffs
+   */
+  private getDBASSeverity(score: number): string {
+    if (score <= 3) return 'норма';
+    if (score <= 5) return 'умеренные искажения';
+    if (score <= 7) return 'выраженные искажения';
+    return 'тяжёлые искажения';
+  }
+
+  /**
+   * Get personalized Stimulus Control content from StimulusControlEngine
+   * Uses SleepCoreAPI.getStimulusControlRules() for Bootzin's 6 rules
+   *
+   * Research basis (2025-2026):
+   * - Bootzin (1972): Original SCT instructions [HIGH confidence]
+   * - Furukawa 2024 JAMA: SCT consistently effective as adjunct [HIGH confidence]
+   * - AASM 2021: Strong recommendation for SCT [HIGH confidence]
+   *
+   * @param ctx - Sleep core context with user session
+   * @returns Personalized SCT content or null if unavailable
+   */
+  private getPersonalizedSCTContent(ctx: ISleepCoreContext): string | null {
+    try {
+      const sctRules = ctx.sleepCore.getStimulusControlRules(ctx.userId);
+      if (!sctRules) {
+        return null;
+      }
+
+      // Get adherence tracking if available
+      const adherence = ctx.sleepCore.trackStimulusControlAdherence(ctx.userId);
+
+      // Build personalized rules list
+      const rulesList = sctRules.rules.map((rule, i) => {
+        const adherenceIcon = adherence?.ruleAdherence?.[i] ? '✅' : '⬜';
+        return `${adherenceIcon} *Правило ${i + 1}:* ${rule}`;
+      }).join('\n');
+
+      // Calculate overall adherence
+      const adherencePercent = adherence
+        ? Math.round((adherence.overallAdherence || 0) * 100)
+        : null;
+
+      const adherenceSection = adherencePercent !== null
+        ? `
+📊 *Ваше соблюдение SCT:* ${adherencePercent}%
+${formatter.progressBar(adherencePercent, 10)}
+${adherencePercent >= 80 ? '✅ Отличная приверженность!' : '💪 Продолжайте практиковать!'}`
+        : '';
+
+      // Get leave reminder based on typical awake time
+      const leaveReminder = ctx.sleepCore.getLeaveReminder(20);
+
+      return `
+${formatter.header('Ваши правила контроля стимулов (SCT)')}
+
+*6 правил Bootzin:*
+${rulesList}
+
+${formatter.divider()}
+
+⏱ *Правило 15-20 минут:*
+${leaveReminder}
+
+${adherenceSection}
+
+💡 *Ключевой принцип:* Кровать = только сон.
+Это восстанавливает ассоциацию между кроватью и сонливостью.
+      `.trim();
+    } catch {
+      // Return null if engine unavailable
+      return null;
+    }
+  }
+
+  /**
+   * Get personalized Sleep Hygiene content from SleepHygieneEngine
+   * Uses SleepCoreAPI.assessSleepHygiene() for 9 Hauri categories
+   *
+   * Research basis (2025-2026):
+   * - Hauri (1991): Original 9 sleep hygiene categories
+   * - Furukawa 2024 JAMA: Sleep hygiene NOT effective as standalone
+   *   but useful as adjunct to SRT/SCT [HIGH confidence]
+   * - AASM 2021: Conditional recommendation (adjunct only)
+   *
+   * IMPORTANT: Always frame as ADJUNCT to behavioral interventions
+   *
+   * @param ctx - Sleep core context with user session
+   * @returns Personalized hygiene content or null if unavailable
+   */
+  private getPersonalizedHygieneContent(ctx: ISleepCoreContext): string | null {
+    try {
+      const assessment = ctx.sleepCore.assessSleepHygiene(ctx.userId);
+      if (!assessment) {
+        return null;
+      }
+
+      // Get improvement tracking
+      const improvement = ctx.sleepCore.trackHygieneImprovement(ctx.userId);
+
+      // Build category assessment list
+      const categoryLines: string[] = [];
+      const priorityIssues: string[] = [];
+
+      for (const category of assessment.categories) {
+        const score = category.score || 0;
+        const icon = score >= 80 ? '✅' : score >= 60 ? '🔶' : '🔴';
+        categoryLines.push(`${icon} *${category.name}:* ${score}%`);
+
+        // Track priority issues (score < 60)
+        if (score < 60 && category.recommendations) {
+          priorityIssues.push(...category.recommendations.slice(0, 1));
+        }
+      }
+
+      // Build priority recommendations (top 3)
+      const prioritySection = priorityIssues.length > 0
+        ? `
+${formatter.header('Приоритетные улучшения')}
+${priorityIssues.slice(0, 3).map((issue, i) => `${i + 1}. ${issue}`).join('\n')}`
+        : '';
+
+      // Improvement tracking
+      const improvementSection = improvement
+        ? `
+📈 *Улучшения за неделю:*
+✅ Улучшено: ${improvement.improved.length} категорий
+⚠️ Требует внимания: ${improvement.declined.length} категорий`
+        : '';
+
+      // CRITICAL: Evidence-based disclaimer
+      const disclaimer = `
+⚠️ *Важно:* Гигиена сна эффективна только как дополнение
+к поведенческим техникам (SRT, SCT). Сама по себе не лечит
+хроническую инсомнию (Furukawa 2024, JAMA).`;
+
+      return `
+${formatter.header('Оценка гигиены сна (9 категорий)')}
+
+${categoryLines.join('\n')}
+
+${formatter.divider()}
+
+*Общий балл:* ${assessment.overallScore}%
+${formatter.progressBar(assessment.overallScore, 10)}
+${prioritySection}
+${improvementSection}
+
+${formatter.divider()}
+${disclaimer}
+      `.trim();
+    } catch {
+      // Return null if engine unavailable
+      return null;
+    }
   }
 
   private getCoreContent(core: ICoreSession): string {
