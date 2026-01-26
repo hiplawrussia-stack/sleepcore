@@ -1330,9 +1330,13 @@ ${titrationAdvice}
         const questions = ctx.sleepCore.getSocraticQuestions(belief);
 
         // Generate alternative thought
+        // ICognitiveRestructuringEngine.generateAlternativeThought expects { for: [], against: [] }
         const alternative = ctx.sleepCore.generateAlternativeThought(
           belief,
-          ['Реальные доказательства из вашего опыта']
+          {
+            for: belief.evidenceFor || [],
+            against: belief.evidenceAgainst || ['Реальные доказательства из вашего опыта'],
+          }
         );
 
         beliefSections.push(`
@@ -1348,17 +1352,19 @@ ${questions.slice(0, 3).map((q, i) => `${i + 1}. ${q}`).join('\n')}
       }
 
       // Get cognitive progress report if available
+      // Uses ICognitiveProgressReport.summary per interface spec
       const progressReport = ctx.sleepCore.getCognitiveProgressReport(ctx.userId);
       const progressSection = progressReport
         ? `
 📊 *Прогресс когнитивной терапии:*
-• Проработано убеждений: ${progressReport.beliefsWorkedOn || 0}
-• Сформулировано альтернатив: ${progressReport.alternativesGenerated || 0}`
+• Проработано убеждений: ${progressReport.summary.totalBeliefs || 0}
+• Сформулировано альтернатив: ${progressReport.summary.successfulRestructurings || 0}`
         : '';
 
-      // DBAS score from session assessment
-      const dbasScore = progressReport?.dbasScore
-        ? `${progressReport.dbasScore} (${this.getDBASSeverity(progressReport.dbasScore)})`
+      // Average belief reduction from progress report (0-100 scale)
+      // Note: This represents belief intensity reduction, not DBAS-16 score
+      const beliefReduction = progressReport?.summary.avgBeliefReduction
+        ? `${Math.round(progressReport.summary.avgBeliefReduction)}% снижение (${this.getBeliefReductionLevel(progressReport.summary.avgBeliefReduction)})`
         : 'оцените в упражнении';
       const dbasTarget = 'снижение на 20%+';
 
@@ -1371,7 +1377,7 @@ ${beliefSections.join('\n\n' + formatter.divider() + '\n\n')}
 
 ${formatter.divider()}
 
-📊 *DBAS-16 Score:* ${dbasScore}
+📊 *Прогресс:* ${beliefReduction}
 🎯 *Цель:* ${dbasTarget}
 ${progressSection}
 
@@ -1456,6 +1462,19 @@ ${formatter.divider()}
   }
 
   /**
+   * Get belief reduction level interpretation
+   * Based on cognitive restructuring progress (0-100%)
+   * Research: 20%+ reduction considered clinically significant
+   */
+  private getBeliefReductionLevel(reduction: number): string {
+    if (reduction >= 50) return 'отличный результат';
+    if (reduction >= 30) return 'хороший прогресс';
+    if (reduction >= 20) return 'клинически значимо';
+    if (reduction >= 10) return 'начальный прогресс';
+    return 'в процессе';
+  }
+
+  /**
    * Get personalized Stimulus Control content from StimulusControlEngine
    * Uses SleepCoreAPI.getStimulusControlRules() for Bootzin's 6 rules
    *
@@ -1477,10 +1496,23 @@ ${formatter.divider()}
       // Get adherence tracking if available
       const adherence = ctx.sleepCore.trackStimulusControlAdherence(ctx.userId);
 
-      // Build personalized rules list
-      const rulesList = sctRules.rules.map((rule, i) => {
-        const adherenceIcon = adherence?.ruleAdherence?.[i] ? '✅' : '⬜';
-        return `${adherenceIcon} *Правило ${i + 1}:* ${rule}`;
+      // Build personalized rules list from IStimulusControlRules flat structure
+      // Bootzin's 6 rules mapped to interface properties
+      // Adherence keys match IStimulusControlAdherence property names
+      const bootzinRules = [
+        { adherenceKey: 'wentToBedWhenSleepy' as const, enabled: sctRules.goToBedWhenSleepy, text: 'Ложитесь спать только когда сонливы' },
+        { adherenceKey: 'usedBedOnlyForSleep' as const, enabled: sctRules.bedOnlyForSleep, text: 'Кровать — только для сна (и интимной близости)' },
+        { adherenceKey: 'leftBedWhenAwake' as const, enabled: sctRules.leaveIfAwake, text: `Покиньте кровать, если не уснули за ${sctRules.leaveThresholdMinutes || 20} минут` },
+        { adherenceKey: 'leftBedWhenAwake' as const, enabled: sctRules.returnWhenSleepy, text: 'Возвращайтесь в кровать только когда сонливы' },
+        { adherenceKey: 'maintainedFixedWakeTime' as const, enabled: sctRules.fixedWakeTime, text: `Вставайте в одно время (${sctRules.wakeTime || '07:00'}) независимо от сна` },
+        { adherenceKey: 'avoidedNaps' as const, enabled: sctRules.noNapping, text: 'Избегайте дневного сна' },
+      ];
+
+      const rulesList = bootzinRules.map((rule, i) => {
+        // Check adherence using mapped property name from IStimulusControlAdherence
+        const isAdherent = adherence ? adherence[rule.adherenceKey] : false;
+        const adherenceIcon = isAdherent ? '✅' : rule.enabled ? '⬜' : '⚪';
+        return `${adherenceIcon} *Правило ${i + 1}:* ${rule.text}`;
       }).join('\n');
 
       // Calculate overall adherence
@@ -1545,26 +1577,40 @@ ${adherenceSection}
       // Get improvement tracking
       const improvement = ctx.sleepCore.trackHygieneImprovement(ctx.userId);
 
-      // Build category assessment list
+      // Category name mappings (9 Hauri categories)
+      const categoryNames: Record<string, string> = {
+        caffeine: 'Кофеин',
+        alcohol: 'Алкоголь',
+        nicotine: 'Никотин',
+        exercise: 'Физическая активность',
+        diet: 'Питание',
+        environment: 'Обстановка для сна',
+        screen_time: 'Экраны',
+        routine: 'Режим дня',
+        stress: 'Управление стрессом',
+      };
+
+      // Build category assessment list from scores Record
+      // ISleepHygieneAssessment.scores: Record<SleepHygieneCategory, number> (0-1)
       const categoryLines: string[] = [];
-      const priorityIssues: string[] = [];
-
-      for (const category of assessment.categories) {
-        const score = category.score || 0;
-        const icon = score >= 80 ? '✅' : score >= 60 ? '🔶' : '🔴';
-        categoryLines.push(`${icon} *${category.name}:* ${score}%`);
-
-        // Track priority issues (score < 60)
-        if (score < 60 && category.recommendations) {
-          priorityIssues.push(...category.recommendations.slice(0, 1));
-        }
+      for (const [category, scoreValue] of Object.entries(assessment.scores)) {
+        const scorePercent = Math.round((scoreValue as number) * 100);
+        const icon = scorePercent >= 80 ? '✅' : scorePercent >= 60 ? '🔶' : '🔴';
+        const categoryName = categoryNames[category] || category;
+        categoryLines.push(`${icon} *${categoryName}:* ${scorePercent}%`);
       }
 
-      // Build priority recommendations (top 3)
+      // Get priority issues from topIssues array and recommendations
+      const priorityIssues: string[] = assessment.recommendations
+        .filter((rec) => rec.priority === 'high')
+        .slice(0, 3)
+        .map((rec) => rec.recommendation);
+
+      // Build priority recommendations section
       const prioritySection = priorityIssues.length > 0
         ? `
 ${formatter.header('Приоритетные улучшения')}
-${priorityIssues.slice(0, 3).map((issue, i) => `${i + 1}. ${issue}`).join('\n')}`
+${priorityIssues.map((issue, i) => `${i + 1}. ${issue}`).join('\n')}`
         : '';
 
       // Improvement tracking
@@ -1588,8 +1634,8 @@ ${categoryLines.join('\n')}
 
 ${formatter.divider()}
 
-*Общий балл:* ${assessment.overallScore}%
-${formatter.progressBar(assessment.overallScore, 10)}
+*Общий балл:* ${Math.round(assessment.overallScore * 100)}%
+${formatter.progressBar(Math.round(assessment.overallScore * 100), 10)}
 ${prioritySection}
 ${improvementSection}
 

@@ -27,6 +27,7 @@ import {
   IContentItem,
   AgeGroup,
 } from '../../modules/content';
+import type { RelaxationTechnique } from '../../cbt-i/interfaces/ICBTIComponents';
 
 /**
  * /relax Command Implementation
@@ -58,7 +59,7 @@ export class RelaxCommand implements ICommand, Partial<IConversationCommand> {
     if (args) {
       // Check if requesting detailed protocol
       if (args.startsWith('protocol:')) {
-        const technique = args.replace('protocol:', '');
+        const technique = args.replace('protocol:', '') as RelaxationTechnique;
         return this.showDetailedProtocol(ctx, technique);
       }
 
@@ -108,16 +109,20 @@ export class RelaxCommand implements ICommand, Partial<IConversationCommand> {
     let recommendedTechniqueId: string | null = null;
     try {
       // Determine context from time of day
+      // Map to IRelaxationProtocol targetContext: 'bedtime' | 'daytime' | 'wakeup'
       const hour = new Date().getHours();
-      const timeContext = hour >= 20 || hour < 6 ? 'bedtime' : hour >= 6 && hour < 12 ? 'morning' : 'general';
+      const timeContext: 'bedtime' | 'daytime' | 'wakeup' =
+        hour >= 20 || hour < 6 ? 'bedtime' : hour >= 6 && hour < 10 ? 'wakeup' : 'daytime';
 
       const rec = ctx.sleepCore.getRelaxationRecommendation(ctx.userId, timeContext);
       if (rec) {
         recommendedTechniqueId = this.mapTechniqueToContentId(rec.technique);
-        const rationale = rec.rationale || 'Подходит для вашего профиля';
+        const rationale = 'Подходит для вашего профиля';
+        const icon = rec.technique === 'progressive_muscle_relaxation' ? '💪' :
+                     rec.technique === 'diaphragmatic_breathing' ? '🌬️' : '🧘';
         recommendation = `
 ${formatter.header('Персональная рекомендация')}
-${rec.technique === 'pmr' ? '💪' : rec.technique === 'breathing' ? '🌬️' : '🧘'} *${this.getTechniqueName(rec.technique)}*
+${icon} *${this.getTechniqueName(rec.technique)}*
 _${rationale}_
         `.trim();
       }
@@ -339,7 +344,7 @@ ${sonya.tip('Используй эту технику каждый вечер д
    */
   private async showDetailedProtocol(
     ctx: ISleepCoreContext,
-    technique: string
+    technique: RelaxationTechnique
   ): Promise<ICommandResult> {
     try {
       // Get user's experience level (default to beginner)
@@ -362,7 +367,7 @@ ${sonya.tip('Используй эту технику каждый вечер д
       // Get step-by-step instructions
       const instructions = ctx.sleepCore.getRelaxationTechniqueInstructions(
         technique,
-        protocol.duration || 15
+        protocol.totalDuration || 15
       );
 
       // Build formatted protocol content
@@ -378,7 +383,7 @@ ${formatter.header(`Протокол: ${this.getTechniqueName(technique)}`)}
 ${formatter.divider()}
 
 📋 *Уровень:* ${userLevel === 'beginner' ? 'Начальный' : userLevel === 'intermediate' ? 'Средний' : 'Продвинутый'}
-⏱ *Длительность:* ${protocol.duration || 15} минут
+⏱ *Длительность:* ${protocol.totalDuration || 15} минут
 
 ${formatter.divider()}
 
@@ -396,7 +401,7 @@ ${sonya.tip('Практикуйте ежедневно за 30-60 минут д�
       `.trim();
 
       const keyboard: IInlineButton[][] = [
-        [{ text: '⏱ Запустить практику', callbackData: `relax:timer:${technique}:${protocol.duration || 15}` }],
+        [{ text: '⏱ Запустить практику', callbackData: `relax:timer:${technique}:${protocol.totalDuration || 15}` }],
         [{ text: '✅ Выполнено', callbackData: `relax:done:${technique}` }],
         [{ text: '◀️ К списку', callbackData: 'relax:menu' }],
       ];
@@ -408,7 +413,7 @@ ${sonya.tip('Практикуйте ежедневно за 30-60 минут д�
         metadata: {
           technique,
           level: userLevel,
-          duration: protocol.duration,
+          duration: protocol.totalDuration,
         },
       };
     } catch {
@@ -468,7 +473,7 @@ ${sonya.tip('Практикуйте ежедневно за 30-60 минут д�
 
       // January 2026: Enhanced protocol from RelaxationEngine
       case 'protocol': {
-        const technique = parts[2];
+        const technique = parts[2] as RelaxationTechnique;
         return this.showDetailedProtocol(ctx, technique);
       }
 
