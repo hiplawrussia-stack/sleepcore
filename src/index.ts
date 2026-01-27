@@ -264,6 +264,65 @@ export type {
   IChronotherapyPlan,
 } from './circadian';
 
+// ============= PAT & Phenotyping (NEW - 2025/2026) =============
+// Pretrained Actigraphy Transformer (Ruan et al., 2024)
+// Foundation model for wearable movement data
+export {
+  PATAdapter,
+  createPATAdapter,
+  patAdapter,
+  PAT_ARCHITECTURES,
+  DEFAULT_PAT_CONFIG,
+} from './sleep/services/PATAdapter';
+
+export type {
+  IPATConfig,
+  PATModelVariant,
+} from './sleep/services/PATAdapter';
+
+// Sleep Phenotyping Service (PAT + PLRNN ensemble)
+export {
+  PhenotypingService,
+  createPhenotypingService,
+  phenotypingService,
+  DEFAULT_PHENOTYPING_CONFIG,
+} from './sleep/services/PhenotypingService';
+
+export type {
+  IPhenotypingConfig,
+  ISleepProfile,
+  ITherapyRecommendation,
+  TherapyComponent,
+  IRiskAssessment,
+  ICircadianProfile,
+  IBehavioralPatterns,
+  IEnsemblePrediction,
+} from './sleep/services/PhenotypingService';
+
+// Actigraphy Interfaces
+export {
+  rawToActivityCounts,
+  classifyIntensity,
+  DEFAULT_ACTIGRAPHY_PREPROCESSING,
+  ACTIVITY_INTENSITY_THRESHOLDS,
+} from './sleep/interfaces/IActigraphy';
+
+export type {
+  ActigraphySource,
+  IAccelerometerSample,
+  IActivityCount,
+  IDailyActigraphySummary,
+  IActigraphySession,
+  IPATInput,
+  ISleepPhenotype,
+  SleepPhenotypeClass,
+  IPATPrediction,
+  IActigraphyAttribution,
+  IActigraphyPreprocessingConfig,
+  ISleepPeriodDetection,
+  ICircadianMetrics,
+} from './sleep/interfaces/IActigraphy';
+
 // ============= Version Info =============
 export const VERSION = '1.0.0-alpha.4';
 export const PLATFORM = 'sleepcore';
