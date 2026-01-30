@@ -30,6 +30,8 @@ export function createMockSleepCoreAPI(overrides: Partial<SleepCoreAPI> = {}): S
     }),
     addDiaryEntry: jest.fn().mockReturnValue(true),
     recordISIAssessment: jest.fn(),
+    enrollISISchedule: jest.fn(),
+    registerForNotifications: jest.fn(),
     processNewDiaryEntry: jest.fn().mockResolvedValue({
       metrics: {
         totalSleepTime: 420,
@@ -79,6 +81,145 @@ export function createMockSleepCoreAPI(overrides: Partial<SleepCoreAPI> = {}): S
       responseStatus: 'responding',
     }),
     getSleepEfficiencyTrend: jest.fn().mockReturnValue([78, 80, 82, 81, 85, 84, 86]),
+    getWeeklySummary: jest.fn().mockReturnValue({
+      weekStartDate: '2026-01-23',
+      weekEndDate: '2026-01-30',
+      entriesCount: 7,
+      averages: {
+        timeInBed: 480,
+        totalSleepTime: 408,
+        sleepOnsetLatency: 18,
+        wakeAfterSleepOnset: 25,
+        sleepEfficiency: 85,
+        numberOfAwakenings: 1,
+      },
+      trends: {
+        sleepEfficiency: 'improving',
+        totalSleepTime: 'stable',
+      },
+      qualityDistribution: { very_poor: 0, poor: 1, fair: 2, good: 3, excellent: 1 },
+      recommendations: ['Сохраняйте стабильное время подъёма'],
+    }),
+    analyzePatterns: jest.fn().mockReturnValue({
+      userId: 'test-user',
+      analysisDate: '2026-01-30',
+      dataRange: { start: '2026-01-16', end: '2026-01-30' },
+      entriesAnalyzed: 14,
+      patterns: {
+        averageBedtime: '23:15',
+        averageWakeTime: '07:00',
+        bedtimeVariability: 25,
+        wakeTimeVariability: 15,
+        weekendShift: 45,
+        estimatedChronotype: 'intermediate',
+      },
+      insomnia: {
+        subtype: 'sleep_onset',
+        severity: 'moderate',
+        avgSOL: 22,
+        avgWASO: 18,
+        avgSE: 85,
+      },
+      issues: [{ id: 'var_bedtime', description: 'Нерегулярное время отхода ко сну', frequency: 40, severity: 'medium' }],
+    }),
+    explainCurrentIntervention: jest.fn().mockResolvedValue(null),
+    assessChronotypeFromMEQ: jest.fn().mockReturnValue({
+      chronotype: 'owl',
+      chronotypeCategory: 'moderate_evening',
+      meqScore: 35,
+      estimatedDLMO: '22:30',
+      dlmoConfidence: 0.7,
+      optimalSleepWindow: { bedtime: '23:30', wakeTime: '07:30' },
+      estimatedSleepNeed: 8,
+      socialJetlag: 1.5,
+      socialJetlagSeverity: 'moderate',
+      riskFactors: [],
+    }),
+    storeCircadianAssessment: jest.fn(),
+    initializeMCT: jest.fn().mockReturnValue({
+      startDate: '2026-01-30',
+      currentSession: 1,
+      totalSessions: 8,
+      focus: 'metacognitive_strategies',
+    }),
+    getWorryPostponementExercise: jest.fn().mockReturnValue({
+      instructions: [
+        'Заметьте тревожную мысль',
+        'Скажите себе: "Я подумаю об этом позже"',
+        'Запишите мысль кратко',
+        'Вернитесь к текущей деятельности',
+      ],
+      postponeToTime: '18:00',
+      worryPeriodDuration: 15,
+      tips: [
+        'Выберите фиксированное время для беспокойства',
+        'Ограничьте период беспокойства 15 минутами',
+        'Не анализируйте мысли вне этого периода',
+      ],
+    }),
+    getDetachedMindfulnessExercise: jest.fn().mockReturnValue({
+      instructions: [
+        'Займите удобное положение',
+        'Наблюдайте за мыслями как за облаками',
+        'Не пытайтесь контролировать или оценивать мысли',
+        'Просто отмечайте их появление и исчезновение',
+      ],
+      metaphor: 'Представьте, что ваш ум — это небо, а мысли — облака. Они приходят и уходят, но небо остаётся неизменным.',
+      duration: 10,
+    }),
+    getATTSession: jest.fn().mockReturnValue({
+      instructions: [
+        'Сосредоточьтесь на одном звуке',
+        'Удерживайте внимание на этом звуке 2 минуты',
+        'Замечайте, когда внимание отвлекается',
+        'Мягко возвращайте внимание к звуку',
+      ],
+      tips: [
+        'Начинайте с коротких сессий по 5 минут',
+        'Практикуйте в тихом месте',
+        'Увеличивайте длительность постепенно',
+      ],
+    }),
+    getMCTSessionSummary: jest.fn().mockReturnValue({
+      keyTakeaways: [
+        'Мысли — это просто мысли, а не факты',
+        'Беспокойство можно отложить на определённое время',
+      ],
+      homeExperiments: [
+        'Практикуйте откладывание беспокойства 3 раза в день',
+        'Наблюдайте за мыслями 5 минут перед сном',
+      ],
+      nextSessionPreview: 'Следующая сессия: углублённая практика отстранённой осознанности',
+      progressHighlights: [
+        'Освоена техника откладывания беспокойства',
+        'Начато знакомство с отстранённой осознанностью',
+      ],
+    }),
+    generateChronotherapyPlan: jest.fn().mockReturnValue({
+      optimalSessionTimes: ['10:00', '15:00'],
+      sleepRestrictionAdjustments: {
+        initialBedtime: '23:30',
+        initialWakeTime: '07:00',
+        rationale: 'Учитывает ваш хронотип',
+      },
+      lightTherapy: {
+        recommended: true,
+        timing: '07:00',
+        duration: 30,
+        intensity: 10000,
+        rationale: 'Для сдвига циркадного ритма',
+      },
+      melatoninTiming: {
+        recommended: false,
+        timing: '',
+        dose: '',
+        rationale: '',
+      },
+      lifestyleRecommendations: [
+        'Избегайте яркого света вечером',
+        'Получайте утренний свет',
+      ],
+    }),
     ...overrides,
   } as unknown as SleepCoreAPI;
 }

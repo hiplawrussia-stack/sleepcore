@@ -671,6 +671,270 @@ describe('TherapyCommand', () => {
     });
   });
 
+  describe('MCT Session Delivery', () => {
+    /**
+     * MCT tests use mocked SleepCoreAPI since MCT methods require
+     * initialized MCT plan which needs specific setup.
+     */
+    function createMCTMockContext(overrides: Partial<Record<string, unknown>> = {}): ISleepCoreContext {
+      const mockSleepCore = {
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          currentPhase: 'treatment',
+          weekNumber: 7,
+          mctPlan: { startDate: '2026-01-30', currentSession: 1, totalSessions: 8 },
+        }),
+        isThirdWaveIndicated: jest.fn().mockReturnValue(true),
+        recommendThirdWaveApproach: jest.fn().mockReturnValue(null),
+        getSleepStates: jest.fn().mockReturnValue(Array(7).fill({ date: '2026-01-30' })),
+        initializeMCT: jest.fn().mockReturnValue({
+          startDate: '2026-01-30',
+          currentSession: 1,
+          totalSessions: 8,
+        }),
+        getWorryPostponementExercise: jest.fn().mockReturnValue({
+          instructions: ['Заметьте мысль', 'Отложите на позже', 'Запишите', 'Вернитесь к делу'],
+          postponeToTime: '18:00',
+          worryPeriodDuration: 15,
+          tips: ['Фиксированное время', 'Ограничьте 15 мин'],
+        }),
+        getDetachedMindfulnessExercise: jest.fn().mockReturnValue({
+          instructions: ['Займите положение', 'Наблюдайте за мыслями', 'Не контролируйте'],
+          metaphor: 'Мысли как облака в небе.',
+          duration: 10,
+        }),
+        getATTSession: jest.fn().mockReturnValue({
+          instructions: ['Сосредоточьтесь на звуке', 'Удерживайте внимание', 'Замечайте отвлечения'],
+          tips: ['Начинайте с 5 минут', 'Практикуйте в тишине'],
+        }),
+        getMCTSessionSummary: jest.fn().mockReturnValue({
+          keyTakeaways: ['Мысли — не факты', 'Беспокойство можно отложить'],
+          homeExperiments: ['Откладывание 3 раза в день'],
+          nextSessionPreview: 'Углублённая осознанность',
+          progressHighlights: ['Освоена техника откладывания'],
+        }),
+        getProgressReport: jest.fn().mockReturnValue(null),
+        estimateISI: jest.fn().mockReturnValue(0),
+        ...overrides,
+      } as unknown as SleepCoreAPI;
+
+      return {
+        userId: 'test-user-123',
+        chatId: 12345,
+        displayName: 'Test User',
+        languageCode: 'ru',
+        sleepCore: mockSleepCore,
+      } as unknown as ISleepCoreContext;
+    }
+
+    describe('mct_hub callback', () => {
+      it('should show MCT session hub with exercise buttons', async () => {
+        const ctx = createMCTMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mct_hub',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Метакогнитивная терапия');
+        expect(result.message).toContain('Откладывание беспокойства');
+        expect(result.message).toContain('Отстранённая осознанность');
+        expect(result.message).toContain('Тренировка внимания');
+
+        // Verify exercise buttons exist
+        const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+        expect(allCallbacks).toContain('therapy:mct_worry');
+        expect(allCallbacks).toContain('therapy:mct_dm');
+        expect(allCallbacks).toContain('therapy:mct_att_selective');
+        expect(allCallbacks).toContain('therapy:mct_att_switching');
+        expect(allCallbacks).toContain('therapy:mct_att_divided');
+        expect(allCallbacks).toContain('therapy:mct_summary');
+      });
+
+      it('should show hub even without MCT summary', async () => {
+        const ctx = createMCTMockContext({
+          getMCTSessionSummary: jest.fn().mockReturnValue(null),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mct_hub',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Метакогнитивная терапия');
+      });
+
+      it('should fail without session', async () => {
+        const ctx = createMCTMockContext({
+          getSession: jest.fn().mockReturnValue(null),
+          getMCTSessionSummary: jest.fn().mockReturnValue(null),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mct_hub',
+          {}
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('Сессия не найдена');
+      });
+    });
+
+    describe('mct_worry callback', () => {
+      it('should show worry postponement exercise', async () => {
+        const ctx = createMCTMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mct_worry',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Откладывание беспокойства');
+        expect(result.message).toContain('Wells');
+        expect(result.message).toContain('18:00');
+        expect(result.message).toContain('15 минут');
+        expect(ctx.sleepCore.getWorryPostponementExercise).toHaveBeenCalledWith('test-user-123');
+      });
+
+      it('should show error when no MCT plan exists', async () => {
+        const ctx = createMCTMockContext({
+          getWorryPostponementExercise: jest.fn().mockReturnValue(null),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mct_worry',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('План MCT не найден');
+      });
+    });
+
+    describe('mct_dm callback', () => {
+      it('should show detached mindfulness exercise', async () => {
+        const ctx = createMCTMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mct_dm',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Отстранённая осознанность');
+        expect(result.message).toContain('Wells');
+        expect(result.message).toContain('облака');
+        expect(result.message).toContain('10 минут');
+        expect(ctx.sleepCore.getDetachedMindfulnessExercise).toHaveBeenCalledWith('racing_thoughts');
+      });
+    });
+
+    describe('mct_att callbacks', () => {
+      it('should show ATT selective attention session', async () => {
+        const ctx = createMCTMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mct_att_selective',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Тренировка внимания');
+        expect(result.message).toContain('Избирательное внимание');
+        expect(result.message).toContain('Wells');
+        expect(result.message).toContain('текстовые инструкции');
+      });
+
+      it('should show ATT switching session', async () => {
+        const ctx = createMCTMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mct_att_switching',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Переключение внимания');
+      });
+
+      it('should show ATT divided attention session', async () => {
+        const ctx = createMCTMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mct_att_divided',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Распределённое внимание');
+      });
+
+      it('should call getATTSession with correct phase', async () => {
+        const ctx = createMCTMockContext();
+        await therapyCommand.handleCallback(ctx, 'therapy:mct_att_selective', {});
+        expect(ctx.sleepCore.getATTSession).toHaveBeenCalledWith('selective');
+
+        await therapyCommand.handleCallback(ctx, 'therapy:mct_att_switching', {});
+        expect(ctx.sleepCore.getATTSession).toHaveBeenCalledWith('switching');
+
+        await therapyCommand.handleCallback(ctx, 'therapy:mct_att_divided', {});
+        expect(ctx.sleepCore.getATTSession).toHaveBeenCalledWith('divided');
+      });
+    });
+
+    describe('mct_summary callback', () => {
+      it('should show MCT session summary', async () => {
+        const ctx = createMCTMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mct_summary',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Итоги сессии MCT');
+        expect(result.message).toContain('Мысли — не факты');
+        expect(result.message).toContain('Откладывание 3 раза в день');
+        expect(result.message).toContain('Углублённая осознанность');
+        expect(result.message).toContain('Освоена техника откладывания');
+        expect(ctx.sleepCore.getMCTSessionSummary).toHaveBeenCalledWith('test-user-123');
+      });
+
+      it('should show error when no MCT plan exists', async () => {
+        const ctx = createMCTMockContext({
+          getMCTSessionSummary: jest.fn().mockReturnValue(null),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mct_summary',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Итоги сессии недоступны');
+      });
+    });
+
+    describe('MCT initialization redirect', () => {
+      it('should show MCT hub button after MCT initialization', async () => {
+        const ctx = createMCTMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:start_mct',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('План');
+        const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+        expect(allCallbacks).toContain('therapy:mct_hub');
+      });
+    });
+  });
+
   describe('Clinical Safety - Minimum TIB', () => {
     it('should mention 5.5 hour minimum in sleep_behavior_1', async () => {
       const ctx = createMockContext();

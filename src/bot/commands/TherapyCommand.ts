@@ -450,6 +450,28 @@ export class TherapyCommand implements IConversationCommand {
         return this.showThirdWaveInfo(ctx, therapyId, conversationData);
       }
 
+      // ==================== MCT Session Delivery Handlers ====================
+      case 'mct_hub':
+        return this.showMCTSessionHub(ctx, conversationData);
+
+      case 'mct_worry':
+        return this.showWorryPostponement(ctx, conversationData);
+
+      case 'mct_dm':
+        return this.showDetachedMindfulness(ctx, conversationData);
+
+      case 'mct_att_selective':
+        return this.showATTSession(ctx, 'selective', conversationData);
+
+      case 'mct_att_switching':
+        return this.showATTSession(ctx, 'switching', conversationData);
+
+      case 'mct_att_divided':
+        return this.showATTSession(ctx, 'divided', conversationData);
+
+      case 'mct_summary':
+        return this.showMCTSummary(ctx, conversationData);
+
       default:
         return { success: false, error: `Unknown action: ${action}` };
     }
@@ -821,9 +843,14 @@ ${formatter.divider()}
 ${formatter.tip('Техники третьей волны требуют регулярной практики. Выделите 15-30 минут ежедневно.')}
       `.trim();
 
-      const keyboard: IInlineButton[][] = [
-        [{ text: '📋 К меню терапии', callbackData: 'therapy:menu' }],
-      ];
+      const keyboard: IInlineButton[][] = therapyId === 'mct'
+        ? [
+            [{ text: '🎯 Перейти к упражнениям MCT', callbackData: 'therapy:mct_hub' }],
+            [{ text: '📋 К меню терапии', callbackData: 'therapy:menu' }],
+          ]
+        : [
+            [{ text: '📋 К меню терапии', callbackData: 'therapy:menu' }],
+          ];
 
       return {
         success: true,
@@ -1211,6 +1238,352 @@ ${formatter.tip('Последовательное прохождение про�
       success: true,
       message,
       keyboard,
+    };
+  }
+
+  // ==================== MCT Session Delivery ====================
+
+  /**
+   * Show MCT Session Hub — central navigation for MCT exercises
+   * Displays current session info and available exercise buttons
+   */
+  private async showMCTSessionHub(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const session = ctx.sleepCore.getSession(ctx.userId);
+    if (!session) {
+      return {
+        success: false,
+        message: `${formatter.warning('Сессия не найдена')}\n\nПожалуйста, начните с /start`,
+      };
+    }
+
+    // Check MCT plan exists
+    const mctSummary = ctx.sleepCore.getMCTSessionSummary(ctx.userId);
+
+    const message = `
+${formatter.header('🎯 Метакогнитивная терапия (MCT)')}
+
+${sonya.tip('Выберите упражнение для сегодняшней практики.')}
+
+${formatter.divider()}
+
+*Доступные упражнения:*
+
+📝 *Откладывание беспокойства* (Worry Postponement)
+   Научитесь откладывать тревожные мысли на определённое время
+
+🧘 *Отстранённая осознанность* (Detached Mindfulness)
+   Наблюдайте за мыслями без вовлечения
+
+🎧 *Тренировка внимания* (ATT)
+   Развитие гибкости внимания через три фазы
+   _Примечание: в текущей версии — текстовые инструкции. Аудио-формат в разработке._
+
+${formatter.divider()}
+
+${mctSummary ? `📊 *Ключевые выводы:*\n${mctSummary.keyTakeaways.slice(0, 2).join('\n')}\n` : ''}
+${formatter.tip('Регулярная практика — ключ к изменению метакогнитивных паттернов. Рекомендуется 15-20 минут ежедневно.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📝 Откладывание беспокойства', callbackData: 'therapy:mct_worry' }],
+      [{ text: '🧘 Отстранённая осознанность', callbackData: 'therapy:mct_dm' }],
+      [{ text: '🎧 ATT: Избирательное внимание', callbackData: 'therapy:mct_att_selective' }],
+      [{ text: '🎧 ATT: Переключение', callbackData: 'therapy:mct_att_switching' }],
+      [{ text: '🎧 ATT: Распределённое внимание', callbackData: 'therapy:mct_att_divided' }],
+      [{ text: '📊 Итоги сессии', callbackData: 'therapy:mct_summary' }],
+      [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'mct_hub' },
+    };
+  }
+
+  /**
+   * Deliver Worry Postponement exercise via SleepCoreAPI
+   *
+   * Scientific basis:
+   * - Wells (2009): Worry postponement reduces CAS engagement
+   * - 2025 RCT: Reduces worry but not directly sleep (adjunct to MCT-I)
+   */
+  private async showWorryPostponement(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const exercise = ctx.sleepCore.getWorryPostponementExercise(ctx.userId);
+
+    if (!exercise) {
+      return {
+        success: true,
+        message: `
+${formatter.warning('План MCT не найден')}
+
+Для доступа к упражнениям необходимо сначала инициализировать план MCT.
+
+${formatter.tip('Перейдите в раздел "Альтернативные подходы" и выберите MCT.')}
+        `.trim(),
+        keyboard: [
+          [{ text: '🌿 К альтернативным подходам', callbackData: 'therapy:third_wave_menu' }],
+          [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+        ],
+      };
+    }
+
+    const instructionsList = exercise.instructions
+      .map((inst, i) => `${i + 1}. ${inst}`)
+      .join('\n');
+
+    const tipsList = exercise.tips
+      .map((tip) => `• ${tip}`)
+      .join('\n');
+
+    const message = `
+${formatter.header('📝 Откладывание беспокойства')}
+_(Worry Postponement — Wells, 2009)_
+
+${formatter.divider()}
+
+*Инструкции:*
+
+${instructionsList}
+
+${formatter.divider()}
+
+⏰ *Время для беспокойства:* ${exercise.postponeToTime}
+⏱ *Длительность периода беспокойства:* ${exercise.worryPeriodDuration} минут
+
+${formatter.divider()}
+
+💡 *Советы:*
+${tipsList}
+
+${formatter.divider()}
+
+${sonya.tip('Помните: цель не в том, чтобы избавиться от мыслей, а в том, чтобы изменить своё отношение к ним.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🎯 Вернуться к упражнениям MCT', callbackData: 'therapy:mct_hub' }],
+      [{ text: '📊 Итоги сессии', callbackData: 'therapy:mct_summary' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'mct_worry' },
+    };
+  }
+
+  /**
+   * Deliver Detached Mindfulness exercise via SleepCoreAPI
+   *
+   * Scientific basis:
+   * - Wells (2009): DM reduces thought-action fusion
+   * - Key MCT technique for disengaging from CAS
+   */
+  private async showDetachedMindfulness(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const exercise = ctx.sleepCore.getDetachedMindfulnessExercise('racing_thoughts');
+
+    const instructionsList = exercise.instructions
+      .map((inst, i) => `${i + 1}. ${inst}`)
+      .join('\n');
+
+    const message = `
+${formatter.header('🧘 Отстранённая осознанность')}
+_(Detached Mindfulness — Wells, 2009)_
+
+${formatter.divider()}
+
+*Метафора:*
+_${exercise.metaphor}_
+
+${formatter.divider()}
+
+*Инструкции:*
+
+${instructionsList}
+
+${formatter.divider()}
+
+⏱ *Рекомендуемая длительность:* ${exercise.duration} минут
+
+${formatter.divider()}
+
+${sonya.tip('Представьте, что мысли — это облака, проплывающие по небу. Вы наблюдаете за ними, но не пытаетесь их удержать или прогнать.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🎯 Вернуться к упражнениям MCT', callbackData: 'therapy:mct_hub' }],
+      [{ text: '📊 Итоги сессии', callbackData: 'therapy:mct_summary' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'mct_dm' },
+    };
+  }
+
+  /**
+   * Deliver ATT (Attention Training Technique) session via SleepCoreAPI
+   *
+   * Scientific basis:
+   * - Wells (2009): ATT strengthens executive attention control
+   * - 3 phases: selective → switching → divided attention
+   * - Note: ATT is fundamentally audio-based; text delivery is a pragmatic
+   *   adaptation (SpACE variant). Future versions will include audio.
+   */
+  private async showATTSession(
+    ctx: ISleepCoreContext,
+    phase: 'selective' | 'switching' | 'divided',
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const session = ctx.sleepCore.getATTSession(phase);
+
+    const phaseNames: Record<string, string> = {
+      selective: 'Избирательное внимание',
+      switching: 'Переключение внимания',
+      divided: 'Распределённое внимание',
+    };
+
+    const phaseIcons: Record<string, string> = {
+      selective: '1️⃣',
+      switching: '2️⃣',
+      divided: '3️⃣',
+    };
+
+    const instructionsList = session.instructions
+      .map((inst, i) => `${i + 1}. ${inst}`)
+      .join('\n');
+
+    const tipsList = session.tips
+      .map((tip) => `• ${tip}`)
+      .join('\n');
+
+    const message = `
+${formatter.header(`🎧 Тренировка внимания (ATT) — Фаза ${phaseIcons[phase]}`)}
+*${phaseNames[phase]}*
+_(Attention Training Technique — Wells, 1990)_
+
+${formatter.divider()}
+
+*Инструкции:*
+
+${instructionsList}
+
+${formatter.divider()}
+
+💡 *Советы:*
+${tipsList}
+
+${formatter.divider()}
+
+⚠️ _Текущая версия: текстовые инструкции. ATT изначально разработана как аудио-техника.
+Аудио-формат будет добавлен в следующем обновлении._
+
+${sonya.tip('Практикуйте все три фазы ATT последовательно: сначала избирательное внимание, затем переключение, затем распределённое.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🎯 Вернуться к упражнениям MCT', callbackData: 'therapy:mct_hub' }],
+      [{ text: '📊 Итоги сессии', callbackData: 'therapy:mct_summary' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: `mct_att_${phase}` },
+    };
+  }
+
+  /**
+   * Show MCT session summary via SleepCoreAPI
+   */
+  private async showMCTSummary(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const summary = ctx.sleepCore.getMCTSessionSummary(ctx.userId);
+
+    if (!summary) {
+      return {
+        success: true,
+        message: `
+${formatter.warning('Итоги сессии недоступны')}
+
+Для получения итогов необходимо инициализировать план MCT.
+
+${formatter.tip('Перейдите в раздел "Альтернативные подходы" и выберите MCT.')}
+        `.trim(),
+        keyboard: [
+          [{ text: '🌿 К альтернативным подходам', callbackData: 'therapy:third_wave_menu' }],
+          [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+        ],
+      };
+    }
+
+    const takeawaysList = summary.keyTakeaways
+      .map((t, i) => `${i + 1}. ${t}`)
+      .join('\n');
+
+    const experimentsList = summary.homeExperiments
+      .map((e) => `• ${e}`)
+      .join('\n');
+
+    const highlightsList = summary.progressHighlights
+      .map((h) => `✅ ${h}`)
+      .join('\n');
+
+    const message = `
+${formatter.header('📊 Итоги сессии MCT')}
+
+${formatter.divider()}
+
+*Ключевые выводы:*
+${takeawaysList}
+
+${formatter.divider()}
+
+*Домашние эксперименты:*
+${experimentsList}
+
+${formatter.divider()}
+
+*Достижения:*
+${highlightsList}
+
+${formatter.divider()}
+
+*Следующая сессия:*
+${summary.nextSessionPreview}
+
+${formatter.divider()}
+
+${sonya.tip('Выполняйте домашние эксперименты ежедневно. Записывайте наблюдения в дневник.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🎯 К упражнениям MCT', callbackData: 'therapy:mct_hub' }],
+      [{ text: '📋 К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'mct_summary' },
     };
   }
 
