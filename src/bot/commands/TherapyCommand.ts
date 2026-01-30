@@ -472,6 +472,16 @@ export class TherapyCommand implements IConversationCommand {
       case 'mct_summary':
         return this.showMCTSummary(ctx, conversationData);
 
+      // ==================== Evidence-Based Guidelines Handlers ====================
+      case 'evidence_overview':
+        return this.showEvidenceOverview(ctx, conversationData);
+
+      case 'evidence_components':
+        return this.showComponentEvidence(ctx, conversationData);
+
+      case 'evidence_new2023':
+        return this.showNew2023Recommendations(ctx, conversationData);
+
       default:
         return { success: false, error: `Unknown action: ${action}` };
     }
@@ -570,6 +580,11 @@ ${formatter.tip('Каждая сессия занимает 30-60 минут. П
 
     keyboard.push([
       { text: '📊 Обзор прогресса', callbackData: 'therapy:progress' },
+    ]);
+
+    // Evidence-based guidelines (psychoeducation, European Guideline 2023)
+    keyboard.push([
+      { text: '📋 Доказательная база', callbackData: 'therapy:evidence_overview' },
     ]);
 
     // Add third-wave therapy option when indicated (Week 6+ or non-responding)
@@ -937,6 +952,15 @@ ${sonya.tip('Устройтесь поудобнее. Эта сессия зал
     // For SRT session (sleep_behavior_1), add personalized sleep window
     let content = this.getCoreContent(core);
 
+    // For overview session, add evidence-based component summary
+    // Uses European Insomnia Guideline 2023 evidence data
+    if (coreId === 'overview') {
+      const evidenceContent = this.getEvidenceBasedOverviewContent(ctx);
+      if (evidenceContent) {
+        content += '\n\n' + evidenceContent;
+      }
+    }
+
     // Integrate with real CBT-I engines for personalized content
     // January 2026: Enhanced integration based on Furukawa 2024 JAMA NMA findings
     if (coreId === 'sleep_behavior_1' || coreId === 'sleep_behavior_2') {
@@ -1190,6 +1214,7 @@ ${isiTrend}
 ${formatter.divider()}
 
 🎯 *Клинические цели:*
+_(European Insomnia Guideline 2023)_
 • ISI < 7 (ремиссия) — ${this.getGoalStatus('isi', ctx)}
 • SE ≥ 85% — ${this.getGoalStatus('se', ctx)}
 • SOL < 20 мин — ${this.getGoalStatus('sol', ctx)}
@@ -1201,6 +1226,7 @@ ${formatter.tip('Регулярное прохождение ISI каждые 2 
     const keyboard: IInlineButton[][] = [
       [{ text: '📋 К сессиям', callbackData: 'therapy:menu' }],
       [{ text: '📝 Пройти ISI', callbackData: 'start:begin_assessment' }],
+      [{ text: '📊 Доказательная база', callbackData: 'therapy:evidence_overview' }],
     ];
 
     return {
@@ -1587,7 +1613,253 @@ ${sonya.tip('Выполняйте домашние эксперименты еж
     };
   }
 
+  // ==================== Evidence-Based Guidelines ====================
+
+  /**
+   * Show evidence overview — psychoeducation about CBT-I evidence base
+   * Uses European Insomnia Guideline 2023 (Riemann et al.)
+   *
+   * Research basis:
+   * - dCBT-I Grade A first-line recommendation [HIGH]
+   * - Psychoeducation is standard CBT-I component [HIGH]
+   * - Patient Decision Aids improve knowledge +11.90/100 (Cochrane 2024) [HIGH]
+   *
+   * NOTE: Pharmacological evidence is NOT exposed to patients.
+   * CLAUDE.md red line: "Нет рекомендаций снотворных без врача"
+   * Regulatory risk: FDA PDURS, EU MDR scope creep [HIGH]
+   */
+  private async showEvidenceOverview(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const recommendations = ctx.sleepCore.getTreatmentRecommendations('treatment');
+
+    // Format top treatment recommendations (non-pharmacological only)
+    const recLines = recommendations
+      .filter((r) => r.category === 'treatment')
+      .slice(0, 5)
+      .map((r) => {
+        const gradeIcon = r.evidenceGrade === 'A' ? '🟢' : r.evidenceGrade === 'B' ? '🟡' : '🔵';
+        const newTag = r.isNew2023 ? ' 🆕' : '';
+        return `${gradeIcon} *${r.textRu}*${newTag}\n   Уровень доказательности: ${r.evidenceGrade} | ${r.source}`;
+      })
+      .join('\n\n');
+
+    const message = `
+${formatter.header('📊 Доказательная база КПТ-И')}
+_(European Insomnia Guideline 2023, Riemann et al.)_
+
+${formatter.divider()}
+
+*Уровни доказательности:*
+🟢 Grade A — высокий (множественные РКИ, мета-анализы)
+🟡 Grade B — умеренный (РКИ, систематические обзоры)
+🔵 Grade C/D — низкий (мнения экспертов, серии случаев)
+
+${formatter.divider()}
+
+*Рекомендации по лечению:*
+
+${recLines}
+
+${formatter.divider()}
+
+${sonya.tip('КПТ-И — «золотой стандарт» лечения хронической бессонницы с Grade A доказательностью. Наша программа следует этим рекомендациям.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📈 Эффективность компонентов КПТ-И', callbackData: 'therapy:evidence_components' }],
+      [{ text: '🆕 Что нового в 2023?', callbackData: 'therapy:evidence_new2023' }],
+      [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'evidence_overview' },
+    };
+  }
+
+  /**
+   * Show CBT-I component evidence with effect sizes
+   * Uses getCBTIComponentEvidence() and getMostEffectiveCBTIComponents()
+   *
+   * Displays Cohen's d effect sizes for each CBT-I component,
+   * helping patients understand which techniques have the strongest evidence.
+   */
+  private async showComponentEvidence(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const components = ctx.sleepCore.getMostEffectiveCBTIComponents();
+    const allEvidence = ctx.sleepCore.getCBTIComponentEvidence();
+
+    // Component name mapping (Russian)
+    const componentNames: Record<string, string> = {
+      multicomponent_cbti: 'Мультикомпонентная КПТ-И',
+      sleep_restriction: 'Ограничение сна (SRT)',
+      stimulus_control: 'Контроль стимулов (SCT)',
+      cognitive_restructuring: 'Когнитивная реструктуризация',
+      relaxation: 'Релаксация',
+      sleep_hygiene: 'Гигиена сна',
+    };
+
+    // Build ranked list
+    const componentLines = components
+      .slice(0, 6)
+      .map((c, i) => {
+        const name = componentNames[c.component] || c.component;
+        const qualityIcon = c.quality === 'high' ? '🟢' : c.quality === 'moderate' ? '🟡' : '🔵';
+        const effectBar = this.renderEffectBar(c.effectSize);
+        return `${i + 1}. *${name}*
+   ${effectBar} d = ${c.effectSize.toFixed(2)} [${c.effectSizeCI[0].toFixed(2)}–${c.effectSizeCI[1].toFixed(2)}]
+   ${qualityIcon} ${c.nStudies} исследований, ${c.nParticipants.toLocaleString()} участников`;
+      })
+      .join('\n\n');
+
+    const message = `
+${formatter.header('📈 Эффективность компонентов КПТ-И')}
+_(ранжированы по размеру эффекта, Cohen\\'s d)_
+
+${formatter.divider()}
+
+${componentLines}
+
+${formatter.divider()}
+
+*Как читать:*
+• d ≥ 0.8 — большой эффект
+• d = 0.5-0.8 — средний эффект
+• d = 0.2-0.5 — малый эффект
+
+${formatter.divider()}
+
+${sonya.tip('Мультикомпонентная КПТ-И (все компоненты вместе) значительно эффективнее любого отдельного компонента. Поэтому наша программа включает все 5.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📊 Обзор доказательной базы', callbackData: 'therapy:evidence_overview' }],
+      [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'evidence_components' },
+    };
+  }
+
+  /**
+   * Show new 2023 guideline recommendations
+   * Uses getNew2023Recommendations() for updates since 2017 guideline
+   */
+  private async showNew2023Recommendations(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const newRecs = ctx.sleepCore.getNew2023Recommendations();
+
+    const recLines = newRecs
+      .filter((r) => r.category !== 'pharmacological') // Exclude pharma from patient view
+      .map((r) => {
+        const gradeIcon = r.evidenceGrade === 'A' ? '🟢' : r.evidenceGrade === 'B' ? '🟡' : '🔵';
+        return `${gradeIcon} *${r.textRu}*\n   Уровень: ${r.evidenceGrade} | ${r.source}`;
+      })
+      .join('\n\n');
+
+    const message = `
+${formatter.header('🆕 Обновления European Insomnia Guideline 2023')}
+_(Riemann et al., Journal of Sleep Research)_
+
+${formatter.divider()}
+
+*Ключевые изменения по сравнению с 2017:*
+
+${recLines || 'Нет новых нефармакологических рекомендаций.'}
+
+${formatter.divider()}
+
+${sonya.tip('Рекомендации обновляются на основе новых мета-анализов и РКИ. Наша программа соответствует актуальным стандартам 2023 года.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📈 Эффективность компонентов', callbackData: 'therapy:evidence_components' }],
+      [{ text: '📊 Обзор доказательной базы', callbackData: 'therapy:evidence_overview' }],
+      [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'evidence_new2023' },
+    };
+  }
+
+  /**
+   * Render effect size bar for visual representation
+   */
+  private renderEffectBar(effectSize: number): string {
+    const maxBars = 10;
+    const filled = Math.min(maxBars, Math.round(effectSize * 10));
+    const empty = maxBars - filled;
+    return `[${'█'.repeat(filled)}${'░'.repeat(empty)}]`;
+  }
+
   // ==================== Content Helpers ====================
+
+  /**
+   * Get evidence-based overview content from European Guideline 2023
+   * Integrates getCBTIComponentEvidence() into Core 1 psychoeducation
+   *
+   * Shows patients the scientific foundation of their treatment program,
+   * increasing trust and adherence (Patient Decision Aids, Cochrane 2024).
+   */
+  private getEvidenceBasedOverviewContent(ctx: ISleepCoreContext): string | null {
+    try {
+      const components = ctx.sleepCore.getMostEffectiveCBTIComponents();
+      if (!components || components.length === 0) {
+        return null;
+      }
+
+      // Component name mapping
+      const componentNames: Record<string, string> = {
+        multicomponent_cbti: 'Мультикомпонентная КПТ-И',
+        sleep_restriction: 'Ограничение сна',
+        stimulus_control: 'Контроль стимулов',
+        cognitive_restructuring: 'Когнитивная реструктуризация',
+        relaxation: 'Релаксация',
+        sleep_hygiene: 'Гигиена сна',
+      };
+
+      const topComponents = components.slice(0, 4).map((c) => {
+        const name = componentNames[c.component] || c.component;
+        return `• *${name}*: d = ${c.effectSize.toFixed(2)} (${c.nStudies} исследований)`;
+      }).join('\n');
+
+      // Get treatment recommendations for headline
+      const recs = ctx.sleepCore.getTreatmentRecommendations('treatment');
+      const topRec = recs.find((r) => r.evidenceGrade === 'A');
+      const topRecLine = topRec
+        ? `\n🟢 *${topRec.textRu}* (Grade A)`
+        : '';
+
+      return `
+*📊 Научная основа программы*
+_(European Insomnia Guideline 2023)_
+${topRecLine}
+
+*Эффективность компонентов КПТ-И (Cohen's d):*
+${topComponents}
+
+_d ≥ 0.8 = большой эффект, 0.5-0.8 = средний, 0.2-0.5 = малый_
+      `.trim();
+    } catch {
+      return null;
+    }
+  }
 
   /**
    * Get personalized Sleep Restriction content from treatment plan

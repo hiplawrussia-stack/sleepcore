@@ -29,9 +29,9 @@ import type {
   IInlineButton,
 } from './interfaces/ICommand';
 import {
-  circadianAI,
   MEQ_ITEMS,
   type IMEQResponse,
+  type IMCTQResponse,
   type ICircadianAssessment,
   type IChronotherapyPlan,
   type ChronotypeCategory,
@@ -99,7 +99,7 @@ export class ChronotypeCommand implements IConversationCommand {
    */
   async execute(ctx: ISleepCoreContext, _args?: string): Promise<ICommandResult> {
     // Check if user already has chronotype assessment
-    const existingAssessment = await this.getStoredAssessment(ctx.userId);
+    const existingAssessment = this.getStoredAssessment(ctx.sleepCore, ctx.userId);
 
     if (existingAssessment) {
       return this.showExistingResults(ctx, existingAssessment);
@@ -146,13 +146,15 @@ export class ChronotypeCommand implements IConversationCommand {
     conversationData: Record<string, unknown>
   ): Promise<ICommandResult> {
     // Parse callback: "chronotype:action:value"
+    // Value may contain colons (e.g. MCTQ time "free_wake:09:30"),
+    // so only split on the first two colons.
     const parts = callbackData.split(':');
     if (parts[0] !== 'chronotype') {
       return { success: false, error: 'Invalid callback' };
     }
 
     const action = parts[1];
-    const value = parts[2];
+    const value = parts.slice(2).join(':');
 
     switch (action) {
       case 'start':
@@ -453,8 +455,10 @@ ${question.textRu}
       return this.showMCTQWork(ctx, data);
     }
 
-    // Parse value: "action:time"
-    const [action, time] = value.split(':');
+    // Parse value: "action:HH:MM" — split only on first colon to preserve time format
+    const colonIdx = value.indexOf(':');
+    const action = colonIdx === -1 ? value : value.slice(0, colonIdx);
+    const time = colonIdx === -1 ? '' : value.slice(colonIdx + 1);
     const mctqData = (data.mctqData as Record<string, string>) || {};
 
     switch (action) {
@@ -585,26 +589,20 @@ ${question.textRu}
       q5_selfRating: meqAnswers.q5_selfRating,
     };
 
-    // Get assessment from CircadianAI
-    let assessment = circadianAI.assessFromMEQ(meqResponse);
+    // Get assessment from CircadianAI via SleepCoreAPI (persists to session)
+    let assessment = ctx.sleepCore.assessChronotypeFromMEQ(ctx.userId, meqResponse);
 
-    // If MCTQ data provided, calculate social jetlag
+    // If MCTQ data provided, use assessChronotypeFromMCTQ for proper CircadianAI processing
+    // This provides more accurate MSFsc-based chronotype and social jetlag calculation
+    // (Roenneberg et al., 2003; MSFsc correlates with DLMO r=0.54 vs MEQ r=-0.40)
     if (includeMCTQ) {
       const mctqData = data.mctqData as Record<string, string>;
-      const socialJetlag = this.calculateSocialJetlag(mctqData);
-      assessment = {
-        ...assessment,
-        socialJetlag,
-        socialJetlagSeverity: this.getSocialJetlagSeverity(socialJetlag),
-        dlmoConfidence: 0.8, // Higher confidence with MCTQ
-      };
+      const mctqResponse: IMCTQResponse = this.buildMCTQResponse(ctx.userId, mctqData);
+      assessment = ctx.sleepCore.assessChronotypeFromMCTQ(ctx.userId, mctqResponse);
     }
 
-    // Store assessment
-    await this.storeAssessment(ctx.userId, assessment);
-
-    // Generate chronotherapy plan
-    const plan = circadianAI.generateChronotherapyPlan(ctx.userId, assessment);
+    // Generate chronotherapy plan via SleepCoreAPI (persists to session)
+    const plan = ctx.sleepCore.generateChronotherapyPlan(ctx.userId);
 
     return this.showResults(ctx, { assessment, plan });
   }
@@ -613,7 +611,7 @@ ${question.textRu}
    * Show assessment results
    */
   private showResults(
-    _ctx: ISleepCoreContext,
+    ctx: ISleepCoreContext,
     data: Record<string, unknown>
   ): ICommandResult {
     const assessment = data.assessment as ICircadianAssessment;
@@ -644,6 +642,12 @@ ${question.textRu}
 <b>✈️ Социальный джетлаг</b>
 ${jetlagDesc}
 `;
+
+    // Use getSocialJetlag() for enriched recommendation from SleepCoreAPI
+    const socialJetlagData = ctx.sleepCore.getSocialJetlag(ctx.userId);
+    if (socialJetlagData) {
+      message += `\n<i>${socialJetlagData.recommendation}</i>\n`;
+    }
 
     // Add risk factors if any
     if (assessment.riskFactors.length > 0) {
@@ -702,7 +706,19 @@ ${jetlagDesc}
     ctx: ISleepCoreContext,
     assessment: ICircadianAssessment
   ): ICommandResult {
-    const plan = circadianAI.generateChronotherapyPlan(ctx.userId, assessment);
+    // Verify stored chronotype via getChronotype() API
+    const storedChronotype = ctx.sleepCore.getChronotype(ctx.userId);
+    if (storedChronotype && storedChronotype !== assessment.chronotypeCategory) {
+      // Use the most up-to-date stored assessment
+      const updatedAssessment: ICircadianAssessment = {
+        ...assessment,
+        chronotypeCategory: storedChronotype,
+      };
+      const plan = ctx.sleepCore.generateChronotherapyPlan(ctx.userId);
+      return this.showResults(ctx, { assessment: updatedAssessment, plan });
+    }
+
+    const plan = ctx.sleepCore.generateChronotherapyPlan(ctx.userId);
     return this.showResults(ctx, { assessment, plan });
   }
 
@@ -861,82 +877,75 @@ ${lt.rationale}
   }
 
   /**
-   * Calculate social jetlag from MCTQ data
+   * Build IMCTQResponse from collected MCTQ form data
+   *
+   * Maps simplified form inputs to the full IMCTQResponse interface.
+   * MCTQ collects sleep onset and wake times; bedtime is estimated as
+   * 30 minutes before sleep onset (typical sleep onset latency).
+   *
+   * Note: The current MCTQ form collects sleepOnset/wakeTime only.
+   * IMCTQResponse also requires bedtime and useAlarm.
+   * - bedtime: estimated as sleepOnset - 30 min
+   * - useAlarm: workdays=true, free days=false (standard MCTQ assumption)
    */
-  private calculateSocialJetlag(mctqData: Record<string, string>): number {
-    const workMidpoint = this.calculateMidpoint(
-      mctqData.workSleepOnset,
-      mctqData.workWakeTime
-    );
-    const freeMidpoint = this.calculateMidpoint(
-      mctqData.freeSleepOnset,
-      mctqData.freeWakeTime
-    );
-
-    return Math.abs(freeMidpoint - workMidpoint);
+  private buildMCTQResponse(
+    userId: string,
+    mctqData: Record<string, string>
+  ): IMCTQResponse {
+    return {
+      userId,
+      date: new Date().toISOString().split('T')[0],
+      work: {
+        bedtime: this.estimateBedtime(mctqData.workSleepOnset),
+        sleepOnset: mctqData.workSleepOnset,
+        wakeTime: mctqData.workWakeTime,
+        useAlarm: true, // Standard MCTQ assumption for workdays
+      },
+      free: {
+        bedtime: this.estimateBedtime(mctqData.freeSleepOnset),
+        sleepOnset: mctqData.freeSleepOnset,
+        wakeTime: mctqData.freeWakeTime,
+        useAlarm: false, // Standard MCTQ assumption for free days
+      },
+    };
   }
 
   /**
-   * Calculate midpoint between sleep and wake times
+   * Estimate bedtime as 30 minutes before sleep onset
+   * Standard sleep onset latency estimate for MCTQ bedtime field
    */
-  private calculateMidpoint(sleepTime: string, wakeTime: string): number {
-    const sleepHours = this.timeToHours(sleepTime);
-    const wakeHours = this.timeToHours(wakeTime);
-
-    let duration = wakeHours - sleepHours;
-    if (duration < 0) duration += 24;
-
-    let midpoint = sleepHours + duration / 2;
-    if (midpoint >= 24) midpoint -= 24;
-
-    return midpoint;
-  }
-
-  /**
-   * Convert time string to hours
-   */
-  private timeToHours(time: string): number {
-    const [hours, minutes] = time.split(':').map(Number);
-    return hours + minutes / 60;
-  }
-
-  /**
-   * Get social jetlag severity
-   */
-  private getSocialJetlagSeverity(
-    hours: number
-  ): 'none' | 'mild' | 'moderate' | 'severe' {
-    if (hours < 0.5) return 'none';
-    if (hours < 1.0) return 'mild';
-    if (hours < 2.0) return 'moderate';
-    return 'severe';
+  private estimateBedtime(sleepOnset: string): string {
+    const [hours, minutes] = sleepOnset.split(':').map(Number);
+    let bedHours = hours;
+    let bedMinutes = minutes - 30;
+    if (bedMinutes < 0) {
+      bedMinutes += 60;
+      bedHours -= 1;
+      if (bedHours < 0) bedHours += 24;
+    }
+    return `${bedHours.toString().padStart(2, '0')}:${bedMinutes.toString().padStart(2, '0')}`;
   }
 
   /**
    * Get stored assessment for user
    */
-  private async getStoredAssessment(
+  private getStoredAssessment(
+    sleepCore: ISleepCoreContext['sleepCore'],
     userId: string
-  ): Promise<ICircadianAssessment | null> {
-    // TODO: Integrate with SleepCore storage
-    // For now, return null to always offer assessment
-    return null;
+  ): ICircadianAssessment | null {
+    const session = sleepCore.getSession(userId);
+    return session?.circadianAssessment ?? null;
   }
 
   /**
    * Store assessment for user
    */
-  private async storeAssessment(
+  private storeAssessment(
+    sleepCore: ISleepCoreContext['sleepCore'],
     userId: string,
     assessment: ICircadianAssessment
-  ): Promise<void> {
-    // TODO: Integrate with SleepCore storage
-    // This should save to user's profile
-    console.log(`[ChronotypeCommand] Stored assessment for user ${userId}:`, {
-      chronotype: assessment.chronotype,
-      meqScore: assessment.meqScore,
-      socialJetlag: assessment.socialJetlag,
-    });
+  ): void {
+    sleepCore.storeCircadianAssessment(userId, assessment);
   }
 }
 

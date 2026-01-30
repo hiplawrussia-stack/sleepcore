@@ -935,6 +935,271 @@ describe('TherapyCommand', () => {
     });
   });
 
+  describe('Evidence Base Integration', () => {
+    /**
+     * Evidence tests use mocked SleepCoreAPI since evidence methods
+     * return structured data from EuropeanInsomnia2023.
+     */
+    function createEvidenceMockContext(): ISleepCoreContext {
+      const mockSleepCore = {
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          currentPhase: 'treatment',
+          weekNumber: 2,
+        }),
+        getTreatmentRecommendations: jest.fn().mockReturnValue([
+          {
+            id: 'rec_cbti',
+            category: 'treatment',
+            text: 'CBT-I is recommended as first-line treatment',
+            textRu: 'КПТ-И рекомендуется как терапия первой линии',
+            evidenceGrade: 'A',
+            strength: 'strong',
+            isNew2023: false,
+            source: 'Riemann et al., 2023',
+          },
+          {
+            id: 'rec_dcbti',
+            category: 'treatment',
+            text: 'Digital CBT-I is effective',
+            textRu: 'Цифровая КПТ-И эффективна',
+            evidenceGrade: 'A',
+            strength: 'strong',
+            isNew2023: true,
+            source: 'Riemann et al., 2023',
+          },
+        ]),
+        getNew2023Recommendations: jest.fn().mockReturnValue([
+          {
+            id: 'new_dcbti',
+            category: 'treatment',
+            text: 'Digital CBT-I recommended',
+            textRu: 'Цифровая КПТ-И рекомендуется как альтернатива очной терапии',
+            evidenceGrade: 'A',
+            strength: 'strong',
+            isNew2023: true,
+            source: 'Riemann et al., 2023',
+          },
+          {
+            id: 'new_pharma',
+            category: 'pharmacological',
+            text: 'Pharmacological update',
+            textRu: 'Обновление фармакологических рекомендаций',
+            evidenceGrade: 'B',
+            strength: 'conditional',
+            isNew2023: true,
+            source: 'Riemann et al., 2023',
+          },
+        ]),
+        getCBTIComponentEvidence: jest.fn().mockReturnValue([
+          {
+            component: 'multicomponent_cbti',
+            effectSize: 0.84,
+            effectSizeCI: [0.72, 0.96],
+            nStudies: 87,
+            nParticipants: 9475,
+            quality: 'high',
+            recommendation: 'Strongly recommended',
+          },
+          {
+            component: 'sleep_restriction',
+            effectSize: 0.45,
+            effectSizeCI: [0.29, 0.61],
+            nStudies: 12,
+            nParticipants: 890,
+            quality: 'high',
+            recommendation: 'Recommended',
+          },
+        ]),
+        getMostEffectiveCBTIComponents: jest.fn().mockReturnValue([
+          {
+            component: 'multicomponent_cbti',
+            effectSize: 0.84,
+            effectSizeCI: [0.72, 0.96],
+            nStudies: 87,
+            nParticipants: 9475,
+            quality: 'high',
+            recommendation: 'Strongly recommended',
+          },
+          {
+            component: 'sleep_restriction',
+            effectSize: 0.45,
+            effectSizeCI: [0.29, 0.61],
+            nStudies: 12,
+            nParticipants: 890,
+            quality: 'high',
+            recommendation: 'Recommended',
+          },
+          {
+            component: 'stimulus_control',
+            effectSize: 0.41,
+            effectSizeCI: [0.25, 0.57],
+            nStudies: 10,
+            nParticipants: 750,
+            quality: 'moderate',
+            recommendation: 'Recommended',
+          },
+          {
+            component: 'cognitive_restructuring',
+            effectSize: 0.32,
+            effectSizeCI: [0.18, 0.46],
+            nStudies: 8,
+            nParticipants: 620,
+            quality: 'moderate',
+            recommendation: 'Recommended',
+          },
+        ]),
+        getProgressReport: jest.fn().mockReturnValue(null),
+        estimateISI: jest.fn().mockReturnValue(0),
+      } as unknown as SleepCoreAPI;
+
+      return {
+        userId: 'test-user-123',
+        chatId: 12345,
+        displayName: 'Test User',
+        languageCode: 'ru',
+        sleepCore: mockSleepCore,
+      } as unknown as ISleepCoreContext;
+    }
+
+    describe('evidence_overview callback', () => {
+      it('should show evidence overview with treatment recommendations', async () => {
+        const ctx = createEvidenceMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:evidence_overview',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Доказательная база КПТ-И');
+        expect(result.message).toContain('European Insomnia Guideline 2023');
+        expect(result.message).toContain('Grade A');
+        expect(result.message).toContain('КПТ-И рекомендуется');
+        expect(ctx.sleepCore.getTreatmentRecommendations).toHaveBeenCalledWith('treatment');
+      });
+
+      it('should show navigation to component evidence and new 2023', async () => {
+        const ctx = createEvidenceMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:evidence_overview',
+          {}
+        );
+
+        const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+        expect(allCallbacks).toContain('therapy:evidence_components');
+        expect(allCallbacks).toContain('therapy:evidence_new2023');
+        expect(allCallbacks).toContain('therapy:menu');
+      });
+
+      it('should have step metadata evidence_overview', async () => {
+        const ctx = createEvidenceMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:evidence_overview',
+          {}
+        );
+
+        expect(result.metadata?.step).toBe('evidence_overview');
+      });
+    });
+
+    describe('evidence_components callback', () => {
+      it('should show CBT-I component evidence with effect sizes', async () => {
+        const ctx = createEvidenceMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:evidence_components',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Эффективность компонентов КПТ-И');
+        expect(result.message).toContain('Cohen');
+        expect(result.message).toContain('0.84');
+        expect(result.message).toContain('Мультикомпонентная КПТ-И');
+        expect(result.message).toContain('Ограничение сна');
+        expect(ctx.sleepCore.getMostEffectiveCBTIComponents).toHaveBeenCalled();
+        expect(ctx.sleepCore.getCBTIComponentEvidence).toHaveBeenCalled();
+      });
+
+      it('should display study counts and participant numbers', async () => {
+        const ctx = createEvidenceMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:evidence_components',
+          {}
+        );
+
+        expect(result.message).toContain('87');
+        // toLocaleString() may format as "9,475" or "9 475" depending on locale
+        expect(result.message).toMatch(/9[,.\s]?475/);
+      });
+
+      it('should have step metadata evidence_components', async () => {
+        const ctx = createEvidenceMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:evidence_components',
+          {}
+        );
+
+        expect(result.metadata?.step).toBe('evidence_components');
+      });
+    });
+
+    describe('evidence_new2023 callback', () => {
+      it('should show new 2023 guideline recommendations', async () => {
+        const ctx = createEvidenceMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:evidence_new2023',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Обновления European Insomnia Guideline 2023');
+        expect(result.message).toContain('Цифровая КПТ-И');
+        expect(ctx.sleepCore.getNew2023Recommendations).toHaveBeenCalled();
+      });
+
+      it('should filter out pharmacological recommendations', async () => {
+        const ctx = createEvidenceMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:evidence_new2023',
+          {}
+        );
+
+        expect(result.message).not.toContain('фармакологических');
+        expect(result.message).not.toContain('Обновление фармакологических');
+      });
+
+      it('should have step metadata evidence_new2023', async () => {
+        const ctx = createEvidenceMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:evidence_new2023',
+          {}
+        );
+
+        expect(result.metadata?.step).toBe('evidence_new2023');
+      });
+    });
+
+    describe('evidence in therapy menu', () => {
+      it('should include evidence button in therapy menu', async () => {
+        const ctx = createMockContext({ hasSession: true });
+        const result = await therapyCommand.execute(ctx);
+
+        expect(result.success).toBe(true);
+        const allCallbacks = result.keyboard?.flat().map(btn => btn.callbackData) || [];
+        expect(allCallbacks).toContain('therapy:evidence_overview');
+      });
+    });
+  });
+
   describe('Clinical Safety - Minimum TIB', () => {
     it('should mention 5.5 hour minimum in sleep_behavior_1', async () => {
       const ctx = createMockContext();
