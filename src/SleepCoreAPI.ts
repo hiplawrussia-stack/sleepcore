@@ -80,6 +80,17 @@ import {
 /**
  * SleepCore user session
  */
+/**
+ * Baseline ISI assessment data
+ * Recorded during onboarding (/start command)
+ */
+export interface IBaselineISI {
+  readonly score: number;
+  readonly severity: string;
+  readonly date: Date;
+  readonly answers: number[];
+}
+
 export interface ISleepCoreSession {
   readonly userId: string;
   readonly startDate: Date;
@@ -88,6 +99,9 @@ export interface ISleepCoreSession {
   readonly actiPlan: IACTIPlan | null;
   readonly mctPlan: IMCTPlan | null;
   readonly isActive: boolean;
+
+  /** Baseline ISI from onboarding assessment (Morin et al., 2011) */
+  readonly baselineISI: IBaselineISI | null;
 
   // NEW: Circadian & Cultural Adaptations
   readonly circadianAssessment: ICircadianAssessment | null;
@@ -243,6 +257,7 @@ export class SleepCoreAPI {
       actiPlan: null,
       mctPlan: null,
       isActive: true,
+      baselineISI: null,
       // NEW: Circadian & Cultural Adaptations
       circadianAssessment: null,
       chronotherapyPlan: null,
@@ -285,6 +300,42 @@ export class SleepCoreAPI {
     if (session) {
       this.sessions.set(userId, { ...session, isActive: false });
     }
+  }
+
+  /**
+   * Record ISI assessment result for a user
+   *
+   * Called after ISI-7 completion during onboarding (/start).
+   * Stores baseline ISI in session for use in treatment planning.
+   *
+   * CLINICAL NOTE: ISI >= 22 (severe) requires specialist referral
+   * (European Insomnia Guideline 2023, CLAUDE.md Red Line 2.1)
+   *
+   * @param userId - User ID
+   * @param score - ISI total score (0-28)
+   * @param severity - ISI severity classification
+   * @param answers - Individual ISI item responses (7 items, 0-4 each)
+   */
+  recordISIAssessment(
+    userId: string,
+    score: number,
+    severity: string,
+    answers: number[]
+  ): void {
+    const session = this.sessions.get(userId);
+    if (!session) {
+      return;
+    }
+
+    this.sessions.set(userId, {
+      ...session,
+      baselineISI: {
+        score,
+        severity,
+        date: new Date(),
+        answers,
+      },
+    });
   }
 
   // ============= Sleep Diary =============
@@ -497,9 +548,18 @@ export class SleepCoreAPI {
    */
   private buildSleepStateFromDiary(entry: ISleepDiaryEntry, metrics: ISleepMetrics): ISleepState {
     const userId = entry.userId;
-    const isiScore = this.diaryService.getEntries(userId).length >= 7
-      ? this.estimateISI(userId)
-      : 15; // Default moderate if not enough data
+    const session = this.sessions.get(userId);
+
+    // Use real baseline ISI if available (from onboarding assessment),
+    // otherwise fall back to diary-based estimation
+    let isiScore: number;
+    if (session?.baselineISI) {
+      isiScore = session.baselineISI.score;
+    } else if (this.diaryService.getEntries(userId).length >= 7) {
+      isiScore = this.estimateISI(userId);
+    } else {
+      isiScore = 15; // Default moderate if not enough data
+    }
 
     const qualityMap: Record<string, number> = {
       very_poor: 1, poor: 2, fair: 3, good: 4, excellent: 5

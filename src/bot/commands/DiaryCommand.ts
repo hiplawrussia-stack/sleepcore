@@ -25,6 +25,7 @@ import type {
 } from './interfaces/ICommand';
 import type { ISleepDiaryEntry } from '../../sleep/interfaces/ISleepState';
 import type { ICBTIIntervention } from '../../cbt-i/interfaces/ICBTIComponents';
+import type { IThirdWaveRecommendation } from '../../third-wave/interfaces/IThirdWaveTherapies';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
 
@@ -42,6 +43,9 @@ type DiaryStep =
 
 /**
  * Processing result from SleepCoreAPI
+ *
+ * Extended January 2026 to include third-wave therapy fields
+ * for CBT-I non-responder detection (European Guideline 2023 stepped care)
  */
 interface ProcessingResult {
   metrics: import('../../sleep/interfaces/ISleepState').ISleepMetrics | null;
@@ -49,6 +53,10 @@ interface ProcessingResult {
   planCreated: boolean;
   intervention: ICBTIIntervention | null;
   message: string;
+  /** Third-wave therapy recommendation when CBT-I non-response detected */
+  thirdWaveRecommendation: IThirdWaveRecommendation | null;
+  /** True if non-response detected after Week 6 (ISI reduction < 8 points) */
+  isNonResponding: boolean;
 }
 
 /**
@@ -452,6 +460,8 @@ ${formatter.header('Шаг 3/3: Качество сна')}
         planCreated: result.planCreated,
         intervention: result.intervention,
         message: result.message,
+        thirdWaveRecommendation: result.thirdWaveRecommendation,
+        isNonResponding: result.isNonResponding,
       };
     } catch (error) {
       console.error('Failed to process diary entry:', error);
@@ -464,6 +474,8 @@ ${formatter.header('Шаг 3/3: Качество сна')}
           planCreated: false,
           intervention: null,
           message: 'Запись сохранена.',
+          thirdWaveRecommendation: null,
+          isNonResponding: false,
         };
       } catch (e) {
         console.error('Failed to save diary entry:', e);
@@ -549,6 +561,33 @@ _${intervention.rationale}_
       `.trim();
     }
 
+    // Show non-response detection and third-wave recommendation
+    // (European Guideline 2023 stepped care model)
+    let nonResponseSection = '';
+    if (result?.isNonResponding && result?.thirdWaveRecommendation) {
+      const rec = result.thirdWaveRecommendation;
+      const approachNames: Record<string, string> = {
+        mbti: 'Терапия осознанности (MBT-I)',
+        acti: 'Терапия принятия (ACT-I)',
+        mct: 'Метакогнитивная терапия (MCT)',
+        hybrid: 'Комбинированный подход',
+      };
+      const approachName = approachNames[rec.recommendedApproach] || 'альтернативный подход';
+
+      if (rec.recommendedApproach !== 'none') {
+        nonResponseSection = `
+${formatter.divider()}
+
+💡 *Рекомендация по терапии*
+
+Стандартная КПТ-И показывает ограниченный эффект.
+Рекомендуется: *${approachName}*
+
+_${rec.rationale}_
+        `.trim();
+      }
+    }
+
     // Sonya's response based on context
     let sonyaResponse: string;
     if (result?.planCreated) {
@@ -575,6 +614,7 @@ ${qualityEmoji} Качество: ${data.sleepQuality}/5
 
 ${statusSection}
 ${interventionSection}
+${nonResponseSection}
 
 ${sonya.tip(entriesCount < 7 ? 'Заполняй дневник каждое утро — осталось совсем немного!' : 'Следуй рекомендациям для улучшения сна')}
     `.trim();
@@ -584,6 +624,12 @@ ${sonya.tip(entriesCount < 7 ? 'Заполняй дневник каждое у�
 
     if (result?.intervention) {
       keyboard.push([{ text: '✅ Понятно', callbackData: 'intervention:ack' }]);
+    }
+
+    // Non-response: show button to navigate to third-wave therapy
+    if (result?.isNonResponding && result?.thirdWaveRecommendation &&
+        result.thirdWaveRecommendation.recommendedApproach !== 'none') {
+      keyboard.push([{ text: '🔄 Перейти к новой терапии', callbackData: 'therapy:third_wave_menu' }]);
     }
 
     keyboard.push([{ text: '📊 Мой прогресс', callbackData: 'progress:show' }]);

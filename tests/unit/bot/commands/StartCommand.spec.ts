@@ -265,6 +265,34 @@ describe('StartCommand', () => {
 
       expect(result.metadata?.severity).toBeDefined();
     });
+
+    it('should persist ISI assessment via recordISIAssessment', async () => {
+      const ctx = createMockContext();
+      const answers = [2, 3, 2, 3, 2, 1, 2]; // score = 15 (moderate)
+      await command.handleStep(ctx, 'isi_result', { isiAnswers: answers });
+
+      expect(ctx.sleepCore.recordISIAssessment).toHaveBeenCalledWith(
+        ctx.userId,
+        15,
+        'moderate',
+        answers
+      );
+    });
+
+    it('should persist ISI for severe score (ISI >= 22)', async () => {
+      const ctx = createMockContext();
+      const answers = [4, 4, 3, 3, 3, 3, 3]; // score = 23 (severe)
+      const result = await command.handleStep(ctx, 'isi_result', { isiAnswers: answers });
+
+      expect(ctx.sleepCore.recordISIAssessment).toHaveBeenCalledWith(
+        ctx.userId,
+        23,
+        'severe',
+        answers
+      );
+      // ISI >= 22 must recommend specialist referral (CLAUDE.md Red Line 2.1)
+      assertContainsText(result, 'консультация специалиста');
+    });
   });
 
   describe('singleton export', () => {

@@ -256,7 +256,7 @@ describe('DiaryCommand', () => {
       expect(result.metadata?.step).toBe('sleep_quality');
     });
 
-    it('should process quality callback and save entry', async () => {
+    it('should process quality callback and save entry via processNewDiaryEntry', async () => {
       const mockSleepCore = createMockSleepCoreAPI();
       const ctx = createMockContext({ sleepCore: mockSleepCore });
 
@@ -270,6 +270,26 @@ describe('DiaryCommand', () => {
 
       expect(result.metadata?.sleepQuality).toBe(4);
       expect(result.metadata?.step).toBe('summary');
+      // Primary path uses processNewDiaryEntry (January 2026 audit fix)
+      expect(mockSleepCore.processNewDiaryEntry).toHaveBeenCalled();
+    });
+
+    it('should fall back to addDiaryEntry when processNewDiaryEntry fails', async () => {
+      const mockSleepCore = createMockSleepCoreAPI({
+        processNewDiaryEntry: jest.fn().mockRejectedValue(new Error('Integration failure')),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
+
+      const result = await command.handleCallback(ctx, 'diary:quality:3', {
+        date: '2024-12-22',
+        bedtimeHour: 23,
+        bedtimeMinute: 0,
+        waketimeHour: 7,
+        waketimeMinute: 0,
+      });
+
+      expect(result.metadata?.step).toBe('summary');
+      // Fallback path uses addDiaryEntry
       expect(mockSleepCore.addDiaryEntry).toHaveBeenCalled();
     });
 
@@ -326,6 +346,218 @@ describe('DiaryCommand', () => {
       expect(buttons.length).toBe(5);
       expect(buttons[0].callbackData).toBe('diary:quality:1');
       expect(buttons[4].callbackData).toBe('diary:quality:5');
+    });
+  });
+
+  describe('processNewDiaryEntry integration', () => {
+    it('should show plan created message when planCreated is true', async () => {
+      const mockSleepCore = createMockSleepCoreAPI({
+        processNewDiaryEntry: jest.fn().mockResolvedValue({
+          metrics: {
+            totalSleepTime: 420,
+            sleepEfficiency: 85,
+            sleepOnsetLatency: 15,
+            wakeAfterSleepOnset: 30,
+            timeInBed: 480,
+            numberOfAwakenings: 1,
+          },
+          entriesCount: 7,
+          planCreated: true,
+          intervention: {
+            component: 'sleep_restriction',
+            action: 'Ложитесь спать в 23:30',
+            rationale: 'Оптимизация времени в постели',
+            priority: 3,
+            timing: 'tonight',
+            personalizationScore: 0.85,
+          },
+          message: 'План терапии готов!',
+          thirdWaveRecommendation: null,
+          isNonResponding: false,
+          currentWeek: 1,
+        }),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
+
+      const result = await command.handleCallback(ctx, 'diary:quality:4', {
+        date: '2024-12-22',
+        bedtimeHour: 23,
+        bedtimeMinute: 0,
+        waketimeHour: 7,
+        waketimeMinute: 0,
+      });
+
+      assertSuccessWithMessage(result);
+      assertContainsText(result, 'Базовый период завершён');
+      assertContainsText(result, '7 дней');
+    });
+
+    it('should show intervention when returned by processNewDiaryEntry', async () => {
+      const mockSleepCore = createMockSleepCoreAPI({
+        processNewDiaryEntry: jest.fn().mockResolvedValue({
+          metrics: {
+            totalSleepTime: 420,
+            sleepEfficiency: 85,
+            sleepOnsetLatency: 15,
+            wakeAfterSleepOnset: 30,
+            timeInBed: 480,
+            numberOfAwakenings: 1,
+          },
+          entriesCount: 8,
+          planCreated: false,
+          intervention: {
+            component: 'sleep_restriction',
+            action: 'Ложитесь спать в 23:30, вставайте в 06:30',
+            rationale: 'Оптимизация времени в постели для повышения эффективности сна',
+            priority: 3,
+            timing: 'tonight',
+            personalizationScore: 0.85,
+          },
+          message: 'Запись сохранена.',
+          thirdWaveRecommendation: null,
+          isNonResponding: false,
+          currentWeek: 2,
+        }),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
+
+      const result = await command.handleCallback(ctx, 'diary:quality:3', {
+        date: '2024-12-22',
+        bedtimeHour: 23,
+        bedtimeMinute: 0,
+        waketimeHour: 7,
+        waketimeMinute: 0,
+      });
+
+      assertSuccessWithMessage(result);
+      assertContainsText(result, 'Рекомендация на сегодня');
+      assertContainsText(result, 'Ложитесь спать в 23:30');
+    });
+
+    it('should show baseline collection progress for entries < 7', async () => {
+      const mockSleepCore = createMockSleepCoreAPI({
+        processNewDiaryEntry: jest.fn().mockResolvedValue({
+          metrics: {
+            totalSleepTime: 420,
+            sleepEfficiency: 85,
+            sleepOnsetLatency: 15,
+            wakeAfterSleepOnset: 30,
+            timeInBed: 480,
+            numberOfAwakenings: 1,
+          },
+          entriesCount: 3,
+          planCreated: false,
+          intervention: null,
+          message: 'Запись сохранена. Ещё 4 дня до начала терапии.',
+          thirdWaveRecommendation: null,
+          isNonResponding: false,
+          currentWeek: 0,
+        }),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
+
+      const result = await command.handleCallback(ctx, 'diary:quality:3', {
+        date: '2024-12-22',
+        bedtimeHour: 23,
+        bedtimeMinute: 0,
+        waketimeHour: 7,
+        waketimeMinute: 0,
+      });
+
+      assertSuccessWithMessage(result);
+      assertContainsText(result, 'Сбор базовых данных');
+      assertContainsText(result, 'День: 3/7');
+    });
+  });
+
+  describe('non-response detection and third-wave UI', () => {
+    it('should show third-wave recommendation when non-response detected', async () => {
+      const mockSleepCore = createMockSleepCoreAPI({
+        processNewDiaryEntry: jest.fn().mockResolvedValue({
+          metrics: {
+            totalSleepTime: 360,
+            sleepEfficiency: 75,
+            sleepOnsetLatency: 45,
+            wakeAfterSleepOnset: 60,
+            timeInBed: 480,
+            numberOfAwakenings: 3,
+          },
+          entriesCount: 49, // Week 7
+          planCreated: false,
+          intervention: null,
+          message: 'CBT-I показывает ограниченный эффект.',
+          thirdWaveRecommendation: {
+            recommendedApproach: 'mbti',
+            rationale: 'Высокий уровень когнитивного возбуждения указывает на MBT-I',
+            contraindications: [],
+            expectedBenefits: ['Снижение когнитивного возбуждения', 'Улучшение сна'],
+          },
+          isNonResponding: true,
+          currentWeek: 7,
+        }),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
+
+      const result = await command.handleCallback(ctx, 'diary:quality:2', {
+        date: '2024-12-22',
+        bedtimeHour: 23,
+        bedtimeMinute: 0,
+        waketimeHour: 7,
+        waketimeMinute: 0,
+      });
+
+      assertSuccessWithMessage(result);
+      assertContainsText(result, 'Рекомендация по терапии');
+      assertContainsText(result, 'Терапия осознанности (MBT-I)');
+      // Should have third-wave navigation button
+      const buttons = result.keyboard!.flat();
+      const thirdWaveButton = buttons.find(b => b.callbackData === 'therapy:third_wave_menu');
+      expect(thirdWaveButton).toBeDefined();
+      expect(thirdWaveButton!.text).toContain('Перейти к новой терапии');
+    });
+
+    it('should NOT show third-wave section when not non-responding', async () => {
+      const mockSleepCore = createMockSleepCoreAPI({
+        processNewDiaryEntry: jest.fn().mockResolvedValue({
+          metrics: {
+            totalSleepTime: 420,
+            sleepEfficiency: 90,
+            sleepOnsetLatency: 10,
+            wakeAfterSleepOnset: 15,
+            timeInBed: 480,
+            numberOfAwakenings: 1,
+          },
+          entriesCount: 14,
+          planCreated: false,
+          intervention: {
+            component: 'sleep_restriction',
+            action: 'Продолжайте текущий режим',
+            rationale: 'Хороший прогресс',
+            priority: 2,
+            timing: 'tonight',
+            personalizationScore: 0.9,
+          },
+          message: 'Вы на верном пути!',
+          thirdWaveRecommendation: null,
+          isNonResponding: false,
+          currentWeek: 2,
+        }),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
+
+      const result = await command.handleCallback(ctx, 'diary:quality:4', {
+        date: '2024-12-22',
+        bedtimeHour: 23,
+        bedtimeMinute: 0,
+        waketimeHour: 7,
+        waketimeMinute: 0,
+      });
+
+      assertSuccessWithMessage(result);
+      expect(result.message).not.toContain('Рекомендация по терапии');
+      const buttons = result.keyboard!.flat();
+      const thirdWaveButton = buttons.find(b => b.callbackData === 'therapy:third_wave_menu');
+      expect(thirdWaveButton).toBeUndefined();
     });
   });
 

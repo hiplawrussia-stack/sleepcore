@@ -642,6 +642,15 @@ ${progress}
 
     const severity = formatter.getISISeverity(isiScore);
 
+    // Persist ISI assessment in session (January 2026 audit fix)
+    // This ensures treatment planning uses real ISI, not diary-estimated values
+    ctx.sleepCore.recordISIAssessment(
+      ctx.userId,
+      isiScore,
+      severity,
+      data.isiAnswers
+    );
+
     // Traffic light color indicator (KANOPEE pattern)
     let colorIndicator: string;
     let recommendation: string;
@@ -665,7 +674,8 @@ ${progress}
         break;
       case 'severe':
         colorIndicator = '🟡🟠🟠🔴🔴';
-        recommendation = 'Выраженная инсомния. Программа КПТ-И особенно эффективна в вашем случае.';
+        // ISI >= 22: Specialist referral required (European Guideline 2023, CLAUDE.md Red Line 2.1)
+        recommendation = 'Выраженная инсомния. Рекомендуется консультация специалиста. Программа КПТ-И может быть полезным дополнением к лечению.';
         sonyaResponse = sonya.respondToEmotion('discouraged');
         break;
       default:
