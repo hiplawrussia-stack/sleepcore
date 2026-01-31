@@ -1600,6 +1600,278 @@ describe('TherapyCommand', () => {
     });
   });
 
+  describe('ACT-I Session Delivery', () => {
+    /**
+     * ACT-I tests use mocked SleepCoreAPI since ACT-I methods require
+     * initialized ACT-I plan which needs specific setup.
+     */
+    function createACTIMockContext(overrides: Partial<Record<string, unknown>> = {}): ISleepCoreContext {
+      const mockSleepCore = {
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          currentPhase: 'treatment',
+          weekNumber: 7,
+          actiPlan: { startDate: '2026-01-30', currentSession: 1, totalSessions: 6 },
+        }),
+        isThirdWaveIndicated: jest.fn().mockReturnValue(true),
+        recommendThirdWaveApproach: jest.fn().mockReturnValue(null),
+        getSleepStates: jest.fn().mockReturnValue(Array(7).fill({ date: '2026-01-30' })),
+        initializeACTI: jest.fn().mockReturnValue({
+          startDate: '2026-01-30',
+          currentSession: 1,
+          totalSessions: 6,
+        }),
+        getAcceptanceExercise: jest.fn().mockReturnValue({
+          exercise: 'Готовность к бодрствованию',
+          instructions: [
+            'Лягте в постель и закройте глаза',
+            'Заметьте желание заснуть',
+            'Скажите себе: «Я готов бодрствовать»',
+            'Наблюдайте за ощущениями без борьбы',
+            'Позвольте сну прийти самому',
+          ],
+          metaphor: 'Зыбучие пески: чем больше боретесь, тем глубже увязаете.',
+        }),
+        getDefusionTechnique: jest.fn().mockReturnValue({
+          id: 'def_notice',
+          name: 'Я замечаю мысль...',
+          description: 'Добавьте «Я замечаю мысль, что...» перед тревожной мыслью',
+          instructions: [
+            'Сформулируйте тревожную мысль',
+            'Добавьте «Я замечаю мысль, что...»',
+            'Произнесите полную фразу',
+            'Заметьте изменение в отношении к мысли',
+          ],
+          targetExperiences: ['thought'],
+          difficulty: 'beginner',
+          duration: 2,
+        }),
+        identifyUnwantedExperiences: jest.fn().mockReturnValue([
+          { id: 'exp_1', type: 'thought', content: 'Я не смогу уснуть', distress: 0.6, frequency: 0.7, fusionLevel: 0.7 },
+          { id: 'exp_2', type: 'feeling', content: 'Тревога о сне', distress: 0.7, frequency: 0.5, fusionLevel: 0.5 },
+        ]),
+        getACTISessionSummary: jest.fn().mockReturnValue({
+          keyTakeaways: ['Борьба с бессонницей усиливает её', 'Готовность — это не желание бодрствовать'],
+          practiceExercises: ['Заметить все попытки контролировать сон', 'Практиковать «Я замечаю мысль...»'],
+          nextSessionPreview: 'Следующая сессия: Мысли — это только мысли',
+        }),
+        getProgressReport: jest.fn().mockReturnValue(null),
+        estimateISI: jest.fn().mockReturnValue(0),
+        ...overrides,
+      } as unknown as SleepCoreAPI;
+
+      return {
+        userId: 'test-user-123',
+        chatId: 12345,
+        displayName: 'Test User',
+        languageCode: 'ru',
+        sleepCore: mockSleepCore,
+      } as unknown as ISleepCoreContext;
+    }
+
+    describe('acti_hub callback', () => {
+      it('should show ACT-I session hub with exercise buttons', async () => {
+        const ctx = createACTIMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:acti_hub',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Терапия принятия и ответственности');
+        expect(result.message).toContain('Упражнение на принятие');
+        expect(result.message).toContain('Техника дефузии');
+        expect(result.message).toContain('Исследование переживаний');
+
+        // Verify exercise buttons exist
+        const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+        expect(allCallbacks).toContain('therapy:acti_acceptance');
+        expect(allCallbacks).toContain('therapy:acti_defusion');
+        expect(allCallbacks).toContain('therapy:acti_experiences');
+        expect(allCallbacks).toContain('therapy:acti_summary');
+      });
+
+      it('should show hub even without ACT-I summary', async () => {
+        const ctx = createACTIMockContext({
+          getACTISessionSummary: jest.fn().mockReturnValue(null),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:acti_hub',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Терапия принятия и ответственности');
+      });
+
+      it('should fail when session is not found', async () => {
+        const ctx = createACTIMockContext({
+          getSession: jest.fn().mockReturnValue(null),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:acti_hub',
+          {}
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('Сессия не найдена');
+      });
+    });
+
+    describe('acti_acceptance callback', () => {
+      it('should show acceptance exercise with metaphor and instructions', async () => {
+        const ctx = createACTIMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:acti_acceptance',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Упражнение на принятие');
+        expect(result.message).toContain('Готовность к бодрствованию');
+        expect(result.message).toContain('Зыбучие пески');
+        expect(result.message).toContain('Лягте в постель');
+
+        // Verify navigation
+        const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+        expect(allCallbacks).toContain('therapy:acti_hub');
+        expect(allCallbacks).toContain('therapy:acti_summary');
+      });
+
+      it('should show fallback when exercise is not available', async () => {
+        const ctx = createACTIMockContext({
+          getAcceptanceExercise: jest.fn().mockReturnValue(null),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:acti_acceptance',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('План ACT-I не найден');
+      });
+    });
+
+    describe('acti_defusion callback', () => {
+      it('should show defusion technique with instructions and metadata', async () => {
+        const ctx = createACTIMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:acti_defusion',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Техника дефузии');
+        expect(result.message).toContain('Я замечаю мысль');
+        expect(result.message).toContain('Сформулируйте тревожную мысль');
+        expect(result.message).toContain('2 мин');
+        expect(result.message).toContain('Начальный');
+
+        // Verify navigation
+        const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+        expect(allCallbacks).toContain('therapy:acti_hub');
+      });
+
+      it('should show fallback when technique is not available', async () => {
+        const ctx = createACTIMockContext({
+          getDefusionTechnique: jest.fn().mockReturnValue(null),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:acti_defusion',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Техника дефузии недоступна');
+      });
+    });
+
+    describe('acti_experiences callback', () => {
+      it('should show unwanted experiences with distress levels', async () => {
+        const ctx = createACTIMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:acti_experiences',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Исследование переживаний');
+        expect(result.message).toContain('Я не смогу уснуть');
+        expect(result.message).toContain('Тревога о сне');
+        expect(result.message).toContain('60%');
+        expect(result.message).toContain('70%');
+
+        // Verify reflection questions
+        expect(result.message).toContain('Что вы пробовали');
+        expect(result.message).toContain('Помогло ли это');
+
+        // Verify navigation offers exercise buttons
+        const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+        expect(allCallbacks).toContain('therapy:acti_acceptance');
+        expect(allCallbacks).toContain('therapy:acti_defusion');
+        expect(allCallbacks).toContain('therapy:acti_hub');
+      });
+
+      it('should handle empty experiences list', async () => {
+        const ctx = createACTIMockContext({
+          identifyUnwantedExperiences: jest.fn().mockReturnValue([]),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:acti_experiences',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Нет идентифицированных переживаний');
+      });
+    });
+
+    describe('acti_summary callback', () => {
+      it('should show session summary with takeaways and exercises', async () => {
+        const ctx = createACTIMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:acti_summary',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Итоги сессии ACT-I');
+        expect(result.message).toContain('Борьба с бессонницей усиливает её');
+        expect(result.message).toContain('Заметить все попытки контролировать сон');
+        expect(result.message).toContain('Следующая сессия: Мысли — это только мысли');
+
+        // Verify navigation
+        const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+        expect(allCallbacks).toContain('therapy:acti_hub');
+        expect(allCallbacks).toContain('therapy:menu');
+      });
+
+      it('should show fallback when summary is not available', async () => {
+        const ctx = createACTIMockContext({
+          getACTISessionSummary: jest.fn().mockReturnValue(null),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:acti_summary',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Итоги сессии недоступны');
+      });
+    });
+  });
+
   describe('Clinical Safety - Minimum TIB', () => {
     it('should mention 5.5 hour minimum in sleep_behavior_1', async () => {
       const ctx = createMockContext();

@@ -450,6 +450,22 @@ export class TherapyCommand implements IConversationCommand {
         return this.showThirdWaveInfo(ctx, therapyId, conversationData);
       }
 
+      // ==================== ACT-I Session Delivery Handlers ====================
+      case 'acti_hub':
+        return this.showACTISessionHub(ctx, conversationData);
+
+      case 'acti_acceptance':
+        return this.showAcceptanceExercise(ctx, conversationData);
+
+      case 'acti_defusion':
+        return this.showDefusionTechnique(ctx, conversationData);
+
+      case 'acti_experiences':
+        return this.showUnwantedExperiences(ctx, conversationData);
+
+      case 'acti_summary':
+        return this.showACTISummary(ctx, conversationData);
+
       // ==================== MCT Session Delivery Handlers ====================
       case 'mct_hub':
         return this.showMCTSessionHub(ctx, conversationData);
@@ -870,9 +886,14 @@ ${formatter.divider()}
 ${formatter.tip('Техники третьей волны требуют регулярной практики. Выделите 15-30 минут ежедневно.')}
       `.trim();
 
-      const keyboard: IInlineButton[][] = therapyId === 'mct'
+      const hubButtons: Record<string, IInlineButton[]> = {
+        mct: [{ text: '🎯 Перейти к упражнениям MCT', callbackData: 'therapy:mct_hub' }],
+        acti: [{ text: '🧘 Перейти к упражнениям ACT-I', callbackData: 'therapy:acti_hub' }],
+      };
+
+      const keyboard: IInlineButton[][] = hubButtons[therapyId]
         ? [
-            [{ text: '🎯 Перейти к упражнениям MCT', callbackData: 'therapy:mct_hub' }],
+            hubButtons[therapyId],
             [{ text: '📋 К меню терапии', callbackData: 'therapy:menu' }],
           ]
         : [
@@ -1276,6 +1297,378 @@ ${formatter.tip('Последовательное прохождение про�
       success: true,
       message,
       keyboard,
+    };
+  }
+
+  // ==================== ACT-I Session Delivery ====================
+
+  /**
+   * Show ACT-I Session Hub — central navigation for ACT-I exercises
+   * Displays current session info and available exercise buttons
+   *
+   * Scientific basis:
+   * - Hayes et al. (1999): ACT Hexaflex — 6 core processes
+   * - Meadows (2014): "The Sleep Book" — ACT-I digital protocol
+   * - El Rafihi-Ferreira et al. (2024): ACT vs CBT-I RCT (n=227) [HIGH]
+   */
+  private async showACTISessionHub(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const session = ctx.sleepCore.getSession(ctx.userId);
+    if (!session) {
+      return {
+        success: false,
+        message: `${formatter.warning('Сессия не найдена')}\n\nПожалуйста, начните с /start`,
+      };
+    }
+
+    const summary = ctx.sleepCore.getACTISessionSummary(ctx.userId);
+
+    const message = `
+${formatter.header('🧘 Терапия принятия и ответственности (ACT-I)')}
+
+${sonya.tip('Выберите упражнение для сегодняшней практики.')}
+
+${formatter.divider()}
+
+*Доступные упражнения:*
+
+💚 *Упражнение на принятие* (Acceptance)
+   Научитесь быть открытыми к опыту бессонницы вместо борьбы с ней
+
+🍃 *Техника дефузии* (Cognitive Defusion)
+   Измените отношение к тревожным мыслям о сне
+
+🔍 *Исследование переживаний* (Unwanted Experiences)
+   Идентифицируйте мысли, чувства и ощущения, связанные с бессонницей
+
+${formatter.divider()}
+
+${summary ? `📊 *Ключевые выводы:*\n${summary.keyTakeaways.slice(0, 2).join('\n')}\n` : ''}
+${formatter.tip('Борьба с бессонницей усиливает её. Готовность к бодрствованию парадоксально приводит ко сну (Meadows, 2014).')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '💚 Упражнение на принятие', callbackData: 'therapy:acti_acceptance' }],
+      [{ text: '🍃 Техника дефузии', callbackData: 'therapy:acti_defusion' }],
+      [{ text: '🔍 Исследование переживаний', callbackData: 'therapy:acti_experiences' }],
+      [{ text: '📊 Итоги сессии', callbackData: 'therapy:acti_summary' }],
+      [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'acti_hub' },
+    };
+  }
+
+  /**
+   * Deliver Acceptance exercise via SleepCoreAPI
+   *
+   * Scientific basis:
+   * - Meadows (2014): "Willing wakefulness" — core ACT-I principle [HIGH]
+   * - Harris (2009): "The Happiness Trap" — Expansion technique [HIGH]
+   * - Ruan et al. (2022): Acceptance — strongest predictor of ISI (27%) [HIGH]
+   */
+  private async showAcceptanceExercise(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const exercise = ctx.sleepCore.getAcceptanceExercise('cant_sleep');
+
+    if (!exercise) {
+      return {
+        success: true,
+        message: `
+${formatter.warning('План ACT-I не найден')}
+
+Для доступа к упражнениям необходимо сначала инициализировать план ACT-I.
+
+${formatter.tip('Перейдите в раздел "Альтернативные подходы" и выберите ACT-I.')}
+        `.trim(),
+        keyboard: [
+          [{ text: '🌿 К альтернативным подходам', callbackData: 'therapy:third_wave_menu' }],
+          [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+        ],
+      };
+    }
+
+    const instructionsList = exercise.instructions
+      .map((inst, i) => `${i + 1}. ${inst}`)
+      .join('\n');
+
+    const message = `
+${formatter.header('💚 Упражнение на принятие')}
+_${exercise.exercise}_
+_(ACT-I — Meadows, 2014; Harris, 2009)_
+
+${formatter.divider()}
+
+*Метафора:*
+_${exercise.metaphor}_
+
+${formatter.divider()}
+
+*Инструкции:*
+
+${instructionsList}
+
+${formatter.divider()}
+
+${sonya.tip('Готовность — это не желание бодрствовать. Это открытость опыту без борьбы. Парадокс: когда мы перестаём бороться, сон приходит сам.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🧘 Вернуться к упражнениям ACT-I', callbackData: 'therapy:acti_hub' }],
+      [{ text: '📊 Итоги сессии', callbackData: 'therapy:acti_summary' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'acti_acceptance' },
+    };
+  }
+
+  /**
+   * Deliver Defusion technique via SleepCoreAPI
+   *
+   * Scientific basis:
+   * - Hayes et al. (1999): Cognitive defusion — core ACT process [HIGH]
+   * - Harris (2009): "I notice the thought..." technique [HIGH]
+   * - Hertenstein et al. (2024): Defusion reduces thought-action fusion [MEDIUM]
+   */
+  private async showDefusionTechnique(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    // Create a default experience for technique selection
+    const defaultExperience = {
+      id: 'default',
+      type: 'thought' as const,
+      content: 'Я не смогу уснуть',
+      context: 'pre_sleep' as const,
+      frequency: 0.7,
+      distress: 0.6,
+      fusionLevel: 0.7,
+      avoidanceBehaviors: [],
+    };
+
+    const technique = ctx.sleepCore.getDefusionTechnique(defaultExperience, 'beginner');
+
+    if (!technique) {
+      return {
+        success: true,
+        message: `
+${formatter.warning('Техника дефузии недоступна')}
+
+Для доступа к упражнениям необходимо сначала инициализировать план ACT-I.
+
+${formatter.tip('Перейдите в раздел "Альтернативные подходы" и выберите ACT-I.')}
+        `.trim(),
+        keyboard: [
+          [{ text: '🌿 К альтернативным подходам', callbackData: 'therapy:third_wave_menu' }],
+          [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+        ],
+      };
+    }
+
+    const instructionsList = technique.instructions
+      .map((inst, i) => `${i + 1}. ${inst}`)
+      .join('\n');
+
+    const difficultyLabels: Record<string, string> = {
+      beginner: 'Начальный',
+      intermediate: 'Средний',
+      advanced: 'Продвинутый',
+    };
+
+    const message = `
+${formatter.header('🍃 Техника дефузии')}
+*${technique.name}*
+_(Cognitive Defusion — Hayes et al., 1999)_
+
+${formatter.divider()}
+
+${technique.description}
+
+${formatter.divider()}
+
+*Инструкции:*
+
+${instructionsList}
+
+${formatter.divider()}
+
+⏱ *Длительность:* ${technique.duration} мин
+📊 *Уровень:* ${difficultyLabels[technique.difficulty] || technique.difficulty}
+
+${formatter.divider()}
+
+${sonya.tip('Мысли — это не факты. Вы можете наблюдать мысли о сне, не сливаясь с ними. Со временем их влияние ослабевает.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🧘 Вернуться к упражнениям ACT-I', callbackData: 'therapy:acti_hub' }],
+      [{ text: '📊 Итоги сессии', callbackData: 'therapy:acti_summary' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'acti_defusion' },
+    };
+  }
+
+  /**
+   * Deliver Unwanted Experiences identification via SleepCoreAPI
+   *
+   * Scientific basis:
+   * - Hayes et al. (1999): Creative hopelessness — identifying struggle [HIGH]
+   * - Meadows (2014): Identifying control strategies that backfire [HIGH]
+   */
+  private async showUnwantedExperiences(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    // Identify common pre-sleep unwanted experiences
+    const experiences = ctx.sleepCore.identifyUnwantedExperiences(
+      'не засну тревога напряжение',
+      'pre_sleep'
+    );
+
+    const experiencesList = experiences.length > 0
+      ? experiences
+          .map((exp) => {
+            const typeLabels: Record<string, string> = {
+              thought: '💭 Мысль',
+              feeling: '💛 Чувство',
+              sensation: '🫀 Ощущение',
+              urge: '⚡ Побуждение',
+            };
+            const distressBar = '█'.repeat(Math.round(exp.distress * 5)) + '░'.repeat(5 - Math.round(exp.distress * 5));
+            return `${typeLabels[exp.type] || exp.type}: *${exp.content}*\n   Дистресс: ${distressBar} (${Math.round(exp.distress * 100)}%)`;
+          })
+          .join('\n\n')
+      : '_Нет идентифицированных переживаний_';
+
+    const message = `
+${formatter.header('🔍 Исследование переживаний')}
+_(Creative Hopelessness — Hayes et al., 1999)_
+
+${formatter.divider()}
+
+*Что такое «нежелательные переживания»?*
+
+Это мысли, чувства и ощущения, связанные с бессонницей, с которыми вы боретесь. Борьба с ними — как зыбучие пески: чем сильнее сопротивляетесь, тем глубже увязаете.
+
+${formatter.divider()}
+
+*Типичные переживания при бессоннице:*
+
+${experiencesList}
+
+${formatter.divider()}
+
+*Вопросы для размышления:*
+• Что вы пробовали, чтобы избавиться от этих переживаний?
+• Помогло ли это в долгосрочной перспективе?
+• Какую цену вы платите за борьбу с ними?
+
+${formatter.divider()}
+
+${sonya.tip('Цель — не избавиться от переживаний, а изменить отношение к ним. Когда мы перестаём бороться, мы освобождаем энергию для того, что действительно важно.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '💚 Попробовать упражнение на принятие', callbackData: 'therapy:acti_acceptance' }],
+      [{ text: '🍃 Попробовать технику дефузии', callbackData: 'therapy:acti_defusion' }],
+      [{ text: '🧘 Вернуться к упражнениям ACT-I', callbackData: 'therapy:acti_hub' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'acti_experiences' },
+    };
+  }
+
+  /**
+   * Show ACT-I session summary via SleepCoreAPI
+   *
+   * Scientific basis:
+   * - El Rafihi-Ferreira (Springer, 2024): Session-by-session ACT-I guide [HIGH]
+   */
+  private async showACTISummary(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const summary = ctx.sleepCore.getACTISessionSummary(ctx.userId);
+
+    if (!summary) {
+      return {
+        success: true,
+        message: `
+${formatter.warning('Итоги сессии недоступны')}
+
+Для получения итогов необходимо инициализировать план ACT-I.
+
+${formatter.tip('Перейдите в раздел "Альтернативные подходы" и выберите ACT-I.')}
+        `.trim(),
+        keyboard: [
+          [{ text: '🌿 К альтернативным подходам', callbackData: 'therapy:third_wave_menu' }],
+          [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+        ],
+      };
+    }
+
+    const takeawaysList = summary.keyTakeaways
+      .map((t, i) => `${i + 1}. ${t}`)
+      .join('\n');
+
+    const exercisesList = summary.practiceExercises
+      .map((e) => `• ${e}`)
+      .join('\n');
+
+    const message = `
+${formatter.header('📊 Итоги сессии ACT-I')}
+
+${formatter.divider()}
+
+*Ключевые выводы:*
+${takeawaysList}
+
+${formatter.divider()}
+
+*Домашние эксперименты:*
+${exercisesList}
+
+${formatter.divider()}
+
+*Следующая сессия:*
+${summary.nextSessionPreview}
+
+${formatter.divider()}
+
+${sonya.tip('Практикуйте готовность к бодрствованию каждую ночь. Записывайте наблюдения в дневник.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🧘 К упражнениям ACT-I', callbackData: 'therapy:acti_hub' }],
+      [{ text: '📋 К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'acti_summary' },
     };
   }
 
