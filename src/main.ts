@@ -87,8 +87,6 @@ import {
   // Phase 1.4 Safety: Crisis Detection & Escalation
   crisisDetectionService,
   crisisEscalationService,
-  // Sprint 1 CogniCore: PLRNN-based Sleep Prediction
-  sleepPredictionService,
   type IStreakData,
   type IMoodHistory,
   type MoodLevel,
@@ -2266,7 +2264,7 @@ interface IStartupHealthCheck {
 /**
  * Global health state for runtime checks
  */
-let healthState: {
+const healthState: {
   startupAt: Date;
   startupChecks: IStartupHealthCheck | null;
   databaseHealthy: boolean;
@@ -2323,14 +2321,19 @@ async function performStartupHealthChecks(): Promise<IStartupHealthCheck> {
   });
 
   // Check 3: Admin configuration for crisis escalation (CRITICAL for safety)
+  // Per ISO 14971: risk controls (crisis escalation) cannot be bypassed
+  // Per FDA DHAC Nov 2025: crisis escalation mandatory for AI mental health devices
   const checkAdminStart = Date.now();
   const adminIds = process.env.ADMIN_USER_IDS?.split(',').filter(Boolean) || [];
+  const isProduction = process.env.NODE_ENV === 'production';
   if (adminIds.length === 0) {
     checks.push({
       name: 'Crisis Escalation Admins',
-      status: 'warn',
-      message: 'No ADMIN_USER_IDS configured - crisis escalation notifications disabled',
-      critical: false,
+      status: isProduction ? 'fail' : 'warn',
+      message: isProduction
+        ? 'ADMIN_USER_IDS not configured - crisis escalation blocked (required in production per ISO 14971)'
+        : 'No ADMIN_USER_IDS configured - crisis escalation notifications disabled (non-blocking in dev)',
+      critical: isProduction,
       durationMs: Date.now() - checkAdminStart,
     });
   } else {
@@ -2338,7 +2341,7 @@ async function performStartupHealthChecks(): Promise<IStartupHealthCheck> {
       name: 'Crisis Escalation Admins',
       status: 'pass',
       message: `${adminIds.length} admin(s) configured for crisis notifications`,
-      critical: false,
+      critical: true,
       durationMs: Date.now() - checkAdminStart,
     });
   }
@@ -2599,17 +2602,50 @@ async function main(): Promise<void> {
   // --- Initialize ISI Scheduling Service (Phase 7: CBT-I Session Integration) ---
   const isiSchedulingService = createISISchedulingService(bot as unknown as Bot<Context>);
 
+  // --- Wire service hooks into SleepCoreAPI (January 2026 audit fix) ---
+  // Enables commands to call enrollISISchedule() and registerForNotifications()
+  // via ctx.sleepCore without direct dependency on bot services
+  api.setISISchedulingHook((userId, chatId, userName, baselineISI) => {
+    isiSchedulingService.enrollUser(userId, chatId, userName, baselineISI);
+  });
+  api.setNotificationHook((userId, chatId, userName) => {
+    notificationService.registerUser({
+      userId,
+      chatId,
+      userName,
+      preferences: {
+        enabled: true,
+        morningTime: '08:00',
+        eveningTime: '20:00',
+        timezone: 'Europe/Moscow',
+      },
+      context: {},
+    });
+  });
+  // --- Wire database connection into SleepCoreAPI (Phase 5d) ---
+  // Enables AdminCommand and other features that require database access
+  if (db) {
+    api.setDatabase(db);
+    console.log('[Database] SleepCoreAPI database connection wired');
+  }
+
+  console.log('[ServiceHooks] ISI scheduling and notification hooks wired to SleepCoreAPI');
+
   // --- Initialize Crisis Escalation Service (Phase 1.4 Safety) ---
   // CRITICAL: Must call setBot() to enable admin notifications
   crisisEscalationService.setBot(bot as unknown as Bot<Context>);
 
   // Configure admin user IDs from environment (comma-separated)
+  // ISO 14971: Crisis escalation is a safety-critical risk control
   const adminUserIds = process.env.ADMIN_USER_IDS?.split(',').map(id => id.trim()).filter(Boolean) || [];
   if (adminUserIds.length > 0) {
     crisisEscalationService.updateConfig({ adminUserIds });
     console.log(`[CrisisEscalation] Configured with ${adminUserIds.length} admin(s) for emergency notifications`);
+  } else if (process.env.NODE_ENV === 'production') {
+    console.error('[CrisisEscalation] FATAL: No ADMIN_USER_IDS in production — crisis escalation risk control missing');
+    process.exit(1);
   } else {
-    console.warn('[CrisisEscalation] WARNING: No ADMIN_USER_IDS configured - crisis escalation will not notify anyone!');
+    console.warn('[CrisisEscalation] WARNING: No ADMIN_USER_IDS configured — crisis escalation disabled in dev mode');
   }
 
   // --- Sprint 1 CogniCore: PLRNN-based Sleep Prediction Service ---

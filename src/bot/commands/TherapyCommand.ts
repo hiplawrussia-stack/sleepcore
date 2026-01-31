@@ -512,6 +512,26 @@ export class TherapyCommand implements IConversationCommand {
       case 'evidence_new2023':
         return this.showNew2023Recommendations(ctx, conversationData);
 
+      // ==================== Cognitive Therapy Handlers (Phase 5a) ====================
+      case 'behavioral_experiment':
+        return this.showBehavioralExperiment(ctx, conversationData);
+
+      case 'hygiene_education':
+        return this.showHygieneEducation(ctx, coreId, conversationData);
+
+      case 'cognitive_progress':
+        return this.showCognitiveProgress(ctx, conversationData);
+
+      // ==================== Extended Evidence Handlers (Phase 5b) ====================
+      case 'evidence_pharma':
+        return this.showPharmacologicalEvidence(ctx, conversationData);
+
+      case 'evidence_dcbti':
+        return this.showDCBTICompliance(ctx, conversationData);
+
+      case 'evidence_integrated':
+        return this.showIntegratedRecommendation(ctx, conversationData);
+
       default:
         return { success: false, error: `Unknown action: ${action}` };
     }
@@ -617,6 +637,20 @@ ${formatter.tip('Каждая сессия занимает 30-60 минут. П
     if (session?.plan && currentWeek >= 2) {
       keyboard.push([
         { text: '📊 Еженедельный обзор SRT', callbackData: 'therapy:weekly_review' },
+      ]);
+    }
+
+    // Cognitive therapy tools (Core 5 support)
+    if (currentWeek >= 5) {
+      keyboard.push([
+        { text: '🔬 Поведенческий эксперимент', callbackData: 'therapy:behavioral_experiment' },
+      ]);
+    }
+
+    // Sleep hygiene education (Core 4 support)
+    if (currentWeek >= 4) {
+      keyboard.push([
+        { text: '📚 Гигиена сна', callbackData: 'therapy:hygiene_education' },
       ]);
     }
 
@@ -2322,6 +2356,9 @@ ${sonya.tip('КПТ-И — «золотой стандарт» лечения х
     const keyboard: IInlineButton[][] = [
       [{ text: '📈 Эффективность компонентов КПТ-И', callbackData: 'therapy:evidence_components' }],
       [{ text: '🆕 Что нового в 2023?', callbackData: 'therapy:evidence_new2023' }],
+      [{ text: '💊 Фармакология (для врача)', callbackData: 'therapy:evidence_pharma' }],
+      [{ text: '🏥 Соответствие dCBT-I', callbackData: 'therapy:evidence_dcbti' }],
+      [{ text: '🌐 Интегрированная рекомендация', callbackData: 'therapy:evidence_integrated' }],
       [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
     ];
 
@@ -2448,6 +2485,468 @@ ${sonya.tip('Рекомендации обновляются на основе �
       keyboard,
       metadata: { step: 'evidence_new2023' },
     };
+  }
+
+  // ==================== Phase 5a: Cognitive Therapy Methods ====================
+
+  /**
+   * Show behavioral experiment design for a dysfunctional belief
+   *
+   * Scientific basis (HIGH confidence):
+   * - Harvey (2002): Cognitive model of insomnia — prediction testing
+   * - Morin et al. (1993): DBAS-16 as primary cognitive outcome
+   * - European Guideline 2023: Cognitive restructuring Grade A component
+   *
+   * Implementation: Uses CognitiveRestructuringEngine.designExperiment()
+   * which generates hypothesis, experiment design, and predicted outcome
+   * categorized by belief type (expectations, consequences, control, medication, causes).
+   */
+  private async showBehavioralExperiment(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const session = ctx.sleepCore.getSession(ctx.userId);
+    if (!session) {
+      return {
+        success: true,
+        message: `${formatter.warning('Сессия не найдена')}\n\nНачните с /start для прохождения программы.`,
+      };
+    }
+
+    // Identify beliefs from session data or use a common insomnia belief
+    const beliefs = ctx.sleepCore.identifyCognitiveBeliefs(
+      ctx.userId,
+      'Я не смогу функционировать, если не высплюсь'
+    );
+
+    if (beliefs.length === 0) {
+      return {
+        success: true,
+        message: `${formatter.header('🔬 Поведенческий эксперимент')}\n\n${formatter.warning('Недостаточно данных')}\n\nДля проведения поведенческих экспериментов необходимы данные о вашем сне. Продолжайте вести дневник сна (/diary).`,
+        keyboard: [[{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }]],
+      };
+    }
+
+    const belief = beliefs[0];
+    const experiment = ctx.sleepCore.designBehavioralExperiment(belief);
+    const questions = ctx.sleepCore.getSocraticQuestions(belief);
+
+    const message = `
+${formatter.header('🔬 Поведенческий эксперимент')}
+_(Harvey, 2002; Morin, 1993)_
+
+${formatter.divider()}
+
+*Убеждение:* "${belief.belief}"
+*Категория:* ${this.getBeliefCategoryRu(belief.category)}
+*Интенсивность:* ${(belief.intensity * 100).toFixed(0)}%
+
+${formatter.divider()}
+
+*🔍 Гипотеза:*
+${experiment.hypothesis}
+
+*📋 Эксперимент:*
+${experiment.experiment}
+
+*📊 Ожидаемый результат:*
+${experiment.predictedOutcome}
+
+${formatter.divider()}
+
+*❓ Вопросы для размышления:*
+${questions.slice(0, 3).map((q, i) => `${i + 1}. ${q}`).join('\n')}
+
+${formatter.divider()}
+
+${sonya.tip('Поведенческие эксперименты — один из самых эффективных методов когнитивной реструктуризации. Проверяйте свои убеждения на практике!')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📊 Когнитивный прогресс', callbackData: 'therapy:cognitive_progress' }],
+      [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'behavioral_experiment', belief: belief.category },
+    };
+  }
+
+  /**
+   * Show sleep hygiene educational content
+   *
+   * Scientific basis (HIGH confidence):
+   * - Hauri (1977): Sleep hygiene principles
+   * - European Guideline 2023: SHE NOT sufficient as standalone (Grade A)
+   * - Irish et al. 2015: SHE as adjunct to CBT-I, effect size d=0.12
+   *
+   * Renders educational content from SleepHygieneEngine including
+   * tips, myths, and category-specific information.
+   */
+  private async showHygieneEducation(
+    ctx: ISleepCoreContext,
+    categoryId: string | undefined,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    type SleepHygieneCategory = import('../../cbt-i/interfaces/ICBTIComponents').SleepHygieneCategory;
+
+    const validCategories: SleepHygieneCategory[] = [
+      'caffeine', 'alcohol', 'nicotine', 'exercise',
+      'diet', 'environment', 'screen_time', 'routine', 'stress',
+    ];
+
+    // If no category specified, show category menu
+    if (!categoryId || !validCategories.includes(categoryId as SleepHygieneCategory)) {
+      const categoryNames: Record<SleepHygieneCategory, string> = {
+        caffeine: '☕ Кофеин',
+        alcohol: '🍷 Алкоголь',
+        nicotine: '🚬 Никотин',
+        exercise: '🏃 Физическая активность',
+        diet: '🍽️ Питание',
+        environment: '🌡️ Среда сна',
+        screen_time: '📱 Экраны и синий свет',
+        routine: '⏰ Режим дня',
+        stress: '🧘 Управление стрессом',
+      };
+
+      const keyboard: IInlineButton[][] = validCategories.map(cat => [{
+        text: categoryNames[cat],
+        callbackData: `therapy:hygiene_education:${cat}`,
+      }]);
+      keyboard.push([{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }]);
+
+      return {
+        success: true,
+        message: `${formatter.header('📚 Гигиена сна — Обучение')}\n_(Hauri, 1977; European Guideline 2023)_\n\n${sonya.tip('Гигиена сна сама по себе недостаточна для лечения бессонницы (Grade A), но является важным компонентом КПТ-И.')}\n\nВыберите тему:`,
+        keyboard,
+        metadata: { step: 'hygiene_education_menu' },
+      };
+    }
+
+    const category = categoryId as SleepHygieneCategory;
+    const education = ctx.sleepCore.getHygieneEducation(category);
+
+    const tipsFormatted = education.tips
+      .map((tip, i) => `${i + 1}. ${tip}`)
+      .join('\n');
+
+    const mythsFormatted = education.myths
+      .map(myth => `❌ ${myth}`)
+      .join('\n');
+
+    const message = `
+${formatter.header(`📚 ${education.title}`)}
+
+${formatter.divider()}
+
+${education.content}
+
+${formatter.divider()}
+
+*✅ Рекомендации:*
+${tipsFormatted}
+
+${formatter.divider()}
+
+*🚫 Распространённые мифы:*
+${mythsFormatted}
+
+${formatter.divider()}
+
+${sonya.tip('Помните: гигиена сна — это часть комплексной терапии. Она работает лучше всего в сочетании с другими компонентами КПТ-И.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📚 Другие темы', callbackData: 'therapy:hygiene_education' }],
+      [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'hygiene_education', category },
+    };
+  }
+
+  /**
+   * Show cognitive restructuring progress report
+   *
+   * Note: getCognitiveProgressReport() currently returns null
+   * as belief history storage is not yet implemented.
+   * This handler gracefully handles that case.
+   */
+  private async showCognitiveProgress(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const report = ctx.sleepCore.getCognitiveProgressReport(ctx.userId);
+
+    if (!report) {
+      return {
+        success: true,
+        message: `${formatter.header('📊 Когнитивный прогресс')}\n\n${formatter.warning('Недостаточно данных')}\n\nДля формирования отчёта необходимо:\n• Минимум 2 недели работы с убеждениями\n• Регулярное ведение дневника мыслей\n\nИспользуйте /therapy → Core 5 (Мысли о сне) для начала когнитивной реструктуризации.`,
+        keyboard: [
+          [{ text: '🔬 Поведенческий эксперимент', callbackData: 'therapy:behavioral_experiment' }],
+          [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+        ],
+        metadata: { step: 'cognitive_progress' },
+      };
+    }
+
+    const message = `
+${formatter.header('📊 Когнитивный прогресс')}
+_(Beck, 1979; Morin, 1993)_
+
+${formatter.divider()}
+
+${report.toMarkdownTable()}
+
+${formatter.divider()}
+
+*Обработано убеждений:* ${report.summary.totalBeliefs}
+*Доминирующая категория:* ${this.getBeliefCategoryRu(report.summary.dominantCategory)}
+
+${sonya.tip('Когнитивная реструктуризация — постепенный процесс. Каждая неделя работы приближает вас к здоровому отношению ко сну.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🔬 Поведенческий эксперимент', callbackData: 'therapy:behavioral_experiment' }],
+      [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'cognitive_progress' },
+    };
+  }
+
+  // ==================== Phase 5b: Extended Evidence Methods ====================
+
+  /**
+   * Show pharmacological evidence (for healthcare provider reference)
+   *
+   * Scientific basis (HIGH confidence):
+   * - European Guideline 2023: Updated pharmacological recommendations
+   * - Daridorexant (DORA): NEW Grade A, up to 3 months (Idorsia 2023)
+   * - BZ/Z-drugs: ≤4 weeks Grade A
+   * - Melatonin PR: ≥55 years, up to 3 months Grade B
+   * - Antihistamines: NOT recommended Grade A
+   *
+   * IMPORTANT: For informational purposes only, not prescribing advice.
+   * System is not authorized to recommend medications.
+   */
+  private async showPharmacologicalEvidence(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const allEvidence = ctx.sleepCore.getPharmacologicalEvidence();
+
+    const gradeIcons: Record<string, string> = {
+      A: '🟢', B: '🟡', C: '🔵', D: '⚪',
+    };
+
+    const evidenceLines = allEvidence
+      .map(e => {
+        const icon = gradeIcons[e.evidenceGrade] || '⚪';
+        const recIcon = e.isRecommended ? '✅' : '⛔';
+        return `${icon} *${e.agent}* (${e.class})\n   ${recIcon} ${e.notes}\n   Уровень: ${e.evidenceGrade} | ${e.recommendedDuration}`;
+      })
+      .join('\n\n');
+
+    const message = `
+${formatter.header('💊 Фармакологическая доказательная база')}
+_(European Insomnia Guideline 2023, Riemann et al.)_
+
+${formatter.divider()}
+
+${formatter.warning('Только для справки — решение о медикаментах принимает врач.')}
+
+${formatter.divider()}
+
+${evidenceLines}
+
+${formatter.divider()}
+
+${sonya.tip('КПТ-И остаётся терапией первой линии (Grade A). Медикаменты рассматриваются при недостаточном ответе на КПТ-И или как временная мера.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📊 Обзор доказательной базы', callbackData: 'therapy:evidence_overview' }],
+      [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'evidence_pharma' },
+    };
+  }
+
+  /**
+   * Show dCBT-I compliance status
+   *
+   * Scientific basis (HIGH confidence):
+   * - Espie, Torous & Brennan (2022): Digital CBT-I implementation criteria
+   * - FDA 510(k): Somryst (K191716), SleepioRx cleared as Class II
+   * - DiGA/BfArM: Somnio, HelloBetter Sleep permanent listing
+   *
+   * Shows which dCBT-I criteria the platform meets.
+   */
+  private async showDCBTICompliance(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    // Check compliance against our implemented features
+    const criteria: Record<string, boolean> = {
+      sleepDiary: true,
+      sleepRestriction: true,
+      stimulusControl: true,
+      cognitiveRestructuring: true,
+      sleepHygiene: true,
+      relaxation: true,
+      personalizedTiming: true,
+      progressTracking: true,
+      automatedAdjustment: true,
+      clinicianDashboard: false, // Not yet implemented
+    };
+
+    const compliance = ctx.sleepCore.checkDCBTICompliance(criteria);
+
+    const statusIcon = compliance.compliant ? '✅' : '⚠️';
+    const statusText = compliance.compliant
+      ? 'Платформа соответствует критериям dCBT-I'
+      : 'Частичное соответствие критериям dCBT-I';
+
+    const missingReqLines = compliance.missingRequired.length > 0
+      ? `\n*Отсутствующие обязательные:*\n${compliance.missingRequired.map(r => `❌ ${r}`).join('\n')}`
+      : '';
+
+    const missingOptLines = compliance.missingOptional.length > 0
+      ? `\n*Отсутствующие рекомендуемые:*\n${compliance.missingOptional.map(r => `⚠️ ${r}`).join('\n')}`
+      : '';
+
+    const message = `
+${formatter.header('🏥 Соответствие стандартам dCBT-I')}
+_(Espie, Torous & Brennan, 2022)_
+
+${formatter.divider()}
+
+${statusIcon} *${statusText}*
+
+*Реализованные компоненты:*
+${Object.entries(criteria)
+  .filter(([, v]) => v)
+  .map(([k]) => `✅ ${k}`)
+  .join('\n')}
+${missingReqLines}${missingOptLines}
+
+${formatter.divider()}
+
+*Регуляторные аналоги:*
+• Somryst — FDA 510(k) K191716
+• SleepioRx — FDA 510(k) 2024
+• Somnio — DiGA (Германия)
+
+${sonya.tip('Наша платформа следует стандартам FDA-cleared dCBT-I продуктов, обеспечивая доказательный подход к лечению бессонницы.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📊 Обзор доказательной базы', callbackData: 'therapy:evidence_overview' }],
+      [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'evidence_dcbti' },
+    };
+  }
+
+  /**
+   * Show integrated treatment recommendation
+   *
+   * Combines circadian, cultural (TCM/Ayurveda), and evidence-based factors
+   * into a personalized treatment plan overview.
+   */
+  private async showIntegratedRecommendation(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const recommendation = ctx.sleepCore.getIntegratedRecommendation(ctx.userId);
+
+    if (!recommendation) {
+      return {
+        success: true,
+        message: `${formatter.header('🌐 Интегрированная рекомендация')}\n\n${formatter.warning('Недостаточно данных')}\n\nДля формирования интегрированной рекомендации необходима активная сессия. Начните с /start.`,
+        keyboard: [[{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }]],
+      };
+    }
+
+    const adaptationsBlock = recommendation.culturalAdaptations.length > 0
+      ? `\n*🌍 Культурные адаптации:*\n${recommendation.culturalAdaptations.map(a => `• ${a}`).join('\n')}`
+      : '';
+
+    const factorsBlock = recommendation.personalizationFactors.length > 0
+      ? `\n*🎯 Факторы персонализации:*\n${recommendation.personalizationFactors.map(f => `• ${f}`).join('\n')}`
+      : '';
+
+    const scheduleBlock = recommendation.weeklySchedule.length > 0
+      ? `\n*📅 Недельное расписание:*\n${recommendation.weeklySchedule.map(d => `*${d.day}:* ${d.activities.join(', ')}`).join('\n')}`
+      : '';
+
+    const message = `
+${formatter.header('🌐 Интегрированная рекомендация')}
+
+${formatter.divider()}
+
+*Основной подход:* ${recommendation.primaryApproach}
+*Уровень доказательности:* Grade ${recommendation.evidenceLevel}
+
+*Дополнительные подходы:*
+${recommendation.secondaryApproaches.map(a => `• ${a}`).join('\n')}
+${adaptationsBlock}${factorsBlock}
+
+${formatter.divider()}
+${scheduleBlock}
+
+${sonya.tip('Рекомендация учитывает ваш хронотип, культурные предпочтения и индивидуальные факторы для оптимального результата.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📊 Обзор доказательной базы', callbackData: 'therapy:evidence_overview' }],
+      [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'evidence_integrated' },
+    };
+  }
+
+  /**
+   * Get Russian name for belief category
+   */
+  private getBeliefCategoryRu(
+    category: 'expectations' | 'consequences' | 'control' | 'medication' | 'causes'
+  ): string {
+    const names: Record<string, string> = {
+      expectations: 'Ожидания от сна',
+      consequences: 'Последствия бессонницы',
+      control: 'Контроль над сном',
+      medication: 'Убеждения о лекарствах',
+      causes: 'Причины бессонницы',
+    };
+    return names[category] || category;
   }
 
   /**

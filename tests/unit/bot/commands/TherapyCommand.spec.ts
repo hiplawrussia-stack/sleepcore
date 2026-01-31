@@ -2099,6 +2099,281 @@ describe('TherapyCommand', () => {
     });
   });
 
+  // ==================== Phase 5a: Cognitive Therapy Callbacks ====================
+
+  describe('Phase 5a: behavioral_experiment callback', () => {
+    function createCognitiveMockContext(overrides: Partial<Record<string, unknown>> = {}): ISleepCoreContext {
+      const mockSleepCore = {
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          currentPhase: 'treatment',
+          weekNumber: 5,
+        }),
+        identifyCognitiveBeliefs: jest.fn().mockReturnValue([{
+          id: 'belief-1',
+          category: 'consequences',
+          belief: 'Если я не высплюсь, я не смогу работать',
+          intensity: 0.8,
+          frequency: 0.6,
+          evidenceFor: [],
+          evidenceAgainst: [],
+          alternativeThought: '',
+          isActive: true,
+        }]),
+        designBehavioralExperiment: jest.fn().mockReturnValue({
+          hypothesis: 'Если я сплю < 7 часов, мои рабочие показатели снизятся',
+          experiment: 'Отследите свою продуктивность в день после <7ч сна и >7ч сна',
+          predictedOutcome: 'Реальная продуктивность будет выше ожидаемой',
+        }),
+        getSocraticQuestions: jest.fn().mockReturnValue([
+          'Были ли случаи, когда вы плохо спали, но хорошо работали?',
+          'Как вы оцениваете свою работу объективно?',
+          'Что самое худшее, что может случиться?',
+        ]),
+        getProgressReport: jest.fn().mockReturnValue(null),
+        estimateISI: jest.fn().mockReturnValue(0),
+        ...overrides,
+      } as unknown as SleepCoreAPI;
+
+      return {
+        userId: 'test-user-123',
+        chatId: 12345,
+        displayName: 'Test User',
+        languageCode: 'ru',
+        sleepCore: mockSleepCore,
+      } as unknown as ISleepCoreContext;
+    }
+
+    it('should show experiment design with hypothesis', async () => {
+      const ctx = createCognitiveMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:behavioral_experiment', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Поведенческий эксперимент');
+      expect(result.message).toContain('Гипотеза');
+      expect(result.message).toContain('Эксперимент');
+      expect(result.message).toContain('Ожидаемый результат');
+    });
+
+    it('should display belief and its category', async () => {
+      const ctx = createCognitiveMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:behavioral_experiment', {});
+
+      expect(result.message).toContain('Если я не высплюсь');
+      expect(result.message).toContain('Последствия бессонницы');
+    });
+
+    it('should display Socratic questions', async () => {
+      const ctx = createCognitiveMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:behavioral_experiment', {});
+
+      expect(result.message).toContain('Вопросы для размышления');
+      expect(result.message).toContain('Были ли случаи');
+    });
+
+    it('should show scientific attribution (Harvey, Morin)', async () => {
+      const ctx = createCognitiveMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:behavioral_experiment', {});
+
+      expect(result.message).toContain('Harvey');
+      expect(result.message).toContain('Morin');
+    });
+
+    it('should have navigation buttons', async () => {
+      const ctx = createCognitiveMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:behavioral_experiment', {});
+
+      const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+      expect(allCallbacks).toContain('therapy:cognitive_progress');
+      expect(allCallbacks).toContain('therapy:menu');
+    });
+
+    it('should handle no session gracefully', async () => {
+      const ctx = createCognitiveMockContext({
+        getSession: jest.fn().mockReturnValue(null),
+      });
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:behavioral_experiment', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Сессия не найдена');
+    });
+
+    it('should handle no beliefs gracefully', async () => {
+      const ctx = createCognitiveMockContext({
+        identifyCognitiveBeliefs: jest.fn().mockReturnValue([]),
+      });
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:behavioral_experiment', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Недостаточно данных');
+    });
+  });
+
+  describe('Phase 5a: hygiene_education callback', () => {
+    it('should show category menu when no category specified', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:hygiene_education', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Гигиена сна');
+      expect(result.message).toContain('Hauri');
+      // Should have 8 categories + back button
+      expect(result.keyboard!.length).toBeGreaterThanOrEqual(9);
+    });
+
+    it('should show educational content for caffeine category', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:hygiene_education:caffeine', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Рекомендации');
+      expect(result.message).toContain('мифы');
+    });
+
+    it('should show educational content for environment category', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:hygiene_education:environment', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Рекомендации');
+    });
+
+    it('should show category menu for invalid category', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:hygiene_education:invalid', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Выберите тему');
+    });
+
+    it('should have navigation back to other topics', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:hygiene_education:caffeine', {});
+
+      const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+      expect(allCallbacks).toContain('therapy:hygiene_education');
+      expect(allCallbacks).toContain('therapy:menu');
+    });
+  });
+
+  describe('Phase 5a: cognitive_progress callback', () => {
+    it('should show insufficient data message (getCognitiveProgressReport returns null)', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:cognitive_progress', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Недостаточно данных');
+      expect(result.message).toContain('Core 5');
+    });
+
+    it('should offer behavioral experiment button', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:cognitive_progress', {});
+
+      const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+      expect(allCallbacks).toContain('therapy:behavioral_experiment');
+      expect(allCallbacks).toContain('therapy:menu');
+    });
+  });
+
+  // ==================== Phase 5b: Extended Evidence Callbacks ====================
+
+  describe('Phase 5b: evidence_pharma callback', () => {
+    it('should show pharmacological evidence', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:evidence_pharma', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Фармакологическая');
+      expect(result.message).toContain('European Insomnia Guideline 2023');
+    });
+
+    it('should include safety disclaimer', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:evidence_pharma', {});
+
+      expect(result.message).toContain('решение о медикаментах принимает врач');
+    });
+
+    it('should have navigation buttons', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:evidence_pharma', {});
+
+      const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+      expect(allCallbacks).toContain('therapy:evidence_overview');
+      expect(allCallbacks).toContain('therapy:menu');
+    });
+  });
+
+  describe('Phase 5b: evidence_dcbti callback', () => {
+    it('should show dCBT-I compliance status', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:evidence_dcbti', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('dCBT-I');
+      expect(result.message).toContain('Espie');
+    });
+
+    it('should list regulatory analogues', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:evidence_dcbti', {});
+
+      expect(result.message).toContain('Somryst');
+      expect(result.message).toContain('SleepioRx');
+      expect(result.message).toContain('Somnio');
+    });
+
+    it('should have navigation buttons', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:evidence_dcbti', {});
+
+      const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+      expect(allCallbacks).toContain('therapy:evidence_overview');
+      expect(allCallbacks).toContain('therapy:menu');
+    });
+  });
+
+  describe('Phase 5b: evidence_integrated callback', () => {
+    it('should show integrated recommendation', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:evidence_integrated', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Интегрированная рекомендация');
+    });
+
+    it('should show primary approach as CBT-I', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:evidence_integrated', {});
+
+      expect(result.message).toContain('КПТ-И');
+      expect(result.message).toContain('Grade A');
+    });
+
+    it('should handle no session', async () => {
+      const ctx = createMockContext({ hasSession: false });
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:evidence_integrated', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Недостаточно данных');
+    });
+  });
+
+  // ==================== Phase 5b: Evidence overview buttons ====================
+
+  describe('Phase 5b: evidence_overview buttons', () => {
+    it('should include pharmacology, dCBT-I and integrated buttons', async () => {
+      const ctx = createMockContext();
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:evidence_overview', {});
+
+      const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+      expect(allCallbacks).toContain('therapy:evidence_pharma');
+      expect(allCallbacks).toContain('therapy:evidence_dcbti');
+      expect(allCallbacks).toContain('therapy:evidence_integrated');
+    });
+  });
+
   describe('Clinical Safety - Minimum TIB', () => {
     it('should mention 5.5 hour minimum in sleep_behavior_1', async () => {
       const ctx = createMockContext();

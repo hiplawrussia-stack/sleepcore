@@ -513,7 +513,19 @@ export class SleepCoreAPI {
         if (progress) {
           currentWeek = progress.currentWeek;
 
-          if (progress.responseStatus === 'responding') {
+          // Check for treatment completion (Week 8+ with remission)
+          // ISI ≤ 7 = remission (Morin et al., 2011)
+          const TREATMENT_COMPLETION_WEEK = 8;
+          const ISI_REMISSION_CUTOFF = 7;
+
+          if (
+            progress.currentWeek >= TREATMENT_COMPLETION_WEEK &&
+            progress.currentISI <= ISI_REMISSION_CUTOFF
+          ) {
+            this.endSession(entry.userId);
+            message = `🎉 Поздравляем! Ваш ISI: ${progress.currentISI} — ремиссия бессонницы достигнута! ` +
+              'Программа завершена. Продолжайте поддерживать здоровые привычки сна.';
+          } else if (progress.responseStatus === 'responding') {
             message = `Запись сохранена. Вы на верном пути! ISI: ${progress.currentISI} (снижение на ${progress.isiChange})`;
           } else {
             // ===============================================================
