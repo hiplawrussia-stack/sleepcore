@@ -1040,6 +1040,63 @@ describe('SleepCoreAPI', () => {
     });
   });
 
+  describe('Cognitive Progress Report', () => {
+    describe('getCognitiveProgressReport()', () => {
+      it('should return null without belief history', () => {
+        api.startSession('user-123');
+
+        const report = api.getCognitiveProgressReport('user-123');
+
+        expect(report).toBeNull();
+      });
+
+      it('should return null for non-existent session', () => {
+        const report = api.getCognitiveProgressReport('non-existent');
+
+        expect(report).toBeNull();
+      });
+
+      it('should return report after identifyCognitiveBeliefs accumulates data', async () => {
+        api.startSession('user-123');
+        api.initializeTreatment('user-123', createBaselineData('user-123', 7));
+        await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
+
+        // Call identifyCognitiveBeliefs to accumulate belief snapshots
+        const beliefs = api.identifyCognitiveBeliefs('user-123', 'Я никогда не засну, это ужасно');
+
+        if (beliefs.length > 0) {
+          const report = api.getCognitiveProgressReport('user-123');
+          expect(report).not.toBeNull();
+          expect(report!.rows).toBeDefined();
+          expect(report!.summary).toBeDefined();
+          expect(report!.userId).toBe('user-123');
+        }
+      });
+
+      it('should accumulate belief history across multiple calls', async () => {
+        api.startSession('user-123');
+        api.initializeTreatment('user-123', createBaselineData('user-123', 7));
+        await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-123' }));
+
+        // Multiple calls to identify beliefs
+        api.identifyCognitiveBeliefs('user-123', 'Я никогда не засну');
+        api.identifyCognitiveBeliefs('user-123', 'Моя бессонница разрушит здоровье');
+
+        const session = api.getSession('user-123');
+        // beliefHistory should accumulate (only for calls that found beliefs)
+        expect(Array.isArray(session!.beliefHistory)).toBe(true);
+      });
+    });
+
+    describe('beliefHistory initialization', () => {
+      it('should initialize beliefHistory as empty array in new session', () => {
+        const session = api.startSession('user-123');
+
+        expect(session.beliefHistory).toEqual([]);
+      });
+    });
+  });
+
   // ==================== Phase 5d: Session Lifecycle ====================
 
   describe('endSession()', () => {

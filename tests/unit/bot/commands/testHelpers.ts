@@ -269,6 +269,10 @@ export function createMockSleepCoreAPI(overrides: Partial<SleepCoreAPI> = {}): S
         avoidanceBehaviors: [],
       },
     ]),
+    recordMBTIPractice: jest.fn().mockReturnValue(null),
+    assessArousal: jest.fn().mockReturnValue(null),
+    identifyCognitiveBeliefs: jest.fn().mockReturnValue([]),
+    getCognitiveProgressReport: jest.fn().mockReturnValue(null),
     getACTISessionSummary: jest.fn().mockReturnValue({
       keyTakeaways: [
         'Борьба с бессонницей усиливает её',

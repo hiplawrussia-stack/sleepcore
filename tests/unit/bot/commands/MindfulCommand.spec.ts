@@ -7,6 +7,7 @@
 import { MindfulCommand, mindfulCommand } from '../../../../src/bot/commands/MindfulCommand';
 import {
   createMockContext,
+  createMockSleepCoreAPI,
   assertSuccessWithMessage,
   assertHasKeyboard,
   assertContainsText,
@@ -131,6 +132,139 @@ describe('MindfulCommand', () => {
 
       // Should have helpful guidance (more than 100 chars)
       expect(result.message?.length).toBeGreaterThan(100);
+    });
+  });
+
+  describe('handleCallback - completion with MBT-I wiring', () => {
+    it('should call recordMBTIPractice when mbtiPlan exists', async () => {
+      const mockSleepCore = createMockSleepCoreAPI({
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          mbtiPlan: { currentWeek: 2, practiceLog: [] },
+        }),
+        recordMBTIPractice: jest.fn().mockReturnValue(null),
+        assessArousal: jest.fn().mockReturnValue({
+          cognitive: 0.6,
+          somatic: 0.4,
+          sleepEffort: 0.3,
+        }),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
+
+      const result = await command.handleCallback(ctx, 'mindful:done:grounding-54321-001', {});
+
+      assertSuccessWithMessage(result);
+      expect(mockSleepCore.recordMBTIPractice).toHaveBeenCalledWith(
+        ctx.userId,
+        expect.objectContaining({
+          completed: true,
+          practice: expect.any(String),
+          duration: expect.any(Number),
+        })
+      );
+    });
+
+    it('should NOT call recordMBTIPractice when mbtiPlan is null', async () => {
+      const mockSleepCore = createMockSleepCoreAPI({
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          mbtiPlan: null,
+        }),
+        recordMBTIPractice: jest.fn(),
+        assessArousal: jest.fn().mockReturnValue(null),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
+
+      await command.handleCallback(ctx, 'mindful:done:grounding-54321-001', {});
+
+      expect(mockSleepCore.recordMBTIPractice).not.toHaveBeenCalled();
+    });
+
+    it('should show arousal info when cognitive arousal > 0.5', async () => {
+      const mockSleepCore = createMockSleepCoreAPI({
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          mbtiPlan: { currentWeek: 2, practiceLog: [] },
+        }),
+        recordMBTIPractice: jest.fn().mockReturnValue(null),
+        assessArousal: jest.fn().mockReturnValue({
+          cognitive: 0.7,
+          somatic: 0.4,
+          sleepEffort: 0.3,
+        }),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
+
+      const result = await command.handleCallback(ctx, 'mindful:done:grounding-54321-001', {});
+
+      expect(result.message).toContain('Когнитивное возбуждение: 70%');
+      expect(result.message).toContain('Ong et al., 2014');
+    });
+
+    it('should use assessArousal for pre-arousal in practice session', async () => {
+      const mockSleepCore = createMockSleepCoreAPI({
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          mbtiPlan: { currentWeek: 2, practiceLog: [] },
+        }),
+        recordMBTIPractice: jest.fn().mockReturnValue(null),
+        assessArousal: jest.fn().mockReturnValue({
+          cognitive: 0.8,
+          somatic: 0.6,
+          sleepEffort: 0.3,
+        }),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
+
+      await command.handleCallback(ctx, 'mindful:done:grounding-54321-001', {});
+
+      expect(mockSleepCore.recordMBTIPractice).toHaveBeenCalledWith(
+        ctx.userId,
+        expect.objectContaining({
+          preArousalLevel: 0.7, // (0.8 + 0.6) / 2
+          postArousalLevel: expect.closeTo(0.49, 1), // 0.7 * 0.7
+        })
+      );
+    });
+  });
+
+  describe('mapContentToPractice', () => {
+    it('should map body_scan content ID correctly', async () => {
+      const mockSleepCore = createMockSleepCoreAPI({
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          mbtiPlan: { currentWeek: 1, practiceLog: [] },
+        }),
+        recordMBTIPractice: jest.fn().mockReturnValue(null),
+        assessArousal: jest.fn().mockReturnValue(null),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
+
+      await command.handleCallback(ctx, 'mindful:done:mindful-body-scan-001', {});
+
+      expect(mockSleepCore.recordMBTIPractice).toHaveBeenCalledWith(
+        ctx.userId,
+        expect.objectContaining({ practice: 'body_scan' })
+      );
+    });
+
+    it('should fallback to breath_awareness for unknown content IDs', async () => {
+      const mockSleepCore = createMockSleepCoreAPI({
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          mbtiPlan: { currentWeek: 1, practiceLog: [] },
+        }),
+        recordMBTIPractice: jest.fn().mockReturnValue(null),
+        assessArousal: jest.fn().mockReturnValue(null),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
+
+      await command.handleCallback(ctx, 'mindful:done:grounding-54321-001', {});
+
+      expect(mockSleepCore.recordMBTIPractice).toHaveBeenCalledWith(
+        ctx.userId,
+        expect.objectContaining({ practice: 'breath_awareness' })
+      );
     });
   });
 

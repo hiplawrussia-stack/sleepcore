@@ -125,6 +125,9 @@ export interface ISleepCoreSession {
   readonly tcmAssessment: ITCMAssessment | null;
   readonly tcmPlan: ITCMCBTIPlan | null;
   readonly ayurvedicAssessment: IAyurvedicAssessment | null;
+
+  /** Weekly snapshots of dysfunctional beliefs for cognitive progress tracking */
+  readonly beliefHistory: import('./cbt-i/interfaces/ICBTIComponents').IDysfunctionalBelief[][];
 }
 
 /**
@@ -343,6 +346,7 @@ export class SleepCoreAPI {
       tcmAssessment: null,
       tcmPlan: null,
       ayurvedicAssessment: null,
+      beliefHistory: [],
     };
 
     this.sessions.set(userId, session);
@@ -1087,7 +1091,16 @@ export class SleepCoreAPI {
     }
 
     const lastState = userStates[userStates.length - 1];
-    return this.cbtiEngine.getCognitiveRestructuringEngine().identifyBeliefs(userText, lastState);
+    const beliefs = this.cbtiEngine.getCognitiveRestructuringEngine().identifyBeliefs(userText, lastState);
+
+    // Accumulate belief snapshots for cognitive progress tracking
+    const session = this.sessions.get(userId);
+    if (session && beliefs.length > 0) {
+      const updatedHistory = [...session.beliefHistory, beliefs];
+      this.sessions.set(userId, { ...session, beliefHistory: updatedHistory });
+    }
+
+    return beliefs;
   }
 
   /**
@@ -1141,9 +1154,12 @@ export class SleepCoreAPI {
   getCognitiveProgressReport(
     userId: string
   ): import('./cbt-i/interfaces/ICBTIComponents').ICognitiveProgressReport | null {
-    // This would need belief history storage - for now return null
-    // TODO: Implement belief history storage in session
-    return null;
+    const session = this.sessions.get(userId);
+    if (!session?.beliefHistory || session.beliefHistory.length === 0) return null;
+
+    return this.cbtiEngine.getCognitiveRestructuringEngine().generateCognitiveProgressReport(
+      session.beliefHistory, userId
+    );
   }
 
   // ============= Relaxation =============
