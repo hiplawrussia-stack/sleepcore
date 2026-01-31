@@ -79,6 +79,20 @@ import {
   type IPharmacologicalEvidence,
 } from './evidence-base';
 
+// Phase 6: Wire orphaned services
+import {
+  metacognitiveEngineService,
+  type IMCTStatus,
+} from './bot/services/MetacognitiveEngineService';
+import {
+  adaptivePersonaService,
+  type IAdaptedMessage,
+} from './bot/services/AdaptivePersonaService';
+import {
+  proactiveIntelligenceService,
+  type IProactiveInsight,
+} from './bot/services/ProactiveIntelligenceService';
+
 /**
  * SleepCore user session
  */
@@ -584,6 +598,16 @@ export class SleepCoreAPI {
         console.error('Failed to get intervention:', error);
         message = 'Запись сохранена.';
       }
+    }
+
+    // Phase 6: Proactive intelligence analysis (non-critical)
+    try {
+      const sleepHistory = this.sleepStates.get(entry.userId) || [];
+      if (sleepHistory.length >= 3) {
+        await proactiveIntelligenceService.runDailyAnalysis(entry.userId, sleepHistory);
+      }
+    } catch {
+      // Non-critical: log and continue — diary entry is already saved
     }
 
     return {
@@ -1459,6 +1483,41 @@ export class SleepCoreAPI {
 
     const mctEngine = this.thirdWave.getMCTEngine();
     return mctEngine.generateSessionSummary(session.mctPlan);
+  }
+
+  // ============= Phase 6: Orphaned Service Access =============
+
+  /**
+   * Get MetacognitiveEngineService singleton
+   * Provides access to MCT orchestration: WorryPostponement, ATT, DM, MCQ-30
+   */
+  getMetacognitiveEngine(): typeof metacognitiveEngineService {
+    return metacognitiveEngineService;
+  }
+
+  /**
+   * Adapt message tone via AdaptivePersonaService (MI + TTM)
+   * Falls back to original message on error
+   */
+  async adaptMessageTone(userId: string, message: string): Promise<string> {
+    try {
+      const result = await adaptivePersonaService.adaptTone(userId, message);
+      return result.adapted;
+    } catch {
+      return message;
+    }
+  }
+
+  /**
+   * Get pending proactive insights for user
+   * Non-critical: returns empty array on error
+   */
+  getProactiveInsights(userId: string): IProactiveInsight[] {
+    try {
+      return proactiveIntelligenceService.getPendingInsights(userId);
+    } catch {
+      return [];
+    }
   }
 
   /**

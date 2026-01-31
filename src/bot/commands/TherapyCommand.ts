@@ -570,7 +570,18 @@ ${formatter.tip('Начните с /start для регистрации в пр�
     const session = ctx.sleepCore.getSession(ctx.userId);
     const currentWeek = this.getCurrentWeek(session);
 
-    const greeting = sonya.greet({ userName: ctx.displayName || 'друг' });
+    // Phase 6: Adapt greeting tone via AdaptivePersonaService (fallback: original)
+    const baseGreeting = sonya.greet({ userName: ctx.displayName || 'друг' });
+    let adaptedGreetingText: string;
+    try {
+      adaptedGreetingText = await ctx.sleepCore.adaptMessageTone(
+        ctx.userId,
+        `${baseGreeting.emoji} Терапевтические сессии`
+      );
+    } catch {
+      adaptedGreetingText = `${baseGreeting.emoji} Терапевтические сессии`;
+    }
+    const greeting = baseGreeting;
 
     // Build session list with lock status
     const sessionLines: string[] = [];
@@ -594,8 +605,19 @@ ${formatter.tip('Начните с /start для регистрации в пр�
       );
     }
 
+    // Phase 6: Get proactive insights (non-critical)
+    let insights: { messageRu: string }[] = [];
+    try {
+      insights = ctx.sleepCore.getProactiveInsights(ctx.userId);
+    } catch {
+      // Non-critical: continue without insights
+    }
+    const insightSection = insights.length > 0
+      ? `\n💡 *Наблюдения Сони:*\n${insights[0].messageRu}\n`
+      : '';
+
     const message = `
-${greeting.emoji} *${sonya.name} — Терапевтические сессии*
+${adaptedGreetingText || `${greeting.emoji} *${sonya.name} — Терапевтические сессии*`}
 
 ${formatter.header('6-недельная программа КПТ-И')}
 
@@ -605,7 +627,7 @@ ${formatter.divider()}
 
 📊 *Ваш прогресс:* Неделя ${currentWeek} из 8
 ${formatter.progressBar((currentWeek / 8) * 100, 10)}
-
+${insightSection}
 ${formatter.tip('Каждая сессия занимает 30-60 минут. Проходите по одной в неделю для лучшего усвоения.')}
     `.trim();
 
@@ -1974,13 +1996,48 @@ ${formatter.tip('Регулярная практика — ключ к сниж�
     // Check MCT plan exists
     const mctSummary = ctx.sleepCore.getMCTSessionSummary(ctx.userId);
 
+    // Phase 6: Activate MCT and get full status from MetacognitiveEngineService
+    const mctEngine = ctx.sleepCore.getMetacognitiveEngine();
+    mctEngine.activateMCT(ctx.userId);
+    const mctStatus = mctEngine.getMCTStatus(ctx.userId);
+
+    // Build component progress section
+    const progressLines: string[] = [];
+    if (mctStatus.active) {
+      const wp = mctStatus.components.worryPostponement;
+      const att = mctStatus.components.att;
+      const dm = mctStatus.components.detachedMindfulness;
+
+      if (wp.sessionsDone > 0) {
+        progressLines.push(`📝 Откладывание беспокойства: ${wp.sessionsDone} сессий`);
+      }
+      if (att.sessionsThisWeek > 0) {
+        progressLines.push(`🎧 ATT: ${att.sessionsThisWeek}/${att.targetSessionsPerWeek} на этой неделе${att.currentStreak > 1 ? ` (серия: ${att.currentStreak})` : ''}`);
+      }
+      if (dm.masteredExercises > 0) {
+        progressLines.push(`🧘 DM: ${dm.masteredExercises} освоенных упражнений`);
+      }
+      if (mctStatus.components.mcq30.assessmentDue) {
+        progressLines.push(`📋 MCQ-30: пора пройти оценку`);
+      }
+    }
+
+    const progressSection = progressLines.length > 0
+      ? `\n*Ваш прогресс:*\n${progressLines.join('\n')}\n`
+      : '';
+
+    // Daily recommendation from MCT engine
+    const recommendationSection = mctStatus.dailyRecommendations.length > 0
+      ? `\n💡 *Рекомендация дня:*\n${mctStatus.dailyRecommendations[0]}\n`
+      : '';
+
     const message = `
 ${formatter.header('🎯 Метакогнитивная терапия (MCT)')}
 
 ${sonya.tip('Выберите упражнение для сегодняшней практики.')}
 
 ${formatter.divider()}
-
+${progressSection}
 *Доступные упражнения:*
 
 📝 *Откладывание беспокойства* (Worry Postponement)
@@ -1994,7 +2051,7 @@ ${formatter.divider()}
    _Примечание: в текущей версии — текстовые инструкции. Аудио-формат в разработке._
 
 ${formatter.divider()}
-
+${recommendationSection}
 ${mctSummary ? `📊 *Ключевые выводы:*\n${mctSummary.keyTakeaways.slice(0, 2).join('\n')}\n` : ''}
 ${formatter.tip('Регулярная практика — ключ к изменению метакогнитивных паттернов. Рекомендуется 15-20 минут ежедневно.')}
     `.trim();
@@ -2047,6 +2104,10 @@ ${formatter.tip('Перейдите в раздел "Альтернативны�
       };
     }
 
+    // Phase 6: Activate MCT tracking via MetacognitiveEngineService
+    const mctEngine = ctx.sleepCore.getMetacognitiveEngine();
+    mctEngine.activateMCT(ctx.userId);
+
     const instructionsList = exercise.instructions
       .map((inst, i) => `${i + 1}. ${inst}`)
       .join('\n');
@@ -2054,6 +2115,13 @@ ${formatter.tip('Перейдите в раздел "Альтернативны�
     const tipsList = exercise.tips
       .map((tip) => `• ${tip}`)
       .join('\n');
+
+    // Get worry statistics from service
+    const worryService = mctEngine.getWorryService();
+    const worryStats = worryService.getStatistics(ctx.userId);
+    const statsLine = worryStats.sessionsCompleted > 0
+      ? `\n📊 *Статистика:* ${worryStats.sessionsCompleted} сессий выполнено\n`
+      : '';
 
     const message = `
 ${formatter.header('📝 Откладывание беспокойства')}
@@ -2069,7 +2137,7 @@ ${formatter.divider()}
 
 ⏰ *Время для беспокойства:* ${exercise.postponeToTime}
 ⏱ *Длительность периода беспокойства:* ${exercise.worryPeriodDuration} минут
-
+${statsLine}
 ${formatter.divider()}
 
 💡 *Советы:*
@@ -2104,18 +2172,34 @@ ${sonya.tip('Помните: цель не в том, чтобы избавит�
     ctx: ISleepCoreContext,
     _data: Record<string, unknown>
   ): Promise<ICommandResult> {
+    // Phase 6: Get DM recommendation from MetacognitiveEngineService
+    const mctEngine = ctx.sleepCore.getMetacognitiveEngine();
+    mctEngine.activateMCT(ctx.userId);
+    const dmService = mctEngine.getDMService();
+    const skillLevel = dmService.getSkillLevel(ctx.userId);
+    const recommendedExercise = skillLevel.recommendedExercise;
+
     const exercise = ctx.sleepCore.getDetachedMindfulnessExercise('racing_thoughts');
 
     const instructionsList = exercise.instructions
       .map((inst, i) => `${i + 1}. ${inst}`)
       .join('\n');
 
+    // Show skill level and recommendation
+    const skillInfo = skillLevel.overall > 0
+      ? `\n📊 *Уровень навыка:* ${Math.round(skillLevel.overall * 100)}%${skillLevel.masteredExercises.length > 0 ? ` (освоено: ${skillLevel.masteredExercises.length})` : ''}\n`
+      : '';
+
+    const recommendationInfo = recommendedExercise
+      ? `\n💡 *Рекомендуемое упражнение:* ${recommendedExercise}\n`
+      : '';
+
     const message = `
 ${formatter.header('🧘 Отстранённая осознанность')}
 _(Detached Mindfulness — Wells, 2009)_
 
 ${formatter.divider()}
-
+${skillInfo}${recommendationInfo}
 *Метафора:*
 _${exercise.metaphor}_
 
@@ -2163,6 +2247,12 @@ ${sonya.tip('Представьте, что мысли — это облака, 
   ): Promise<ICommandResult> {
     const session = ctx.sleepCore.getATTSession(phase);
 
+    // Phase 6: Get ATT progress from MetacognitiveEngineService
+    const mctEngine = ctx.sleepCore.getMetacognitiveEngine();
+    mctEngine.activateMCT(ctx.userId);
+    const attService = mctEngine.getATTService();
+    const attProgress = attService.getProgress(ctx.userId);
+
     const phaseNames: Record<string, string> = {
       selective: 'Избирательное внимание',
       switching: 'Переключение внимания',
@@ -2183,13 +2273,18 @@ ${sonya.tip('Представьте, что мысли — это облака, 
       .map((tip) => `• ${tip}`)
       .join('\n');
 
+    // ATT progress section
+    const progressSection = attProgress.sessionsThisWeek > 0 || attProgress.currentStreak > 0
+      ? `\n📊 *Прогресс ATT:* ${attProgress.sessionsThisWeek}/${attProgress.targetSessionsPerWeek} на этой неделе${attProgress.currentStreak > 1 ? ` | серия: ${attProgress.currentStreak}` : ''}\n`
+      : '';
+
     const message = `
 ${formatter.header(`🎧 Тренировка внимания (ATT) — Фаза ${phaseIcons[phase]}`)}
 *${phaseNames[phase]}*
 _(Attention Training Technique — Wells, 1990)_
 
 ${formatter.divider()}
-
+${progressSection}
 *Инструкции:*
 
 ${instructionsList}
@@ -3845,6 +3940,19 @@ _________________________________
       ? `\n\n${formatter.warning('Окно сна < 6 часов. Будьте внимательны за рулём и при работе с механизмами. При выраженной сонливости сообщите нам.')}`
       : '';
 
+    // Phase 6: Adapt summary tone via AdaptivePersonaService
+    const baseSummary = se >= 90
+      ? 'Отличный результат! Ваш сон стабилизируется.'
+      : se >= 85
+        ? 'Хороший прогресс. Продолжайте в том же духе.'
+        : 'Корректировка поможет улучшить результат.';
+    let adaptedSummary: string;
+    try {
+      adaptedSummary = await ctx.sleepCore.adaptMessageTone(ctx.userId, baseSummary);
+    } catch {
+      adaptedSummary = baseSummary;
+    }
+
     const message = `
 ${formatter.header('📊 Еженедельный обзор SRT')}
 
@@ -3854,6 +3962,8 @@ ${formatter.divider()}
 
 *Эффективность сна (SE):* ${se.toFixed(1)}%
 ${se >= 90 ? '✅ Отлично! SE ≥ 90%' : se >= 85 ? '🟡 Хорошо. SE 85-89%' : '🔻 SE < 85% — требуется корректировка'}
+
+_${adaptedSummary}_
 
 *Решение:* ${decisionEmoji} ${decision}
 

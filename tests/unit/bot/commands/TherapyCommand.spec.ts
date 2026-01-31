@@ -715,6 +715,30 @@ describe('TherapyCommand', () => {
         }),
         getProgressReport: jest.fn().mockReturnValue(null),
         estimateISI: jest.fn().mockReturnValue(0),
+        getMetacognitiveEngine: jest.fn().mockReturnValue({
+          activateMCT: jest.fn(),
+          getMCTStatus: jest.fn().mockReturnValue({
+            active: false, weekNumber: 1, overallSkill: 0,
+            components: {
+              worryPostponement: { enabled: false, worryTimeSet: false, todaysWorryCount: 0, sessionsDone: 0 },
+              att: { enabled: false, sessionsThisWeek: 0, targetSessionsPerWeek: 3, currentStreak: 0 },
+              mcq30: { assessmentDue: false },
+              detachedMindfulness: { skillLevel: 0, masteredExercises: 0, recommendedExercise: '' },
+            },
+            dailyRecommendations: [],
+          }),
+          getWorryService: jest.fn().mockReturnValue({
+            getStatistics: jest.fn().mockReturnValue({ sessionsCompleted: 0 }),
+          }),
+          getDMService: jest.fn().mockReturnValue({
+            getSkillLevel: jest.fn().mockReturnValue({ overall: 0, masteredExercises: [], recommendedExercise: '' }),
+          }),
+          getATTService: jest.fn().mockReturnValue({
+            getProgress: jest.fn().mockReturnValue({ sessionsThisWeek: 0, targetSessionsPerWeek: 3, currentStreak: 0, totalSessions: 0 }),
+          }),
+        }),
+        adaptMessageTone: jest.fn().mockImplementation((_u: string, msg: string) => Promise.resolve(msg)),
+        getProactiveInsights: jest.fn().mockReturnValue([]),
         ...overrides,
       } as unknown as SleepCoreAPI;
 
@@ -1266,6 +1290,7 @@ describe('TherapyCommand', () => {
         }),
         isThirdWaveIndicated: jest.fn().mockReturnValue(false),
         estimateISI: jest.fn().mockReturnValue(0),
+        adaptMessageTone: jest.fn().mockImplementation((_u: string, msg: string) => Promise.resolve(msg)),
         ...overrides,
       } as unknown as SleepCoreAPI;
 
@@ -1549,6 +1574,8 @@ describe('TherapyCommand', () => {
         isThirdWaveIndicated: jest.fn().mockReturnValue(false),
         getProgressReport: jest.fn().mockReturnValue(null),
         estimateISI: jest.fn().mockReturnValue(0),
+        adaptMessageTone: jest.fn().mockImplementation((_u: string, msg: string) => Promise.resolve(msg)),
+        getProactiveInsights: jest.fn().mockReturnValue([]),
       } as unknown as SleepCoreAPI;
 
       return {
@@ -2371,6 +2398,345 @@ describe('TherapyCommand', () => {
       expect(allCallbacks).toContain('therapy:evidence_pharma');
       expect(allCallbacks).toContain('therapy:evidence_dcbti');
       expect(allCallbacks).toContain('therapy:evidence_integrated');
+    });
+  });
+
+  // ==================== Phase 6: Service Integration Tests ====================
+
+  describe('Phase 6: MetacognitiveEngineService Integration', () => {
+    /**
+     * Tests that MCT hub, worry, DM, and ATT callbacks
+     * properly call MetacognitiveEngineService methods.
+     */
+    function createPhase6MCTMockContext(overrides: Partial<Record<string, unknown>> = {}): ISleepCoreContext {
+      const mockMCTEngine = {
+        activateMCT: jest.fn(),
+        getMCTStatus: jest.fn().mockReturnValue({
+          active: true,
+          weekNumber: 2,
+          overallSkill: 0.45,
+          components: {
+            worryPostponement: {
+              enabled: true,
+              worryTimeSet: true,
+              todaysWorryCount: 3,
+              sessionsDone: 5,
+            },
+            att: {
+              enabled: true,
+              sessionsThisWeek: 2,
+              targetSessionsPerWeek: 3,
+              currentStreak: 4,
+            },
+            mcq30: {
+              assessmentDue: true,
+              lastScore: 72,
+              trend: 'improving' as const,
+            },
+            detachedMindfulness: {
+              skillLevel: 0.6,
+              masteredExercises: 3,
+              recommendedExercise: 'cloud_metaphor',
+            },
+          },
+          dailyRecommendations: ['Попробуйте технику откладывания перед сном'],
+        }),
+        getWorryService: jest.fn().mockReturnValue({
+          getStatistics: jest.fn().mockReturnValue({
+            sessionsCompleted: 5,
+            averageDuration: 12,
+            topWorryCategories: [],
+          }),
+        }),
+        getDMService: jest.fn().mockReturnValue({
+          getSkillLevel: jest.fn().mockReturnValue({
+            overall: 0.6,
+            masteredExercises: ['cloud_metaphor', 'leaves_on_stream', 'train_platform'],
+            recommendedExercise: 'cloud_metaphor',
+          }),
+        }),
+        getATTService: jest.fn().mockReturnValue({
+          getProgress: jest.fn().mockReturnValue({
+            sessionsThisWeek: 2,
+            targetSessionsPerWeek: 3,
+            currentStreak: 4,
+            totalSessions: 12,
+          }),
+        }),
+      };
+
+      const mockSleepCore = {
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          currentPhase: 'treatment',
+          weekNumber: 7,
+          mctPlan: { startDate: '2026-01-30', currentSession: 1, totalSessions: 8 },
+        }),
+        isThirdWaveIndicated: jest.fn().mockReturnValue(true),
+        recommendThirdWaveApproach: jest.fn().mockReturnValue(null),
+        getSleepStates: jest.fn().mockReturnValue(Array(7).fill({ date: '2026-01-30' })),
+        initializeMCT: jest.fn().mockReturnValue({
+          startDate: '2026-01-30',
+          currentSession: 1,
+          totalSessions: 8,
+        }),
+        getWorryPostponementExercise: jest.fn().mockReturnValue({
+          instructions: ['Заметьте мысль', 'Отложите на позже', 'Запишите', 'Вернитесь к делу'],
+          postponeToTime: '18:00',
+          worryPeriodDuration: 15,
+          tips: ['Фиксированное время', 'Ограничьте 15 мин'],
+        }),
+        getDetachedMindfulnessExercise: jest.fn().mockReturnValue({
+          instructions: ['Займите положение', 'Наблюдайте за мыслями', 'Не контролируйте'],
+          metaphor: 'Мысли как облака в небе.',
+          duration: 10,
+        }),
+        getATTSession: jest.fn().mockReturnValue({
+          instructions: ['Сосредоточьтесь на звуке', 'Удерживайте внимание', 'Замечайте отвлечения'],
+          tips: ['Начинайте с 5 минут', 'Практикуйте в тишине'],
+        }),
+        getMCTSessionSummary: jest.fn().mockReturnValue({
+          keyTakeaways: ['Мысли — не факты', 'Беспокойство можно отложить'],
+          homeExperiments: ['Откладывание 3 раза в день'],
+          nextSessionPreview: 'Углублённая осознанность',
+          progressHighlights: ['Освоена техника откладывания'],
+        }),
+        getMetacognitiveEngine: jest.fn().mockReturnValue(mockMCTEngine),
+        adaptMessageTone: jest.fn().mockImplementation((_userId: string, msg: string) => Promise.resolve(msg)),
+        getProactiveInsights: jest.fn().mockReturnValue([]),
+        getProgressReport: jest.fn().mockReturnValue(null),
+        estimateISI: jest.fn().mockReturnValue(0),
+        ...overrides,
+      } as unknown as SleepCoreAPI;
+
+      return {
+        userId: 'test-user-123',
+        chatId: 12345,
+        displayName: 'Test User',
+        languageCode: 'ru',
+        sleepCore: mockSleepCore,
+        _mockMCTEngine: mockMCTEngine,
+      } as unknown as ISleepCoreContext;
+    }
+
+    describe('MCT hub shows status from MetacognitiveEngineService', () => {
+      it('should display component progress from getMCTStatus()', async () => {
+        const ctx = createPhase6MCTMockContext();
+        const result = await therapyCommand.handleCallback(ctx, 'therapy:mct_hub', {});
+
+        expect(result.success).toBe(true);
+        // Verify service was called
+        const mockEngine = (ctx as unknown as { _mockMCTEngine: Record<string, jest.Mock> })._mockMCTEngine;
+        expect(mockEngine.activateMCT).toHaveBeenCalledWith('test-user-123');
+        expect(mockEngine.getMCTStatus).toHaveBeenCalledWith('test-user-123');
+
+        // Verify component progress is displayed
+        expect(result.message).toContain('5 сессий');
+        expect(result.message).toContain('2/3 на этой неделе');
+        expect(result.message).toContain('серия: 4');
+        expect(result.message).toContain('3 освоенных упражнений');
+        expect(result.message).toContain('MCQ-30: пора пройти оценку');
+      });
+
+      it('should display daily recommendation', async () => {
+        const ctx = createPhase6MCTMockContext();
+        const result = await therapyCommand.handleCallback(ctx, 'therapy:mct_hub', {});
+
+        expect(result.message).toContain('Рекомендация дня');
+        expect(result.message).toContain('Попробуйте технику откладывания перед сном');
+      });
+    });
+
+    describe('Worry Postponement activates MCT', () => {
+      it('should call activateMCT() and show worry statistics', async () => {
+        const ctx = createPhase6MCTMockContext();
+        const result = await therapyCommand.handleCallback(ctx, 'therapy:mct_worry', {});
+
+        expect(result.success).toBe(true);
+        const mockEngine = (ctx as unknown as { _mockMCTEngine: Record<string, jest.Mock> })._mockMCTEngine;
+        expect(mockEngine.activateMCT).toHaveBeenCalledWith('test-user-123');
+        expect(mockEngine.getWorryService).toHaveBeenCalled();
+
+        // Verify worry statistics are displayed
+        expect(result.message).toContain('5 сессий выполнено');
+      });
+    });
+
+    describe('Detached Mindfulness uses skill level from service', () => {
+      it('should call getDMService().getSkillLevel() and show recommendation', async () => {
+        const ctx = createPhase6MCTMockContext();
+        const result = await therapyCommand.handleCallback(ctx, 'therapy:mct_dm', {});
+
+        expect(result.success).toBe(true);
+        const mockEngine = (ctx as unknown as { _mockMCTEngine: Record<string, jest.Mock> })._mockMCTEngine;
+        expect(mockEngine.getDMService).toHaveBeenCalled();
+
+        // Verify skill info is in the message
+        expect(result.message).toContain('60%');
+        expect(result.message).toContain('освоено: 3');
+      });
+    });
+
+    describe('ATT shows progress from service', () => {
+      it('should call getATTService().getProgress() and show progress', async () => {
+        const ctx = createPhase6MCTMockContext();
+        const result = await therapyCommand.handleCallback(ctx, 'therapy:mct_att_selective', {});
+
+        expect(result.success).toBe(true);
+        const mockEngine = (ctx as unknown as { _mockMCTEngine: Record<string, jest.Mock> })._mockMCTEngine;
+        expect(mockEngine.getATTService).toHaveBeenCalled();
+
+        // Verify ATT progress is displayed
+        expect(result.message).toContain('2/3 на этой неделе');
+        expect(result.message).toContain('серия: 4');
+      });
+    });
+  });
+
+  describe('Phase 6: AdaptivePersonaService Fallback', () => {
+    it('should fallback to original message when adaptMessageTone throws', async () => {
+      const mockSleepCore = {
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          currentPhase: 'treatment',
+          weekNumber: 3,
+          plan: {
+            userId: 'test-user-123',
+            currentWeek: 3,
+            activeComponents: {
+              sleepRestriction: {
+                prescribedTIB: 345,
+                prescribedBedtime: '00:15',
+                prescribedWakeTime: '06:00',
+                efficiencyThreshold: 85,
+                minimumTIB: 300,
+                adjustmentIncrement: 15,
+              },
+              stimulusControl: {},
+              cognitiveTargets: [],
+              hygieneRecommendations: [],
+              relaxationProtocol: {},
+            },
+          },
+        }),
+        getProgressReport: jest.fn().mockReturnValue({
+          currentISI: 12,
+          isiChange: 6,
+          currentSleepEfficiency: 92,
+          sleepEfficiencyChange: 20,
+          currentWeek: 3,
+          overallAdherence: 0.85,
+          achievements: [],
+          improvements: [],
+          responseStatus: 'responding',
+        }),
+        updateTreatmentPlan: jest.fn().mockReturnValue({
+          userId: 'test-user-123',
+          currentWeek: 3,
+          activeComponents: {
+            sleepRestriction: {
+              prescribedTIB: 345,
+              prescribedBedtime: '00:15',
+              prescribedWakeTime: '06:00',
+            },
+            stimulusControl: {},
+            cognitiveTargets: [],
+            hygieneRecommendations: [],
+            relaxationProtocol: {},
+          },
+        }),
+        isThirdWaveIndicated: jest.fn().mockReturnValue(false),
+        estimateISI: jest.fn().mockReturnValue(0),
+        // Phase 6: adaptMessageTone throws error - should fallback gracefully
+        adaptMessageTone: jest.fn().mockRejectedValue(new Error('Service unavailable')),
+      } as unknown as SleepCoreAPI;
+
+      const ctx = {
+        userId: 'test-user-123',
+        chatId: 12345,
+        displayName: 'Test User',
+        languageCode: 'ru',
+        sleepCore: mockSleepCore,
+      } as unknown as ISleepCoreContext;
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:weekly_review', {});
+
+      // Should still succeed — adaptive tone failure is non-critical
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Еженедельный обзор SRT');
+      expect(result.message).toContain('Spielman');
+    });
+
+    it('should use adapted greeting in therapy menu when service works', async () => {
+      const sleepCore = new SleepCoreAPI();
+      sleepCore.startSession('test-user-menu');
+
+      // Mock the Phase 6 methods
+      sleepCore.adaptMessageTone = jest.fn().mockResolvedValue('🌙 Персонализированное приветствие');
+      sleepCore.getProactiveInsights = jest.fn().mockReturnValue([]);
+
+      const ctx = {
+        userId: 'test-user-menu',
+        chatId: 12345,
+        displayName: 'Test User',
+        languageCode: 'ru',
+        sleepCore,
+      } as unknown as ISleepCoreContext;
+
+      const result = await therapyCommand.execute(ctx);
+
+      expect(result.success).toBe(true);
+      expect(sleepCore.adaptMessageTone).toHaveBeenCalled();
+      expect(result.message).toContain('Персонализированное приветствие');
+    });
+  });
+
+  describe('Phase 6: ProactiveIntelligenceService Integration', () => {
+    it('should show proactive insights in therapy menu when available', async () => {
+      const sleepCore = new SleepCoreAPI();
+      sleepCore.startSession('test-user-insights');
+
+      // Mock Phase 6 methods
+      sleepCore.adaptMessageTone = jest.fn().mockImplementation((_u: string, msg: string) => Promise.resolve(msg));
+      sleepCore.getProactiveInsights = jest.fn().mockReturnValue([
+        { id: 'insight-1', messageRu: 'Ваш сон улучшился на 15% за последнюю неделю', priority: 'medium' },
+      ]);
+
+      const ctx = {
+        userId: 'test-user-insights',
+        chatId: 12345,
+        displayName: 'Test User',
+        languageCode: 'ru',
+        sleepCore,
+      } as unknown as ISleepCoreContext;
+
+      const result = await therapyCommand.execute(ctx);
+
+      expect(result.success).toBe(true);
+      expect(sleepCore.getProactiveInsights).toHaveBeenCalledWith('test-user-insights');
+      expect(result.message).toContain('Наблюдения Сони');
+      expect(result.message).toContain('Ваш сон улучшился на 15%');
+    });
+
+    it('should show menu without insights section when no insights available', async () => {
+      const sleepCore = new SleepCoreAPI();
+      sleepCore.startSession('test-user-no-insights');
+
+      sleepCore.adaptMessageTone = jest.fn().mockImplementation((_u: string, msg: string) => Promise.resolve(msg));
+      sleepCore.getProactiveInsights = jest.fn().mockReturnValue([]);
+
+      const ctx = {
+        userId: 'test-user-no-insights',
+        chatId: 12345,
+        displayName: 'Test User',
+        languageCode: 'ru',
+        sleepCore,
+      } as unknown as ISleepCoreContext;
+
+      const result = await therapyCommand.execute(ctx);
+
+      expect(result.success).toBe(true);
+      expect(result.message).not.toContain('Наблюдения Сони');
     });
   });
 
