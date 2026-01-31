@@ -9,6 +9,7 @@ import {
   createMockContext,
   createMockContextNoSession,
   createMockContextNoIntervention,
+  createMockSleepCoreAPI,
   assertSuccessWithMessage,
   assertHasKeyboard,
   assertContainsText,
@@ -120,7 +121,7 @@ describe('TodayCommand', () => {
       const ctx = createMockContext();
       const result = await command.execute(ctx);
 
-      expect(result.metadata?.intervention).toBeDefined();
+      expect(result.metadata?.lastIntervention).toBeDefined();
     });
   });
 
@@ -166,6 +167,71 @@ describe('TodayCommand', () => {
 
       assertContainsText(result, '/diary');
       assertContainsText(result, '/relax');
+    });
+  });
+
+  describe('handleCallback()', () => {
+    describe('today:done', () => {
+      it('should record adherence via trackStimulusControlAdherence', async () => {
+        const mockSleepCore = createMockSleepCoreAPI({
+          trackStimulusControlAdherence: jest.fn().mockReturnValue({
+            overallAdherence: 0.87,
+            components: {},
+          }),
+        });
+        const ctx = createMockContext({ sleepCore: mockSleepCore });
+        const result = await command.handleCallback(ctx, 'today:done', {});
+
+        assertSuccessWithMessage(result);
+        expect(mockSleepCore.trackStimulusControlAdherence).toHaveBeenCalledWith('test-user-123');
+      });
+
+      it('should display adherence score when available', async () => {
+        const mockSleepCore = createMockSleepCoreAPI({
+          trackStimulusControlAdherence: jest.fn().mockReturnValue({
+            overallAdherence: 0.87,
+            components: {},
+          }),
+        });
+        const ctx = createMockContext({ sleepCore: mockSleepCore });
+        const result = await command.handleCallback(ctx, 'today:done', {});
+
+        assertContainsText(result, '87%');
+      });
+
+      it('should work when adherence tracking returns null', async () => {
+        const mockSleepCore = createMockSleepCoreAPI({
+          trackStimulusControlAdherence: jest.fn().mockReturnValue(null),
+        });
+        const ctx = createMockContext({ sleepCore: mockSleepCore });
+        const result = await command.handleCallback(ctx, 'today:done', {});
+
+        assertSuccessWithMessage(result);
+        assertContainsText(result, 'Отлично');
+      });
+
+      it('should set interventionCompleted metadata', async () => {
+        const mockSleepCore = createMockSleepCoreAPI({
+          trackStimulusControlAdherence: jest.fn().mockReturnValue(null),
+        });
+        const ctx = createMockContext({ sleepCore: mockSleepCore });
+        const result = await command.handleCallback(ctx, 'today:done', {});
+
+        expect(result.metadata?.interventionCompleted).toBe(true);
+      });
+
+      it('should offer diary and progress buttons', async () => {
+        const mockSleepCore = createMockSleepCoreAPI({
+          trackStimulusControlAdherence: jest.fn().mockReturnValue(null),
+        });
+        const ctx = createMockContext({ sleepCore: mockSleepCore });
+        const result = await command.handleCallback(ctx, 'today:done', {});
+
+        assertHasKeyboard(result);
+        const buttons = result.keyboard!.flat();
+        expect(buttons.some(b => b.callbackData === 'diary:start')).toBe(true);
+        expect(buttons.some(b => b.callbackData === 'progress:show')).toBe(true);
+      });
     });
   });
 

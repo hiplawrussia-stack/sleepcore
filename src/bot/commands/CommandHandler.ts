@@ -43,6 +43,19 @@ import { adminCommand } from './AdminCommand';
 import { aeReportCommand } from './AEReportCommand';
 // Phase 2.1: Circadian/Chronotype Assessment
 import { chronotypeCommand } from './ChronotypeCommand';
+// CBT-I Therapy Sessions (January 2026 Audit Fix)
+import { therapyCommand } from './TherapyCommand';
+// Sprint 3: Rehearsal & Recall
+import { rehearsalCommand } from './RehearsalCommand';
+import { recallCommand } from './RecallCommand';
+// Sprint 3: Counterfactual Scenarios
+import { whatIfCommand } from './WhatIfCommand';
+// Sprint 4: Advanced AI Commands
+import { predictCommand } from './PredictCommand';
+import { insightsCommand } from './InsightsCommand';
+import { explainCommand } from './ExplainCommand';
+import { safetyCommand } from './SafetyCommand';
+import { twinCommand } from './TwinCommand';
 
 /**
  * Command Handler implementation
@@ -573,6 +586,23 @@ export class CommandHandler implements ICommandRegistry {
 
     // Phase 2.1: Circadian/Chronotype Assessment
     this.register(chronotypeCommand);
+
+    // CBT-I Therapy Sessions (January 2026 Audit Fix)
+    this.register(therapyCommand);
+
+    // Sprint 3: Rehearsal & Recall
+    this.register(rehearsalCommand);
+    this.register(recallCommand);
+
+    // Sprint 3: Counterfactual Scenarios
+    this.register(whatIfCommand);
+
+    // Sprint 4: Advanced AI Commands
+    this.register(predictCommand);
+    this.register(insightsCommand);
+    this.register(explainCommand);
+    this.register(safetyCommand);
+    this.register(twinCommand);
   }
 }
 

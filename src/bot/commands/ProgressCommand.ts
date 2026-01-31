@@ -13,7 +13,7 @@
  */
 
 import type {
-  ICommand,
+  IConversationCommand,
   ISleepCoreContext,
   ICommandResult,
   IInlineButton,
@@ -29,11 +29,12 @@ import {
 /**
  * /progress Command Implementation
  */
-export class ProgressCommand implements ICommand {
+export class ProgressCommand implements IConversationCommand {
   readonly name = 'progress';
   readonly description = 'Ваш прогресс за неделю';
   readonly aliases = ['stats', 'report', 'прогресс'];
   readonly requiresSession = true;
+  readonly steps = ['initial'];
 
   /**
    * Execute the command
@@ -106,6 +107,12 @@ ${formatter.tip('Чем больше данных, тем точнее анал�
     const seTrend = ctx.sleepCore.getSleepEfficiencyTrend(ctx.userId, 7);
     const trendChart = this.buildTrendChart(seTrend);
 
+    // Get weekly summary for diary-based recommendations
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - 7);
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+    const weeklySummary = ctx.sleepCore.getWeeklySummary(ctx.userId, weekStartStr);
+
     // Response status indicator
     const statusInfo = this.getResponseStatusInfo(report.responseStatus);
 
@@ -138,9 +145,14 @@ ${formatter.tip('Чем больше данных, тем точнее анал�
       ? formatter.bulletList(report.achievements.slice(0, 3))
       : 'Пока нет достижений';
 
-    // Improvements list
-    const improvementsList = report.improvements.length > 0
-      ? formatter.bulletList(report.improvements.slice(0, 3))
+    // Improvements list — enrich with diary-based weekly recommendations
+    const combinedImprovements = [
+      ...report.improvements,
+      ...(weeklySummary?.recommendations ?? []),
+    ];
+    const uniqueImprovements = [...new Set(combinedImprovements)];
+    const improvementsList = uniqueImprovements.length > 0
+      ? formatter.bulletList(uniqueImprovements.slice(0, 4))
       : 'Всё идёт хорошо!';
 
     const message = `
@@ -197,6 +209,151 @@ _${statusInfo.description}_
       keyboard,
       metadata: { report },
     };
+  }
+
+  // ==================== Conversation Interface ====================
+
+  async handleStep(
+    ctx: ISleepCoreContext,
+    step: string,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    if (step === 'initial') {
+      return this.execute(ctx);
+    }
+    return { success: false, error: `Unknown step: ${step}` };
+  }
+
+  async handleCallback(
+    ctx: ISleepCoreContext,
+    callbackData: string,
+    _conversationData: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const parts = callbackData.split(':');
+    if (parts[0] !== 'progress') {
+      return { success: false, error: 'Invalid callback' };
+    }
+
+    const action = parts[1];
+
+    switch (action) {
+      case 'detailed':
+        return this.showDetailedStats(ctx);
+      case 'export':
+        return this.showExportForDoctor(ctx);
+      case 'show':
+        return this.execute(ctx);
+      default:
+        return { success: false, error: `Unknown action: ${action}` };
+    }
+  }
+
+  // ==================== Callback Handlers ====================
+
+  /**
+   * Show detailed statistics breakdown
+   */
+  private async showDetailedStats(ctx: ISleepCoreContext): Promise<ICommandResult> {
+    const report = ctx.sleepCore.getProgressReport(ctx.userId);
+    if (!report) {
+      return this.showInsufficientData(ctx);
+    }
+
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - 7);
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+    const weeklySummary = ctx.sleepCore.getWeeklySummary(ctx.userId, weekStartStr);
+
+    const sol = weeklySummary?.averages?.sleepOnsetLatency ?? 0;
+    const waso = weeklySummary?.averages?.wakeAfterSleepOnset ?? 0;
+    const tst = weeklySummary?.averages?.totalSleepTime ?? 0;
+    const tib = weeklySummary?.averages?.timeInBed ?? 0;
+
+    const message = `
+${formatter.header('📊 Подробная статистика')}
+
+${formatter.divider()}
+
+*Средние показатели за 7 дней:*
+
+*SOL (время засыпания):* ${Math.round(sol)} мин ${sol < 20 ? '✅' : sol < 30 ? '🟡' : '🔴'}
+_Цель: < 20 мин (European Guideline 2023)_
+
+*WASO (пробуждения):* ${Math.round(waso)} мин ${waso < 30 ? '✅' : waso < 45 ? '🟡' : '🔴'}
+_Цель: < 30 мин_
+
+*TST (общее время сна):* ${Math.round(tst)} мин (${(tst / 60).toFixed(1)} ч)
+
+*TIB (время в постели):* ${Math.round(tib)} мин (${(tib / 60).toFixed(1)} ч)
+
+*SE (эффективность сна):* ${report.currentSleepEfficiency.toFixed(1)}% ${report.currentSleepEfficiency >= 85 ? '✅' : '🟡'}
+_Цель: ≥ 85%_
+
+*ISI (индекс бессонницы):* ${report.currentISI} ${report.currentISI <= 7 ? '✅ Ремиссия' : report.currentISI <= 14 ? '🟡 Субклиническая' : '🔴 Клиническая'}
+
+${formatter.divider()}
+
+*Приверженность:* ${(report.overallAdherence * 100).toFixed(0)}%
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '◀️ Назад к отчёту', callbackData: 'progress:show' }],
+    ];
+
+    return { success: true, message, keyboard };
+  }
+
+  /**
+   * Show export-ready summary for physician
+   */
+  private async showExportForDoctor(ctx: ISleepCoreContext): Promise<ICommandResult> {
+    const report = ctx.sleepCore.getProgressReport(ctx.userId);
+    if (!report) {
+      return this.showInsufficientData(ctx);
+    }
+
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - 7);
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+    const weeklySummary = ctx.sleepCore.getWeeklySummary(ctx.userId, weekStartStr);
+
+    const sol = weeklySummary?.averages?.sleepOnsetLatency ?? 0;
+    const waso = weeklySummary?.averages?.wakeAfterSleepOnset ?? 0;
+    const tst = weeklySummary?.averages?.totalSleepTime ?? 0;
+
+    const message = `
+${formatter.header('📤 Отчёт для врача')}
+
+Вы можете переслать это сообщение вашему лечащему врачу.
+
+${formatter.divider()}
+
+*ОТЧЁТ О ПРОГРЕССЕ CBT-I*
+_SleepCore Digital Therapeutic_
+_Дата: ${new Date().toLocaleDateString('ru-RU')}_
+
+*Неделя терапии:* ${report.currentWeek}
+*ISI Score:* ${report.currentISI}/28
+*Изменение ISI:* ${report.isiChange > 0 ? '-' : '+'}${Math.abs(report.isiChange).toFixed(1)} пунктов
+*Sleep Efficiency:* ${report.currentSleepEfficiency.toFixed(1)}%
+*Avg SOL:* ${Math.round(sol)} мин
+*Avg WASO:* ${Math.round(waso)} мин
+*Avg TST:* ${Math.round(tst)} мин
+*Adherence:* ${(report.overallAdherence * 100).toFixed(0)}%
+*Response Status:* ${report.responseStatus}
+
+${formatter.divider()}
+
+_Данные получены из ежедневного дневника сна._
+_Валидация ISI: Danilenko K.V., 2011_
+_Протокол: Spielman et al., 1987_
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '◀️ Назад к отчёту', callbackData: 'progress:show' }],
+    ];
+
+    return { success: true, message, keyboard };
   }
 
   // ==================== Helpers ====================

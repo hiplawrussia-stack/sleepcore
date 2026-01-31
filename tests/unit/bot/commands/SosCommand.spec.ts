@@ -12,6 +12,30 @@ import {
   assertContainsText,
 } from './testHelpers';
 
+// Mock crisis services
+jest.mock('../../../../src/bot/services/CrisisDetectionService', () => ({
+  crisisDetectionService: {
+    recordSosEvent: jest.fn(),
+  },
+}));
+
+jest.mock('../../../../src/bot/services/CrisisEscalationService', () => ({
+  crisisEscalationService: {
+    escalate: jest.fn().mockResolvedValue({
+      escalated: true,
+      level: 'notify_urgent',
+      notificationsSent: 1,
+      aeCreated: false,
+    }),
+  },
+}));
+
+// Get mock references after jest.mock hoisting
+import { crisisDetectionService } from '../../../../src/bot/services/CrisisDetectionService';
+import { crisisEscalationService } from '../../../../src/bot/services/CrisisEscalationService';
+const mockCrisisRecordSosEvent = crisisDetectionService.recordSosEvent as jest.Mock;
+const mockCrisisEscalate = crisisEscalationService.escalate as jest.Mock;
+
 describe('SosCommand', () => {
   let command: SosCommand;
 
@@ -148,6 +172,241 @@ describe('SosCommand', () => {
       // Should include emergency-related aliases
       expect(command.aliases).toContain('emergency');
       expect(command.aliases).toContain('crisis');
+    });
+  });
+
+  describe('crisis escalation', () => {
+    beforeEach(() => {
+      mockCrisisRecordSosEvent.mockClear();
+      mockCrisisEscalate.mockClear();
+    });
+
+    it('should record SOS event via CrisisDetectionService', async () => {
+      const ctx = createMockContext();
+      await command.execute(ctx);
+
+      // Allow async escalation to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(mockCrisisRecordSosEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: ctx.userId,
+          chatId: String(ctx.chatId),
+          severity: 'high',
+          crisisType: 'acute_distress',
+          confidence: 1.0,
+          action: 'interrupt',
+          messageText: '/sos',
+          indicators: ['user_initiated_sos'],
+          responseProvided: true,
+        })
+      );
+    });
+
+    it('should escalate to admins via CrisisEscalationService', async () => {
+      const ctx = createMockContext();
+      await command.execute(ctx);
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(mockCrisisEscalate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: ctx.userId,
+          severity: 'high',
+          crisisType: 'acute_distress',
+        })
+      );
+    });
+
+    it('should still show resources even if escalation fails', async () => {
+      mockCrisisEscalate.mockRejectedValueOnce(new Error('Network error'));
+      const ctx = createMockContext();
+      const result = await command.execute(ctx);
+
+      // Resources are shown regardless of escalation outcome
+      assertSuccessWithMessage(result);
+      assertContainsText(result, '8-800');
+    });
+  });
+
+  describe('conversation interface', () => {
+    it('should have steps array with initial', () => {
+      expect(command.steps).toEqual(['initial']);
+    });
+
+    it('should implement handleStep for initial step', async () => {
+      const ctx = createMockContext();
+
+      // Allow async escalation to complete
+      const result = await command.handleStep(ctx, 'initial', {});
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      assertSuccessWithMessage(result);
+    });
+
+    it('should return error for unknown step', async () => {
+      const ctx = createMockContext();
+      const result = await command.handleStep(ctx, 'unknown', {});
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('handleCallback()', () => {
+    beforeEach(() => {
+      mockCrisisRecordSosEvent.mockClear();
+      mockCrisisEscalate.mockClear();
+    });
+
+    describe('sos:breathing', () => {
+      it('should show 4-7-8 breathing exercise', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:breathing', {});
+
+        assertSuccessWithMessage(result);
+        assertContainsText(result, '4-7-8');
+      });
+
+      it('should include technique attribution (A. Weil)', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:breathing', {});
+
+        assertContainsText(result, 'Вейл');
+      });
+
+      it('should include inhale-hold-exhale steps', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:breathing', {});
+
+        assertContainsText(result, 'Вдох');
+        assertContainsText(result, 'Задержка');
+        assertContainsText(result, 'Выдох');
+      });
+
+      it('should include safety note about dizziness', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:breathing', {});
+
+        assertContainsText(result, 'головокружени');
+      });
+
+      it('should have back button', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:breathing', {});
+
+        assertHasKeyboard(result);
+        const buttons = result.keyboard!.flat();
+        expect(buttons.some(b => b.callbackData === 'sos:back')).toBe(true);
+      });
+    });
+
+    describe('sos:grounding', () => {
+      it('should show 5-4-3-2-1 grounding exercise', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:grounding', {});
+
+        assertSuccessWithMessage(result);
+        assertContainsText(result, '5-4-3-2-1');
+      });
+
+      it('should include all five senses', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:grounding', {});
+
+        assertContainsText(result, 'ЗРЕНИЕ');
+        assertContainsText(result, 'ОСЯЗАНИЕ');
+        assertContainsText(result, 'СЛУХ');
+        assertContainsText(result, 'ОБОНЯНИЕ');
+        assertContainsText(result, 'ВКУС');
+      });
+
+      it('should include nighttime adaptation (eyes closed)', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:grounding', {});
+
+        assertContainsText(result, 'глаза закрыты');
+      });
+
+      it('should have back button', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:grounding', {});
+
+        assertHasKeyboard(result);
+        const buttons = result.keyboard!.flat();
+        expect(buttons.some(b => b.callbackData === 'sos:back')).toBe(true);
+      });
+    });
+
+    describe('sos:talk', () => {
+      it('should show talk resources with hotlines', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:talk', {});
+
+        assertSuccessWithMessage(result);
+        assertContainsText(result, 'Поговорить');
+      });
+
+      it('should include trust hotline (8-800-2000-122)', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:talk', {});
+
+        assertContainsText(result, '8-800-2000-122');
+      });
+
+      it('should include psychological help hotline (8-800-100-49-94)', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:talk', {});
+
+        assertContainsText(result, '8-800-100-49-94');
+      });
+
+      it('should include MChS emergency psychology', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:talk', {});
+
+        assertContainsText(result, 'МЧС');
+      });
+
+      it('should include online resource', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:talk', {});
+
+        assertContainsText(result, 'psi.mchs.gov.ru');
+      });
+
+      it('should have back button', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:talk', {});
+
+        assertHasKeyboard(result);
+        const buttons = result.keyboard!.flat();
+        expect(buttons.some(b => b.callbackData === 'sos:back')).toBe(true);
+      });
+    });
+
+    describe('sos:back', () => {
+      it('should return to main crisis resources', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'sos:back', {});
+
+        assertSuccessWithMessage(result);
+        assertContainsText(result, 'помощь');
+        assertContainsText(result, '8-800');
+      });
+    });
+
+    it('should return error for invalid callback prefix', async () => {
+      const ctx = createMockContext();
+      const result = await command.handleCallback(ctx, 'other:action', {});
+
+      expect(result.success).toBe(false);
+    });
+
+    it('should return error for unknown action', async () => {
+      const ctx = createMockContext();
+      const result = await command.handleCallback(ctx, 'sos:unknown', {});
+
+      expect(result.success).toBe(false);
     });
   });
 

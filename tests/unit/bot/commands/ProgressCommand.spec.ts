@@ -153,6 +153,164 @@ describe('ProgressCommand', () => {
     });
   });
 
+  describe('conversation interface', () => {
+    it('should have steps array with initial', () => {
+      expect(command.steps).toEqual(['initial']);
+    });
+
+    it('should implement handleStep for initial step', async () => {
+      const ctx = createMockContext();
+      const result = await command.handleStep(ctx, 'initial', {});
+
+      assertSuccessWithMessage(result);
+    });
+
+    it('should return error for unknown step', async () => {
+      const ctx = createMockContext();
+      const result = await command.handleStep(ctx, 'unknown', {});
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('handleCallback()', () => {
+    describe('progress:detailed', () => {
+      it('should show detailed statistics', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:detailed', {});
+
+        assertSuccessWithMessage(result);
+        assertContainsText(result, 'Подробная статистика');
+      });
+
+      it('should display SOL metric with target', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:detailed', {});
+
+        assertContainsText(result, 'SOL');
+        assertContainsText(result, 'European Guideline');
+      });
+
+      it('should display WASO metric', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:detailed', {});
+
+        assertContainsText(result, 'WASO');
+      });
+
+      it('should display SE metric with target ≥ 85%', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:detailed', {});
+
+        assertContainsText(result, 'SE');
+        assertContainsText(result, '85%');
+      });
+
+      it('should display ISI with severity classification', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:detailed', {});
+
+        assertContainsText(result, 'ISI');
+        // ISI 12 = subthreshold
+        expect(result.message).toMatch(/Субклиническая|Ремиссия|Клиническая/);
+      });
+
+      it('should show back button to main report', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:detailed', {});
+
+        assertHasKeyboard(result);
+        const buttons = result.keyboard!.flat();
+        expect(buttons.some(b => b.callbackData === 'progress:show')).toBe(true);
+      });
+
+      it('should handle missing progress data', async () => {
+        const mockSleepCore = createMockSleepCoreAPI({
+          getProgressReport: jest.fn().mockReturnValue(null),
+        });
+        const ctx = createMockContext({ sleepCore: mockSleepCore });
+        const result = await command.handleCallback(ctx, 'progress:detailed', {});
+
+        assertSuccessWithMessage(result);
+        assertContainsText(result, 'данных');
+      });
+    });
+
+    describe('progress:export', () => {
+      it('should show physician export report', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:export', {});
+
+        assertSuccessWithMessage(result);
+        assertContainsText(result, 'Отчёт для врача');
+      });
+
+      it('should include ISI score', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:export', {});
+
+        assertContainsText(result, 'ISI Score');
+        assertContainsText(result, '12');
+      });
+
+      it('should include Sleep Efficiency', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:export', {});
+
+        assertContainsText(result, 'Sleep Efficiency');
+      });
+
+      it('should cite scientific sources (Danilenko, Spielman)', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:export', {});
+
+        assertContainsText(result, 'Danilenko');
+        assertContainsText(result, 'Spielman');
+      });
+
+      it('should include SleepCore identifier', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:export', {});
+
+        assertContainsText(result, 'SleepCore');
+      });
+
+      it('should show back button', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:export', {});
+
+        assertHasKeyboard(result);
+        const buttons = result.keyboard!.flat();
+        expect(buttons.some(b => b.callbackData === 'progress:show')).toBe(true);
+      });
+    });
+
+    describe('progress:show', () => {
+      it('should redirect to main progress report (execute)', async () => {
+        const ctx = createMockContext();
+        const result = await command.handleCallback(ctx, 'progress:show', {});
+
+        assertSuccessWithMessage(result);
+        // Should show the same content as execute()
+        assertContainsText(result, 'отчёт');
+      });
+    });
+
+    it('should return error for invalid callback prefix', async () => {
+      const ctx = createMockContext();
+      const result = await command.handleCallback(ctx, 'other:action', {});
+
+      expect(result.success).toBe(false);
+    });
+
+    it('should return error for unknown action', async () => {
+      const ctx = createMockContext();
+      const result = await command.handleCallback(ctx, 'progress:unknown', {});
+
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe('singleton export', () => {
     it('should export singleton instance', () => {
       expect(progressCommand).toBeInstanceOf(ProgressCommand);

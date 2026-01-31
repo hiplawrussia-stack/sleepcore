@@ -39,6 +39,17 @@ describe('CommandHandler', () => {
       expect(handler.has('sonya')).toBe(true);
       // Content Library command (Phase 6.1)
       expect(handler.has('smart_tips')).toBe(true);
+      // Sprint 3: Rehearsal & Recall
+      expect(handler.has('rehearsal')).toBe(true);
+      expect(handler.has('recall')).toBe(true);
+      // Sprint 3: Counterfactual Scenarios
+      expect(handler.has('whatif')).toBe(true);
+      // Sprint 4: Advanced AI Commands
+      expect(handler.has('predict')).toBe(true);
+      expect(handler.has('insights')).toBe(true);
+      expect(handler.has('explain')).toBe(true);
+      expect(handler.has('safety')).toBe(true);
+      expect(handler.has('twin')).toBe(true);
     });
   });
 
@@ -102,8 +113,8 @@ describe('CommandHandler', () => {
   describe('getAll()', () => {
     it('should return all registered commands', () => {
       const commands = handler.getAll();
-      // 8 core + 4 gamification + 1 content library + 2 clinical (admin, aereport) + 1 circadian = 16 commands
-      expect(commands.length).toBe(16);
+      // 8 core + 4 gamification + 1 content library + 2 clinical (admin, aereport) + 1 circadian + 1 therapy + 8 Phase 4 = 25 commands
+      expect(commands.length).toBe(25);
     });
 
     it('should return command instances', () => {
@@ -134,8 +145,8 @@ describe('CommandHandler', () => {
     it('should return commands in BotFather format', () => {
       const commands = handler.getBotFatherCommands();
 
-      // 8 core + 4 gamification + 1 content library + 2 clinical (admin, aereport) + 1 circadian = 16 commands
-      expect(commands.length).toBe(16);
+      // 8 core + 4 gamification + 1 content library + 2 clinical (admin, aereport) + 1 circadian + 1 therapy + 8 Phase 4 = 25 commands
+      expect(commands.length).toBe(25);
       commands.forEach(cmd => {
         expect(cmd.command).toBeDefined();
         expect(cmd.description).toBeDefined();

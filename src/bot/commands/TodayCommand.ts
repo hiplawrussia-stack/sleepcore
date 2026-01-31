@@ -186,7 +186,10 @@ ${sonya.tip('Выполняй задания последовательно дл
       success: true,
       message,
       keyboard,
-      metadata: { intervention, prediction },
+      metadata: {
+        lastIntervention: intervention,
+        prediction,
+      },
     };
   }
 
@@ -391,8 +394,8 @@ ${formatter.warning('Сессия не найдена')}
     }
 
     // Get explanation from SleepCoreAPI
-    // TODO: Store actual ISleepInterventionSelection in conversationData
-    // For now, show research-based explanation without full XAI
+    // Note: Intervention is stored in conversationData.lastIntervention (January 2026 fix)
+    // Full XAI with ISleepInterventionSelection requires SleepCoreAdapter integration
     const explanation = await this.buildSimplifiedExplanation(ctx, intervention);
 
     const message = `
@@ -476,15 +479,28 @@ ${sonya.tip('Алгоритм учитывает твои данные за по
   }
 
   /**
-   * Handle intervention completed
+   * Handle intervention completed — records adherence
+   *
+   * Research basis (Steinmetz et al. 2023, J Sleep Research):
+   * - Self-monitoring of adherence has modest therapeutic effect (MEDIUM confidence)
+   * - Tracking completion improves CBT-I outcomes (MEDIUM confidence)
+   * - 5 standard SRT adherence indices: bedtime, wake time, night awakenings, naps, TIB
    */
-  private async handleInterventionDone(_ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async handleInterventionDone(ctx: ISleepCoreContext): Promise<ICommandResult> {
+    // Record stimulus control adherence if applicable
+    const adherenceReport = ctx.sleepCore.trackStimulusControlAdherence(ctx.userId);
+
+    // Build response with adherence feedback
+    const adherenceInfo = adherenceReport
+      ? `\n*Приверженность за ночь:* ${(adherenceReport.overallAdherence * 100).toFixed(0)}%`
+      : '';
+
     return {
       success: true,
       message: `
 ${formatter.success('Отлично!')}
 
-Задание отмечено как выполненное. ${sonya.emoji}
+Задание отмечено как выполненное. ${sonya.emoji}${adherenceInfo}
 
 ${sonya.tip('Продолжай в том же духе! Каждое выполненное задание приближает к здоровому сну')}
       `.trim(),
@@ -492,6 +508,7 @@ ${sonya.tip('Продолжай в том же духе! Каждое выпол
         [{ text: '📓 Записать сон', callbackData: 'diary:start' }],
         [{ text: '📊 Мой прогресс', callbackData: 'progress:show' }],
       ],
+      metadata: { interventionCompleted: true },
     };
   }
 
