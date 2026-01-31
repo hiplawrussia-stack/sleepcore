@@ -1872,6 +1872,233 @@ describe('TherapyCommand', () => {
     });
   });
 
+  // ==================== MBT-I Delivery Tests ====================
+
+  describe('MBT-I Delivery Pipeline', () => {
+    function createMBTIMockContext(overrides: Partial<Record<string, unknown>> = {}): ISleepCoreContext {
+      const mockSleepCore = {
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user',
+          currentPhase: 'treatment',
+          weekNumber: 3,
+          mbtiPlan: { startDate: '2026-01-30', currentWeek: 3, totalWeeks: 8, dailyPracticeTarget: 20 },
+        }),
+        isThirdWaveIndicated: jest.fn().mockReturnValue(true),
+        recommendThirdWaveApproach: jest.fn().mockReturnValue(null),
+        getSleepStates: jest.fn().mockReturnValue(Array(7).fill({ date: '2026-01-30' })),
+        initializeMBTI: jest.fn().mockReturnValue({
+          startDate: '2026-01-30',
+          currentWeek: 1,
+          totalWeeks: 8,
+          dailyPracticeTarget: 20,
+        }),
+        getMindfulnessPractice: jest.fn().mockReturnValue({
+          practice: 'body_scan',
+          instructions: [
+            'Лягте на спину, руки вдоль тела.',
+            'Закройте глаза и сделайте несколько глубоких вдохов.',
+            'Направьте внимание на пальцы ног.',
+            'Медленно поднимайтесь выше: стопы, голени, колени...',
+          ],
+          audioUrl: undefined,
+        }),
+        getMBTIWeeklySummary: jest.fn().mockReturnValue({
+          practiceMinutes: 85,
+          practiceAdherence: 0.61,
+          arousalChange: {
+            cognitive: 0.15,
+            somatic: 0.08,
+            sleepEffort: 0.12,
+          },
+          keyInsights: ['Заметное снижение когнитивного возбуждения'],
+          nextWeekFocus: ['Тема недели: Принятие бессонницы', 'Основная практика: Открытое осознавание'],
+        }),
+        recordMBTIPractice: jest.fn().mockReturnValue({
+          startDate: '2026-01-30',
+          currentWeek: 3,
+          totalWeeks: 8,
+        }),
+        assessArousal: jest.fn().mockReturnValue({
+          cognitive: 0.6,
+          somatic: 0.4,
+          sleepEffort: 0.7,
+          sleepWorry: 0.5,
+          rumination: 0.5,
+        }),
+        getProgressReport: jest.fn().mockReturnValue(null),
+        estimateISI: jest.fn().mockReturnValue(0),
+        ...overrides,
+      } as unknown as SleepCoreAPI;
+
+      return {
+        userId: 'test-user-123',
+        chatId: 12345,
+        displayName: 'Test User',
+        languageCode: 'ru',
+        sleepCore: mockSleepCore,
+      } as unknown as ISleepCoreContext;
+    }
+
+    describe('mbti_hub callback', () => {
+      it('should show MBT-I session hub with practice buttons', async () => {
+        const ctx = createMBTIMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mbti_hub',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Осознанная терапия бессонницы');
+        expect(result.message).toContain('Практика медитации');
+        expect(result.message).toContain('Еженедельный обзор');
+
+        // Verify practice buttons
+        const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+        expect(allCallbacks).toContain('therapy:mbti_practice');
+        expect(allCallbacks).toContain('therapy:mbti_summary');
+        expect(allCallbacks).toContain('therapy:menu');
+      });
+
+      it('should display weekly stats when summary available', async () => {
+        const ctx = createMBTIMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mbti_hub',
+          {}
+        );
+
+        expect(result.message).toContain('85 мин');
+        expect(result.message).toContain('61%');
+        expect(result.message).toContain('снижение когнитивного возбуждения');
+      });
+
+      it('should return error when no session', async () => {
+        const ctx = createMBTIMockContext({
+          getSession: jest.fn().mockReturnValue(null),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mbti_hub',
+          {}
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('Сессия не найдена');
+      });
+    });
+
+    describe('mbti_practice callback', () => {
+      it('should show mindfulness practice with instructions', async () => {
+        const ctx = createMBTIMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mbti_practice',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Сканирование тела');
+        expect(result.message).toContain('Лягте на спину');
+        expect(result.message).toContain('Ong, 2017');
+
+        // Verify navigation back to hub
+        const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+        expect(allCallbacks).toContain('therapy:mbti_hub');
+      });
+
+      it('should show fallback when no MBT-I plan', async () => {
+        const ctx = createMBTIMockContext({
+          getMindfulnessPractice: jest.fn().mockReturnValue(null),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mbti_practice',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('План MBT-I не найден');
+      });
+    });
+
+    describe('mbti_summary callback', () => {
+      it('should show weekly summary with arousal changes and insights', async () => {
+        const ctx = createMBTIMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mbti_summary',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Еженедельный обзор MBT-I');
+        expect(result.message).toContain('85 мин');
+        expect(result.message).toContain('61%');
+        expect(result.message).toContain('Когнитивное');
+        expect(result.message).toContain('Соматическое');
+        expect(result.message).toContain('Усилие сна');
+        expect(result.message).toContain('снижение когнитивного возбуждения');
+        expect(result.message).toContain('Принятие бессонницы');
+
+        // Verify navigation
+        const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+        expect(allCallbacks).toContain('therapy:mbti_practice');
+        expect(allCallbacks).toContain('therapy:mbti_hub');
+        expect(allCallbacks).toContain('therapy:menu');
+      });
+
+      it('should show fallback when summary is not available', async () => {
+        const ctx = createMBTIMockContext({
+          getMBTIWeeklySummary: jest.fn().mockReturnValue(null),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mbti_summary',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Еженедельный обзор недоступен');
+      });
+
+      it('should show correct adherence status for high adherence', async () => {
+        const ctx = createMBTIMockContext({
+          getMBTIWeeklySummary: jest.fn().mockReturnValue({
+            practiceMinutes: 140,
+            practiceAdherence: 0.85,
+            arousalChange: { cognitive: 0.2, somatic: 0.1, sleepEffort: 0.15 },
+            keyInsights: ['Отличная регулярность практики'],
+            nextWeekFocus: ['Тема недели: Интеграция практик'],
+          }),
+        });
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:mbti_summary',
+          {}
+        );
+
+        expect(result.message).toContain('85%');
+        expect(result.message).toContain('Отлично');
+      });
+    });
+
+    describe('MBT-I hub button after initialization', () => {
+      it('should include mbti hub button after init', async () => {
+        const ctx = createMBTIMockContext();
+        const result = await therapyCommand.handleCallback(
+          ctx,
+          'therapy:start_mbti',
+          {}
+        );
+
+        expect(result.success).toBe(true);
+        const allCallbacks = result.keyboard!.flat().map(btn => btn.callbackData);
+        expect(allCallbacks).toContain('therapy:mbti_hub');
+      });
+    });
+  });
+
   describe('Clinical Safety - Minimum TIB', () => {
     it('should mention 5.5 hour minimum in sleep_behavior_1', async () => {
       const ctx = createMockContext();

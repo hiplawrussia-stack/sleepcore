@@ -48,6 +48,8 @@ import type {
   IUnwantedExperience,
   SessionLevel,
   IWorryPattern,
+  IMindfulnessSession,
+  ISleepArousal,
 } from './third-wave/interfaces/IThirdWaveTherapies';
 
 // ============= NEW: Circadian & Cultural Adaptations =============
@@ -1529,6 +1531,44 @@ export class SleepCoreAPI {
       keyInsights: summary.keyInsights,
       nextWeekFocus: summary.nextWeekFocus,
     };
+  }
+
+  /**
+   * Record completed MBT-I practice session
+   * Wraps MBTIEngine.recordPractice() and persists updated plan
+   *
+   * @param userId - User identifier
+   * @param practiceSession - Completed mindfulness practice session data
+   * @returns Updated MBT-I plan or null if no plan exists
+   */
+  recordMBTIPractice(
+    userId: string,
+    practiceSession: IMindfulnessSession
+  ): IMBTIPlan | null {
+    const session = this.sessions.get(userId);
+    if (!session?.mbtiPlan) return null;
+
+    const mbtiEngine = this.thirdWave.getMBTIEngine();
+    const updatedPlan = mbtiEngine.recordPractice(session.mbtiPlan, practiceSession);
+    this.sessions.set(userId, { ...session, mbtiPlan: updatedPlan });
+
+    return updatedPlan;
+  }
+
+  /**
+   * Assess current sleep arousal levels (cognitive, somatic, sleep effort)
+   * Wraps MBTIEngine.assessArousal() using latest sleep state
+   *
+   * @param userId - User identifier
+   * @returns Arousal assessment or null if no sleep states available
+   */
+  assessArousal(userId: string): ISleepArousal | null {
+    const sleepStates = this.getSleepStates(userId);
+    if (!sleepStates || sleepStates.length === 0) return null;
+
+    const mbtiEngine = this.thirdWave.getMBTIEngine();
+    const lastState = sleepStates[sleepStates.length - 1];
+    return mbtiEngine.assessArousal(lastState);
   }
 
   /**

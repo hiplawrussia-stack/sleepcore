@@ -488,6 +488,16 @@ export class TherapyCommand implements IConversationCommand {
       case 'mct_summary':
         return this.showMCTSummary(ctx, conversationData);
 
+      // ==================== MBT-I Session Delivery Handlers ====================
+      case 'mbti_hub':
+        return this.showMBTISessionHub(ctx, conversationData);
+
+      case 'mbti_practice':
+        return this.showMBTIPractice(ctx, conversationData);
+
+      case 'mbti_summary':
+        return this.showMBTIWeeklySummary(ctx, conversationData);
+
       // ==================== Weekly SRT Review Handler ====================
       case 'weekly_review':
         return this.showWeeklyReview(ctx, conversationData);
@@ -889,6 +899,7 @@ ${formatter.tip('Техники третьей волны требуют рег�
       const hubButtons: Record<string, IInlineButton[]> = {
         mct: [{ text: '🎯 Перейти к упражнениям MCT', callbackData: 'therapy:mct_hub' }],
         acti: [{ text: '🧘 Перейти к упражнениям ACT-I', callbackData: 'therapy:acti_hub' }],
+        mbti: [{ text: '🧘 Перейти к практикам MBT-I', callbackData: 'therapy:mbti_hub' }],
       };
 
       const keyboard: IInlineButton[][] = hubButtons[therapyId]
@@ -1669,6 +1680,242 @@ ${sonya.tip('Практикуйте готовность к бодрствова
       message,
       keyboard,
       metadata: { step: 'acti_summary' },
+    };
+  }
+
+  // ==================== MBT-I Session Delivery ====================
+
+  /**
+   * Show MBT-I Session Hub — central navigation for MBT-I practices
+   * Displays current week, session theme, and available practice buttons
+   *
+   * Scientific basis:
+   * - Ong et al. (2014): 8-week MBT-I protocol, d=1.32 for ISI [HIGH]
+   * - Ong (2012): Two-level arousal model — primary + metacognitive [HIGH]
+   * - MIST trial (2023): Older adults RCT, d=-1.27, no adverse events [HIGH]
+   */
+  private async showMBTISessionHub(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const session = ctx.sleepCore.getSession(ctx.userId);
+    if (!session) {
+      return {
+        success: false,
+        message: `${formatter.warning('Сессия не найдена')}\n\nПожалуйста, начните с /start`,
+      };
+    }
+
+    const summary = ctx.sleepCore.getMBTIWeeklySummary(ctx.userId);
+
+    const weekInfo = summary
+      ? `📊 *Практика за неделю:* ${summary.practiceMinutes} мин (adherence: ${(summary.practiceAdherence * 100).toFixed(0)}%)`
+      : '';
+
+    const arousalInfo = summary && summary.arousalChange
+      ? `🧠 *Когнитивное возбуждение:* ${summary.arousalChange.cognitive > 0 ? '↓' : '→'} ${(Math.abs(summary.arousalChange.cognitive) * 100).toFixed(0)}%`
+      : '';
+
+    const message = `
+${formatter.header('🧘 Осознанная терапия бессонницы (MBT-I)')}
+
+${sonya.tip('8-недельный протокол Джейсона Онга. Осознанность + поведенческие стратегии сна.')}
+
+${formatter.divider()}
+
+*Доступные практики:*
+
+🫁 *Практика медитации*
+   Осознавание дыхания, сканирование тела, сидячая медитация
+
+📊 *Еженедельный обзор*
+   Прогресс практики, изменение возбуждения, фокус следующей недели
+
+${formatter.divider()}
+
+${weekInfo}
+${arousalInfo}
+
+${summary?.keyInsights?.length ? `💡 *Инсайт:* ${summary.keyInsights[0]}` : ''}
+
+${formatter.tip('Осознанность — не попытка заснуть, а изменение отношения к бодрствованию. Парадокс: принятие бессонницы ведёт ко сну (Ong, 2012).')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🫁 Практика медитации', callbackData: 'therapy:mbti_practice' }],
+      [{ text: '📊 Еженедельный обзор', callbackData: 'therapy:mbti_summary' }],
+      [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'mbti_hub' },
+    };
+  }
+
+  /**
+   * Deliver mindfulness practice via SleepCoreAPI
+   *
+   * Scientific basis:
+   * - Ong (2017): MBT-I treatment manual — practice instructions [HIGH]
+   * - Ong (2008): Practice compliance ~16 min/session, ~57% adherence [HIGH]
+   * - Dose-response: Total meditations correlate with arousal reduction r=-0.38 [MEDIUM]
+   */
+  private async showMBTIPractice(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const practice = ctx.sleepCore.getMindfulnessPractice(ctx.userId, 'bedtime', 15);
+
+    if (!practice) {
+      return {
+        success: true,
+        message: `
+${formatter.warning('План MBT-I не найден')}
+
+Для доступа к практикам необходимо сначала инициализировать план MBT-I.
+
+${formatter.tip('Перейдите в раздел "Альтернативные подходы" и выберите MBT-I.')}
+        `.trim(),
+        keyboard: [
+          [{ text: '🌿 К альтернативным подходам', callbackData: 'therapy:third_wave_menu' }],
+          [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+        ],
+      };
+    }
+
+    const instructionsList = practice.instructions
+      .map((inst, i) => `${i + 1}. ${inst}`)
+      .join('\n');
+
+    const practiceNames: Record<string, string> = {
+      breath_awareness: 'Осознавание дыхания',
+      body_scan: 'Сканирование тела',
+      sitting_meditation: 'Сидячая медитация',
+      mindful_movement: 'Осознанное движение',
+      loving_kindness: 'Медитация любящей доброты',
+      open_awareness: 'Открытое осознавание',
+      '3_minute_breathing_space': '3-минутное пространство дыхания',
+    };
+
+    const practiceName = practiceNames[practice.practice] || practice.practice;
+
+    const message = `
+${formatter.header(`🫁 ${practiceName}`)}
+_(MBT-I — Ong, 2017)_
+
+${formatter.divider()}
+
+*Инструкции:*
+
+${instructionsList}
+
+${formatter.divider()}
+
+${sonya.tip('Не пытайтесь заставить себя расслабиться. Просто наблюдайте. Когда ум уходит — мягко возвращайте внимание. Это и есть практика.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🧘 Вернуться к MBT-I', callbackData: 'therapy:mbti_hub' }],
+      [{ text: '📊 Еженедельный обзор', callbackData: 'therapy:mbti_summary' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'mbti_practice' },
+    };
+  }
+
+  /**
+   * Show MBT-I weekly summary via SleepCoreAPI.getMBTIWeeklySummary()
+   *
+   * Scientific basis:
+   * - Ong (2008): Weekly PSAS tracking, linear improvement across weeks [HIGH]
+   * - PSAS reliability: alpha=0.88, test-retest r=0.87 (meta-analysis 2024) [HIGH]
+   * - Arousal change: PSAS-Cognitive d=-0.76 at 6-month follow-up (MIST 2023) [HIGH]
+   */
+  private async showMBTIWeeklySummary(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const summary = ctx.sleepCore.getMBTIWeeklySummary(ctx.userId);
+
+    if (!summary) {
+      return {
+        success: true,
+        message: `
+${formatter.warning('Еженедельный обзор недоступен')}
+
+Для получения обзора необходимо инициализировать план MBT-I и провести хотя бы одну практику.
+
+${formatter.tip('Перейдите в раздел "Альтернативные подходы" и выберите MBT-I.')}
+        `.trim(),
+        keyboard: [
+          [{ text: '🌿 К альтернативным подходам', callbackData: 'therapy:third_wave_menu' }],
+          [{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }],
+        ],
+      };
+    }
+
+    const adherencePercent = (summary.practiceAdherence * 100).toFixed(0);
+    const adherenceStatus = summary.practiceAdherence >= 0.8
+      ? '✅ Отлично'
+      : summary.practiceAdherence >= 0.5
+        ? '🟡 Можно лучше'
+        : '🔻 Нужно больше практики';
+
+    const cognitiveChange = summary.arousalChange.cognitive;
+    const somaticChange = summary.arousalChange.somatic;
+    const effortChange = summary.arousalChange.sleepEffort;
+
+    const insightsList = summary.keyInsights
+      .map((insight) => `• ${insight}`)
+      .join('\n');
+
+    const focusList = summary.nextWeekFocus
+      .map((focus) => `• ${focus}`)
+      .join('\n');
+
+    const message = `
+${formatter.header('📊 Еженедельный обзор MBT-I')}
+
+${formatter.divider()}
+
+*Практика за неделю:*
+⏱️ Общее время: ${summary.practiceMinutes} мин
+📈 Приверженность: ${adherencePercent}% ${adherenceStatus}
+
+${formatter.divider()}
+
+*Изменение возбуждения (arousal):*
+🧠 Когнитивное: ${cognitiveChange > 0 ? '↓' : cognitiveChange < 0 ? '↑' : '→'} ${(Math.abs(cognitiveChange) * 100).toFixed(0)}%
+💪 Соматическое: ${somaticChange > 0 ? '↓' : somaticChange < 0 ? '↑' : '→'} ${(Math.abs(somaticChange) * 100).toFixed(0)}%
+😤 Усилие сна: ${effortChange > 0 ? '↓' : effortChange < 0 ? '↑' : '→'} ${(Math.abs(effortChange) * 100).toFixed(0)}%
+
+${formatter.divider()}
+
+${insightsList ? `*Инсайты:*\n${insightsList}\n\n${formatter.divider()}\n` : ''}
+*Фокус следующей недели:*
+${focusList}
+
+${formatter.tip('Регулярная практика — ключ к снижению пресомнического возбуждения. Даже 5 минут в день имеют значение (Ong, 2008).')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🫁 К практике', callbackData: 'therapy:mbti_practice' }],
+      [{ text: '🧘 К MBT-I меню', callbackData: 'therapy:mbti_hub' }],
+      [{ text: '📋 К меню терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'mbti_summary' },
     };
   }
 
