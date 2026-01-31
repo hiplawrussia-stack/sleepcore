@@ -472,6 +472,10 @@ export class TherapyCommand implements IConversationCommand {
       case 'mct_summary':
         return this.showMCTSummary(ctx, conversationData);
 
+      // ==================== Weekly SRT Review Handler ====================
+      case 'weekly_review':
+        return this.showWeeklyReview(ctx, conversationData);
+
       // ==================== Evidence-Based Guidelines Handlers ====================
       case 'evidence_overview':
         return this.showEvidenceOverview(ctx, conversationData);
@@ -581,6 +585,14 @@ ${formatter.tip('Каждая сессия занимает 30-60 минут. П
     keyboard.push([
       { text: '📊 Обзор прогресса', callbackData: 'therapy:progress' },
     ]);
+
+    // Weekly SRT review button (available from Week 2 when plan exists)
+    // Based on Spielman et al. 1987: weekly sleep window adjustment is core SRT mechanism
+    if (session?.plan && currentWeek >= 2) {
+      keyboard.push([
+        { text: '📊 Еженедельный обзор SRT', callbackData: 'therapy:weekly_review' },
+      ]);
+    }
 
     // Evidence-based guidelines (psychoeducation, European Guideline 2023)
     keyboard.push([
@@ -2623,6 +2635,119 @@ _________________________________
     };
 
     return (exerciseMap[core.id] || 'Упражнение').trim();
+  }
+
+  // ==================== Weekly SRT Review ====================
+
+  /**
+   * Show weekly SRT review — core mechanism of Sleep Restriction Therapy
+   *
+   * Scientific basis (HIGH confidence):
+   * - Spielman et al. 1987: Weekly TIB adjustment based on SE
+   * - AASM 2021 (Edinger et al.): SE ≥ 90% → increase, < 85% → decrease
+   * - HABIT Trial 2023 (Lancet, n=642): SRT safe in primary care
+   * - Kyle et al. 2014: 33% with ESS > normal weeks 1-3, normalizes by 3 months
+   *
+   * Safety:
+   * - TIB never < 300 min (5h) — enforced by SleepRestrictionEngine
+   * - Driving warning when TIB < 360 min (6h) — per European Guideline 2023
+   */
+  private async showWeeklyReview(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const session = ctx.sleepCore.getSession(ctx.userId);
+    if (!session?.plan) {
+      return {
+        success: false,
+        message: `${formatter.warning('План лечения не найден')}\n\nПожалуйста, начните с /start и заполните 7 дней дневника.`,
+      };
+    }
+
+    // Save old values for comparison
+    const oldPlan = session.plan;
+    const oldTIB = oldPlan.activeComponents.sleepRestriction?.prescribedTIB;
+    const oldBedtime = oldPlan.activeComponents.sleepRestriction?.prescribedBedtime;
+
+    // Get current progress
+    const progress = ctx.sleepCore.getProgressReport(ctx.userId);
+
+    // Trigger plan adjustment via SleepRestrictionEngine
+    const updatedPlan = ctx.sleepCore.updateTreatmentPlan(ctx.userId);
+
+    if (!updatedPlan) {
+      return {
+        success: true,
+        message: `${formatter.warning('Недостаточно данных для обзора')}\n\nНеобходимо минимум 5 записей дневника за последнюю неделю.`,
+        keyboard: [[{ text: '⬅️ К меню терапии', callbackData: 'therapy:menu' }]],
+      };
+    }
+
+    const newTIB = updatedPlan.activeComponents.sleepRestriction?.prescribedTIB;
+    const newBedtime = updatedPlan.activeComponents.sleepRestriction?.prescribedBedtime;
+    const se = progress?.currentSleepEfficiency || 0;
+
+    // Determine adjustment decision
+    let decision: string;
+    let decisionEmoji: string;
+    if (newTIB && oldTIB && newTIB > oldTIB) {
+      decision = `Увеличение на ${newTIB - oldTIB} мин`;
+      decisionEmoji = '📈';
+    } else if (newTIB && oldTIB && newTIB < oldTIB) {
+      decision = `Уменьшение на ${oldTIB - newTIB} мин`;
+      decisionEmoji = '📉';
+    } else {
+      decision = 'Без изменений';
+      decisionEmoji = '➡️';
+    }
+
+    // Safety warning when TIB < 6 hours (per European Guideline 2023, Kyle et al. 2014)
+    const safetyWarning = (newTIB && newTIB < 360)
+      ? `\n\n${formatter.warning('Окно сна < 6 часов. Будьте внимательны за рулём и при работе с механизмами. При выраженной сонливости сообщите нам.')}`
+      : '';
+
+    const message = `
+${formatter.header('📊 Еженедельный обзор SRT')}
+
+${sonya.tip(`Неделя ${updatedPlan.currentWeek}. Анализ вашего сна за 7 дней.`)}
+
+${formatter.divider()}
+
+*Эффективность сна (SE):* ${se.toFixed(1)}%
+${se >= 90 ? '✅ Отлично! SE ≥ 90%' : se >= 85 ? '🟡 Хорошо. SE 85-89%' : '🔻 SE < 85% — требуется корректировка'}
+
+*Решение:* ${decisionEmoji} ${decision}
+
+${oldTIB && newTIB ? `*Окно сна:* ${this.formatMinutes(oldTIB)} → ${this.formatMinutes(newTIB)}` : ''}
+${oldBedtime && newBedtime && oldBedtime !== newBedtime ? `*Время отхода:* ${oldBedtime} → ${newBedtime}` : ''}
+
+${formatter.divider()}
+
+${progress ? `*ISI:* ${progress.currentISI} (изменение: ${progress.isiChange > 0 ? '-' : '+'}${Math.abs(progress.isiChange)})` : ''}
+${safetyWarning}
+
+${formatter.tip('Протокол Spielman (1987): еженедельная корректировка окна сна — ключевой элемент терапии ограничения сна.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '✅ Понятно', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'weekly_review' },
+    };
+  }
+
+  /**
+   * Format minutes as hours and minutes (e.g. 330 → "5ч 30мин")
+   */
+  private formatMinutes(min: number): string {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return `${h}ч ${m > 0 ? m + 'мин' : ''}`.trim();
   }
 
   // ==================== Utility Methods ====================

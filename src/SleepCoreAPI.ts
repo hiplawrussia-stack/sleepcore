@@ -214,6 +214,16 @@ export class SleepCoreAPI {
   private _db: import('./infrastructure/database/interfaces/IDatabaseConnection').IDatabaseConnection | null = null;
 
   /**
+   * Optional service hooks for ISI scheduling and proactive notifications.
+   * Set via setServiceHooks() after construction in main.ts.
+   *
+   * Design: Callback-based to avoid circular dependency between
+   * SleepCoreAPI (domain) and bot services (infrastructure).
+   */
+  private _onISIEnroll?: (userId: string, chatId: number, userName?: string, baselineISI?: number) => void;
+  private _onNotificationRegister?: (userId: string, chatId: number, userName?: string) => void;
+
+  /**
    * Get database connection (may be null)
    */
   get db(): import('./infrastructure/database/interfaces/IDatabaseConnection').IDatabaseConnection | null {
@@ -225,6 +235,59 @@ export class SleepCoreAPI {
    */
   setDatabase(db: import('./infrastructure/database/interfaces/IDatabaseConnection').IDatabaseConnection): void {
     this._db = db;
+  }
+
+  /**
+   * Set ISI scheduling hook
+   * Called from main.ts after ISISchedulingService is created.
+   * Enables enrollUser() calls from commands via SleepCoreAPI facade.
+   */
+  setISISchedulingHook(hook: (userId: string, chatId: number, userName?: string, baselineISI?: number) => void): void {
+    this._onISIEnroll = hook;
+  }
+
+  /**
+   * Set notification registration hook
+   * Called from main.ts after ProactiveNotificationService is created.
+   * Enables registerUser() calls from commands via SleepCoreAPI facade.
+   */
+  setNotificationHook(hook: (userId: string, chatId: number, userName?: string) => void): void {
+    this._onNotificationRegister = hook;
+  }
+
+  /**
+   * Enroll user in biweekly ISI assessment schedule.
+   * Delegates to ISISchedulingService via callback hook.
+   *
+   * Called after ISI baseline completion in StartCommand.
+   * Schedule: W0, W2, W4, W6, W8, W12 (Morin et al., 2011; Somryst protocol)
+   *
+   * @param userId - User ID
+   * @param chatId - Telegram chat ID for sending assessment notifications
+   * @param userName - Optional display name
+   * @param baselineISI - Baseline ISI score (0-28)
+   */
+  enrollISISchedule(userId: string, chatId: number, userName?: string, baselineISI?: number): void {
+    if (this._onISIEnroll) {
+      this._onISIEnroll(userId, chatId, userName, baselineISI);
+    }
+  }
+
+  /**
+   * Register user for proactive notifications (diary reminders, re-engagement).
+   * Delegates to ProactiveNotificationService via callback hook.
+   *
+   * Called after consent is given in StartCommand.
+   * Research basis: Push notifications increase adherence P<.001 (JMIR 2025)
+   *
+   * @param userId - User ID
+   * @param chatId - Telegram chat ID
+   * @param userName - Optional display name
+   */
+  registerForNotifications(userId: string, chatId: number, userName?: string): void {
+    if (this._onNotificationRegister) {
+      this._onNotificationRegister(userId, chatId, userName);
+    }
   }
 
   constructor() {
@@ -435,6 +498,13 @@ export class SleepCoreAPI {
       try {
         intervention = await this.getNextIntervention(entry.userId);
         currentWeek = session.plan.currentWeek;
+
+        // Auto-update treatment plan weekly (every 7 diary entries after plan creation)
+        // Spielman et al. 1987: weekly adjustment of sleep window is core SRT mechanism
+        const planEntries = entriesCount - 7; // entries since plan creation
+        if (planEntries > 0 && planEntries % 7 === 0) {
+          this.updateTreatmentPlan(entry.userId);
+        }
 
         // Check progress
         const progress = this.getProgressReport(entry.userId);
@@ -786,6 +856,25 @@ export class SleepCoreAPI {
     if (userStates.length === 0) return null;
 
     const currentState = userStates[userStates.length - 1];
+    return this.adapter.explainIntervention(selection, currentState);
+  }
+
+  /**
+   * Get explanation for the current recommended intervention.
+   * Convenience wrapper that selects the intervention and explains it in one call.
+   * Uses CogniCore ExplainabilityService for SHAP-style feature attribution.
+   */
+  async explainCurrentIntervention(
+    userId: string
+  ): Promise<ISleepInterventionExplanation | null> {
+    const session = this.sessions.get(userId);
+    if (!session?.plan) return null;
+
+    const userStates = this.sleepStates.get(userId) || [];
+    if (userStates.length === 0) return null;
+
+    const currentState = userStates[userStates.length - 1];
+    const selection = await this.adapter.selectIntervention(currentState, userId);
     return this.adapter.explainIntervention(selection, currentState);
   }
 
@@ -1484,6 +1573,20 @@ export class SleepCoreAPI {
     }
 
     return assessment;
+  }
+
+  /**
+   * Store a pre-computed circadian assessment (e.g., MEQ + MCTQ enriched)
+   * Used when the assessment is computed externally with additional data (social jetlag)
+   */
+  storeCircadianAssessment(
+    userId: string,
+    assessment: ICircadianAssessment
+  ): void {
+    const session = this.sessions.get(userId);
+    if (session) {
+      this.sessions.set(userId, { ...session, circadianAssessment: assessment });
+    }
   }
 
   /**

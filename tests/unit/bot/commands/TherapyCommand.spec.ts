@@ -1200,6 +1200,406 @@ describe('TherapyCommand', () => {
     });
   });
 
+  describe('Weekly SRT Review', () => {
+    /**
+     * Weekly review tests use mocked SleepCoreAPI since updateTreatmentPlan
+     * requires initialized plan with sleep states.
+     *
+     * Scientific basis: Spielman et al. 1987 — weekly TIB adjustment
+     */
+    function createWeeklyReviewMockContext(overrides: Partial<Record<string, unknown>> = {}): ISleepCoreContext {
+      const basePlan = {
+        userId: 'test-user-123',
+        startDate: '2026-01-01',
+        currentPhase: 'treatment',
+        currentWeek: 3,
+        totalWeeks: 8,
+        activeComponents: {
+          sleepRestriction: {
+            prescribedTIB: 330,
+            prescribedBedtime: '00:30',
+            prescribedWakeTime: '06:00',
+            efficiencyThreshold: 85,
+            minimumTIB: 300,
+            adjustmentIncrement: 15,
+          },
+          stimulusControl: {},
+          cognitiveTargets: [],
+          hygieneRecommendations: [],
+          relaxationProtocol: {},
+        },
+        progress: {
+          isiBaseline: 18,
+          sleepEfficiencyBaseline: 72,
+        },
+      };
+
+      const mockSleepCore = {
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user-123',
+          currentPhase: 'treatment',
+          weekNumber: 3,
+          plan: basePlan,
+        }),
+        getProgressReport: jest.fn().mockReturnValue({
+          currentISI: 12,
+          isiChange: 6,
+          currentSleepEfficiency: 92,
+          sleepEfficiencyChange: 20,
+          currentWeek: 3,
+          overallAdherence: 0.85,
+          achievements: [],
+          improvements: [],
+          responseStatus: 'responding',
+        }),
+        updateTreatmentPlan: jest.fn().mockReturnValue({
+          ...basePlan,
+          currentWeek: 3,
+          activeComponents: {
+            ...basePlan.activeComponents,
+            sleepRestriction: {
+              ...basePlan.activeComponents.sleepRestriction,
+              prescribedTIB: 345,
+              prescribedBedtime: '00:15',
+            },
+          },
+        }),
+        isThirdWaveIndicated: jest.fn().mockReturnValue(false),
+        estimateISI: jest.fn().mockReturnValue(0),
+        ...overrides,
+      } as unknown as SleepCoreAPI;
+
+      return {
+        userId: 'test-user-123',
+        chatId: 12345,
+        displayName: 'Test User',
+        languageCode: 'ru',
+        sleepCore: mockSleepCore,
+      } as unknown as ISleepCoreContext;
+    }
+
+    it('should call updateTreatmentPlan and show weekly review', async () => {
+      const ctx = createWeeklyReviewMockContext();
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:weekly_review',
+        {}
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Еженедельный обзор SRT');
+      expect(result.message).toContain('Неделя 3');
+      expect(ctx.sleepCore.updateTreatmentPlan).toHaveBeenCalledWith('test-user-123');
+    });
+
+    it('should show TIB increase when SE >= 90%', async () => {
+      const ctx = createWeeklyReviewMockContext();
+      // Default mock: SE=92%, oldTIB=330, newTIB=345
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:weekly_review',
+        {}
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Увеличение');
+      expect(result.message).toContain('15 мин');
+      expect(result.message).toContain('SE ≥ 90%');
+    });
+
+    it('should show TIB decrease when SE < 85%', async () => {
+      const ctx = createWeeklyReviewMockContext({
+        getProgressReport: jest.fn().mockReturnValue({
+          currentISI: 15,
+          isiChange: 3,
+          currentSleepEfficiency: 78,
+          sleepEfficiencyChange: 6,
+          currentWeek: 3,
+          overallAdherence: 0.7,
+          achievements: [],
+          improvements: [],
+          responseStatus: 'partial',
+        }),
+        updateTreatmentPlan: jest.fn().mockReturnValue({
+          userId: 'test-user-123',
+          currentWeek: 3,
+          activeComponents: {
+            sleepRestriction: {
+              prescribedTIB: 345,
+              prescribedBedtime: '00:15',
+              prescribedWakeTime: '06:00',
+              efficiencyThreshold: 85,
+              minimumTIB: 300,
+              adjustmentIncrement: 15,
+            },
+            stimulusControl: {},
+            cognitiveTargets: [],
+            hygieneRecommendations: [],
+            relaxationProtocol: {},
+          },
+        }),
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user-123',
+          plan: {
+            activeComponents: {
+              sleepRestriction: {
+                prescribedTIB: 360,
+                prescribedBedtime: '00:00',
+                prescribedWakeTime: '06:00',
+              },
+            },
+          },
+        }),
+      });
+
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:weekly_review',
+        {}
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Уменьшение');
+      expect(result.message).toContain('SE < 85%');
+    });
+
+    it('should show no change when SE is 85-89%', async () => {
+      const ctx = createWeeklyReviewMockContext({
+        getProgressReport: jest.fn().mockReturnValue({
+          currentISI: 13,
+          isiChange: 5,
+          currentSleepEfficiency: 87,
+          sleepEfficiencyChange: 15,
+          currentWeek: 3,
+          overallAdherence: 0.8,
+          achievements: [],
+          improvements: [],
+          responseStatus: 'responding',
+        }),
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user-123',
+          plan: {
+            activeComponents: {
+              sleepRestriction: {
+                prescribedTIB: 330,
+                prescribedBedtime: '00:30',
+                prescribedWakeTime: '06:00',
+              },
+            },
+          },
+        }),
+        updateTreatmentPlan: jest.fn().mockReturnValue({
+          userId: 'test-user-123',
+          currentWeek: 3,
+          activeComponents: {
+            sleepRestriction: {
+              prescribedTIB: 330,
+              prescribedBedtime: '00:30',
+              prescribedWakeTime: '06:00',
+            },
+            stimulusControl: {},
+            cognitiveTargets: [],
+            hygieneRecommendations: [],
+            relaxationProtocol: {},
+          },
+        }),
+      });
+
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:weekly_review',
+        {}
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Без изменений');
+      expect(result.message).toContain('SE 85-89%');
+    });
+
+    it('should show safety warning when TIB < 360 min', async () => {
+      const ctx = createWeeklyReviewMockContext({
+        updateTreatmentPlan: jest.fn().mockReturnValue({
+          userId: 'test-user-123',
+          currentWeek: 3,
+          activeComponents: {
+            sleepRestriction: {
+              prescribedTIB: 315,
+              prescribedBedtime: '00:45',
+              prescribedWakeTime: '06:00',
+            },
+            stimulusControl: {},
+            cognitiveTargets: [],
+            hygieneRecommendations: [],
+            relaxationProtocol: {},
+          },
+        }),
+      });
+
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:weekly_review',
+        {}
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Окно сна < 6 часов');
+      expect(result.message).toContain('рулём');
+    });
+
+    it('should not show safety warning when TIB >= 360 min', async () => {
+      const ctx = createWeeklyReviewMockContext({
+        updateTreatmentPlan: jest.fn().mockReturnValue({
+          userId: 'test-user-123',
+          currentWeek: 3,
+          activeComponents: {
+            sleepRestriction: {
+              prescribedTIB: 390,
+              prescribedBedtime: '23:30',
+              prescribedWakeTime: '06:00',
+            },
+            stimulusControl: {},
+            cognitiveTargets: [],
+            hygieneRecommendations: [],
+            relaxationProtocol: {},
+          },
+        }),
+      });
+
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:weekly_review',
+        {}
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.message).not.toContain('Окно сна < 6 часов');
+    });
+
+    it('should show error when no plan exists', async () => {
+      const ctx = createWeeklyReviewMockContext({
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user-123',
+          plan: null,
+        }),
+      });
+
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:weekly_review',
+        {}
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('План лечения не найден');
+    });
+
+    it('should show insufficient data when updateTreatmentPlan returns null', async () => {
+      const ctx = createWeeklyReviewMockContext({
+        updateTreatmentPlan: jest.fn().mockReturnValue(null),
+      });
+
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:weekly_review',
+        {}
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Недостаточно данных');
+    });
+
+    it('should have step metadata weekly_review', async () => {
+      const ctx = createWeeklyReviewMockContext();
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:weekly_review',
+        {}
+      );
+
+      expect(result.metadata?.step).toBe('weekly_review');
+    });
+
+    it('should reference Spielman protocol', async () => {
+      const ctx = createWeeklyReviewMockContext();
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:weekly_review',
+        {}
+      );
+
+      expect(result.message).toContain('Spielman');
+    });
+  });
+
+  describe('Weekly SRT Review Button in Menu', () => {
+    function createMenuMockContext(weekNumber: number, hasPlan: boolean): ISleepCoreContext {
+      const plan = hasPlan ? {
+        userId: 'test-user-123',
+        currentWeek: weekNumber,
+        activeComponents: { sleepRestriction: { prescribedTIB: 330 } },
+      } : null;
+
+      const mockSleepCore = {
+        getSession: jest.fn().mockReturnValue({
+          userId: 'test-user-123',
+          currentPhase: 'treatment',
+          therapyWeek: weekNumber,
+          plan,
+        }),
+        isThirdWaveIndicated: jest.fn().mockReturnValue(false),
+        getProgressReport: jest.fn().mockReturnValue(null),
+        estimateISI: jest.fn().mockReturnValue(0),
+      } as unknown as SleepCoreAPI;
+
+      return {
+        userId: 'test-user-123',
+        chatId: 12345,
+        displayName: 'Test User',
+        languageCode: 'ru',
+        sleepCore: mockSleepCore,
+      } as unknown as ISleepCoreContext;
+    }
+
+    it('should show SRT review button when week >= 2 and plan exists', async () => {
+      const ctx = createMenuMockContext(3, true);
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:menu',
+        {}
+      );
+
+      expect(result.success).toBe(true);
+      const allCallbacks = result.keyboard?.flat().map(btn => btn.callbackData) || [];
+      expect(allCallbacks).toContain('therapy:weekly_review');
+    });
+
+    it('should NOT show SRT review button when week < 2', async () => {
+      const ctx = createMenuMockContext(1, true);
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:menu',
+        {}
+      );
+
+      expect(result.success).toBe(true);
+      const allCallbacks = result.keyboard?.flat().map(btn => btn.callbackData) || [];
+      expect(allCallbacks).not.toContain('therapy:weekly_review');
+    });
+
+    it('should NOT show SRT review button when no plan exists', async () => {
+      const ctx = createMenuMockContext(3, false);
+      const result = await therapyCommand.handleCallback(
+        ctx,
+        'therapy:menu',
+        {}
+      );
+
+      expect(result.success).toBe(true);
+      const allCallbacks = result.keyboard?.flat().map(btn => btn.callbackData) || [];
+      expect(allCallbacks).not.toContain('therapy:weekly_review');
+    });
+  });
+
   describe('Clinical Safety - Minimum TIB', () => {
     it('should mention 5.5 hour minimum in sleep_behavior_1', async () => {
       const ctx = createMockContext();
