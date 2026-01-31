@@ -49,11 +49,16 @@ export class PredictCommand implements ICommand, Partial<IConversationCommand> {
 
     // Check if user has enough data
     const history = sleepPredictionService.getHistory(ctx.userId);
-    if (!history || history.length < 7) {
+    if (!history || history.length < 3) {
       return this.showInsufficientData(history?.length || 0);
     }
 
-    // Show loading indicator (will be replaced by actual response)
+    // Cold-start: 3-6 days → preliminary ESN-based prediction
+    if (history.length < 7) {
+      return this.showColdStartPrediction(ctx, history.length);
+    }
+
+    // Full PLRNN prediction (7+ days)
     return this.showPredictionDashboard(ctx);
   }
 
@@ -82,6 +87,8 @@ export class PredictCommand implements ICommand, Partial<IConversationCommand> {
         return this.showRecommendations(ctx);
       case 'tipping':
         return this.showTippingPoints(ctx);
+      case 'about':
+        return this.showAboutPrediction();
       default:
         return this.showPredictionDashboard(ctx);
     }
@@ -435,6 +442,87 @@ ${sonya.tip('Знание о точках перелома даёт вам во�
     return { success: true, message, keyboard };
   }
 
+  /**
+   * Nocebo-safe cold-start prediction display (3-6 days)
+   *
+   * Rules (Draganich & Erdal 2014 — "placebo sleep"):
+   * 1. Never say "your sleep will worsen"
+   * 2. Always accompany prediction with actionable advice
+   * 3. Wide CI for honest uncertainty communication
+   * 4. Language: "preliminary estimate", not "prediction"
+   * 5. Primary CTA: record diary, not view warnings
+   */
+  private async showColdStartPrediction(
+    ctx: ISleepCoreContext,
+    daysCollected: number
+  ): Promise<ICommandResult> {
+    const prediction = await this.getPrediction(ctx.userId, 'medium');
+
+    if (!prediction) {
+      return this.showInsufficientData(daysCollected);
+    }
+
+    const progressBar = formatter.progressBar((daysCollected / 7) * 100, 10);
+    const se = prediction.predictedSleepEfficiency;
+
+    const message = `
+${formatter.header('🔮 Предварительная оценка сна')}
+
+${progressBar} ${daysCollected}/7 дней данных
+
+📊 *Предварительная оценка эффективности сна:*
+
+Текущая оценка: *${se.value.toFixed(0)}%*
+Диапазон: ${se.lower95.toFixed(0)}% — ${se.upper95.toFixed(0)}%
+Уверенность: ${(se.confidence * 100).toFixed(0)}%
+
+${formatter.divider()}
+
+💡 *Что это значит:*
+Это предварительная оценка на основе ${daysCollected} ${this.pluralizeDays(daysCollected)} данных. Точность *значительно вырастет* после 7 дней ведения дневника.
+
+*Ваши действия влияют на результат* — каждый день дневника помогает модели лучше понять ваш индивидуальный паттерн сна.
+
+${sonya.tip(`Ещё ${7 - daysCollected} ${this.pluralizeDays(7 - daysCollected)} — и вы получите полный прогноз с траекторией и ранними предупреждениями!`)}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📓 Записать сон', callbackData: 'diary:start' }],
+      [{ text: 'ℹ️ О прогнозировании', callbackData: 'predict:about' }],
+    ];
+
+    return { success: true, message, keyboard };
+  }
+
+  /**
+   * Educational content about prediction models
+   */
+  private async showAboutPrediction(): Promise<ICommandResult> {
+    const message = `
+${formatter.header('ℹ️ О прогнозировании сна')}
+
+*Как работает прогноз:*
+
+📊 *3-6 дней* — предварительная оценка
+Используется облегчённая модель (Echo State Network), которая находит начальные закономерности в ваших данных. Диапазон оценки широкий — это честно отражает неопределённость.
+
+🔮 *7+ дней* — полный прогноз
+Включается модель PLRNN (Piecewise-Linear Recurrent Neural Network), обученная на ваших индивидуальных данных. Она строит траекторию на 7 дней вперёд и обнаруживает ранние сигналы изменений.
+
+*Почему точность растёт:*
+Каждый день дневника — это новая точка данных для обучения модели. Чем больше данных, тем лучше модель различает закономерности от случайных колебаний.
+
+${sonya.say('Наука сна сложна, но твой дневник — ключ к пониманию именно твоих паттернов! 🦉')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📓 Записать сон', callbackData: 'diary:start' }],
+      [{ text: '← Назад', callbackData: 'predict:dashboard' }],
+    ];
+
+    return { success: true, message, keyboard };
+  }
+
   private async showPredictionError(): Promise<ICommandResult> {
     const message = `
 ${formatter.warning('Ошибка прогнозирования')}
@@ -496,10 +584,10 @@ ${formatter.tip('Используйте /diary для добавления за�
 
     const lines: string[] = [];
     const chartHeight = 8;
-    const chartWidth = 25;
+    const _chartWidth = 25;
 
     // Find min/max for scaling
-    const values = trajectory.map(t => t.predicted);
+    const _values = trajectory.map(t => t.predicted);
     const lowerValues = trajectory.map(t => t.lower95);
     const upperValues = trajectory.map(t => t.upper95);
 
@@ -508,7 +596,7 @@ ${formatter.tip('Используйте /diary для добавления за�
     const range = maxVal - minVal;
 
     // Y-axis labels
-    const yLabels = [100, 85, 70, 55].map(v => `${v}%`.padStart(4));
+    const _yLabels = [100, 85, 70, 55].map(v => `${v}%`.padStart(4));
 
     // Build chart rows
     for (let row = 0; row < chartHeight; row++) {

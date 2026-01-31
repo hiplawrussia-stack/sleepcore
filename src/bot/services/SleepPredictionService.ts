@@ -22,7 +22,6 @@
 
 import {
   createPLRNNEngine,
-  DEFAULT_PLRNN_CONFIG,
   type IPLRNNEngine,
   type IPLRNNConfig,
   type IPLRNNState,
@@ -32,7 +31,9 @@ import {
   type IInterventionSimulation,
 } from '@cognicore/engine';
 
-import type { ISleepMetrics, ISleepDiaryEntry } from '../../sleep/interfaces/ISleepState';
+import type { ISleepMetrics } from '../../sleep/interfaces/ISleepState';
+import { ESNColdStartPredictor } from './ESNColdStartPredictor';
+import { rqaMetricsLogger } from './RQAMetricsLogger';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -120,10 +121,15 @@ export const DEFAULT_SLEEP_PREDICTION_CONFIG: ISleepPredictionConfig = {
     maxTST: 12, // 12 hours max
   },
   earlyWarning: {
-    seDropThreshold: 10, // 10 percentage points
-    solIncreaseThreshold: 15, // 15 minutes
-    wasoIncreaseThreshold: 20, // 20 minutes
-    varianceThreshold: 1.5, // 50% increase
+    /**
+     * Conservative thresholds per Smit et al. 2025 (PNAS):
+     * EWS sensitivity ~32.9% — prioritize specificity to reduce false positives
+     * and alert fatigue (PMC 5466696: >3 notifications/day → +14% errors)
+     */
+    seDropThreshold: 12, // 12 pp (was 10) — reduce false positives
+    solIncreaseThreshold: 20, // 20 min (was 15) — clinically meaningful
+    wasoIncreaseThreshold: 25, // 25 min (was 20) — clinically meaningful
+    varianceThreshold: 1.8, // 80% increase (was 1.5) — reduce noise alerts
   },
   minHistoryEntries: 3,
   horizons: {
@@ -187,6 +193,9 @@ export interface ISleepPrediction {
 
   /** Recommendations based on prediction */
   readonly recommendations: string[];
+
+  /** Prediction source model */
+  readonly source: 'plrnn' | 'esn_cold_start';
 }
 
 /**
@@ -244,6 +253,7 @@ export class SleepPredictionService {
   private plrnnEngine: IPLRNNEngine;
   private userStates: Map<string, IPLRNNState> = new Map();
   private userHistory: Map<string, ISleepHistoryEntry[]> = new Map();
+  private esnPredictors: Map<string, ESNColdStartPredictor> = new Map();
   private initialized = false;
 
   constructor(config: Partial<ISleepPredictionConfig> = {}) {
@@ -354,6 +364,14 @@ export class SleepPredictionService {
 
     this.userHistory.set(entry.userId, filteredHistory);
 
+    // Clean up ESN cold-start predictor once we have enough data for PLRNN
+    if (filteredHistory.length >= 7) {
+      this.esnPredictors.delete(entry.userId);
+    }
+
+    // RQA experimental metrics logging (disabled by default)
+    rqaMetricsLogger.computeAndLog(entry.userId, filteredHistory);
+
     // Update PLRNN state
     const plrnnState = this.sleepMetricsToPLRNNState(
       entry.metrics,
@@ -401,6 +419,11 @@ export class SleepPredictionService {
 
     const currentState = this.userStates.get(userId);
     const history = this.userHistory.get(userId) || [];
+
+    // ESN cold-start fallback for 3-6 days of data
+    if (history.length >= 3 && history.length < 7) {
+      return this.predictColdStart(userId, history, horizon);
+    }
 
     if (!currentState || history.length < this.config.minHistoryEntries) {
       console.warn('[SleepPrediction] Insufficient data for prediction:', {
@@ -476,6 +499,75 @@ export class SleepPredictionService {
       trend,
       deteriorationRisk,
       recommendations,
+      source: 'plrnn',
+    };
+  }
+
+  /**
+   * ESN cold-start prediction for users with 3-6 days of data
+   *
+   * Uses Echo State Networks (Jaeger 2001) as a lightweight fallback
+   * before enough data is available for full PLRNN prediction.
+   */
+  private predictColdStart(
+    userId: string,
+    history: ISleepHistoryEntry[],
+    horizon: 'short' | 'medium' | 'long'
+  ): ISleepPrediction {
+    // Get or create ESN predictor for this user
+    let esn = this.esnPredictors.get(userId);
+    if (!esn) {
+      esn = new ESNColdStartPredictor();
+      this.esnPredictors.set(userId, esn);
+    }
+
+    // Train on available history
+    esn.train(history);
+
+    const hoursAhead = this.config.horizons[horizon];
+    const daysAhead = Math.round(hoursAhead / 24);
+
+    // Predict
+    const esnPrediction = esn.predict(daysAhead);
+
+    // Map to ISleepPrediction
+    const trajectory = esnPrediction.trajectory.map((point, idx) => ({
+      date: new Date(Date.now() + (idx + 1) * 24 * 60 * 60 * 1000),
+      predicted: point.predictedSE,
+      lower95: point.lower95,
+      upper95: point.upper95,
+    }));
+
+    const final = trajectory[trajectory.length - 1] ?? {
+      predicted: esnPrediction.predictedSE,
+      lower95: esnPrediction.predictedSE - 15,
+      upper95: esnPrediction.predictedSE + 15,
+    };
+
+    return {
+      userId,
+      timestamp: new Date(),
+      horizon,
+      hoursAhead,
+      daysAhead,
+      sleepEfficiencyTrajectory: trajectory,
+      predictedSleepEfficiency: {
+        value: esnPrediction.predictedSE,
+        confidence: esnPrediction.confidence,
+        lower95: final.lower95,
+        upper95: final.upper95,
+      },
+      predictedMetrics: esnPrediction.predictedMetrics,
+      // No early warnings for cold-start — insufficient data for reliable EWS
+      earlyWarnings: [],
+      // Always stable for cold-start — no declining/critical to avoid nocebo
+      trend: 'stable',
+      deteriorationRisk: 0,
+      recommendations: [
+        'Продолжайте вести дневник сна — точность прогноза значительно вырастет после 7 дней',
+        'Старайтесь ложиться и вставать в одно время',
+      ],
+      source: 'esn_cold_start',
     };
   }
 
@@ -598,7 +690,8 @@ export class SleepPredictionService {
 
     // Use PLRNN's built-in early warning signals
     for (const ews of prediction.earlyWarningSignals) {
-      if (ews.strength > 0.5) {
+      // Conservative threshold: Smit et al. 2025 — EWS sensitivity ~32.9%
+      if (ews.strength > 0.6) {
         warnings.push({
           type: 'pattern_disruption',
           severity: ews.strength > 0.8 ? 'high' : 'moderate',
