@@ -35,6 +35,7 @@ import type {
   ICommandResult,
   IInlineButton,
 } from './interfaces/ICommand';
+import type { ICBTIIntervention, CBTIComponent } from '../../cbt-i/interfaces/ICBTIComponents';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
 
@@ -317,6 +318,18 @@ const CORE_SESSIONS: readonly ICoreSession[] = [
 ] as const;
 
 /**
+ * Maps CBTIComponent (from POMDP/Thompson Sampling) to TherapyCore sessions.
+ * Used to check relevance of adaptive recommendation to current core.
+ */
+const COMPONENT_TO_CORE_MAP: Record<CBTIComponent, TherapyCore[]> = {
+  sleep_restriction: ['sleep_behavior_1', 'sleep_behavior_2'],
+  stimulus_control: ['sleep_behavior_1', 'sleep_behavior_2'],
+  cognitive_restructuring: ['sleep_thoughts'],
+  sleep_hygiene: ['sleep_education'],
+  relaxation: ['overview', 'problem_prevention'],
+};
+
+/**
  * /therapy Command Implementation
  * 6-Core Structured CBT-I Sessions
  */
@@ -531,6 +544,10 @@ export class TherapyCommand implements IConversationCommand {
 
       case 'evidence_integrated':
         return this.showIntegratedRecommendation(ctx, conversationData);
+
+      // ==================== Adaptive Recommendation Handler ====================
+      case 'adaptive_done':
+        return this.handleAdaptiveRecommendationDone(ctx, conversationData);
 
       default:
         return { success: false, error: `Unknown action: ${action}` };
@@ -1184,6 +1201,9 @@ ${sonya.tip('Выполните упражнение прямо сейчас и�
       .map((hw, i) => `${i + 1}. ${hw}`)
       .join('\n');
 
+    // Get adaptive recommendation from POMDP/Thompson Sampling
+    const adaptiveBlock = await this.getAdaptiveRecommendation(ctx, coreId);
+
     const message = `
 ${core.icon} *Домашнее задание*
 _Core ${core.weekNumber}: ${core.titleRu}_
@@ -1193,6 +1213,7 @@ ${formatter.divider()}
 ${formatter.header('На эту неделю')}
 
 ${homeworkList}
+${adaptiveBlock ? `\n${formatter.divider()}\n\n${adaptiveBlock.text}` : ''}
 
 ${formatter.divider()}
 
@@ -1200,6 +1221,112 @@ ${formatter.divider()}
 📓 *Не забывайте:* вести дневник сна каждый день
 
 ${sonya.tip('Регулярное выполнение заданий — ключ к успеху терапии. Исследования показывают, что adherence > 80% даёт лучшие результаты.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [];
+    if (adaptiveBlock) {
+      keyboard.push([{ text: '✅ Рекомендация принята', callbackData: 'therapy:adaptive_done' }]);
+    }
+    keyboard.push(
+      [{ text: '✅ Завершить сессию', callbackData: 'therapy:complete' }],
+      [{ text: '📓 Открыть дневник', callbackData: 'diary:start' }],
+    );
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: {
+        ...data,
+        step: 'core_homework',
+        ...(adaptiveBlock ? { adaptiveIntervention: adaptiveBlock.intervention } : {}),
+      },
+    };
+  }
+
+  // ==================== Adaptive Recommendation (POMDP/Thompson Sampling) ====================
+
+  /**
+   * Get adaptive recommendation from CogniCore POMDP/Thompson Sampling engine.
+   * Returns formatted text block + raw intervention for metadata, or null on graceful degradation.
+   *
+   * Reference pattern: TodayCommand.execute() → ctx.sleepCore.getNextIntervention()
+   */
+  private async getAdaptiveRecommendation(
+    ctx: ISleepCoreContext,
+    currentCore: TherapyCore
+  ): Promise<{ text: string; intervention: ICBTIIntervention } | null> {
+    try {
+      const intervention = await ctx.sleepCore.getNextIntervention(ctx.userId);
+      if (!intervention) return null;
+
+      const componentNames: Record<string, string> = {
+        sleep_restriction: 'Ограничение сна',
+        stimulus_control: 'Контроль стимулов',
+        cognitive_restructuring: 'Когнитивная работа',
+        sleep_hygiene: 'Гигиена сна',
+        relaxation: 'Релаксация',
+      };
+
+      const componentIcons: Record<string, string> = {
+        sleep_restriction: '🛏',
+        stimulus_control: '🚪',
+        cognitive_restructuring: '🧠',
+        sleep_hygiene: '🌙',
+        relaxation: '🧘',
+      };
+
+      const component = intervention.component;
+      const icon = componentIcons[component] || '📋';
+      const name = componentNames[component] || component;
+
+      // Check if recommendation is relevant to current core
+      const relevantCores = COMPONENT_TO_CORE_MAP[component] || [];
+      const isRelevant = relevantCores.includes(currentCore);
+      const relevanceNote = isRelevant
+        ? ''
+        : `\n_ℹ️ Дополнительная рекомендация из модуля "${name}"_`;
+
+      const priorityStars = '⭐'.repeat(Math.min(intervention.priority, 5));
+
+      const text = `${formatter.header('Персональная рекомендация (AI)')}\n\n` +
+        `${icon} *${name}* | ${priorityStars}${relevanceNote}\n\n` +
+        `*Что делать:*\n${intervention.action}\n\n` +
+        `_💡 ${intervention.rationale}_`;
+
+      return { text, intervention };
+    } catch {
+      // Graceful degradation: homework works as before without adaptive block
+      return null;
+    }
+  }
+
+  /**
+   * Handle "Рекомендация принята" callback for Thompson Sampling outcome tracking.
+   */
+  private async handleAdaptiveRecommendationDone(
+    ctx: ISleepCoreContext,
+    data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const intervention = data.adaptiveIntervention as ICBTIIntervention | undefined;
+    const componentNames: Record<string, string> = {
+      sleep_restriction: 'Ограничение сна',
+      stimulus_control: 'Контроль стимулов',
+      cognitive_restructuring: 'Когнитивная работа',
+      sleep_hygiene: 'Гигиена сна',
+      relaxation: 'Релаксация',
+    };
+
+    const name = intervention
+      ? componentNames[intervention.component] || intervention.component
+      : 'рекомендацию';
+
+    const message = `
+${formatter.success('Рекомендация принята')}
+
+Вы приняли персональную рекомендацию: *${name}*
+
+${sonya.tip('Результаты выполнения будут учтены при следующем подборе рекомендаций.')}
     `.trim();
 
     const keyboard: IInlineButton[][] = [
@@ -1211,7 +1338,7 @@ ${sonya.tip('Регулярное выполнение заданий — клю
       success: true,
       message,
       keyboard,
-      metadata: { ...data, step: 'core_homework' },
+      metadata: { ...data, adaptiveAccepted: true },
     };
   }
 
