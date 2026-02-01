@@ -350,9 +350,70 @@ export class ProactiveIntelligenceService {
   private config: IProactiveIntelligenceConfig;
   private userAnalysisCache: Map<string, { date: Date; analysis: IDailyAnalysis }> = new Map();
   private userInsightHistory: Map<string, IProactiveInsight[]> = new Map();
+  private stateRepo?: import('../../infrastructure/database/repositories/ServiceStateRepository').ServiceStateRepository;
 
   constructor(config: Partial<IProactiveIntelligenceConfig> = {}) {
     this.config = { ...DEFAULT_PROACTIVE_CONFIG, ...config };
+  }
+
+  async setRepository(repo: import('../../infrastructure/database/repositories/ServiceStateRepository').ServiceStateRepository): Promise<void> {
+    this.stateRepo = repo;
+    await this.loadFromDB();
+  }
+
+  private async loadFromDB(): Promise<void> {
+    if (!this.stateRepo) return;
+    try {
+      // Load insight history
+      const insightEntries = await this.stateRepo.getAllForService('proactive_insights');
+      for (const { userId, state } of insightEntries) {
+        const insights = (state as { insights?: IProactiveInsight[] }).insights ?? [];
+        // Restore Date objects
+        for (const i of insights) {
+          i.generatedAt = new Date(i.generatedAt);
+          i.expiresAt = new Date(i.expiresAt);
+        }
+        this.userInsightHistory.set(userId, insights);
+      }
+
+      // Load engagement tracking
+      const engEntries = await this.stateRepo.getAllForService('engagement_tracking');
+      for (const { userId, state } of engEntries) {
+        const tracking = state as unknown as IEngagementTracking;
+        if (tracking) {
+          // Restore Map for thompsonStates
+          if (tracking.thompsonStates && !(tracking.thompsonStates instanceof Map)) {
+            tracking.thompsonStates = new Map(Object.entries(tracking.thompsonStates)) as Map<IProactiveInsight['type'], IThompsonSamplingState>;
+          }
+          if (tracking.lastInsightTime) {
+            tracking.lastInsightTime = new Date(tracking.lastInsightTime as unknown as string);
+          }
+          this.engagementTracking.set(userId, tracking);
+        }
+      }
+      console.log(`[ProactiveIntelligence] Loaded ${insightEntries.length} insight + ${engEntries.length} engagement records from DB`);
+    } catch (err) {
+      console.error('[ProactiveIntelligence] DB load failed:', err);
+    }
+  }
+
+  private persistInsights(userId: string, insights: IProactiveInsight[]): void {
+    if (!this.stateRepo) return;
+    this.stateRepo.set(userId, 'proactive_insights', { insights } as unknown as Record<string, unknown>).catch(err => {
+      console.error(`[ProactiveIntelligence] Failed to persist insights for ${userId}:`, err);
+    });
+  }
+
+  private persistEngagement(userId: string, tracking: IEngagementTracking): void {
+    if (!this.stateRepo) return;
+    // Convert Map to plain object for serialization
+    const serializable = {
+      ...tracking,
+      thompsonStates: Object.fromEntries(tracking.thompsonStates),
+    };
+    this.stateRepo.set(userId, 'engagement_tracking', serializable as unknown as Record<string, unknown>).catch(err => {
+      console.error(`[ProactiveIntelligence] Failed to persist engagement for ${userId}:`, err);
+    });
   }
 
   // ==================== Public API ====================
@@ -464,6 +525,7 @@ export class ProactiveIntelligenceService {
     if (index !== -1) {
       insights.splice(index, 1);
       this.userInsightHistory.set(userId, insights);
+      this.persistInsights(userId, insights);
     }
   }
 
@@ -1200,6 +1262,7 @@ export class ProactiveIntelligenceService {
       };
 
       this.engagementTracking.set(userId, tracking);
+      this.persistEngagement(userId, tracking);
     }
 
     return tracking;

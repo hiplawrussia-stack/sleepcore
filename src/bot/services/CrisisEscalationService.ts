@@ -23,6 +23,7 @@ import { Bot, Context } from 'grammy';
 import type { ICrisisEvent } from './CrisisDetectionService';
 import type { AdverseEventService } from './AdverseEventService';
 import { DTX_AE_CATEGORIES } from './AdverseEventService';
+import type { SafetyPlanRepository } from '../../infrastructure/database/repositories/SafetyPlanRepository';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -252,6 +253,7 @@ export class CrisisEscalationService {
   private config: ICrisisEscalationConfig;
   private bot?: Bot<Context>;
   private aeService?: AdverseEventService;
+  private safetyPlanRepo?: SafetyPlanRepository;
   private notifications: IAdminNotification[] = [];
   private safetyPlans: Map<string, IUserSafetyPlan> = new Map();
 
@@ -275,6 +277,63 @@ export class CrisisEscalationService {
    */
   setAdverseEventService(aeService: AdverseEventService): void {
     this.aeService = aeService;
+  }
+
+  /**
+   * Set repository for safety plan persistence
+   * Hydrates in-memory Map from DB on connect
+   */
+  async setRepository(repo: SafetyPlanRepository): Promise<void> {
+    this.safetyPlanRepo = repo;
+    await this.loadSafetyPlansFromDB();
+  }
+
+  /**
+   * Hydrate safety plans from database
+   */
+  private async loadSafetyPlansFromDB(): Promise<void> {
+    if (!this.safetyPlanRepo) return;
+    try {
+      const plans = await this.safetyPlanRepo.findAll();
+      for (const plan of plans) {
+        this.safetyPlans.set(plan.userId, {
+          userId: plan.userId,
+          createdAt: plan.createdAt,
+          updatedAt: plan.updatedAt,
+          warningSignsRu: plan.warningSigns,
+          copingStrategies: plan.copingStrategies,
+          reasonsToLive: plan.reasonsToLive,
+          supportContacts: plan.supportContacts as IUserSafetyPlan['supportContacts'],
+          safePlaces: plan.safePlaces,
+          professionalContacts: plan.professionalContacts as IUserSafetyPlan['professionalContacts'],
+        });
+      }
+      console.log(`[CrisisEscalation] Loaded ${plans.length} safety plans from DB`);
+    } catch (err) {
+      console.error('[CrisisEscalation] DB load failed, Map empty:', err);
+    }
+  }
+
+  /**
+   * Persist safety plan to database (write-through)
+   */
+  private async persistSafetyPlan(userId: string, plan: IUserSafetyPlan): Promise<void> {
+    if (!this.safetyPlanRepo) return;
+    try {
+      await this.safetyPlanRepo.upsert(userId, {
+        userId,
+        warningSigns: plan.warningSignsRu ?? plan.warningSignsEn ?? [],
+        copingStrategies: plan.copingStrategies ?? [],
+        reasonsToLive: plan.reasonsToLive ?? [],
+        supportContacts: (plan.supportContacts ?? []) as Array<{ name: string; phone?: string; relation?: string }>,
+        safePlaces: plan.safePlaces ?? [],
+        professionalContacts: (plan.professionalContacts ?? []) as Array<{ name: string; phone: string; type: string }>,
+        createdAt: plan.createdAt,
+        updatedAt: plan.updatedAt,
+      });
+    } catch (err) {
+      console.error(`[CrisisEscalation] Failed to persist safety plan for ${userId}:`, err);
+    }
   }
 
   /**
@@ -576,6 +635,10 @@ export class CrisisEscalationService {
     };
 
     this.safetyPlans.set(userId, updatedPlan);
+
+    // CRITICAL: Write-through to DB for safety data
+    this.persistSafetyPlan(userId, updatedPlan);
+
     return updatedPlan;
   }
 

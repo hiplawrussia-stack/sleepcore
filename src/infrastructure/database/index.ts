@@ -128,6 +128,34 @@ export { AssessmentRepository } from './repositories/AssessmentRepository';
 export { TherapySessionRepository } from './repositories/TherapySessionRepository';
 export { GamificationRepository } from './repositories/GamificationRepository';
 export { VoiceDiaryRepository } from './repositories/VoiceDiaryRepository';
+export {
+  AdverseEventRepository,
+  SafetyAlertRepository,
+  createAdverseEventRepository,
+  createSafetyAlertRepository,
+  type IAdverseEventEntity,
+  type ISafetyAlertEntity,
+  type IAdverseEventAuditEntry,
+  type AESeverity,
+  type SeriousnessCriteria,
+  type AEOutcome,
+  type CausalityAssessment,
+  type Expectedness,
+  type ActionTaken,
+  type ReportStatus,
+  type ReporterType,
+  type ReportedBy,
+} from './repositories/AdverseEventRepository';
+
+// Phase 9: Service persistence repositories
+export { SafetyPlanRepository } from './repositories/SafetyPlanRepository';
+export { ISIScheduleRepository } from './repositories/ISIScheduleRepository';
+export { DigitalTwinRepository } from './repositories/DigitalTwinRepository';
+export { OnboardingRepository } from './repositories/OnboardingRepository';
+export { ServiceStateRepository } from './repositories/ServiceStateRepository';
+export { NotificationUserRepository } from './repositories/NotificationUserRepository';
+export { MCTRepository } from './repositories/MCTRepository';
+export { MCQ30Repository } from './repositories/MCQ30Repository';
 
 // ============================================================================
 // Migrations

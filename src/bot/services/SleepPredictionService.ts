@@ -255,10 +255,41 @@ export class SleepPredictionService {
   private userHistory: Map<string, ISleepHistoryEntry[]> = new Map();
   private esnPredictors: Map<string, ESNColdStartPredictor> = new Map();
   private initialized = false;
+  private stateRepo?: import('../../infrastructure/database/repositories/ServiceStateRepository').ServiceStateRepository;
 
   constructor(config: Partial<ISleepPredictionConfig> = {}) {
     this.config = { ...DEFAULT_SLEEP_PREDICTION_CONFIG, ...config };
     this.plrnnEngine = createPLRNNEngine(this.config.plrnnConfig);
+  }
+
+  async setStateRepository(repo: import('../../infrastructure/database/repositories/ServiceStateRepository').ServiceStateRepository): Promise<void> {
+    this.stateRepo = repo;
+    await this.loadStatesFromDB();
+  }
+
+  private async loadStatesFromDB(): Promise<void> {
+    if (!this.stateRepo) return;
+    try {
+      const entries = await this.stateRepo.getAllForService('plrnn_state');
+      for (const { userId, state } of entries) {
+        const plrnnState = state as unknown as IPLRNNState;
+        if (plrnnState && plrnnState.latentState) {
+          // Restore Date object
+          plrnnState.timestamp = new Date(plrnnState.timestamp);
+          this.userStates.set(userId, plrnnState);
+        }
+      }
+      console.log(`[SleepPrediction] Loaded ${entries.length} PLRNN states from DB`);
+    } catch (err) {
+      console.error('[SleepPrediction] DB state load failed:', err);
+    }
+  }
+
+  private persistState(userId: string, state: IPLRNNState): void {
+    if (!this.stateRepo) return;
+    this.stateRepo.set(userId, 'plrnn_state', state as unknown as Record<string, unknown>).catch(err => {
+      console.error(`[SleepPrediction] Failed to persist state for ${userId}:`, err);
+    });
   }
 
   // ==========================================================================
@@ -383,8 +414,10 @@ export class SleepPredictionService {
     if (this.initialized) {
       const updatedState = this.plrnnEngine.forward(plrnnState);
       this.userStates.set(entry.userId, updatedState);
+      this.persistState(entry.userId, updatedState);
     } else {
       this.userStates.set(entry.userId, plrnnState);
+      this.persistState(entry.userId, plrnnState);
     }
   }
 

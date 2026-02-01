@@ -138,6 +138,8 @@ const _TARGET_COMPLETION_TIMES: Record<OnboardingStep, number> = {
 
 // ==================== Service Implementation ====================
 
+import type { OnboardingRepository } from '../../infrastructure/database/repositories/OnboardingRepository';
+
 /**
  * Onboarding Tracking Service
  *
@@ -164,6 +166,51 @@ export class OnboardingTrackingService {
   private progressMap: Map<string, IOnboardingProgress> = new Map();
   private eventLog: IOnboardingEvent[] = [];
   private maxEventLogSize = 10000; // Prevent memory bloat
+  private repo?: OnboardingRepository;
+
+  async setRepository(repo: OnboardingRepository): Promise<void> {
+    this.repo = repo;
+    await this.loadFromDB();
+  }
+
+  private async loadFromDB(): Promise<void> {
+    if (!this.repo) return;
+    try {
+      const entities = await this.repo.findAll();
+      for (const e of entities) {
+        this.progressMap.set(e.userId, {
+          userId: e.userId,
+          startedAt: new Date(e.startedAt),
+          completedAt: e.completedAt ? new Date(e.completedAt) : undefined,
+          currentStep: e.currentStep as OnboardingStep,
+          completedSteps: JSON.parse(e.completedStepsJson).map((s: { step: string; completedAt: string; durationMs?: number; metadata?: Record<string, unknown> }) => ({
+            ...s,
+            completedAt: new Date(s.completedAt),
+          })),
+          isCompleted: !!e.isCompleted,
+          completionPercentage: e.completionPercentage,
+        });
+      }
+      console.log(`[Onboarding] Loaded ${entities.length} progress records from DB`);
+    } catch (err) {
+      console.error('[Onboarding] DB load failed:', err);
+    }
+  }
+
+  private persistProgress(userId: string, progress: IOnboardingProgress): void {
+    if (!this.repo) return;
+    this.repo.upsert(userId, {
+      userId,
+      startedAt: progress.startedAt,
+      completedAt: progress.completedAt,
+      currentStep: progress.currentStep,
+      completedStepsJson: JSON.stringify(progress.completedSteps),
+      isCompleted: progress.isCompleted,
+      completionPercentage: progress.completionPercentage,
+    }).catch(err => {
+      console.error(`[Onboarding] Failed to persist progress for ${userId}:`, err);
+    });
+  }
 
   /**
    * Start onboarding tracking for a user
@@ -184,6 +231,7 @@ export class OnboardingTrackingService {
     };
 
     this.progressMap.set(userId, progress);
+    this.persistProgress(userId, progress);
     this.logEvent(userId, 'welcome_viewed', 'started');
 
     console.log(`[Onboarding] Started tracking for user: ${userId}`);
@@ -244,6 +292,7 @@ export class OnboardingTrackingService {
       progress.completedAt = new Date();
     }
 
+    this.persistProgress(userId, progress);
     this.logEvent(userId, step, 'completed', metadata);
 
     console.log(

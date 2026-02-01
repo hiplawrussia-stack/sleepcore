@@ -17,6 +17,8 @@ import { migration004 } from './004_bot_sessions';
 import { migration005 } from './005_gamification';
 import { migration006 } from './006_voice_diary';
 import { migration007 } from './007_audit_metadata';
+import { migration008 } from './008_adverse_events';
+import { migration009 } from './009_service_persistence';
 
 /**
  * All registered migrations in version order
@@ -29,6 +31,8 @@ export const MIGRATIONS: readonly IMigration[] = [
   migration005,
   migration006,
   migration007,
+  migration008,
+  migration009,
 ] as const;
 
 /**
@@ -53,3 +57,5 @@ export { migration004 } from './004_bot_sessions';
 export { migration005 } from './005_gamification';
 export { migration006 } from './006_voice_diary';
 export { migration007 } from './007_audit_metadata';
+export { migration008 } from './008_adverse_events';
+export { migration009 } from './009_service_persistence';

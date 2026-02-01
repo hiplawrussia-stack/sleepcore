@@ -29,6 +29,7 @@ import {
 
 import type { ISleepMetrics } from '../../sleep/interfaces/ISleepState';
 import type { SleepAction } from '../../platform/SleepCorePOMDP';
+import type { DigitalTwinRepository } from '../../infrastructure/database/repositories/DigitalTwinRepository';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -197,6 +198,55 @@ export interface IComparisonResult {
  */
 export class DigitalTwinService {
   private twins: Map<string, IDigitalTwin> = new Map();
+  private repo?: DigitalTwinRepository;
+
+  /**
+   * Set repository for persistence. Hydrates Map from DB.
+   */
+  async setRepository(repo: DigitalTwinRepository): Promise<void> {
+    this.repo = repo;
+    await this.loadFromDB();
+  }
+
+  private async loadFromDB(): Promise<void> {
+    if (!this.repo) return;
+    try {
+      const entities = await this.repo.findAll();
+      for (const e of entities) {
+        this.twins.set(e.userId, {
+          userId: e.userId,
+          createdAt: e.twinCreatedAt,
+          lastUpdatedAt: e.lastUpdatedAt,
+          observationCount: e.observationCount,
+          stateQuality: e.stateQuality,
+          isReady: e.isReady,
+          currentMetrics: e.currentMetricsJson ? JSON.parse(e.currentMetricsJson) : null,
+          trend: e.trend as IDigitalTwin['trend'],
+          riskLevel: e.riskLevel as IDigitalTwin['riskLevel'],
+        });
+      }
+      console.log(`[DigitalTwin] Loaded ${entities.length} twins from DB`);
+    } catch (err) {
+      console.error('[DigitalTwin] DB load failed:', err);
+    }
+  }
+
+  private persistTwin(userId: string, twin: IDigitalTwin): void {
+    if (!this.repo) return;
+    this.repo.upsert(userId, {
+      userId,
+      observationCount: twin.observationCount,
+      stateQuality: twin.stateQuality,
+      isReady: twin.isReady,
+      currentMetricsJson: twin.currentMetrics ? JSON.stringify(twin.currentMetrics) : null,
+      trend: twin.trend,
+      riskLevel: twin.riskLevel,
+      twinCreatedAt: twin.createdAt,
+      lastUpdatedAt: twin.lastUpdatedAt,
+    }).catch(err => {
+      console.error(`[DigitalTwin] Failed to persist twin for ${userId}:`, err);
+    });
+  }
 
   // ==========================================================================
   // TWIN LIFECYCLE
@@ -242,6 +292,7 @@ export class DigitalTwinService {
     };
 
     this.twins.set(userId, twin);
+    this.persistTwin(userId, twin);
     return twin;
   }
 

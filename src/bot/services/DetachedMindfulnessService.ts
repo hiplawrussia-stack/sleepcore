@@ -419,9 +419,35 @@ export const DM_EXERCISES: IDMExercise[] = [
 export class DetachedMindfulnessService {
   private readonly config: IDMConfig;
   private readonly sessions: Map<string, IDMSessionRecord[]> = new Map();
+  private mctRepo?: import('../../infrastructure/database/repositories/MCTRepository').MCTRepository;
 
   constructor(config: Partial<IDMConfig> = {}) {
     this.config = { ...DEFAULT_DM_CONFIG, ...config };
+  }
+
+  async setRepository(repo: import('../../infrastructure/database/repositories/MCTRepository').MCTRepository): Promise<void> {
+    this.mctRepo = repo;
+    await this.loadFromDB();
+  }
+
+  private async loadFromDB(): Promise<void> {
+    if (!this.mctRepo) return;
+    try {
+      const entries = await this.mctRepo.getAllSessionsForService('dm');
+      for (const { userId, sessions } of entries) {
+        this.sessions.set(userId, sessions as IDMSessionRecord[]);
+      }
+      console.log(`[DetachedMindfulness] Loaded ${entries.length} user session records from DB`);
+    } catch (err) {
+      console.error('[DetachedMindfulness] DB load failed:', err);
+    }
+  }
+
+  private persistSession(userId: string, session: IDMSessionRecord): void {
+    if (!this.mctRepo) return;
+    this.mctRepo.addSession(userId, 'dm', session, session.timestamp).catch(err => {
+      console.error(`[DetachedMindfulness] Failed to persist session for ${userId}:`, err);
+    });
   }
 
   /**
@@ -603,6 +629,7 @@ export class DetachedMindfulnessService {
     const userSessions = this.sessions.get(userId) ?? [];
     userSessions.push(session);
     this.sessions.set(userId, userSessions);
+    this.persistSession(userId, session);
 
     return session;
   }
@@ -629,6 +656,7 @@ export class DetachedMindfulnessService {
     const userSessions = this.sessions.get(userId) ?? [];
     userSessions.push(session);
     this.sessions.set(userId, userSessions);
+    this.persistSession(userId, session);
 
     return session;
   }

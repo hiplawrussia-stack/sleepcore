@@ -248,9 +248,40 @@ export const MCQ30_ITEMS: IMCQ30Item[] = [
 export class MCQ30AssessmentService {
   private readonly config: IMCQ30Config;
   private readonly assessments: Map<string, IMCQ30Result[]> = new Map();
+  private mcq30Repo?: import('../../infrastructure/database/repositories/MCQ30Repository').MCQ30Repository;
 
   constructor(config: Partial<IMCQ30Config> = {}) {
     this.config = { ...DEFAULT_MCQ30_CONFIG, ...config };
+  }
+
+  async setRepository(repo: import('../../infrastructure/database/repositories/MCQ30Repository').MCQ30Repository): Promise<void> {
+    this.mcq30Repo = repo;
+    await this.loadFromDB();
+  }
+
+  private async loadFromDB(): Promise<void> {
+    if (!this.mcq30Repo) return;
+    try {
+      const allResults = await this.mcq30Repo.getAllResults();
+      for (const { userId, results } of allResults) {
+        const typedResults = results as IMCQ30Result[];
+        // Restore Date objects
+        for (const r of typedResults) {
+          (r as { timestamp: Date }).timestamp = new Date(r.timestamp);
+        }
+        this.assessments.set(userId, typedResults);
+      }
+      console.log(`[MCQ30] Loaded ${allResults.length} user assessment records from DB`);
+    } catch (err) {
+      console.error('[MCQ30] DB load failed:', err);
+    }
+  }
+
+  private persistResult(userId: string, result: IMCQ30Result): void {
+    if (!this.mcq30Repo) return;
+    this.mcq30Repo.addResult(userId, result, result.timestamp).catch(err => {
+      console.error(`[MCQ30] Failed to persist result for ${userId}:`, err);
+    });
   }
 
   /**
@@ -356,6 +387,7 @@ export class MCQ30AssessmentService {
     // Store result
     previousAssessments.push(result);
     this.assessments.set(userId, previousAssessments);
+    this.persistResult(userId, result);
 
     return result;
   }

@@ -197,9 +197,52 @@ export class AdaptivePersonaService {
   private config: IAdaptivePersonaConfig;
   private userProfiles: Map<string, ICommunicationProfile> = new Map();
   private emotionalHistory: Map<string, IEmotionalState[]> = new Map();
+  private stateRepo?: import('../../infrastructure/database/repositories/ServiceStateRepository').ServiceStateRepository;
 
   constructor(config: Partial<IAdaptivePersonaConfig> = {}) {
     this.config = { ...DEFAULT_ADAPTIVE_CONFIG, ...config };
+  }
+
+  async setRepository(repo: import('../../infrastructure/database/repositories/ServiceStateRepository').ServiceStateRepository): Promise<void> {
+    this.stateRepo = repo;
+    await this.loadFromDB();
+  }
+
+  private async loadFromDB(): Promise<void> {
+    if (!this.stateRepo) return;
+    try {
+      const profileEntries = await this.stateRepo.getAllForService('comm_profile');
+      for (const { userId, state } of profileEntries) {
+        const profile = state as unknown as ICommunicationProfile;
+        if (profile) {
+          profile.lastUpdated = new Date(profile.lastUpdated);
+          this.userProfiles.set(userId, profile);
+        }
+      }
+
+      const emotionEntries = await this.stateRepo.getAllForService('emotional_history');
+      for (const { userId, state } of emotionEntries) {
+        const history = (state as { history?: IEmotionalState[] }).history ?? [];
+        this.emotionalHistory.set(userId, history);
+      }
+      console.log(`[AdaptivePersona] Loaded ${profileEntries.length} profiles + ${emotionEntries.length} emotion records from DB`);
+    } catch (err) {
+      console.error('[AdaptivePersona] DB load failed:', err);
+    }
+  }
+
+  private persistProfile(userId: string, profile: ICommunicationProfile): void {
+    if (!this.stateRepo) return;
+    this.stateRepo.set(userId, 'comm_profile', profile as unknown as Record<string, unknown>).catch(err => {
+      console.error(`[AdaptivePersona] Failed to persist profile for ${userId}:`, err);
+    });
+  }
+
+  private persistEmotions(userId: string, history: IEmotionalState[]): void {
+    if (!this.stateRepo) return;
+    this.stateRepo.set(userId, 'emotional_history', { history } as unknown as Record<string, unknown>).catch(err => {
+      console.error(`[AdaptivePersona] Failed to persist emotions for ${userId}:`, err);
+    });
   }
 
   // ==================== Public API ====================
@@ -408,12 +451,14 @@ export class AdaptivePersonaService {
     }
 
     this.emotionalHistory.set(userId, history);
+    this.persistEmotions(userId, history);
 
     // Update profile baseline
     const profile = await this.getOrCreateProfile(userId);
     profile.emotionalBaseline = this.calculateEmotionalBaseline(history);
     profile.lastUpdated = new Date();
     this.userProfiles.set(userId, profile);
+    this.persistProfile(userId, profile);
   }
 
   /**
@@ -424,6 +469,7 @@ export class AdaptivePersonaService {
     profile.changeStage = stage;
     profile.lastUpdated = new Date();
     this.userProfiles.set(userId, profile);
+    this.persistProfile(userId, profile);
   }
 
   /**
@@ -488,6 +534,7 @@ export class AdaptivePersonaService {
         lastUpdated: new Date(),
       };
       this.userProfiles.set(userId, profile);
+      this.persistProfile(userId, profile);
     }
 
     return profile;

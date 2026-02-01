@@ -23,6 +23,7 @@ import * as cron from 'node-cron';
 import type { Bot, Context } from 'grammy';
 import { formatter } from '../commands/utils/MessageFormatter';
 import { sonya } from '../persona';
+import type { ISIScheduleRepository } from '../../infrastructure/database/repositories/ISIScheduleRepository';
 
 // ==================== Constants ====================
 
@@ -70,9 +71,65 @@ export class ISISchedulingService {
   private users: Map<string, IUserAssessmentData> = new Map();
   private cronJob: cron.ScheduledTask | null = null;
   private isRunning = false;
+  private repo?: ISIScheduleRepository;
 
   constructor(bot: Bot<Context>) {
     this.bot = bot;
+  }
+
+  /**
+   * Set repository for persistence. Hydrates Map from DB.
+   */
+  async setRepository(repo: ISIScheduleRepository): Promise<void> {
+    this.repo = repo;
+    await this.loadFromDB();
+  }
+
+  private async loadFromDB(): Promise<void> {
+    if (!this.repo) return;
+    try {
+      const entities = await this.repo.findAll();
+      for (const e of entities) {
+        this.users.set(e.userId, {
+          chatId: e.chatId,
+          odlikerId: e.userId,
+          userName: e.userName,
+          enrollmentDate: e.enrollmentDate,
+          lastAssessmentDate: e.lastAssessmentDate,
+          lastAssessmentWeek: e.lastAssessmentWeek,
+          nextAssessmentWeek: e.nextAssessmentWeek,
+          reminderSent: e.reminderSent,
+          isiHistory: e.isiHistory,
+        });
+      }
+      console.log(`[ISI Schedule] Loaded ${entities.length} users from DB`);
+    } catch (err) {
+      console.error('[ISI Schedule] DB load failed:', err);
+    }
+  }
+
+  private persistUser(userId: string, data: IUserAssessmentData): void {
+    if (!this.repo) return;
+    this.repo.upsert(userId, {
+      userId,
+      chatId: data.chatId,
+      userName: data.userName,
+      enrollmentDate: data.enrollmentDate,
+      lastAssessmentDate: data.lastAssessmentDate,
+      lastAssessmentWeek: data.lastAssessmentWeek,
+      nextAssessmentWeek: data.nextAssessmentWeek,
+      reminderSent: data.reminderSent,
+      isiHistory: data.isiHistory,
+    }).catch(err => {
+      console.error(`[ISI Schedule] Failed to persist user ${userId}:`, err);
+    });
+  }
+
+  private persistDelete(userId: string): void {
+    if (!this.repo) return;
+    this.repo.deleteByUserId(userId).catch(err => {
+      console.error(`[ISI Schedule] Failed to delete user ${userId} from DB:`, err);
+    });
   }
 
   /**
@@ -137,6 +194,7 @@ export class ISISchedulingService {
     };
 
     this.users.set(userId, userData);
+    this.persistUser(userId, userData);
     console.log(`[ISI Schedule] Enrolled user ${userId}, next assessment: Week ${userData.nextAssessmentWeek}`);
   }
 
@@ -170,6 +228,8 @@ export class ISISchedulingService {
       ? ISI_SCHEDULE.assessmentWeeks[nextWeekIndex]
       : -1; // -1 means study completed
 
+    this.persistUser(userId, user);
+
     console.log(`[ISI Schedule] User ${userId} completed Week ${currentWeek} ISI (score: ${isiScore})`);
     console.log(`[ISI Schedule] Next assessment: ${user.nextAssessmentWeek >= 0 ? `Week ${user.nextAssessmentWeek}` : 'Study complete'}`);
 
@@ -182,6 +242,7 @@ export class ISISchedulingService {
    */
   unenrollUser(userId: string): void {
     this.users.delete(userId);
+    this.persistDelete(userId);
     console.log(`[ISI Schedule] Unenrolled user ${userId}`);
   }
 
@@ -216,6 +277,7 @@ export class ISISchedulingService {
           // Send initial assessment notification
           await this.sendAssessmentNotification(userData, currentWeek);
           userData.reminderSent = true;
+          this.persistUser(userId, userData);
         }
       } catch (error) {
         console.error(`[ISI Schedule] Error processing user ${userId}:`, error);
@@ -381,6 +443,7 @@ ${formatter.tip('Оценка займёт всего 2-3 минуты')}
       if (grammyError.error_code === 403) {
         console.log(`[ISI Schedule] User ${userData.odlikerId} blocked bot, removing from schedule`);
         this.users.delete(userData.odlikerId);
+        this.persistDelete(userData.odlikerId);
         return;
       }
     }

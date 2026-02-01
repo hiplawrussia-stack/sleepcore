@@ -293,9 +293,52 @@ export class VoiceBiomarkerService {
   private config: IVoiceBiomarkerConfig;
   private userBaselines: Map<string, IVoiceBaseline> = new Map();
   private analysisHistory: Map<string, IVoiceBiomarkerResult[]> = new Map();
+  private stateRepo?: import('../../infrastructure/database/repositories/ServiceStateRepository').ServiceStateRepository;
 
   constructor(config: Partial<IVoiceBiomarkerConfig> = {}) {
     this.config = { ...DEFAULT_VOICE_BIOMARKER_CONFIG, ...config };
+  }
+
+  async setRepository(repo: import('../../infrastructure/database/repositories/ServiceStateRepository').ServiceStateRepository): Promise<void> {
+    this.stateRepo = repo;
+    await this.loadFromDB();
+  }
+
+  private async loadFromDB(): Promise<void> {
+    if (!this.stateRepo) return;
+    try {
+      const baselineEntries = await this.stateRepo.getAllForService('voice_baseline');
+      for (const { userId, state } of baselineEntries) {
+        const baseline = state as unknown as IVoiceBaseline;
+        if (baseline) {
+          baseline.calibratedAt = new Date(baseline.calibratedAt);
+          this.userBaselines.set(userId, baseline);
+        }
+      }
+
+      const historyEntries = await this.stateRepo.getAllForService('voice_history');
+      for (const { userId, state } of historyEntries) {
+        const history = (state as { results?: IVoiceBiomarkerResult[] }).results ?? [];
+        this.analysisHistory.set(userId, history);
+      }
+      console.log(`[VoiceBiomarker] Loaded ${baselineEntries.length} baselines + ${historyEntries.length} history records from DB`);
+    } catch (err) {
+      console.error('[VoiceBiomarker] DB load failed:', err);
+    }
+  }
+
+  private persistBaseline(userId: string, baseline: IVoiceBaseline): void {
+    if (!this.stateRepo) return;
+    this.stateRepo.set(userId, 'voice_baseline', baseline as unknown as Record<string, unknown>).catch(err => {
+      console.error(`[VoiceBiomarker] Failed to persist baseline for ${userId}:`, err);
+    });
+  }
+
+  private persistHistory(userId: string, history: IVoiceBiomarkerResult[]): void {
+    if (!this.stateRepo) return;
+    this.stateRepo.set(userId, 'voice_history', { results: history } as unknown as Record<string, unknown>).catch(err => {
+      console.error(`[VoiceBiomarker] Failed to persist history for ${userId}:`, err);
+    });
   }
 
   // ==================== Public API ====================
@@ -424,6 +467,7 @@ export class VoiceBiomarkerService {
     baseline.baselineAnxietyRisk = anxietyRisk;
 
     this.userBaselines.set(userId, baseline);
+    this.persistBaseline(userId, baseline);
     return baseline;
   }
 
@@ -1278,6 +1322,7 @@ export class VoiceBiomarkerService {
     if (!baseline) {
       baseline = this.createEmptyBaseline(userId);
       this.userBaselines.set(userId, baseline);
+      this.persistBaseline(userId, baseline);
     }
     return baseline;
   }
@@ -1357,8 +1402,11 @@ export class VoiceBiomarkerService {
 
     // Keep last 90 days of data
     if (history.length > 90) {
-      this.analysisHistory.set(userId, history.slice(-90));
+      history = history.slice(-90);
+      this.analysisHistory.set(userId, history);
     }
+
+    this.persistHistory(userId, history);
   }
 
   /**

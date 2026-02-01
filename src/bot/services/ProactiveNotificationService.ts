@@ -110,10 +110,63 @@ export class ProactiveNotificationService {
   private activeUsers: Map<string, IUserNotificationData> = new Map();
   private jobs: Map<string, cron.ScheduledTask> = new Map();
   private isRunning = false;
+  private repo?: import('../../infrastructure/database/repositories/NotificationUserRepository').NotificationUserRepository;
 
   constructor(bot: Bot<Context>, menuService: ContextAwareMenuService) {
     this.bot = bot;
     this.menuService = menuService;
+  }
+
+  async setRepository(repo: import('../../infrastructure/database/repositories/NotificationUserRepository').NotificationUserRepository): Promise<void> {
+    this.repo = repo;
+    await this.loadFromDB();
+  }
+
+  private async loadFromDB(): Promise<void> {
+    if (!this.repo) return;
+    try {
+      const entities = await this.repo.findAll();
+      for (const e of entities) {
+        this.activeUsers.set(e.userId, {
+          userId: e.userId,
+          chatId: e.chatId,
+          userName: e.userName ?? undefined,
+          preferences: JSON.parse(e.preferencesJson),
+          context: JSON.parse(e.contextJson),
+          firstInteractionAt: e.firstInteractionAt ? new Date(e.firstInteractionAt) : new Date(),
+          lastNotificationAt: e.lastNotificationAt ? new Date(e.lastNotificationAt) : undefined,
+          lastResponseAt: e.lastResponseAt ? new Date(e.lastResponseAt) : undefined,
+          reengagementAttempts: e.reengagementAttempts,
+        });
+      }
+      console.log(`[Notifications] Loaded ${entities.length} users from DB`);
+    } catch (err) {
+      console.error('[Notifications] DB load failed:', err);
+    }
+  }
+
+  private persistUser(userId: string, data: IUserNotificationData): void {
+    if (!this.repo) return;
+    this.repo.upsert(userId, {
+      userId,
+      chatId: data.chatId,
+      userName: data.userName,
+      preferencesJson: JSON.stringify(data.preferences),
+      contextJson: JSON.stringify(data.context ?? {}),
+      firstInteractionAt: data.firstInteractionAt,
+      lastNotificationAt: (data as { lastNotificationAt?: Date }).lastNotificationAt,
+      lastResponseAt: (data as { lastResponseAt?: Date }).lastResponseAt,
+      reengagementAttempts: data.reengagementAttempts,
+    }).catch(err => {
+      console.error(`[Notifications] Failed to persist user ${userId}:`, err);
+    });
+  }
+
+  private persistDelete(userId: string): void {
+    if (!this.repo) return;
+    this.repo.deleteByUserId(userId).catch(err => {
+      console.error(`[Notifications] Failed to delete user ${userId}:`, err);
+    });
   }
 
   /**
@@ -179,6 +232,7 @@ export class ProactiveNotificationService {
     };
 
     this.activeUsers.set(data.userId, fullData);
+    this.persistUser(data.userId, fullData);
     console.log(`[Notifications] Registered user: ${data.userId}`);
   }
 
@@ -187,6 +241,7 @@ export class ProactiveNotificationService {
    */
   unregisterUser(userId: string): void {
     this.activeUsers.delete(userId);
+    this.persistDelete(userId);
     console.log(`[Notifications] Unregistered user: ${userId}`);
   }
 
@@ -384,6 +439,7 @@ export class ProactiveNotificationService {
         if (!this.canSendFollowUp(userData)) {
           console.log(`[Notifications] Removing ${userId} - exceeded 14-day window without response`);
           this.activeUsers.delete(userId);
+          this.persistDelete(userId);
           continue;
         }
 
@@ -461,6 +517,7 @@ export class ProactiveNotificationService {
           for (const [uId, data] of this.activeUsers) {
             if (data.chatId === chatId) {
               this.activeUsers.delete(uId);
+              this.persistDelete(uId);
               break;
             }
           }

@@ -200,9 +200,59 @@ export class ATTService {
   private readonly config: IATTConfig;
   private readonly sessions: Map<string, IATTSessionRecord[]> = new Map();
   private readonly startDates: Map<string, Date> = new Map();
+  private mctRepo?: import('../../infrastructure/database/repositories/MCTRepository').MCTRepository;
+  private stateRepo?: import('../../infrastructure/database/repositories/ServiceStateRepository').ServiceStateRepository;
 
   constructor(config: Partial<IATTConfig> = {}) {
     this.config = { ...DEFAULT_ATT_CONFIG, ...config };
+  }
+
+  async setRepository(
+    mctRepo: import('../../infrastructure/database/repositories/MCTRepository').MCTRepository,
+    stateRepo: import('../../infrastructure/database/repositories/ServiceStateRepository').ServiceStateRepository
+  ): Promise<void> {
+    this.mctRepo = mctRepo;
+    this.stateRepo = stateRepo;
+    await this.loadFromDB();
+  }
+
+  private async loadFromDB(): Promise<void> {
+    try {
+      if (this.mctRepo) {
+        const entries = await this.mctRepo.getAllSessionsForService('att');
+        for (const { userId, sessions } of entries) {
+          this.sessions.set(userId, sessions as IATTSessionRecord[]);
+        }
+        console.log(`[ATT] Loaded ${entries.length} user session records from DB`);
+      }
+
+      if (this.stateRepo) {
+        const dates = await this.stateRepo.getAllForService('att_start_dates');
+        for (const { userId, state } of dates) {
+          const dateStr = (state as { startDate?: string }).startDate;
+          if (dateStr) {
+            this.startDates.set(userId, new Date(dateStr));
+          }
+        }
+        console.log(`[ATT] Loaded ${dates.length} start dates from DB`);
+      }
+    } catch (err) {
+      console.error('[ATT] DB load failed:', err);
+    }
+  }
+
+  private persistSession(userId: string, session: IATTSessionRecord): void {
+    if (!this.mctRepo) return;
+    this.mctRepo.addSession(userId, 'att', session, session.timestamp).catch(err => {
+      console.error(`[ATT] Failed to persist session for ${userId}:`, err);
+    });
+  }
+
+  private persistStartDate(userId: string, date: Date): void {
+    if (!this.stateRepo) return;
+    this.stateRepo.set(userId, 'att_start_dates', { startDate: date.toISOString() }).catch(err => {
+      console.error(`[ATT] Failed to persist start date for ${userId}:`, err);
+    });
   }
 
   /**
@@ -305,7 +355,9 @@ export class ATTService {
    */
   startProgram(userId: string): Date {
     if (!this.startDates.has(userId)) {
-      this.startDates.set(userId, new Date());
+      const date = new Date();
+      this.startDates.set(userId, date);
+      this.persistStartDate(userId, date);
     }
     return this.startDates.get(userId)!;
   }
@@ -370,6 +422,7 @@ export class ATTService {
     const userSessions = this.sessions.get(userId) ?? [];
     userSessions.push(session);
     this.sessions.set(userId, userSessions);
+    this.persistSession(userId, session);
 
     return session;
   }
@@ -396,6 +449,7 @@ export class ATTService {
     const userSessions = this.sessions.get(userId) ?? [];
     userSessions.push(session);
     this.sessions.set(userId, userSessions);
+    this.persistSession(userId, session);
 
     return session;
   }

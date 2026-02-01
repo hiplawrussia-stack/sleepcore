@@ -91,6 +91,14 @@ import {
   metacognitiveEngineService,
   adaptivePersonaService,
   proactiveIntelligenceService,
+  // Phase 9: Service persistence singletons
+  sleepPredictionService,
+  digitalTwinService,
+  worryPostponementService,
+  detachedMindfulnessService,
+  attService,
+  mcq30AssessmentService,
+  voiceBiomarkerService,
   type IStreakData,
   type IMoodHistory,
   type MoodLevel,
@@ -116,6 +124,15 @@ import {
   type ISleepDiaryEntryEntity,
   type IAssessmentEntity,
   type ITherapySessionEntity,
+  // Phase 9: Service persistence repositories
+  SafetyPlanRepository,
+  ISIScheduleRepository,
+  DigitalTwinRepository,
+  OnboardingRepository,
+  ServiceStateRepository,
+  NotificationUserRepository,
+  MCTRepository,
+  MCQ30Repository,
 } from './infrastructure/database';
 
 // Monitoring imports (Sentry)
@@ -2634,6 +2651,42 @@ async function main(): Promise<void> {
   }
 
   console.log('[ServiceHooks] ISI scheduling and notification hooks wired to SleepCoreAPI');
+
+  // --- Phase 9: Service persistence wiring ---
+  // FDA 21 CFR Part 11 / HIPAA: Persist clinical data to DB (write-through + hydration)
+  if (db) {
+    const safetyPlanRepo = new SafetyPlanRepository(db);
+    const isiScheduleRepo = new ISIScheduleRepository(db);
+    const digitalTwinRepo = new DigitalTwinRepository(db);
+    const onboardingRepo = new OnboardingRepository(db);
+    const serviceStateRepo = new ServiceStateRepository(db);
+    const notificationUserRepo = new NotificationUserRepository(db);
+    const mctRepo = new MCTRepository(db);
+    const mcq30Repo = new MCQ30Repository(db);
+
+    // CRITICAL: Safety plans and clinical scheduling
+    await crisisEscalationService.setRepository(safetyPlanRepo);
+    await isiSchedulingService.setRepository(isiScheduleRepo);
+
+    // HIGH: Clinical state
+    await digitalTwinService.setRepository(digitalTwinRepo);
+    await onboardingTracker.setRepository(onboardingRepo);
+    await sleepPredictionService.setStateRepository(serviceStateRepo);
+
+    // MEDIUM: Engagement and notifications
+    await notificationService.setRepository(notificationUserRepo);
+    await proactiveIntelligenceService.setRepository(serviceStateRepo);
+    await adaptivePersonaService.setRepository(serviceStateRepo);
+
+    // LOW: MCT therapy + voice biomarkers
+    await worryPostponementService.setRepository(mctRepo);
+    await detachedMindfulnessService.setRepository(mctRepo);
+    await attService.setRepository(mctRepo, serviceStateRepo);
+    await mcq30AssessmentService.setRepository(mcq30Repo);
+    await voiceBiomarkerService.setRepository(serviceStateRepo);
+
+    console.log('[DB] All service repositories wired — data persistence enabled');
+  }
 
   // --- Initialize Crisis Escalation Service (Phase 1.4 Safety) ---
   // CRITICAL: Must call setBot() to enable admin notifications

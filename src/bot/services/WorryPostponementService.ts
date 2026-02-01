@@ -165,9 +165,51 @@ export class WorryPostponementService {
   private readonly worryEntries: Map<string, IWorryEntry[]> = new Map();
   private readonly settings: Map<string, IWorryTimeSettings> = new Map();
   private readonly sessions: Map<string, IWorrySession[]> = new Map();
+  private mctRepo?: import('../../infrastructure/database/repositories/MCTRepository').MCTRepository;
 
   constructor(config: Partial<IWorryPostponementConfig> = {}) {
     this.config = { ...DEFAULT_WORRY_CONFIG, ...config };
+  }
+
+  async setRepository(repo: import('../../infrastructure/database/repositories/MCTRepository').MCTRepository): Promise<void> {
+    this.mctRepo = repo;
+    await this.loadFromDB();
+  }
+
+  private async loadFromDB(): Promise<void> {
+    if (!this.mctRepo) return;
+    try {
+      // We load all worry entries, settings, and sessions for all users
+      // Since MCTRepository stores per-user, we need getAllSessionsForService
+      const worrySessions = await this.mctRepo.getAllSessionsForService('worry');
+      for (const { userId, sessions } of worrySessions) {
+        this.sessions.set(userId, sessions as IWorrySession[]);
+      }
+      console.log(`[WorryPostponement] Loaded ${worrySessions.length} user session records from DB`);
+    } catch (err) {
+      console.error('[WorryPostponement] DB load failed:', err);
+    }
+  }
+
+  private persistSettings(userId: string, s: IWorryTimeSettings): void {
+    if (!this.mctRepo) return;
+    this.mctRepo.upsertWorrySettings(userId, s).catch(err => {
+      console.error(`[WorryPostponement] Failed to persist settings for ${userId}:`, err);
+    });
+  }
+
+  private persistWorryEntry(userId: string, entry: IWorryEntry): void {
+    if (!this.mctRepo) return;
+    this.mctRepo.addWorryEntry(userId, entry).catch(err => {
+      console.error(`[WorryPostponement] Failed to persist worry entry for ${userId}:`, err);
+    });
+  }
+
+  private persistSession(userId: string, session: IWorrySession): void {
+    if (!this.mctRepo) return;
+    this.mctRepo.addSession(userId, 'worry', session, session.date).catch(err => {
+      console.error(`[WorryPostponement] Failed to persist session for ${userId}:`, err);
+    });
   }
 
   /**
@@ -199,6 +241,7 @@ export class WorryPostponementService {
     };
 
     this.settings.set(userId, settings);
+    this.persistSettings(userId, settings);
     return settings;
   }
 
@@ -226,6 +269,7 @@ export class WorryPostponementService {
     };
 
     this.settings.set(userId, updated);
+    this.persistSettings(userId, updated);
     return updated;
   }
 
@@ -273,6 +317,7 @@ export class WorryPostponementService {
     const userWorries = this.worryEntries.get(userId) ?? [];
     userWorries.push(entry);
     this.worryEntries.set(userId, userWorries);
+    this.persistWorryEntry(userId, entry);
 
     return entry;
   }
@@ -336,6 +381,7 @@ export class WorryPostponementService {
     const userSessions = this.sessions.get(userId) ?? [];
     userSessions.push(session);
     this.sessions.set(userId, userSessions);
+    this.persistSession(userId, session);
 
     return session;
   }
