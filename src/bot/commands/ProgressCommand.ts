@@ -25,6 +25,11 @@ import {
   type ISleepPrediction,
   type ISleepEarlyWarning,
 } from '../services/SleepPredictionService';
+import {
+  proactiveIntelligenceService,
+  type IPatternAlert,
+} from '../services/ProactiveIntelligenceService';
+import { cognitiveProgressReportService } from '../services/CognitiveProgressReportService';
 
 /**
  * /progress Command Implementation
@@ -120,6 +125,9 @@ ${formatter.tip('Чем больше данных, тем точнее анал�
     const prediction = sleepPredictionService.predict(ctx.userId, 'long');
     const predictionSection = this.buildPredictionSection(prediction);
 
+    // Get proactive pattern alerts (JITAI, graceful degradation)
+    const patternSection = await this.buildPatternAlertsSection(ctx);
+
     // Sonya's encouragement based on therapy week and response
     const weekMessage = sonya.encourageByWeek(report.currentWeek);
     const emotionalResponse = report.responseStatus === 'responding'
@@ -190,7 +198,7 @@ ${achievementsList}
 
 *🎯 Фокус на следующую неделю:*
 ${improvementsList}
-
+${patternSection}
 ${formatter.divider()}
 
 ${statusInfo.icon} *${statusInfo.label}*
@@ -209,6 +217,108 @@ _${statusInfo.description}_
       keyboard,
       metadata: { report },
     };
+  }
+
+  // ==================== Proactive Intelligence ====================
+
+  /**
+   * Build pattern alerts section from ProactiveIntelligenceService
+   *
+   * Research basis: Progress feedback improves CBT-I outcomes (HIGH confidence)
+   * Pattern change detection helps identify deterioration early
+   */
+  private async buildPatternAlertsSection(ctx: ISleepCoreContext): Promise<string> {
+    try {
+      const sleepHistory = ctx.sleepCore.getSleepStates?.(ctx.userId, 14) ?? [];
+      if (sleepHistory.length < 7) return '';
+
+      const beliefState = ctx.sleepCore.getBeliefState?.(ctx.userId);
+      const analysis = await proactiveIntelligenceService.runDailyAnalysis(
+        ctx.userId,
+        sleepHistory,
+        beliefState
+      );
+
+      if (analysis.patternAlerts.length === 0) return '';
+
+      const lines: string[] = [];
+      lines.push('');
+      lines.push(formatter.divider());
+      lines.push('');
+      lines.push('*🔍 Обнаруженные паттерны:*');
+
+      // Show top 2 pattern alerts
+      const topAlerts = analysis.patternAlerts.slice(0, 2);
+      for (const alert of topAlerts) {
+        const alertIcon = alert.type === 'improvement' ? '🟢'
+          : alert.type === 'deterioration' ? '🟠'
+          : alert.type === 'instability' ? '🟡'
+          : '🔵';
+        lines.push(`${alertIcon} ${alert.descriptionRu}`);
+      }
+
+      // Show risk summary if elevated
+      if (analysis.summary.riskLevel === 'high') {
+        lines.push('');
+        lines.push('🔴 _Повышенный уровень риска — рекомендуем обсудить с терапевтом_');
+      }
+
+      return lines.join('\n');
+    } catch {
+      return '';
+    }
+  }
+
+  // ==================== Cognitive Progress (DBAS-16 inspired) ====================
+
+  /**
+   * Build cognitive progress section from CognitiveProgressReportService.
+   *
+   * Research basis: DBAS-16 session-by-session monitoring (Morin, 2007)
+   * Effect of CBT-I on DBAS: g=-0.90 (Espie et al., 2014)
+   */
+  private async buildCognitiveProgressSection(
+    ctx: ISleepCoreContext,
+    currentWeek: number
+  ): Promise<string> {
+    try {
+      const sleepHistory = ctx.sleepCore.getSleepStates?.(ctx.userId, 14) ?? [];
+      if (sleepHistory.length < 3) return '';
+
+      const report = cognitiveProgressReportService.generateWeeklyReport(
+        ctx.userId, sleepHistory, currentWeek
+      );
+      if (!report) return '';
+
+      const lines: string[] = [];
+      lines.push('');
+      lines.push(formatter.divider());
+      lines.push('');
+      lines.push('*🧠 Когнитивный прогресс:*');
+
+      // DBAS score with traffic light
+      const dbasIcon = report.currentDbas < 3.8 ? '✅' : report.currentDbas < 5.0 ? '🟡' : '🔴';
+      lines.push(`DBAS: ${report.currentDbas} ${dbasIcon} (${report.dbasChangePercent > 0 ? '+' : ''}${report.dbasChangePercent}%)`);
+
+      // Overall progress label
+      const progressLabels: Record<string, string> = {
+        excellent: '🟢 Отличный прогресс',
+        good: '🟢 Хороший прогресс',
+        moderate: '🟡 Умеренный прогресс',
+        minimal: '🟡 Минимальные изменения',
+        none: '🔴 Без изменений',
+      };
+      lines.push(progressLabels[report.overallProgress] ?? '');
+
+      // Top recommendation
+      if (report.recommendations.length > 0) {
+        lines.push(`_${report.recommendations[0]}_`);
+      }
+
+      return lines.join('\n');
+    } catch {
+      return '';
+    }
   }
 
   // ==================== Conversation Interface ====================
@@ -294,6 +404,7 @@ _Цель: ≥ 85%_
 ${formatter.divider()}
 
 *Приверженность:* ${(report.overallAdherence * 100).toFixed(0)}%
+${await this.buildCognitiveProgressSection(ctx, report.currentWeek)}
     `.trim();
 
     const keyboard: IInlineButton[][] = [

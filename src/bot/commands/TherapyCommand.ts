@@ -38,6 +38,7 @@ import type {
 import type { ICBTIIntervention, CBTIComponent } from '../../cbt-i/interfaces/ICBTIComponents';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
+import { arousalAssessmentService } from '../services/ArousalAssessmentService';
 
 /**
  * Therapy session cores (6-week structure)
@@ -769,6 +770,27 @@ ${formatter.tip('Каждая сессия занимает 30-60 минут. П
       // Continue without recommendation
     }
 
+    // Get arousal-based recommendation (PSAS-inspired, Nicassio et al. 1985)
+    let arousalSection = '';
+    try {
+      const sleepHistory = ctx.sleepCore.getSleepStates?.(ctx.userId, 14) ?? [];
+      if (sleepHistory.length >= 7) {
+        const arousalProfile = arousalAssessmentService.estimateArousalProfile(sleepHistory);
+        if (arousalProfile.available && arousalProfile.recommendation) {
+          const rec = arousalProfile.recommendation;
+          const arousalIcon = arousalProfile.dominantArousal === 'cognitive' ? '🧠'
+            : arousalProfile.dominantArousal === 'somatic' ? '💪' : '⚖️';
+          arousalSection = `
+${arousalIcon} *Профиль возбуждения:*
+_Когнитивное: ${arousalProfile.estimatedCognitive}/40 • Соматическое: ${arousalProfile.estimatedSomatic}/40_
+${rec.rationaleRu}
+`;
+        }
+      }
+    } catch {
+      // Graceful degradation: skip arousal section
+    }
+
     const therapyOptions = THIRD_WAVE_SESSIONS.map((t) => {
       const isRecommended = recommendation?.recommendedApproach === t.id;
       const recommendedMark = isRecommended ? ' ⭐' : '';
@@ -792,7 +814,7 @@ ${formatter.divider()}
 ${recommendation ? `
 🎯 *Рекомендация на основе вашего профиля:*
 ${recommendation.rationale}
-` : ''}
+` : ''}${arousalSection}
 
 ${formatter.tip('Выберите терапию для подробной информации. Рекомендуемые отмечены ⭐')}
     `.trim();
