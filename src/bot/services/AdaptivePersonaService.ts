@@ -20,6 +20,7 @@
  */
 
 import type { ISleepState } from '../../sleep/interfaces/ISleepState';
+import type { IFullBeliefState } from '../../platform/SleepCoreAdapter';
 
 // ==================== Interfaces ====================
 
@@ -253,10 +254,36 @@ export class AdaptivePersonaService {
   async adaptTone(
     userId: string,
     baseMessage: string,
-    emotionalState?: IEmotionalState
+    emotionalState?: IEmotionalState,
+    beliefState?: IFullBeliefState
   ): Promise<IAdaptedMessage> {
     const profile = await this.getOrCreateProfile(userId);
-    const state = emotionalState || profile.emotionalBaseline;
+    let state = emotionalState || profile.emotionalBaseline;
+
+    // Augment emotional state with CogniCore belief state when available
+    // Research: Belief posteriors provide more accurate emotional estimates
+    // than rule-based heuristics (IntelligentPooling, HeartSteps v2 2025)
+    if (beliefState && !emotionalState) {
+      const arousal = beliefState.emotional.arousal.posterior.mean;
+      const valence = beliefState.emotional.valence.posterior.mean;
+      const selfEfficacy = beliefState.cognitive.selfView.posterior.mean;
+
+      state = {
+        ...state,
+        stressLevel: Math.max(state.stressLevel, arousal),
+        sentiment: valence > 0.5 ? valence : Math.min(state.sentiment, valence),
+        engagement: selfEfficacy > 0.5
+          ? Math.max(state.engagement, selfEfficacy)
+          : Math.min(state.engagement, selfEfficacy),
+      };
+
+      // Refine primary emotion from belief posteriors
+      if (arousal > 0.7 && valence < 0.3) {
+        state = { ...state, primary: 'anxious', intensity: arousal };
+      } else if (selfEfficacy < 0.3 && valence < 0.4) {
+        state = { ...state, primary: 'discouraged', intensity: 1 - selfEfficacy };
+      }
+    }
 
     const toneAdjustments: string[] = [];
     let adapted = baseMessage;
@@ -303,7 +330,11 @@ export class AdaptivePersonaService {
    */
   async selectMIStrategy(
     userId: string,
-    context?: { recentChangeTalk?: number; recentSustainTalk?: number }
+    context?: {
+      recentChangeTalk?: number;
+      recentSustainTalk?: number;
+      beliefState?: IFullBeliefState;
+    }
   ): Promise<MIStrategy> {
     const profile = await this.getOrCreateProfile(userId);
     const weights = this.config.strategyWeights[profile.changeStage];
@@ -321,6 +352,33 @@ export class AdaptivePersonaService {
       // High change talk → support and affirm
       adjustedWeights.support_self_efficacy *= 1.5;
       adjustedWeights.affirm *= 1.5;
+    }
+
+    // Belief-augmented MI strategy selection (CogniCore Bayesian beliefs)
+    // Research: CounselLLM (2025) — TTM/MI integration benefits from
+    // accurate cognitive/emotional state estimation
+    if (context?.beliefState) {
+      const selfEfficacy = context.beliefState.cognitive.selfView.posterior.mean;
+      const arousal = context.beliefState.emotional.arousal.posterior.mean;
+      const futureView = context.beliefState.cognitive.futureView.posterior.mean;
+
+      // Low self-efficacy → prioritize support
+      if (selfEfficacy < 0.3) {
+        adjustedWeights.support_self_efficacy *= 2.0;
+        adjustedWeights.affirm *= 1.5;
+      }
+
+      // High arousal → prioritize empathy and de-escalation
+      if (arousal > 0.7) {
+        adjustedWeights.express_empathy *= 1.8;
+        adjustedWeights.roll_with_resistance *= 1.3;
+      }
+
+      // Negative future view → develop discrepancy (show what's possible)
+      if (futureView < 0.3) {
+        adjustedWeights.develop_discrepancy *= 1.5;
+        adjustedWeights.elicit_change_talk *= 1.3;
+      }
     }
 
     // Normalize and select

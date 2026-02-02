@@ -25,6 +25,7 @@ import {
   createSleepCoreAdapter,
   type ISleepInterventionSelection,
   type ISleepInterventionExplanation,
+  type IFullBeliefState,
 } from './platform/SleepCoreAdapter';
 import type { SleepAction } from './platform/SleepCorePOMDP';
 import { ThirdWaveCoordinator } from './third-wave/engines/ThirdWaveCoordinator';
@@ -875,6 +876,40 @@ export class SleepCoreAPI {
 
     const currentState = userStates[userStates.length - 1];
     return this.cbtiEngine.getNextIntervention(session.plan, currentState);
+  }
+
+  /**
+   * Get user's current Bayesian belief state from CogniCore adapter.
+   *
+   * Research basis (2025-2026):
+   * - IntelligentPooling (HeartSteps v2): daily posterior updates enable
+   *   adaptive Thompson Sampling in mHealth (PMC 2021, deployed in trial)
+   * - Noxxea dCBT-I (JMIR Human Factors 2025): Bayesian computation
+   *   (Pasteur Institute) for real-time therapeutic personalization
+   * - van Genugten et al. 2025: JITAIs lack true between/within-user
+   *   adaptivity — belief state injection addresses this gap
+   *
+   * @param userId - User ID
+   * @returns Full belief state with emotional, cognitive, risk, and resource
+   *          dimensions, or undefined if no belief state exists (< 7 diary entries)
+   */
+  getBeliefState(userId: string): IFullBeliefState | undefined {
+    return this.adapter.getUserBelief(userId);
+  }
+
+  /**
+   * Get Thompson Sampling intervention statistics for a user.
+   * Exposes per-action attempt counts, average rewards, and confidence.
+   *
+   * @param userId - User ID
+   * @returns Map of SleepAction → statistics
+   */
+  async getInterventionStats(userId: string): Promise<Map<string, {
+    attempts: number;
+    avgReward: number;
+    confidence: number;
+  }>> {
+    return this.adapter.getInterventionStats(userId);
   }
 
   /**

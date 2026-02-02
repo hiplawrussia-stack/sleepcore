@@ -20,6 +20,7 @@
  */
 
 import type { ISleepState } from '../../sleep/interfaces/ISleepState';
+import type { IFullBeliefState } from '../../platform/SleepCoreAdapter';
 import { sleepPredictionService } from './SleepPredictionService';
 import { voiceBiomarkerService } from './VoiceBiomarkerService';
 
@@ -423,7 +424,8 @@ export class ProactiveIntelligenceService {
    */
   async runDailyAnalysis(
     userId: string,
-    sleepHistory: ISleepState[]
+    sleepHistory: ISleepState[],
+    beliefState?: IFullBeliefState
   ): Promise<IDailyAnalysis> {
     // Check cache
     const cached = this.userAnalysisCache.get(userId);
@@ -439,11 +441,11 @@ export class ProactiveIntelligenceService {
       return this.createEmptyAnalysis(userId);
     }
 
-    // Run analysis components
+    // Run analysis components (belief state augments risk detection when available)
     const [insights, patternAlerts, riskAlerts, optimalTimings] = await Promise.all([
       this.generateInsights(userId, sleepHistory),
       this.detectPatternChanges(userId, sleepHistory),
-      this.detectRiskAlerts(userId, sleepHistory),
+      this.detectRiskAlerts(userId, sleepHistory, beliefState),
       this.findOptimalInterventionTimes(userId, sleepHistory),
     ]);
 
@@ -848,7 +850,8 @@ export class ProactiveIntelligenceService {
 
   private async detectRiskAlerts(
     userId: string,
-    sleepHistory: ISleepState[]
+    sleepHistory: ISleepState[],
+    beliefState?: IFullBeliefState
   ): Promise<IRiskAlert[]> {
     const alerts: IRiskAlert[] = [];
 
@@ -880,6 +883,48 @@ export class ProactiveIntelligenceService {
         escalation: daysSinceLastEntry >= 7 ? 'notify_admin' : 'monitor',
         messageRu: `Дневник не заполнялся ${daysSinceLastEntry} дней. Возможен риск прекращения терапии.`,
       });
+    }
+
+    // Belief-augmented risk detection (CogniCore POMDP belief state)
+    // Research: IntelligentPooling (HeartSteps v2) — posterior beliefs improve
+    // intervention timing; van Genugten 2025 — current JITAIs lack this adaptivity
+    if (beliefState) {
+      const arousal = beliefState.emotional.arousal.posterior.mean;
+      const selfEfficacy = beliefState.cognitive.selfView.posterior.mean;
+      const overallRisk = beliefState.risk.overallRisk.posterior.mean;
+
+      // High arousal + low self-efficacy = mental health risk
+      // Threshold: arousal > 0.7 AND selfView < 0.3 indicates vulnerable state
+      if (arousal > 0.7 && selfEfficacy < 0.3) {
+        const riskScore = Math.min(1, (arousal + (1 - selfEfficacy)) / 2);
+        alerts.push({
+          type: 'mental_health',
+          severity: riskScore > 0.8 ? 'high' : 'moderate',
+          riskScore,
+          factors: [
+            'high_pre_sleep_arousal',
+            'low_sleep_self_efficacy',
+            'belief_state_vulnerable',
+          ],
+          escalation: riskScore > 0.8 ? 'notify_admin' : 'monitor',
+          messageRu: `Повышенное возбуждение и низкая самоэффективность. Рекомендуется усиленная поддержка.`,
+        });
+      }
+
+      // CogniCore overall risk exceeds threshold
+      if (overallRisk > 0.6) {
+        const existingSleepAlert = alerts.find(a => a.type === 'sleep_deterioration');
+        if (!existingSleepAlert) {
+          alerts.push({
+            type: 'sleep_deterioration',
+            severity: overallRisk > 0.8 ? 'high' : 'moderate',
+            riskScore: overallRisk,
+            factors: ['cognicore_belief_risk', 'composite_risk_elevated'],
+            escalation: overallRisk > 0.8 ? 'notify_admin' : 'monitor',
+            messageRu: `Комплексный анализ указывает на повышенный риск ухудшения (${(overallRisk * 100).toFixed(0)}%).`,
+          });
+        }
+      }
     }
 
     return alerts;

@@ -65,6 +65,9 @@ import type { SleepAction, IActionStats } from './SleepCorePOMDP';
 
 // ============================================================================
 // TYPES & INTERFACES
+// Re-export CogniCore belief types for consumers (SleepCoreAPI, bot services)
+export type { IFullBeliefState, DimensionBelief } from '@cognicore/engine';
+
 // ============================================================================
 
 /**
