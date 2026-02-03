@@ -19,6 +19,39 @@ import type { IDatabaseConnection, IQueryOptions } from '../interfaces/IDatabase
 import type { IEntity, IRepository } from '../interfaces/IRepository';
 
 /**
+ * Allowed ORDER BY directions (whitelist)
+ */
+const ALLOWED_ORDER_DIRECTIONS = new Set(['ASC', 'DESC']);
+
+/**
+ * Validate orderBy column against an allowed set (CWE-89 / OWASP A05:2025)
+ *
+ * Parameterized queries cannot protect ORDER BY column names.
+ * Allow-list validation is the primary defense per OWASP Cheat Sheet
+ * and FDA June 2025 cybersecurity guidance.
+ *
+ * @throws Error if column or direction is not in the allowed set
+ */
+export function validateOrderBy(
+  column: string,
+  allowedColumns: ReadonlySet<string>,
+  direction?: string
+): { column: string; direction: 'ASC' | 'DESC' } {
+  if (!allowedColumns.has(column)) {
+    throw new Error(
+      `Invalid ORDER BY column: "${column}". Allowed: ${[...allowedColumns].join(', ')}`
+    );
+  }
+  const dir = (direction || 'ASC').toUpperCase();
+  if (!ALLOWED_ORDER_DIRECTIONS.has(dir)) {
+    throw new Error(
+      `Invalid ORDER BY direction: "${direction}". Allowed: ASC, DESC`
+    );
+  }
+  return { column, direction: dir as 'ASC' | 'DESC' };
+}
+
+/**
  * Database row type (snake_case from SQLite)
  */
 export interface IBaseRow {
@@ -35,6 +68,15 @@ export abstract class BaseRepository<T extends IEntity, ID = number>
   implements IRepository<T, ID>
 {
   protected abstract readonly tableName: string;
+
+  /**
+   * Allowed columns for ORDER BY (whitelist).
+   * Subclasses SHOULD override to include table-specific columns.
+   * Default: common columns present on all tables.
+   */
+  protected readonly allowedOrderByColumns: ReadonlySet<string> = new Set([
+    'id', 'created_at', 'updated_at', 'deleted_at',
+  ]);
 
   constructor(protected readonly db: IDatabaseConnection) {}
 
@@ -69,15 +111,16 @@ export abstract class BaseRepository<T extends IEntity, ID = number>
     }
 
     if (options?.orderBy) {
-      sql += ` ORDER BY ${options.orderBy} ${options.orderDirection || 'ASC'}`;
+      const validated = validateOrderBy(options.orderBy, this.allowedOrderByColumns, options.orderDirection);
+      sql += ` ORDER BY ${validated.column} ${validated.direction}`;
     }
 
     if (options?.limit) {
-      sql += ` LIMIT ${options.limit}`;
+      sql += ` LIMIT ${Number(options.limit)}`;
     }
 
     if (options?.offset) {
-      sql += ` OFFSET ${options.offset}`;
+      sql += ` OFFSET ${Number(options.offset)}`;
     }
 
     const rows = await this.db.query<IBaseRow>(sql);

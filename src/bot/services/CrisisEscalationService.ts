@@ -96,7 +96,6 @@ export interface IUserSafetyPlan {
  * Escalation service configuration
  */
 export interface ICrisisEscalationConfig {
-  readonly enabled: boolean;
   readonly adminUserIds: string[];
   readonly adminChatId?: string;
   readonly notifyOnHigh: boolean;
@@ -111,7 +110,6 @@ export interface ICrisisEscalationConfig {
 // ============================================================================
 
 export const DEFAULT_ESCALATION_CONFIG: ICrisisEscalationConfig = {
-  enabled: true,
   adminUserIds: [],
   adminChatId: undefined,
   notifyOnHigh: true,
@@ -365,10 +363,6 @@ export class CrisisEscalationService {
     aeCreated: boolean;
     aeId?: number;
   }> {
-    if (!this.config.enabled) {
-      return { escalated: false, level: 'none', notificationsSent: 0, aeCreated: false };
-    }
-
     const level = this.determineEscalationLevel(event);
 
     let notificationsSent = 0;

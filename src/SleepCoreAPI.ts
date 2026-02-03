@@ -244,6 +244,19 @@ export class SleepCoreAPI {
   private _onNotificationRegister?: (userId: string, chatId: number, userName?: string) => void;
 
   /**
+   * Crisis screening hook — delegates to CrisisDetectionService.
+   * Returns crisis event if detected, null otherwise.
+   *
+   * IEC 62304 Class C / ISO 14971: Crisis detection must be
+   * integrated into the main API facade for traceability.
+   */
+  private _onCrisisScreen?: (userId: string, text: string) => Promise<{
+    isCrisis: boolean;
+    severity?: string;
+    action?: string;
+  }>;
+
+  /**
    * Get database connection (may be null)
    */
   get db(): import('./infrastructure/database/interfaces/IDatabaseConnection').IDatabaseConnection | null {
@@ -307,6 +320,47 @@ export class SleepCoreAPI {
   registerForNotifications(userId: string, chatId: number, userName?: string): void {
     if (this._onNotificationRegister) {
       this._onNotificationRegister(userId, chatId, userName);
+    }
+  }
+
+  /**
+   * Set crisis screening hook.
+   * Called from main.ts after CrisisDetectionService is available.
+   *
+   * Per IEC 62304 Class C: Crisis detection must be traceable
+   * through the main API facade.
+   */
+  setCrisisScreeningHook(hook: (userId: string, text: string) => Promise<{
+    isCrisis: boolean;
+    severity?: string;
+    action?: string;
+  }>): void {
+    this._onCrisisScreen = hook;
+  }
+
+  /**
+   * Screen user text for crisis indicators.
+   * Delegates to CrisisDetectionService via callback hook.
+   *
+   * Should be called on free-text user input (diary notes, chat messages).
+   * Returns null if hook not configured (graceful degradation).
+   *
+   * @param userId - User ID
+   * @param text - User text to screen
+   */
+  async screenForCrisis(userId: string, text: string): Promise<{
+    isCrisis: boolean;
+    severity?: string;
+    action?: string;
+  } | null> {
+    if (!this._onCrisisScreen) {
+      return null;
+    }
+    try {
+      return await this._onCrisisScreen(userId, text);
+    } catch (error) {
+      console.error('[SleepCoreAPI] Crisis screening error:', error);
+      return null;
     }
   }
 
@@ -392,24 +446,28 @@ export class SleepCoreAPI {
    * Called after ISI-7 completion during onboarding (/start).
    * Stores baseline ISI in session for use in treatment planning.
    *
-   * CLINICAL NOTE: ISI >= 22 (severe) requires specialist referral
-   * (European Insomnia Guideline 2023, CLAUDE.md Red Line 2.1)
+   * CLINICAL SAFETY: ISI >= 22 (severe) triggers specialist referral flag.
+   * Per Bastien 2001, Morin 2011, Somryst K191716 labeling.
+   * This is a RED LINE requirement (CLAUDE.md §2.1).
    *
    * @param userId - User ID
    * @param score - ISI total score (0-28)
    * @param severity - ISI severity classification
    * @param answers - Individual ISI item responses (7 items, 0-4 each)
+   * @returns Assessment result with specialist referral flag
    */
   recordISIAssessment(
     userId: string,
     score: number,
     severity: string,
     answers: number[]
-  ): void {
+  ): { recorded: boolean; requiresSpecialistReferral: boolean } {
     const session = this.sessions.get(userId);
     if (!session) {
-      return;
+      return { recorded: false, requiresSpecialistReferral: score >= 22 };
     }
+
+    const requiresSpecialistReferral = score >= 22;
 
     this.sessions.set(userId, {
       ...session,
@@ -420,6 +478,16 @@ export class SleepCoreAPI {
         answers,
       },
     });
+
+    if (requiresSpecialistReferral) {
+      console.warn(
+        `[SleepCoreAPI] ISI >= 22 (score=${score}) for user ${userId}. ` +
+        `SEVERE INSOMNIA — specialist referral required. ` +
+        `(Bastien 2001, Morin 2011, European Guideline 2023)`
+      );
+    }
+
+    return { recorded: true, requiresSpecialistReferral };
   }
 
   // ============= Sleep Diary =============
