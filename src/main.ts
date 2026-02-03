@@ -2344,9 +2344,11 @@ async function performStartupHealthChecks(): Promise<IStartupHealthCheck> {
   // Check 3: Admin configuration for crisis escalation (CRITICAL for safety)
   // Per ISO 14971: risk controls (crisis escalation) cannot be bypassed
   // Per FDA DHAC Nov 2025: crisis escalation mandatory for AI mental health devices
+  // Per IEC 62304 Team-NB FAQ: Class C units must claim critical resources at startup
   const checkAdminStart = Date.now();
-  const adminIds = process.env.ADMIN_USER_IDS?.split(',').filter(Boolean) || [];
+  const adminIds = process.env.ADMIN_USER_IDS?.split(',').map(id => id.trim()).filter(Boolean) || [];
   const isProduction = process.env.NODE_ENV === 'production';
+  const invalidAdminIds = adminIds.filter(id => !/^\d+$/.test(id));
   if (adminIds.length === 0) {
     checks.push({
       name: 'Crisis Escalation Admins',
@@ -2355,6 +2357,14 @@ async function performStartupHealthChecks(): Promise<IStartupHealthCheck> {
         ? 'ADMIN_USER_IDS not configured - crisis escalation blocked (required in production per ISO 14971)'
         : 'No ADMIN_USER_IDS configured - crisis escalation notifications disabled (non-blocking in dev)',
       critical: isProduction,
+      durationMs: Date.now() - checkAdminStart,
+    });
+  } else if (invalidAdminIds.length > 0) {
+    checks.push({
+      name: 'Crisis Escalation Admins',
+      status: 'fail',
+      message: `Invalid ADMIN_USER_IDS format: ${invalidAdminIds.join(', ')} (must be numeric Telegram user IDs)`,
+      critical: true,
       durationMs: Date.now() - checkAdminStart,
     });
   } else {
@@ -2419,6 +2429,52 @@ async function performStartupHealthChecks(): Promise<IStartupHealthCheck> {
       message: `Crisis detector initialization failed: ${error}`,
       critical: true,
       durationMs: Date.now() - checkCrisisStart,
+    });
+  }
+
+  // Check 6: Encryption key round-trip test (CRITICAL for HIPAA/GDPR)
+  // Per HIPAA 2026: encryption is mandatory (not addressable)
+  // Per OWASP A02:2021: silent cryptographic failure = critical vulnerability
+  const checkEncryptionStart = Date.now();
+  const encryptionKey = process.env.ENCRYPTION_MASTER_KEY;
+  if (encryptionKey) {
+    try {
+      const { EncryptionService } = await import('./infrastructure/database/security/EncryptionService');
+      const testService = new EncryptionService({
+        masterKey: encryptionKey,
+        useKeyDerivation: false,
+      });
+      const testPlaintext = 'sleepcore-startup-integrity-check';
+      const encrypted = testService.encrypt(testPlaintext);
+      const decrypted = testService.decrypt(encrypted);
+      if (decrypted !== testPlaintext) {
+        throw new Error('Round-trip mismatch: decrypted text does not match original');
+      }
+      checks.push({
+        name: 'Encryption Key Integrity',
+        status: 'pass',
+        message: 'AES-256-GCM round-trip test passed',
+        critical: true,
+        durationMs: Date.now() - checkEncryptionStart,
+      });
+    } catch (error) {
+      checks.push({
+        name: 'Encryption Key Integrity',
+        status: 'fail',
+        message: `Encryption round-trip failed (fail-closed per HIPAA 2026): ${error}`,
+        critical: true,
+        durationMs: Date.now() - checkEncryptionStart,
+      });
+    }
+  } else {
+    checks.push({
+      name: 'Encryption Key Integrity',
+      status: isProduction ? 'fail' : 'warn',
+      message: isProduction
+        ? 'ENCRYPTION_MASTER_KEY not set — PHI encryption impossible (required in production per HIPAA)'
+        : 'ENCRYPTION_MASTER_KEY not set — PHI encryption disabled in dev mode',
+      critical: isProduction,
+      durationMs: Date.now() - checkEncryptionStart,
     });
   }
 
@@ -2694,8 +2750,13 @@ async function main(): Promise<void> {
 
   // Configure admin user IDs from environment (comma-separated)
   // ISO 14971: Crisis escalation is a safety-critical risk control
+  // IEC 62304 Team-NB FAQ: Class C units must claim critical resources at startup
   const adminUserIds = process.env.ADMIN_USER_IDS?.split(',').map(id => id.trim()).filter(Boolean) || [];
-  if (adminUserIds.length > 0) {
+  const invalidIds = adminUserIds.filter(id => !/^\d+$/.test(id));
+  if (invalidIds.length > 0) {
+    console.error(`[CrisisEscalation] FATAL: Invalid ADMIN_USER_IDS format: ${invalidIds.join(', ')} (must be numeric Telegram user IDs)`);
+    process.exit(1);
+  } else if (adminUserIds.length > 0) {
     crisisEscalationService.updateConfig({ adminUserIds });
     console.log(`[CrisisEscalation] Configured with ${adminUserIds.length} admin(s) for emergency notifications`);
   } else if (process.env.NODE_ENV === 'production') {

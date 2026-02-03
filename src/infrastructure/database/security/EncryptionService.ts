@@ -467,6 +467,25 @@ export class EncryptionService {
   static generateSecureToken(length: number = 32): string {
     return crypto.randomBytes(length).toString('hex');
   }
+
+  /**
+   * Validate key integrity with encrypt/decrypt round-trip test.
+   * Per HIPAA 2026 (mandatory encryption) and OWASP A02:2021 (Cryptographic Failures).
+   * Fail-closed: throws on any mismatch.
+   *
+   * @throws Error if round-trip fails (corrupted key, algorithm mismatch, etc.)
+   */
+  validateKeyIntegrity(): void {
+    const testPlaintext = 'sleepcore-key-integrity-check';
+    const encrypted = this.encrypt(testPlaintext);
+    const decrypted = this.decrypt(encrypted);
+    if (decrypted !== testPlaintext) {
+      throw new Error(
+        'Encryption key integrity check failed: round-trip mismatch. ' +
+        'This indicates a corrupted or incompatible encryption key.'
+      );
+    }
+  }
 }
 
 /**

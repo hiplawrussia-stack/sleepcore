@@ -1060,4 +1060,293 @@ describe('CrisisEscalationService', () => {
       expect(keyboard[0][0].callback_data).toBe('safety:view');
     });
   });
+
+  // ==========================================================================
+  // Repository Integration (setRepository / loadSafetyPlansFromDB / persistSafetyPlan)
+  // ==========================================================================
+  describe('Repository Integration', () => {
+    /**
+     * Create mock SafetyPlanRepository
+     */
+    const createMockRepo = () => ({
+      findAll: jest.fn().mockResolvedValue([]),
+      upsert: jest.fn().mockResolvedValue(undefined),
+      findByUserId: jest.fn().mockResolvedValue(null),
+    });
+
+    it('should set repository and load plans from DB', async () => {
+      const mockRepo = createMockRepo();
+      mockRepo.findAll.mockResolvedValue([
+        {
+          userId: 'db_user_1',
+          createdAt: new Date('2025-01-01'),
+          updatedAt: new Date('2025-01-15'),
+          warningSigns: ['Чувство безнадёжности'],
+          copingStrategies: ['Прогулка'],
+          reasonsToLive: ['Семья'],
+          supportContacts: [{ name: 'Мама', phone: '+7999', relation: 'mother' }],
+          safePlaces: ['Дом'],
+          professionalContacts: [{ name: 'Терапевт', phone: '+7111', type: 'therapist' }],
+        },
+      ]);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await service.setRepository(mockRepo as any);
+
+      expect(mockRepo.findAll).toHaveBeenCalledTimes(1);
+
+      // Verify plan was loaded into memory
+      const plan = service.getUserSafetyPlan('db_user_1');
+      expect(plan).toBeDefined();
+      expect(plan?.userId).toBe('db_user_1');
+      expect(plan?.warningSignsRu).toEqual(['Чувство безнадёжности']);
+      expect(plan?.copingStrategies).toEqual(['Прогулка']);
+      expect(plan?.reasonsToLive).toEqual(['Семья']);
+      expect(plan?.supportContacts).toHaveLength(1);
+      expect(plan?.safePlaces).toEqual(['Дом']);
+      expect(plan?.professionalContacts).toHaveLength(1);
+    });
+
+    it('should load multiple plans from DB', async () => {
+      const mockRepo = createMockRepo();
+      mockRepo.findAll.mockResolvedValue([
+        {
+          userId: 'user_a',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          warningSigns: ['Sign A'],
+          copingStrategies: [],
+          reasonsToLive: [],
+          supportContacts: [],
+          safePlaces: [],
+          professionalContacts: [],
+        },
+        {
+          userId: 'user_b',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          warningSigns: ['Sign B'],
+          copingStrategies: [],
+          reasonsToLive: [],
+          supportContacts: [],
+          safePlaces: [],
+          professionalContacts: [],
+        },
+      ]);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await service.setRepository(mockRepo as any);
+
+      expect(service.hasSafetyPlan('user_a')).toBe(true);
+      expect(service.hasSafetyPlan('user_b')).toBe(true);
+      expect(service.getUserSafetyPlan('user_a')?.warningSignsRu).toEqual(['Sign A']);
+      expect(service.getUserSafetyPlan('user_b')?.warningSignsRu).toEqual(['Sign B']);
+    });
+
+    it('should handle empty DB gracefully', async () => {
+      const mockRepo = createMockRepo();
+      mockRepo.findAll.mockResolvedValue([]);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await service.setRepository(mockRepo as any);
+
+      expect(mockRepo.findAll).toHaveBeenCalled();
+      expect(service.hasSafetyPlan('any_user')).toBe(false);
+    });
+
+    it('should handle DB load failure gracefully (catch block)', async () => {
+      const mockRepo = createMockRepo();
+      mockRepo.findAll.mockRejectedValue(new Error('Database connection failed'));
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await service.setRepository(mockRepo as any);
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[CrisisEscalation] DB load failed, Map empty:',
+        expect.any(Error)
+      );
+      // Service should still be functional (in-memory only)
+      expect(service.hasSafetyPlan('any_user')).toBe(false);
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should persist safety plan to DB on save (write-through)', async () => {
+      const mockRepo = createMockRepo();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await service.setRepository(mockRepo as any);
+
+      service.saveUserSafetyPlan(testUserId, {
+        warningSignsRu: ['Безнадёжность'],
+        copingStrategies: ['Дыхание'],
+      });
+
+      // Wait for async persistSafetyPlan
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(mockRepo.upsert).toHaveBeenCalledWith(
+        testUserId,
+        expect.objectContaining({
+          userId: testUserId,
+          warningSigns: ['Безнадёжность'],
+          copingStrategies: ['Дыхание'],
+        })
+      );
+    });
+
+    it('should handle DB persist failure gracefully (catch block)', async () => {
+      const mockRepo = createMockRepo();
+      mockRepo.upsert.mockRejectedValue(new Error('Write failed'));
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await service.setRepository(mockRepo as any);
+
+      // Save should still work in-memory even if DB fails
+      const plan = service.saveUserSafetyPlan(testUserId, {
+        warningSignsRu: ['Тест'],
+      });
+
+      // Wait for async persist error
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(plan.warningSignsRu).toEqual(['Тест']);
+      expect(service.hasSafetyPlan(testUserId)).toBe(true);
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to persist safety plan'),
+        expect.any(Error)
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should not call repo when no repo is set (no-op persist)', async () => {
+      // Service without repository — default state
+      const freshService = new CrisisEscalationService({
+        adminUserIds: testAdminIds,
+      });
+
+      // This should not throw — persistSafetyPlan early-returns
+      const plan = freshService.saveUserSafetyPlan(testUserId, {
+        warningSignsRu: ['Тест без репо'],
+      });
+
+      expect(plan.warningSignsRu).toEqual(['Тест без репо']);
+      expect(freshService.hasSafetyPlan(testUserId)).toBe(true);
+    });
+
+    it('should persist updated plan with correct field mapping', async () => {
+      const mockRepo = createMockRepo();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await service.setRepository(mockRepo as any);
+
+      service.saveUserSafetyPlan(testUserId, {
+        warningSignsRu: ['Знак 1'],
+        reasonsToLive: ['Семья'],
+        safePlaces: ['Дом'],
+        supportContacts: [{ name: 'Друг', phone: '+7123', relation: 'friend' }],
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(mockRepo.upsert).toHaveBeenCalledWith(
+        testUserId,
+        expect.objectContaining({
+          warningSigns: ['Знак 1'],
+          reasonsToLive: ['Семья'],
+          safePlaces: ['Дом'],
+          supportContacts: [{ name: 'Друг', phone: '+7123', relation: 'friend' }],
+        })
+      );
+    });
+  });
+
+  // ==========================================================================
+  // Combined Admin Chat + Individual Notifications
+  // ==========================================================================
+  describe('Combined Notification Targets', () => {
+    let mockBot: ReturnType<typeof createMockBot>;
+
+    beforeEach(() => {
+      mockBot = createMockBot();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      service.setBot(mockBot as any);
+    });
+
+    it('should send to both adminChatId AND individual adminUserIds', async () => {
+      const event = createCrisisEvent({ severity: 'critical' });
+
+      const count = await service.sendAdminNotifications(event);
+
+      // 1 admin chat + 2 individual admins = 3
+      expect(count).toBe(3);
+      expect(mockBot.api.sendMessage).toHaveBeenCalledTimes(3);
+      expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
+        testAdminChatId,
+        expect.any(String),
+        expect.any(Object)
+      );
+      expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
+        'admin1',
+        expect.any(String),
+        expect.any(Object)
+      );
+      expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
+        'admin2',
+        expect.any(String),
+        expect.any(Object)
+      );
+    });
+
+    it('should record notification with all notified admins including chat prefix', async () => {
+      const event = createCrisisEvent({ severity: 'critical' });
+
+      await service.sendAdminNotifications(event);
+
+      const notifications = service.getAllNotifications();
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].notifiedAdmins).toContain(`chat:${testAdminChatId}`);
+      expect(notifications[0].notifiedAdmins).toContain('admin1');
+      expect(notifications[0].notifiedAdmins).toContain('admin2');
+    });
+
+    it('should continue sending to individuals even if admin chat fails', async () => {
+      mockBot.api.sendMessage
+        .mockRejectedValueOnce(new Error('Chat not found'))  // admin chat fails
+        .mockResolvedValueOnce({ message_id: 2 })            // admin1 succeeds
+        .mockResolvedValueOnce({ message_id: 3 });            // admin2 succeeds
+
+      const event = createCrisisEvent({ severity: 'critical' });
+      const count = await service.sendAdminNotifications(event);
+
+      expect(count).toBe(2); // Only individual admins succeeded
+      expect(mockBot.api.sendMessage).toHaveBeenCalledTimes(3); // All 3 attempted
+    });
+
+    it('should continue sending even if some individual admins fail', async () => {
+      mockBot.api.sendMessage
+        .mockResolvedValueOnce({ message_id: 1 })              // admin chat succeeds
+        .mockRejectedValueOnce(new Error('User blocked bot'))   // admin1 fails
+        .mockResolvedValueOnce({ message_id: 3 });              // admin2 succeeds
+
+      const event = createCrisisEvent({ severity: 'critical' });
+      const count = await service.sendAdminNotifications(event);
+
+      expect(count).toBe(2); // chat + admin2
+    });
+
+    it('should not record notification when all sends fail', async () => {
+      mockBot.api.sendMessage.mockRejectedValue(new Error('All failed'));
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      const event = createCrisisEvent({ severity: 'critical' });
+      await service.sendAdminNotifications(event);
+
+      const notifications = service.getAllNotifications();
+      expect(notifications).toHaveLength(0); // No successful sends, no record
+
+      consoleSpy.mockRestore();
+    });
+  });
 });

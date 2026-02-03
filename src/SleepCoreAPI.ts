@@ -366,7 +366,9 @@ export class SleepCoreAPI {
 
   constructor() {
     this.diaryService = new SleepDiaryService();
-    this.cbtiEngine = new CBTIEngine();
+    // Disable CBTIEngine's internal adapter — SleepCoreAPI manages its own adapter
+    // to avoid dual belief-state divergence (P1 fix: Thompson Sampling consistency)
+    this.cbtiEngine = new CBTIEngine({ useCogniCore: false });
     this.adapter = createSleepCoreAdapter({ language: 'ru' });
     this.thirdWave = new ThirdWaveCoordinator();
 
@@ -901,15 +903,11 @@ export class SleepCoreAPI {
     userStates.push(currentState);
     this.sleepStates.set(checkIn.userId, userStates);
 
-    // Get CBT-I intervention from engine
-    const intervention = await this.cbtiEngine.getNextIntervention(session.plan, currentState);
-
-    // Use SleepCoreAdapter with Thompson Sampling for action selection
-    // The adapter updates beliefs internally and selects optimal intervention
+    // Use SleepCoreAdapter with Thompson Sampling for unified action selection
+    // P1 fix: single adapter avoids dual belief-state divergence
     const adapterSelection = await this.adapter.selectIntervention(currentState, checkIn.userId);
 
     // Record previous outcome if we have history (for Thompson Sampling learning)
-    // The adapter calculates reward internally based on state improvement
     if (userStates.length > 1) {
       const previousState = userStates[userStates.length - 2];
       await this.adapter.recordOutcome(
@@ -919,6 +917,17 @@ export class SleepCoreAPI {
         checkIn.userId
       );
     }
+
+    // Build ICBTIIntervention from adapter selection + CBTIEngine static fallback
+    const staticIntervention = await this.cbtiEngine.getNextIntervention(session.plan, currentState);
+    const intervention: ICBTIIntervention = {
+      component: adapterSelection.component,
+      action: adapterSelection.explanation,
+      rationale: adapterSelection.explanation,
+      priority: Math.round(adapterSelection.confidence * 5) || 1,
+      timing: staticIntervention.timing,
+      personalizationScore: adapterSelection.confidence,
+    };
 
     return {
       intervention,
@@ -943,7 +952,20 @@ export class SleepCoreAPI {
     if (userStates.length === 0) return null;
 
     const currentState = userStates[userStates.length - 1];
-    return this.cbtiEngine.getNextIntervention(session.plan, currentState);
+
+    // P1 fix: Use SleepCoreAdapter (Thompson Sampling) instead of CBTIEngine directly
+    // This ensures belief state consistency with processDailyCheckIn()
+    const adapterSelection = await this.adapter.selectIntervention(currentState, userId);
+    const staticIntervention = await this.cbtiEngine.getNextIntervention(session.plan, currentState);
+
+    return {
+      component: adapterSelection.component,
+      action: adapterSelection.explanation,
+      rationale: adapterSelection.explanation,
+      priority: Math.round(adapterSelection.confidence * 5) || 1,
+      timing: staticIntervention.timing,
+      personalizationScore: adapterSelection.confidence,
+    };
   }
 
   /**
