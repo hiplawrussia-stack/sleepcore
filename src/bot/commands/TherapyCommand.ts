@@ -38,7 +38,7 @@ import type {
 import type { ICBTIIntervention, CBTIComponent } from '../../cbt-i/interfaces/ICBTIComponents';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import { arousalAssessmentService } from '../services/ArousalAssessmentService';
+import type { arousalAssessmentService } from '../services/ArousalAssessmentService';
 
 /**
  * Therapy session cores (6-week structure)
@@ -775,7 +775,7 @@ ${formatter.tip('Каждая сессия занимает 30-60 минут. П
     try {
       const sleepHistory = ctx.sleepCore.getSleepStates?.(ctx.userId, 14) ?? [];
       if (sleepHistory.length >= 7) {
-        const arousalProfile = arousalAssessmentService.estimateArousalProfile(sleepHistory);
+        const arousalProfile = ctx.sleepCore.estimateArousalProfile(sleepHistory);
         if (arousalProfile.available && arousalProfile.recommendation) {
           const rec = arousalProfile.recommendation;
           const arousalIcon = arousalProfile.dominantArousal === 'cognitive' ? '🧠'

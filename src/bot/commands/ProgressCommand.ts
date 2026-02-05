@@ -20,16 +20,11 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import {
-  sleepPredictionService,
-  type ISleepPrediction,
-  type ISleepEarlyWarning,
+import type {
+  ISleepPrediction,
+  ISleepEarlyWarning,
 } from '../services/SleepPredictionService';
-import {
-  proactiveIntelligenceService,
-  type IPatternAlert,
-} from '../services/ProactiveIntelligenceService';
-import { cognitiveProgressReportService } from '../services/CognitiveProgressReportService';
+import type { IPatternAlert } from '../services/ProactiveIntelligenceService';
 
 /**
  * /progress Command Implementation
@@ -122,7 +117,7 @@ ${formatter.tip('Чем больше данных, тем точнее анал�
     const statusInfo = this.getResponseStatusInfo(report.responseStatus);
 
     // Get PLRNN-based 7-day prediction
-    const prediction = sleepPredictionService.predict(ctx.userId, 'long');
+    const prediction = ctx.sleepCore.getSleepPrediction().predict(ctx.userId, 'long');
     const predictionSection = this.buildPredictionSection(prediction);
 
     // Get proactive pattern alerts (JITAI, graceful degradation)
@@ -232,11 +227,9 @@ _${statusInfo.description}_
       const sleepHistory = ctx.sleepCore.getSleepStates?.(ctx.userId, 14) ?? [];
       if (sleepHistory.length < 7) return '';
 
-      const beliefState = ctx.sleepCore.getBeliefState?.(ctx.userId);
-      const analysis = await proactiveIntelligenceService.runDailyAnalysis(
+      const analysis = await ctx.sleepCore.runProactiveAnalysis(
         ctx.userId,
-        sleepHistory,
-        beliefState
+        sleepHistory
       );
 
       if (analysis.patternAlerts.length === 0) return '';
@@ -285,7 +278,7 @@ _${statusInfo.description}_
       const sleepHistory = ctx.sleepCore.getSleepStates?.(ctx.userId, 14) ?? [];
       if (sleepHistory.length < 3) return '';
 
-      const report = cognitiveProgressReportService.generateWeeklyReport(
+      const report = ctx.sleepCore.generateCognitiveProgressReport(
         ctx.userId, sleepHistory, currentWeek
       );
       if (!report) return '';

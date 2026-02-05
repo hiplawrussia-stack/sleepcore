@@ -94,6 +94,19 @@ import {
   type IProactiveInsight,
 } from './bot/services/ProactiveIntelligenceService';
 
+// Wave 1: SleepPrediction facade routing
+import { sleepPredictionService } from './bot/services/SleepPredictionService';
+
+// Wave 2: DigitalTwin, CausalInsights, CognitiveProgress, Arousal
+import { digitalTwinService } from './bot/services/DigitalTwinService';
+import { causalInsightsService } from './bot/services/CausalInsightsService';
+import { cognitiveProgressReportService } from './bot/services/CognitiveProgressReportService';
+import { arousalAssessmentService } from './bot/services/ArousalAssessmentService';
+
+// Wave 3: Crisis Detection & Escalation (IEC 62304 Class C — accessor only)
+import { crisisDetectionService } from './bot/services/CrisisDetectionService';
+import { crisisEscalationService } from './bot/services/CrisisEscalationService';
+
 /**
  * SleepCore user session
  */
@@ -1659,6 +1672,116 @@ export class SleepCoreAPI {
     } catch {
       return [];
     }
+  }
+
+  // ============= Wave 1: SleepPrediction + ProactiveIntelligence + AdaptivePersona =============
+
+  /**
+   * Get SleepPredictionService singleton (Typed Accessor)
+   * Provides PLRNN-based prediction, history, early warnings
+   */
+  getSleepPrediction(): typeof sleepPredictionService {
+    return sleepPredictionService;
+  }
+
+  /**
+   * Adapt message tone with auto-injected CogniCore belief state (Thin Wrapper)
+   * Falls back to original message on error
+   */
+  async adaptMessageToneWithContext(
+    userId: string,
+    message: string,
+    emotionalState?: Parameters<typeof adaptivePersonaService.adaptTone>[2]
+  ): Promise<string> {
+    try {
+      const beliefState = this.getBeliefState?.(userId);
+      const result = await adaptivePersonaService.adaptTone(
+        userId,
+        message,
+        emotionalState,
+        beliefState
+      );
+      return result.adapted;
+    } catch {
+      return message;
+    }
+  }
+
+  /**
+   * Run proactive daily analysis with auto-injected belief state (Thin Wrapper)
+   */
+  async runProactiveAnalysis(
+    userId: string,
+    sleepHistory: Parameters<typeof proactiveIntelligenceService.runDailyAnalysis>[1]
+  ): ReturnType<typeof proactiveIntelligenceService.runDailyAnalysis> {
+    const beliefState = this.getBeliefState?.(userId);
+    return proactiveIntelligenceService.runDailyAnalysis(userId, sleepHistory, beliefState);
+  }
+
+  /**
+   * Detect risk escalation in sleep data (Thin Wrapper)
+   */
+  async detectRiskEscalation(
+    userId: string,
+    sleepHistory: Parameters<typeof proactiveIntelligenceService.detectRiskEscalation>[1]
+  ): ReturnType<typeof proactiveIntelligenceService.detectRiskEscalation> {
+    return proactiveIntelligenceService.detectRiskEscalation(userId, sleepHistory);
+  }
+
+  // ============= Wave 2: DigitalTwin + CausalInsights + CognitiveProgress + Arousal =============
+
+  /**
+   * Get DigitalTwinService singleton (Typed Accessor)
+   * Provides twin creation, trajectory prediction, scenario simulation, tipping point detection
+   */
+  getDigitalTwin(): typeof digitalTwinService {
+    return digitalTwinService;
+  }
+
+  /**
+   * Get CausalInsightsService singleton (Typed Accessor)
+   * Provides causal graph discovery, personalized insights, intervention targets
+   */
+  getCausalInsights(): typeof causalInsightsService {
+    return causalInsightsService;
+  }
+
+  /**
+   * Generate weekly cognitive progress report (Thin Wrapper)
+   */
+  generateCognitiveProgressReport(
+    userId: string,
+    history: Parameters<typeof cognitiveProgressReportService.generateWeeklyReport>[1],
+    week: Parameters<typeof cognitiveProgressReportService.generateWeeklyReport>[2]
+  ): ReturnType<typeof cognitiveProgressReportService.generateWeeklyReport> {
+    return cognitiveProgressReportService.generateWeeklyReport(userId, history, week);
+  }
+
+  /**
+   * Estimate arousal profile from sleep history (Thin Wrapper)
+   */
+  estimateArousalProfile(
+    sleepHistory: Parameters<typeof arousalAssessmentService.estimateArousalProfile>[0]
+  ): ReturnType<typeof arousalAssessmentService.estimateArousalProfile> {
+    return arousalAssessmentService.estimateArousalProfile(sleepHistory);
+  }
+
+  // ============= Wave 3: CrisisDetection + CrisisEscalation (IEC 62304 Class C) =============
+
+  /**
+   * Get CrisisDetectionService singleton (Typed Accessor)
+   * SAFETY-CRITICAL: Returns module-level singleton. Never null.
+   */
+  getCrisisDetection(): typeof crisisDetectionService {
+    return crisisDetectionService;
+  }
+
+  /**
+   * Get CrisisEscalationService singleton (Typed Accessor)
+   * SAFETY-CRITICAL: Returns module-level singleton. Never null.
+   */
+  getCrisisEscalation(): typeof crisisEscalationService {
+    return crisisEscalationService;
   }
 
   /**

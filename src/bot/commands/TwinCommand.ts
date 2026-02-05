@@ -21,8 +21,7 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import { digitalTwinService, type IDigitalTwin, type ITrajectory } from '../services/DigitalTwinService';
-import { sleepPredictionService } from '../services/SleepPredictionService';
+import type { digitalTwinService } from '../services/DigitalTwinService';
 
 /**
  * /twin Command Implementation
@@ -45,7 +44,7 @@ export class TwinCommand implements ICommand, Partial<IConversationCommand> {
 
     // Check if twin exists
     try {
-      const twin = await digitalTwinService.createTwin(ctx.userId);
+      const twin = await ctx.sleepCore.getDigitalTwin().createTwin(ctx.userId);
       if (!twin) {
         return this.showTwinCreation(ctx);
       }
@@ -105,7 +104,7 @@ ${formatter.tip('Используйте /start для начала')}
   }
 
   private async showTwinCreation(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const history = sleepPredictionService.getHistory(ctx.userId);
+    const history = ctx.sleepCore.getSleepPrediction().getHistory(ctx.userId);
     const daysCollected = history?.length || 0;
     const daysNeeded = Math.max(0, 7 - daysCollected);
 
@@ -165,7 +164,7 @@ ${sonya.tip('Двойник будет улучшаться с каждым но
 
   private async createTwin(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const twin = await digitalTwinService.createTwin(ctx.userId);
+      const twin = await ctx.sleepCore.getDigitalTwin().createTwin(ctx.userId);
       return this.showTwinDashboard(ctx, twin);
     } catch {
       const message = `
@@ -246,7 +245,7 @@ ${sonya.say('Твой двойник готов к работе! Что хоче
 
   private async showTwinStatus(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const twin = await digitalTwinService.createTwin(ctx.userId);
+      const twin = await ctx.sleepCore.getDigitalTwin().createTwin(ctx.userId);
       if (!twin) {
         return this.showTwinCreation(ctx);
       }
@@ -287,7 +286,7 @@ ${sonya.tip('Состояние обновляется автоматическ�
 
   private async showTrajectory(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const trajectory = await digitalTwinService.predictTrajectory(ctx.userId, 7);
+      const trajectory = await ctx.sleepCore.getDigitalTwin().predictTrajectory(ctx.userId, 7);
 
       if (!trajectory || trajectory.dailyPredictions.length === 0) {
         const message = `
@@ -339,7 +338,7 @@ ${trajectory.overallTrend === 'improving'
     }
   }
 
-  private async showSimulationMenu(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showSimulationMenu(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 ${formatter.header('🎯 Симуляция сценариев')}
 
@@ -378,7 +377,7 @@ ${sonya.tip('Симуляция помогает принять решение �
 
   private async showCalibration(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const twin = await digitalTwinService.createTwin(ctx.userId);
+      const twin = await ctx.sleepCore.getDigitalTwin().createTwin(ctx.userId);
 
       if (!twin) {
         return this.showTwinCreation(ctx);
@@ -431,14 +430,14 @@ ${sonya.tip('Чем больше данных — тем точнее двойн
 
   private async showTwinInsights(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const twin = await digitalTwinService.createTwin(ctx.userId);
+      const twin = await ctx.sleepCore.getDigitalTwin().createTwin(ctx.userId);
 
       if (!twin) {
         return this.showTwinCreation(ctx);
       }
 
       // Get tipping points (detectTippingPoints returns ITippingPoint[])
-      const tippingPoints = await digitalTwinService.detectTippingPoints(ctx.userId);
+      const tippingPoints = await ctx.sleepCore.getDigitalTwin().detectTippingPoints(ctx.userId);
 
       const insightsText = tippingPoints.length > 0
         ? tippingPoints.slice(0, 3).map((tp: { type: string; recommendationRu: string; probability: number }, i: number) => {
@@ -488,7 +487,7 @@ ${sonya.tip('Инсайты обновляются по мере накопле�
 
   private async showTwinHealth(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const twin = await digitalTwinService.createTwin(ctx.userId);
+      const twin = await ctx.sleepCore.getDigitalTwin().createTwin(ctx.userId);
 
       if (!twin) {
         return this.showTwinCreation(ctx);

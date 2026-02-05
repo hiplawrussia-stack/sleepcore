@@ -588,6 +588,29 @@ _${rec.rationale}_
       }
     }
 
+    // JITAI: Post-diary risk detection (graceful degradation)
+    let riskAlertSection = '';
+    try {
+      const sleepHistory = ctx.sleepCore.getSleepStates?.(ctx.userId, 14) ?? [];
+      if (sleepHistory.length >= 3) {
+        const riskAlert = await ctx.sleepCore.detectRiskEscalation(
+          ctx.userId,
+          sleepHistory
+        );
+        if (riskAlert && (riskAlert.severity === 'high' || riskAlert.severity === 'critical')) {
+          const riskIcon = riskAlert.severity === 'critical' ? '🔴' : '🟠';
+          riskAlertSection = `
+${formatter.divider()}
+
+${riskIcon} *Обратите внимание*
+_${riskAlert.messageRu}_
+          `.trim();
+        }
+      }
+    } catch {
+      // Non-critical: risk detection failure doesn't block diary save
+    }
+
     // Sonya's response based on context
     let sonyaResponse: string;
     if (result?.planCreated) {
@@ -615,6 +638,7 @@ ${qualityEmoji} Качество: ${data.sleepQuality}/5
 ${statusSection}
 ${interventionSection}
 ${nonResponseSection}
+${riskAlertSection ? '\n' + riskAlertSection : ''}
 
 ${sonya.tip(entriesCount < 7 ? 'Заполняй дневник каждое утро — осталось совсем немного!' : 'Следуй рекомендациям для улучшения сна')}
     `.trim();

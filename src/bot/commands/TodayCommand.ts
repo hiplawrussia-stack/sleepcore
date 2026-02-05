@@ -22,11 +22,11 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import {
-  sleepPredictionService,
-  type ISleepPrediction,
-  type ISleepEarlyWarning,
+import type {
+  ISleepPrediction,
+  ISleepEarlyWarning,
 } from '../services/SleepPredictionService';
+import type { IProactiveInsight } from '../services/ProactiveIntelligenceService';
 
 /**
  * /today Command Implementation
@@ -146,18 +146,31 @@ ${formatter.tip('Чем больше данных, тем точнее реко�
     const timing = timingLabels[intervention.timing] || intervention.timing;
     const priorityStars = '⭐'.repeat(intervention.priority);
 
-    // Sonya's greeting
-    const greeting = sonya.greet({ timeOfDay: this.getTimeOfDay() });
+    // Sonya's greeting — adapt tone via AdaptivePersonaService (MI-informed)
+    const baseGreeting = sonya.greet({ timeOfDay: this.getTimeOfDay() });
+    const beliefState = ctx.sleepCore.getBeliefState?.(ctx.userId);
+    let greetingText = baseGreeting.text;
+    try {
+      greetingText = await ctx.sleepCore.adaptMessageToneWithContext(
+        ctx.userId,
+        baseGreeting.text
+      );
+    } catch {
+      // Graceful degradation: use base greeting
+    }
 
     // Get Early Warning Signals from PLRNN prediction (short-term)
-    const prediction = sleepPredictionService.predict(ctx.userId, 'short');
+    const prediction = ctx.sleepCore.getSleepPrediction().predict(ctx.userId, 'short');
     const ewsAlert = this.buildEarlyWarningAlert(prediction);
+
+    // Get proactive JITAI insights (graceful degradation: empty on failure/insufficient data)
+    const proactiveSection = await this.buildProactiveInsightsSection(ctx);
 
     const message = `
 ${sonya.emoji} *${sonya.name}*
 
-${greeting.text}
-${ewsAlert}
+${greetingText}
+${ewsAlert}${proactiveSection}
 ${formatter.header('Задание на сегодня')}
 
 ${icon} *${name}*
@@ -288,6 +301,63 @@ ${sonya.tip('Выполняй задания последовательно дл
       case 'high': return '🟠';
       case 'moderate': return '🟡';
       default: return '⚪';
+    }
+  }
+
+  // ==================== Proactive Intelligence (JITAI) ====================
+
+  /**
+   * Build proactive insights section for /today display
+   *
+   * Research basis (2025-2026):
+   * - JITAI meta-analysis: g=0.15 effect (van Genugten 2025, HIGH confidence)
+   * - Proactive micro-interventions improve engagement (iREST, HIGH confidence)
+   * - Shows only "today" urgency insights to avoid cognitive overload
+   */
+  private async buildProactiveInsightsSection(ctx: ISleepCoreContext): Promise<string> {
+    try {
+      const sleepHistory = ctx.sleepCore.getSleepStates?.(ctx.userId, 14) ?? [];
+      if (sleepHistory.length < 3) return '';
+
+      const analysis = await ctx.sleepCore.runProactiveAnalysis(
+        ctx.userId,
+        sleepHistory
+      );
+
+      // Filter for today-urgency insights only
+      const todayInsights = analysis.insights.filter(
+        (i) => i.urgency === 'today' || i.urgency === 'immediate'
+      );
+
+      if (todayInsights.length === 0 && analysis.riskAlerts.length === 0) {
+        return '';
+      }
+
+      const lines: string[] = [''];
+
+      // Show top insight (max 1 to avoid overload)
+      if (todayInsights.length > 0) {
+        const top = todayInsights[0];
+        const urgencyIcon = top.urgency === 'immediate' ? '⚡' : '💡';
+        lines.push(`${urgencyIcon} _${top.titleRu}_`);
+        lines.push(`   ${top.messageRu}`);
+      }
+
+      // Show critical risk alerts (max 1)
+      const criticalRisks = analysis.riskAlerts.filter(
+        (r) => r.severity === 'high' || r.severity === 'critical'
+      );
+      if (criticalRisks.length > 0) {
+        const risk = criticalRisks[0];
+        const riskIcon = risk.severity === 'critical' ? '🔴' : '🟠';
+        lines.push(`${riskIcon} _${risk.messageRu}_`);
+      }
+
+      lines.push('');
+      return lines.join('\n');
+    } catch {
+      // Graceful degradation: proactive insights are non-critical
+      return '';
     }
   }
 

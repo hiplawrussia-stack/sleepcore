@@ -21,12 +21,11 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import {
-  sleepPredictionService,
-  type ISleepPrediction,
-  type ISleepEarlyWarning,
+import type {
+  ISleepPrediction,
+  ISleepEarlyWarning,
 } from '../services/SleepPredictionService';
-import { digitalTwinService } from '../services/DigitalTwinService';
+import { sleepCore } from '../../SleepCoreAPI';
 
 /**
  * /predict Command Implementation
@@ -48,7 +47,7 @@ export class PredictCommand implements ICommand, Partial<IConversationCommand> {
     }
 
     // Check if user has enough data
-    const history = sleepPredictionService.getHistory(ctx.userId);
+    const history = ctx.sleepCore.getSleepPrediction().getHistory(ctx.userId);
     if (!history || history.length < 3) {
       return this.showInsufficientData(history?.length || 0);
     }
@@ -374,9 +373,9 @@ ${sonya.say('Эти рекомендации персонализированы 
     let tippingPoints: Array<{ date: Date; type: string; probability: number; description: string }> = [];
 
     try {
-      const twin = await digitalTwinService.createTwin(ctx.userId);
+      const twin = await ctx.sleepCore.getDigitalTwin().createTwin(ctx.userId);
       if (twin) {
-        const detectedPoints = await digitalTwinService.detectTippingPoints(ctx.userId);
+        const detectedPoints = await ctx.sleepCore.getDigitalTwin().detectTippingPoints(ctx.userId);
         tippingPoints = detectedPoints.map(tp => ({
           date: tp.estimatedDays ? new Date(Date.now() + tp.estimatedDays * 24 * 60 * 60 * 1000) : new Date(),
           type: tp.type === 'improvement' ? 'positive' : tp.type === 'deterioration' ? 'negative' : 'warning',
@@ -550,7 +549,7 @@ ${formatter.tip('Используйте /diary для добавления за�
     horizon: 'short' | 'medium' | 'long'
   ): Promise<ISleepPrediction | null> {
     try {
-      return await sleepPredictionService.predict(userId, horizon);
+      return await sleepCore.getSleepPrediction().predict(userId, horizon);
     } catch {
       return null;
     }

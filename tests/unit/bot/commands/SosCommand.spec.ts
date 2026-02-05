@@ -12,29 +12,7 @@ import {
   assertContainsText,
 } from './testHelpers';
 
-// Mock crisis services
-jest.mock('../../../../src/bot/services/CrisisDetectionService', () => ({
-  crisisDetectionService: {
-    recordSosEvent: jest.fn(),
-  },
-}));
-
-jest.mock('../../../../src/bot/services/CrisisEscalationService', () => ({
-  crisisEscalationService: {
-    escalate: jest.fn().mockResolvedValue({
-      escalated: true,
-      level: 'notify_urgent',
-      notificationsSent: 1,
-      aeCreated: false,
-    }),
-  },
-}));
-
-// Get mock references after jest.mock hoisting
-import { crisisDetectionService } from '../../../../src/bot/services/CrisisDetectionService';
-import { crisisEscalationService } from '../../../../src/bot/services/CrisisEscalationService';
-const mockCrisisRecordSosEvent = crisisDetectionService.recordSosEvent as jest.Mock;
-const mockCrisisEscalate = crisisEscalationService.escalate as jest.Mock;
+import { createMockSleepCoreAPI } from './testHelpers';
 
 describe('SosCommand', () => {
   let command: SosCommand;
@@ -176,11 +154,6 @@ describe('SosCommand', () => {
   });
 
   describe('crisis escalation', () => {
-    beforeEach(() => {
-      mockCrisisRecordSosEvent.mockClear();
-      mockCrisisEscalate.mockClear();
-    });
-
     it('should record SOS event via CrisisDetectionService', async () => {
       const ctx = createMockContext();
       await command.execute(ctx);
@@ -188,7 +161,8 @@ describe('SosCommand', () => {
       // Allow async escalation to complete
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      expect(mockCrisisRecordSosEvent).toHaveBeenCalledWith(
+      const mockRecordSosEvent = (ctx.sleepCore.getCrisisDetection() as any).recordSosEvent as jest.Mock;
+      expect(mockRecordSosEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           userId: ctx.userId,
           chatId: String(ctx.chatId),
@@ -209,7 +183,8 @@ describe('SosCommand', () => {
 
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      expect(mockCrisisEscalate).toHaveBeenCalledWith(
+      const mockEscalate = (ctx.sleepCore.getCrisisEscalation() as any).escalate as jest.Mock;
+      expect(mockEscalate).toHaveBeenCalledWith(
         expect.objectContaining({
           userId: ctx.userId,
           severity: 'high',
@@ -219,8 +194,12 @@ describe('SosCommand', () => {
     });
 
     it('should still show resources even if escalation fails', async () => {
-      mockCrisisEscalate.mockRejectedValueOnce(new Error('Network error'));
-      const ctx = createMockContext();
+      const mockSleepCore = createMockSleepCoreAPI({
+        getCrisisEscalation: jest.fn().mockReturnValue({
+          escalate: jest.fn().mockRejectedValue(new Error('Network error')),
+        }),
+      });
+      const ctx = createMockContext({ sleepCore: mockSleepCore });
       const result = await command.execute(ctx);
 
       // Resources are shown regardless of escalation outcome
@@ -253,10 +232,6 @@ describe('SosCommand', () => {
   });
 
   describe('handleCallback()', () => {
-    beforeEach(() => {
-      mockCrisisRecordSosEvent.mockClear();
-      mockCrisisEscalate.mockClear();
-    });
 
     describe('sos:breathing', () => {
       it('should show 4-7-8 breathing exercise', async () => {

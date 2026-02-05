@@ -21,6 +21,8 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
+import type { ICrisisEvent } from '../services/CrisisDetectionService';
+import { sleepCore } from '../../SleepCoreAPI';
 
 /**
  * /safety Command Implementation
@@ -397,7 +399,7 @@ ${sonya.tip('Твоя обратная связь помогает сделат�
 
   // ==================== Helper Methods ====================
 
-  private getCurrentSafetyStatus(_userId: string): {
+  private getCurrentSafetyStatus(userId: string): {
     level: 'safe' | 'monitoring' | 'elevated' | 'critical';
     riskScore: number;
     messagesChecked: number;
@@ -407,38 +409,113 @@ ${sonya.tip('Твоя обратная связь помогает сделат�
     averageSentiment: number;
     safetyFlags: number;
   } {
-    // In production, this would fetch from crisis detection service
-    // For now, return safe defaults
+    // Real data from CrisisDetectionService (January 2026 audit fix)
+    const allEvents = sleepCore.getCrisisDetection().getEvents();
+    const userEvents = sleepCore.getCrisisDetection().getUserEvents(userId);
+    const highSeverityEvents = sleepCore.getCrisisDetection().getHighSeverityEvents();
+
+    // Calculate weekly events (last 7 days)
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weeklyEvents = allEvents.filter(e => e.timestamp >= weekAgo);
+    const userWeeklyEvents = userEvents.filter(e => e.timestamp >= weekAgo);
+
+    // Determine safety level from recent user events
+    const recentUserCrises = userEvents.filter(
+      e => e.timestamp >= weekAgo && (e.severity === 'high' || e.severity === 'critical')
+    );
+    const recentMonitoring = userEvents.filter(
+      e => e.timestamp >= weekAgo && e.severity === 'moderate'
+    );
+
+    let level: 'safe' | 'monitoring' | 'elevated' | 'critical' = 'safe';
+    if (recentUserCrises.some(e => e.severity === 'critical')) {
+      level = 'critical';
+    } else if (recentUserCrises.length > 0) {
+      level = 'elevated';
+    } else if (recentMonitoring.length > 0) {
+      level = 'monitoring';
+    }
+
+    // Risk score: 0-1 based on event count and severity
+    const riskScore = Math.min(1, (
+      recentUserCrises.filter(e => e.severity === 'critical').length * 0.5 +
+      recentUserCrises.filter(e => e.severity === 'high').length * 0.3 +
+      recentMonitoring.length * 0.1
+    ));
+
+    const escalations = userEvents.filter(e => e.action === 'emergency' || e.action === 'interrupt').length;
+    const safetyFlags = userEvents.filter(e => e.severity !== 'none').length;
+
     return {
-      level: 'safe',
-      riskScore: 0.05,
-      messagesChecked: 127,
-      risksDetected: 0,
-      escalations: 0,
-      weeklyMessages: 34,
-      averageSentiment: 0.6,
-      safetyFlags: 0,
+      level,
+      riskScore,
+      messagesChecked: allEvents.length,
+      risksDetected: highSeverityEvents.length,
+      escalations,
+      weeklyMessages: weeklyEvents.length,
+      averageSentiment: 1 - riskScore, // Inverse: lower risk = higher sentiment
+      safetyFlags,
     };
   }
 
-  private getRiskIndicators(_userId: string): Array<{ emoji: string; name: string; value: string }> {
+  private getRiskIndicators(userId: string): Array<{ emoji: string; name: string; value: string }> {
+    // Real indicators from CrisisDetectionService events (January 2026 audit fix)
+    const userEvents = sleepCore.getCrisisDetection().getUserEvents(userId);
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const recentEvents = userEvents.filter(e => e.timestamp >= weekAgo);
+
+    const hasCrisisEvents = recentEvents.some(e => e.severity === 'high' || e.severity === 'critical');
+    const hasModerateEvents = recentEvents.some(e => e.severity === 'moderate');
+    const hasLowEvents = recentEvents.some(e => e.severity === 'low');
+
+    // Mood indicator based on crisis event presence
+    const moodEmoji = hasCrisisEvents ? '😟' : hasModerateEvents ? '😐' : '😊';
+    const moodValue = hasCrisisEvents ? 'Требует внимания' : hasModerateEvents ? 'Наблюдение' : 'Стабильное';
+
+    // Communication indicator based on event frequency
+    const commValue = recentEvents.length > 5 ? 'Повышенная активность' :
+                      recentEvents.length > 0 ? 'Нормальная' : 'Нормальная';
+
+    // Stress indicator
+    const stressEmoji = hasCrisisEvents ? '🔴' : hasModerateEvents ? '🟡' : '⚡';
+    const stressValue = hasCrisisEvents ? 'Высокий' : hasModerateEvents ? 'Средний' : 'Низкий';
+
+    // Safety monitoring
+    const safetyEmoji = hasCrisisEvents ? '🔴' : hasLowEvents ? '🟡' : '🟢';
+    const safetyValue = hasCrisisEvents ? 'Активный мониторинг' :
+                        hasLowEvents ? 'Наблюдение' : 'Норма';
+
     return [
-      { emoji: '😊', name: 'Настроение', value: 'Стабильное' },
-      { emoji: '💬', name: 'Коммуникация', value: 'Нормальная' },
-      { emoji: '😴', name: 'Сон', value: 'Улучшается' },
-      { emoji: '⚡', name: 'Стресс', value: 'Низкий' },
-      { emoji: '🎯', name: 'Вовлечённость', value: 'Высокая' },
+      { emoji: moodEmoji, name: 'Настроение', value: moodValue },
+      { emoji: '💬', name: 'Коммуникация', value: commValue },
+      { emoji: stressEmoji, name: 'Стресс', value: stressValue },
+      { emoji: safetyEmoji, name: 'Безопасность', value: safetyValue },
+      { emoji: '🎯', name: 'Вовлечённость', value: recentEvents.length === 0 ? 'Высокая' : 'Активная' },
     ];
   }
 
-  private getCrisisHistory(_userId: string): Array<{
+  private getCrisisHistory(userId: string): Array<{
     date: Date;
     type: string;
     severity: string;
     resolution: string;
   }> {
-    // In production, fetch from crisis escalation service
-    return [];
+    // Real crisis history from CrisisDetectionService (January 2026 audit fix)
+    const userEvents = sleepCore.getCrisisDetection().getUserEvents(userId);
+
+    return userEvents
+      .filter(e => e.severity !== 'none')
+      .map(e => ({
+        date: e.timestamp,
+        type: e.crisisType,
+        severity: e.severity,
+        resolution: e.action === 'emergency' ? 'Экстренная помощь' :
+                    e.action === 'interrupt' ? 'Сессия прервана, предоставлены ресурсы' :
+                    e.action === 'supportive' ? 'Поддерживающий ответ' :
+                    e.action === 'monitor' ? 'Мониторинг' : 'Продолжение',
+      }));
   }
 
   private buildRiskMeter(score: number): string {

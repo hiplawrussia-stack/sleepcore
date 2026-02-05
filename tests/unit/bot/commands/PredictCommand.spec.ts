@@ -13,51 +13,30 @@ import {
   assertContainsText,
 } from './testHelpers';
 
-// Mock services
-jest.mock('../../../../src/bot/services/SleepPredictionService', () => ({
-  sleepPredictionService: {
-    predict: jest.fn().mockReturnValue({
-      userId: 'test-user-123',
-      horizon: 'medium',
-      trend: 'stable',
-      predictedSE: [82, 83, 81, 84, 82, 83, 85],
-      sleepEfficiencyTrajectory: Array.from({ length: 7 }, (_, i) => ({
-        date: new Date(Date.now() + i * 24 * 60 * 60 * 1000),
-        predicted: 82 + i,
-        lower95: 78 + i,
-        upper95: 86 + i,
-      })),
-      predictedSleepEfficiency: {
-        value: 85,
-        lower95: 81,
-        upper95: 89,
-        confidence: 0.75,
-      },
-      confidenceInterval: { lower: [78, 79, 77, 80, 78, 79, 81], upper: [86, 87, 85, 88, 86, 87, 89] },
-      deteriorationRisk: 0.15,
-      earlyWarnings: [],
-      recommendations: ['Maintain current sleep schedule', 'Consider earlier bedtime'],
-      modelConfidence: 0.75,
-    }),
-    getHistory: jest.fn().mockImplementation(() =>
-      Array.from({ length: 10 }, (_, i) => ({
+// Mock SleepCoreAPI singleton (used by PredictCommand's private helper)
+jest.mock('../../../../src/SleepCoreAPI', () => ({
+  sleepCore: {
+    getSleepPrediction: jest.fn().mockReturnValue({
+      predict: jest.fn().mockReturnValue({
         userId: 'test-user-123',
-        date: new Date(Date.now() - i * 24 * 60 * 60 * 1000),
-        value: 80 + (i % 5),
-        metrics: {
-          sleepEfficiency: 80 + (i % 5),
-          totalSleepTime: 420,
-        },
-      }))
-    ),
-  },
-}));
-
-jest.mock('../../../../src/bot/services/DigitalTwinService', () => ({
-  digitalTwinService: {
-    getRecommendations: jest.fn().mockReturnValue([
-      { action: 'sleep_restriction', confidence: 0.8 },
-    ]),
+        horizon: 'medium',
+        trend: 'stable',
+        predictedSE: [82, 83, 81, 84, 82, 83, 85],
+        sleepEfficiencyTrajectory: Array.from({ length: 7 }, (_, i) => ({
+          date: new Date(Date.now() + i * 24 * 60 * 60 * 1000),
+          predicted: 82 + i,
+          lower95: 78 + i,
+          upper95: 86 + i,
+        })),
+        predictedSleepEfficiency: { value: 85, lower95: 81, upper95: 89, confidence: 0.75 },
+        confidenceInterval: { lower: [78, 79, 77, 80, 78, 79, 81], upper: [86, 87, 85, 88, 86, 87, 89] },
+        deteriorationRisk: 0.15,
+        earlyWarnings: [],
+        recommendations: ['Maintain current sleep schedule'],
+        modelConfidence: 0.75,
+      }),
+      getHistory: jest.fn().mockReturnValue([]),
+    }),
   },
 }));
 

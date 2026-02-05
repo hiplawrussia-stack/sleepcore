@@ -20,11 +20,7 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import {
-  crisisDetectionService,
-  type ICrisisEvent,
-} from '../services/CrisisDetectionService';
-import { crisisEscalationService } from '../services/CrisisEscalationService';
+import type { ICrisisEvent } from '../services/CrisisDetectionService';
 
 /**
  * Crisis resource
@@ -101,8 +97,8 @@ export class SosCommand implements IConversationCommand {
       responseProvided: true,
     };
 
-    crisisDetectionService.recordSosEvent(event);
-    await crisisEscalationService.escalate(event);
+    ctx.sleepCore.getCrisisDetection().recordSosEvent(event);
+    await ctx.sleepCore.getCrisisEscalation().escalate(event);
   }
 
   // ==================== Response Handlers ====================

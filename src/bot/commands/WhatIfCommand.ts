@@ -29,11 +29,11 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import {
+import type {
   digitalTwinService,
-  type IScenario,
-  type ISimulationResult,
-  type IComparisonResult,
+  IScenario,
+  ISimulationResult,
+  IComparisonResult,
 } from '../services/DigitalTwinService';
 import type { SleepAction } from '../../platform/SleepCorePOMDP';
 
@@ -181,7 +181,7 @@ export class WhatIfCommand implements ICommand, Partial<IConversationCommand> {
     }
 
     // Check if digital twin is ready
-    const twin = await digitalTwinService.createTwin(ctx.userId);
+    const twin = await ctx.sleepCore.getDigitalTwin().createTwin(ctx.userId);
 
     if (!twin.isReady) {
       return this.showInsufficientData(ctx, twin.observationCount);
@@ -313,7 +313,7 @@ ${sonya.tip('Команда /diary поможет заполнить дневн�
       return { success: false, error: 'Сценарий не найден' };
     }
 
-    const result = await digitalTwinService.simulateScenario(ctx.userId, scenario);
+    const result = await ctx.sleepCore.getDigitalTwin().simulateScenario(ctx.userId, scenario);
 
     if (!result) {
       return this.showSimulationError(ctx);
@@ -448,7 +448,7 @@ ${sonya.tip('Попробуй заполнить ещё несколько за�
       return { success: false, error: 'Нужно минимум 2 сценария для сравнения' };
     }
 
-    const comparison = await digitalTwinService.compareScenarios(ctx.userId, scenarios);
+    const comparison = await ctx.sleepCore.getDigitalTwin().compareScenarios(ctx.userId, scenarios);
 
     if (!comparison) {
       return this.showSimulationError(ctx);
@@ -523,8 +523,8 @@ ${sonya.tip('Выбери сценарий, который тебе легче �
    * Show digital twin status
    */
   private async showTwinStatus(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const twin = await digitalTwinService.createTwin(ctx.userId);
-    const tippingPoints = await digitalTwinService.detectTippingPoints(ctx.userId);
+    const twin = await ctx.sleepCore.getDigitalTwin().createTwin(ctx.userId);
+    const tippingPoints = await ctx.sleepCore.getDigitalTwin().detectTippingPoints(ctx.userId);
 
     const statusEmoji = twin.isReady ? '✅' : '⏳';
     const trendEmoji = this.getTrendEmoji(twin.trend);

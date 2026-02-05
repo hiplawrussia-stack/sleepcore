@@ -14,16 +14,18 @@ import {
   assertContainsText,
 } from './testHelpers';
 
-// Mock CrisisDetectionService
+// Mock SleepCoreAPI singleton (SafetyCommand uses sleepCore.getCrisisDetection() in private helpers)
 const mockGetEvents = jest.fn().mockReturnValue([]);
 const mockGetUserEvents = jest.fn().mockReturnValue([]);
 const mockGetHighSeverityEvents = jest.fn().mockReturnValue([]);
 
-jest.mock('../../../../src/bot/services/CrisisDetectionService', () => ({
-  crisisDetectionService: {
-    getEvents: (...args: unknown[]) => mockGetEvents(...args),
-    getUserEvents: (...args: unknown[]) => mockGetUserEvents(...args),
-    getHighSeverityEvents: (...args: unknown[]) => mockGetHighSeverityEvents(...args),
+jest.mock('../../../../src/SleepCoreAPI', () => ({
+  sleepCore: {
+    getCrisisDetection: jest.fn().mockReturnValue({
+      getEvents: (...args: unknown[]) => mockGetEvents(...args),
+      getUserEvents: (...args: unknown[]) => mockGetUserEvents(...args),
+      getHighSeverityEvents: (...args: unknown[]) => mockGetHighSeverityEvents(...args),
+    }),
   },
 }));
 

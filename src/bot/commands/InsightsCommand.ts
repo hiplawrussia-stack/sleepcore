@@ -21,14 +21,13 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import {
-  causalInsightsService,
-  type ICausalGraph,
-  type IPersonalizedInsight,
-  type IInterventionTarget,
-  type ICausalFactor,
+import type {
+  ICausalGraph,
+  IPersonalizedInsight,
+  IInterventionTarget,
+  ICausalFactor,
 } from '../services/CausalInsightsService';
-import { sleepPredictionService } from '../services/SleepPredictionService';
+import type { sleepPredictionService } from '../services/SleepPredictionService';
 import type { ISleepState } from '../../sleep/interfaces/ISleepState';
 
 /**
@@ -123,7 +122,7 @@ export class InsightsCommand implements ICommand, Partial<IConversationCommand> 
     }
 
     // Check if user has enough data (14 days minimum for causal analysis)
-    const rawHistory = sleepPredictionService.getHistory(ctx.userId);
+    const rawHistory = ctx.sleepCore.getSleepPrediction().getHistory(ctx.userId);
     if (!rawHistory || rawHistory.length < 14) {
       return this.showInsufficientData(rawHistory?.length || 0);
     }
@@ -208,7 +207,7 @@ ${sonya.tip('Продолжай вести дневник — скоро я см
   }
 
   private async showInsightsDashboard(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const history = sleepPredictionService.getHistory(ctx.userId).map(convertToSleepState);
+    const history = ctx.sleepCore.getSleepPrediction().getHistory(ctx.userId).map(convertToSleepState);
     if (!history) {
       return this.showInsufficientData(0);
     }
@@ -218,8 +217,8 @@ ${sonya.tip('Продолжай вести дневник — скоро я см
     let target: IInterventionTarget | null = null;
 
     try {
-      insights = await causalInsightsService.generateInsights(ctx.userId, history);
-      target = await causalInsightsService.suggestInterventionTarget(ctx.userId, history);
+      insights = await ctx.sleepCore.getCausalInsights().generateInsights(ctx.userId, history);
+      target = await ctx.sleepCore.getCausalInsights().suggestInterventionTarget(ctx.userId, history);
     } catch (error) {
       return this.showAnalysisError();
     }
@@ -268,14 +267,14 @@ ${sonya.say('Это персональный анализ твоих данны�
   }
 
   private async showTopCauses(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const history = sleepPredictionService.getHistory(ctx.userId).map(convertToSleepState);
+    const history = ctx.sleepCore.getSleepPrediction().getHistory(ctx.userId).map(convertToSleepState);
     if (!history) {
       return this.showInsufficientData(0);
     }
 
     let causes: ICausalFactor[] = [];
     try {
-      causes = await causalInsightsService.getTopCauses(ctx.userId, history, 'poor_efficiency');
+      causes = await ctx.sleepCore.getCausalInsights().getTopCauses(ctx.userId, history, 'poor_efficiency');
     } catch {
       return this.showAnalysisError();
     }
@@ -325,14 +324,14 @@ ${sonya.tip('Нажми на причину для подробностей и �
   }
 
   private async showCausalGraph(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const history = sleepPredictionService.getHistory(ctx.userId).map(convertToSleepState);
+    const history = ctx.sleepCore.getSleepPrediction().getHistory(ctx.userId).map(convertToSleepState);
     if (!history) {
       return this.showInsufficientData(0);
     }
 
     let graph: ICausalGraph | null = null;
     try {
-      graph = await causalInsightsService.discoverCausalGraph(ctx.userId, history);
+      graph = await ctx.sleepCore.getCausalInsights().discoverCausalGraph(ctx.userId, history);
     } catch {
       return this.showAnalysisError();
     }
@@ -374,21 +373,24 @@ ${sonya.tip('Граф показывает, как факторы влияют �
   }
 
   private async showPatterns(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const history = sleepPredictionService.getHistory(ctx.userId).map(convertToSleepState);
+    const history = ctx.sleepCore.getSleepPrediction().getHistory(ctx.userId).map(convertToSleepState);
     if (!history) {
       return this.showInsufficientData(0);
     }
 
     let insights: IPersonalizedInsight[] = [];
     try {
-      insights = await causalInsightsService.generateInsights(ctx.userId, history);
+      insights = await ctx.sleepCore.getCausalInsights().generateInsights(ctx.userId, history);
     } catch {
       return this.showAnalysisError();
     }
 
+    // Get diary-based pattern analysis (sleep schedule, variability, chronotype)
+    const diaryPatterns = ctx.sleepCore.analyzePatterns(ctx.userId);
+
     const patterns = insights.filter(i => i.category === 'pattern');
 
-    if (patterns.length === 0) {
+    if (patterns.length === 0 && !diaryPatterns) {
       const message = `
 ${formatter.header('🔄 Паттерны сна')}
 
@@ -407,10 +409,14 @@ ${sonya.tip('Продолжай вести дневник — паттерны �
       .map((p, i) => this.formatPatternFull(p, i + 1))
       .join('\n\n');
 
+    // Build diary-based pattern section
+    const diarySection = diaryPatterns ? this.formatDiaryPatterns(diaryPatterns) : '';
+
     const message = `
 ${formatter.header('🔄 Выявленные паттерны')}
 
 ${patternsText}
+${diarySection ? `\n${formatter.divider()}\n\n${diarySection}` : ''}
 
 ${formatter.divider()}
 
@@ -427,15 +433,59 @@ ${sonya.tip('Понимание паттернов помогает предск
     return { success: true, message, keyboard };
   }
 
+  /**
+   * Format diary-based pattern analysis into display text
+   */
+  private formatDiaryPatterns(analysis: {
+    patterns: {
+      averageBedtime: string;
+      averageWakeTime: string;
+      bedtimeVariability: number;
+      wakeTimeVariability: number;
+      weekendShift: number;
+    };
+    insomnia: {
+      subtype: string;
+      severity: string;
+      avgSOL: number;
+      avgWASO: number;
+      avgSE: number;
+    };
+    issues: Array<{ description: string; severity: string }>;
+  }): string {
+    const lines: string[] = [];
+    lines.push('*🕐 Анализ расписания сна:*');
+    lines.push(`• Среднее время отхода ко сну: *${analysis.patterns.averageBedtime}*`);
+    lines.push(`• Среднее время пробуждения: *${analysis.patterns.averageWakeTime}*`);
+
+    if (analysis.patterns.bedtimeVariability > 30) {
+      lines.push(`• ⚠️ Вариабельность отхода ко сну: ${Math.round(analysis.patterns.bedtimeVariability)} мин`);
+    }
+    if (analysis.patterns.weekendShift > 60) {
+      lines.push(`• ⚠️ Сдвиг в выходные: ${Math.round(analysis.patterns.weekendShift)} мин`);
+    }
+
+    if (analysis.issues.length > 0) {
+      lines.push('');
+      lines.push('*⚠️ Выявленные проблемы:*');
+      analysis.issues.slice(0, 3).forEach(issue => {
+        const icon = issue.severity === 'high' ? '🔴' : issue.severity === 'medium' ? '🟡' : '🟢';
+        lines.push(`${icon} ${issue.description}`);
+      });
+    }
+
+    return lines.join('\n');
+  }
+
   private async showInterventionTarget(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const history = sleepPredictionService.getHistory(ctx.userId).map(convertToSleepState);
+    const history = ctx.sleepCore.getSleepPrediction().getHistory(ctx.userId).map(convertToSleepState);
     if (!history) {
       return this.showInsufficientData(0);
     }
 
     let target: IInterventionTarget | null = null;
     try {
-      target = await causalInsightsService.suggestInterventionTarget(ctx.userId, history);
+      target = await ctx.sleepCore.getCausalInsights().suggestInterventionTarget(ctx.userId, history);
     } catch {
       return this.showAnalysisError();
     }
@@ -496,14 +546,14 @@ ${sonya.say('Фокусируйся на одном факторе за раз �
   }
 
   private async showFactorDetail(ctx: ISleepCoreContext, factorId: string): Promise<ICommandResult> {
-    const history = sleepPredictionService.getHistory(ctx.userId).map(convertToSleepState);
+    const history = ctx.sleepCore.getSleepPrediction().getHistory(ctx.userId).map(convertToSleepState);
     if (!history || !factorId) {
       return this.showInsightsDashboard(ctx);
     }
 
     let graph: ICausalGraph | null = null;
     try {
-      graph = await causalInsightsService.discoverCausalGraph(ctx.userId, history);
+      graph = await ctx.sleepCore.getCausalInsights().discoverCausalGraph(ctx.userId, history);
     } catch {
       return this.showAnalysisError();
     }

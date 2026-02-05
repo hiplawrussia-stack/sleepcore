@@ -429,6 +429,129 @@ export function createMockSleepCoreAPI(overrides: Partial<SleepCoreAPI> = {}): S
         recommendation: 'Recommended',
       },
     ]),
+    // === Wave 1: SleepPrediction, ProactiveIntelligence, AdaptivePersona ===
+    getSleepPrediction: jest.fn().mockReturnValue({
+      predict: jest.fn().mockReturnValue({
+        userId: 'test-user-123',
+        horizon: 'medium',
+        trend: 'stable',
+        predictedSE: [82, 83, 81, 84, 82, 83, 85],
+        sleepEfficiencyTrajectory: Array.from({ length: 7 }, (_, i) => ({
+          date: new Date(Date.now() + i * 24 * 60 * 60 * 1000),
+          predicted: 82 + i,
+          lower95: 78 + i,
+          upper95: 86 + i,
+        })),
+        predictedSleepEfficiency: { value: 85, lower95: 81, upper95: 89, confidence: 0.75 },
+        confidenceInterval: { lower: [78, 79, 77, 80, 78, 79, 81], upper: [86, 87, 85, 88, 86, 87, 89] },
+        deteriorationRisk: 0.15,
+        earlyWarnings: [],
+        recommendations: ['Maintain current sleep schedule'],
+        modelConfidence: 0.75,
+      }),
+      getHistory: jest.fn().mockReturnValue(
+        Array.from({ length: 10 }, (_, i) => ({
+          userId: 'test-user-123',
+          date: new Date(Date.now() - i * 24 * 60 * 60 * 1000),
+          value: 80 + (i % 5),
+          metrics: { sleepEfficiency: 80 + (i % 5), totalSleepTime: 420 },
+        }))
+      ),
+    }),
+    adaptMessageToneWithContext: jest.fn().mockResolvedValue({
+      adaptedText: 'test adapted message',
+      tone: 'empathetic',
+    }),
+    runProactiveAnalysis: jest.fn().mockResolvedValue({
+      patternAlerts: [],
+      insights: [],
+      riskLevel: 'low',
+    }),
+    detectRiskEscalation: jest.fn().mockResolvedValue(null),
+
+    // === Wave 2: DigitalTwin, CausalInsights, CognitiveProgress, Arousal ===
+    getDigitalTwin: jest.fn().mockReturnValue({
+      createTwin: jest.fn().mockResolvedValue({
+        userId: 'test-user-123',
+        isReady: true,
+        observationCount: 30,
+        createdAt: new Date(),
+        lastCalibration: new Date(),
+        lastUpdatedAt: new Date(),
+        calibrationQuality: 0.85,
+        stateQuality: 0.85,
+        currentMetrics: { sleepEfficiency: 80, sleepOnsetLatency: 20, isiScore: 12 },
+        state: { sleepEfficiency: 80, sleepOnsetLatency: 20, isiScore: 12 },
+        trend: 'stable',
+        riskLevel: 'low',
+        predictions: [],
+      }),
+      simulateScenario: jest.fn().mockResolvedValue({
+        scenario: { name: 'Test', intervention: 'adjust_sleep_window' },
+        baseline: { sleepEfficiency: 75, sleepOnsetLatency: 30, isiScore: 15 },
+        predicted: { sleepEfficiency: 82, sleepOnsetLatency: 20, isiScore: 12 },
+        predictedOutcome: { sleepEfficiencyChange: 7, sleepOnsetLatencyChange: -10, isiScoreChange: -3 },
+        confidence: 0.75,
+        keyFactors: ['Consistent wake time'],
+        recommendations: ['Try going to bed 30 min later'],
+        improvements: ['+7% sleep efficiency'],
+        warnings: [],
+      }),
+      compareScenarios: jest.fn().mockResolvedValue({
+        scenarios: [],
+        baseline: { sleepEfficiency: 75 },
+        winner: 'scenario1',
+        insights: ['Scenario 1 shows best improvement'],
+      }),
+      detectTippingPoints: jest.fn().mockResolvedValue([]),
+      predictTrajectory: jest.fn().mockResolvedValue({
+        past: [75, 77, 80, 82],
+        predicted: [83, 85, 86],
+        confidence: 0.8,
+      }),
+      getTwinStatus: jest.fn().mockResolvedValue({
+        isCalibrated: true,
+        calibrationQuality: 0.85,
+        dataPoints: 30,
+        lastUpdate: new Date(),
+      }),
+      calibrate: jest.fn().mockResolvedValue({ success: true, quality: 0.9 }),
+      getRecommendations: jest.fn().mockReturnValue([
+        { action: 'sleep_restriction', confidence: 0.8 },
+      ]),
+    }),
+    getCausalInsights: jest.fn().mockReturnValue({
+      generateInsights: jest.fn().mockReturnValue([]),
+      suggestInterventionTarget: jest.fn().mockReturnValue(null),
+      getTopCauses: jest.fn().mockReturnValue([]),
+      discoverCausalGraph: jest.fn().mockReturnValue({ nodes: [], edges: [], dataQuality: { totalDays: 14, completeness: 0.85, sufficientData: true } }),
+      buildCausalGraph: jest.fn().mockReturnValue({ nodes: [], edges: [], dataQuality: { totalDays: 14, completeness: 0.85, sufficientData: true } }),
+      getPersonalizedInsights: jest.fn().mockReturnValue([]),
+      getTopInterventionTargets: jest.fn().mockReturnValue([]),
+    }),
+    generateCognitiveProgressReport: jest.fn().mockReturnValue(null),
+    estimateArousalProfile: jest.fn().mockReturnValue({
+      available: false,
+      dominantArousal: null,
+      recommendation: null,
+    }),
+
+    // === Wave 3: CrisisDetection, CrisisEscalation ===
+    getCrisisDetection: jest.fn().mockReturnValue({
+      getEvents: jest.fn().mockReturnValue([]),
+      getUserEvents: jest.fn().mockReturnValue([]),
+      getHighSeverityEvents: jest.fn().mockReturnValue([]),
+      recordSosEvent: jest.fn(),
+    }),
+    getCrisisEscalation: jest.fn().mockReturnValue({
+      escalate: jest.fn().mockResolvedValue({
+        escalated: true,
+        level: 'notify_urgent',
+        notificationsSent: 1,
+        aeCreated: false,
+      }),
+    }),
+
     ...overrides,
   } as unknown as SleepCoreAPI;
 }
