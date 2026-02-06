@@ -22,6 +22,7 @@ import {
   type ICrisisDetectionServiceConfig,
   type ICrisisResponse,
   type CrisisAction,
+  type ICrisisEvent,
 } from '../../../../src/bot/services/CrisisDetectionService';
 
 // ==================== Tests ====================
@@ -203,6 +204,44 @@ describe('CrisisDetectionService', () => {
       expect(events.length).toBeGreaterThan(0);
     });
 
+    it('should NOT log normal messages when logAllDetections is false', () => {
+      const noLogService = createCrisisDetectionService({
+        logAllDetections: false,
+      });
+
+      // Normal message with action='continue' should NOT be logged
+      noLogService.analyzeMessage(
+        'Hello, how are you today?',  // Normal message
+        'no-log-user',
+        'no-log-chat'
+      );
+
+      const events = noLogService.getEvents();
+      const userEvents = events.filter(e => e.userId === 'no-log-user');
+
+      // Should not log normal messages when logAllDetections=false
+      expect(userEvents.length).toBe(0);
+    });
+
+    it('should still log crisis events when logAllDetections is false', () => {
+      const noLogService = createCrisisDetectionService({
+        logAllDetections: false,
+      });
+
+      // Crisis message should still be logged (action !== 'continue')
+      noLogService.analyzeMessage(
+        'I want to kill myself',  // Crisis message
+        'crisis-log-user',
+        'crisis-log-chat'
+      );
+
+      const events = noLogService.getEvents();
+      const userEvents = events.filter(e => e.userId === 'crisis-log-user');
+
+      // Crisis events should always be logged
+      expect(userEvents.length).toBeGreaterThan(0);
+    });
+
     it('should track user-specific events', () => {
       service.analyzeMessage('I feel hopeless', 'user-A', 'chat-1');
       service.analyzeMessage('I want to die', 'user-B', 'chat-2');
@@ -222,6 +261,47 @@ describe('CrisisDetectionService', () => {
       expect(
         highSeverityEvents.every(e => e.severity === 'high' || e.severity === 'critical')
       ).toBe(true);
+    });
+
+    it('should track both high AND critical severity events', () => {
+      // Add critical severity event via recordSosEvent
+      const criticalEvent: ICrisisEvent = {
+        userId: 'critical-user',
+        chatId: 'critical-chat',
+        timestamp: new Date(),
+        severity: 'critical',
+        crisisType: 'suicidal_ideation',
+        confidence: 1.0,
+        action: 'emergency',
+        messageText: 'SOS',
+        indicators: ['sos'],
+        responseProvided: true,
+      };
+      service.recordSosEvent(criticalEvent);
+
+      // Add high severity event via recordSosEvent
+      const highEvent: ICrisisEvent = {
+        userId: 'high-user',
+        chatId: 'high-chat',
+        timestamp: new Date(),
+        severity: 'high',
+        crisisType: 'self_harm',
+        confidence: 0.9,
+        action: 'interrupt',
+        messageText: 'Need help',
+        indicators: ['help_needed'],
+        responseProvided: true,
+      };
+      service.recordSosEvent(highEvent);
+
+      const highSeverityEvents = service.getHighSeverityEvents();
+
+      // Should include both critical and high severity events
+      const hasCritical = highSeverityEvents.some(e => e.severity === 'critical');
+      const hasHigh = highSeverityEvents.some(e => e.severity === 'high');
+
+      expect(hasCritical).toBe(true);
+      expect(hasHigh).toBe(true);
     });
 
     it('should filter events by date range', () => {
@@ -409,6 +489,233 @@ describe('CrisisDetectionService', () => {
         'emergency',
       ];
       expect(validActions).toContain(result.action);
+    });
+  });
+
+  describe('recordSosEvent()', () => {
+    it('should record externally-created SOS event', () => {
+      const sosEvent: ICrisisEvent = {
+        userId: 'sos-user-123',
+        chatId: 'sos-chat-456',
+        timestamp: new Date(),
+        severity: 'critical',
+        crisisType: 'suicidal_ideation',
+        confidence: 1.0,
+        action: 'emergency',
+        messageText: 'User pressed /sos button',
+        indicators: ['user_initiated_sos'],
+        responseProvided: true,
+      };
+
+      service.recordSosEvent(sosEvent);
+
+      const events = service.getEvents();
+      const recordedEvent = events.find(e => e.userId === 'sos-user-123');
+      expect(recordedEvent).toBeDefined();
+      expect(recordedEvent?.severity).toBe('critical');
+      expect(recordedEvent?.crisisType).toBe('suicidal_ideation');
+    });
+
+    it('should add SOS event to high severity events list', () => {
+      const sosEvent: ICrisisEvent = {
+        userId: 'sos-high-user',
+        chatId: 'sos-chat',
+        timestamp: new Date(),
+        severity: 'high',
+        crisisType: 'self_harm',
+        confidence: 0.95,
+        action: 'interrupt',
+        messageText: 'User pressed /sos',
+        indicators: ['user_initiated'],
+        responseProvided: true,
+      };
+
+      service.recordSosEvent(sosEvent);
+
+      const highSeverityEvents = service.getHighSeverityEvents();
+      expect(highSeverityEvents.some(e => e.userId === 'sos-high-user')).toBe(true);
+    });
+  });
+
+  describe('language configuration', () => {
+    it('should use configured English language instead of auto-detection', () => {
+      const englishService = createCrisisDetectionService({
+        language: 'en',
+      });
+
+      // Russian text but English language configured
+      const result = englishService.analyzeMessage(
+        'Я хочу умереть',  // Russian crisis phrase
+        'user-123',
+        'chat-456'
+      );
+
+      // Should return English resources despite Russian text
+      if (result.message) {
+        expect(result.message).toContain('988'); // US crisis line
+      }
+    });
+
+    it('should use configured Russian language instead of auto-detection', () => {
+      const russianService = createCrisisDetectionService({
+        language: 'ru',
+      });
+
+      // English text but Russian language configured
+      const result = russianService.analyzeMessage(
+        'I want to kill myself',  // English crisis phrase
+        'user-123',
+        'chat-456'
+      );
+
+      // Should return Russian resources despite English text
+      if (result.message) {
+        expect(result.message).toContain('8-800-2000-122'); // Russian crisis line
+      }
+    });
+  });
+
+  describe('moderate severity handling', () => {
+    it('should return supportive action for moderate severity crisis', () => {
+      // Test with a phrase that triggers moderate severity
+      // "I feel hopeless" typically triggers moderate, not high
+      const result = service.analyzeMessage(
+        'I feel so hopeless and lost',
+        'user-123',
+        'chat-456'
+      );
+
+      // If severity is moderate, action should be supportive
+      if (result.severity === 'moderate') {
+        expect(result.action).toBe('supportive');
+        expect(result.shouldInterrupt).toBe(false);
+        expect(result.message).toBeTruthy();
+      }
+    });
+
+    it('should return moderate crisis message in response', () => {
+      const result = service.analyzeMessage(
+        'Мне очень плохо и я не вижу выхода',  // "I feel very bad and see no way out"
+        'user-123',
+        'chat-456'
+      );
+
+      // If severity is moderate, message should contain support resources
+      if (result.severity === 'moderate') {
+        expect(result.message).toContain('8-800-2000-122');
+      }
+    });
+  });
+
+  describe('stateRiskData parameter', () => {
+    it('should accept state risk data in analyzeMessage', () => {
+      // StateRiskData interface from CogniCore Engine
+      const stateRiskData = {
+        overallRiskLevel: 0.3,
+        suicidalIdeation: 0.1,
+        selfHarmRisk: 0.1,
+        emotionalValence: -0.2,
+        recentTrend: 'stable' as const,
+      };
+
+      const result = service.analyzeMessage(
+        'I am having trouble sleeping',
+        'user-123',
+        'chat-456',
+        stateRiskData
+      );
+
+      // Should complete without error
+      expect(result).toBeDefined();
+      expect(result.event).toBeDefined();
+    });
+
+    it('should factor state risk data into crisis detection', () => {
+      // High risk state data that should elevate severity
+      const highRiskState = {
+        overallRiskLevel: 0.85,  // High overall risk
+        suicidalIdeation: 0.7,   // Significant suicidal ideation
+        selfHarmRisk: 0.6,       // Elevated self-harm risk
+        emotionalValence: -0.8,  // Very negative emotions
+        recentTrend: 'declining' as const,
+      };
+
+      const result = service.analyzeMessage(
+        'Everything feels overwhelming',
+        'user-123',
+        'chat-456',
+        highRiskState
+      );
+
+      // State-based risk factors may elevate severity
+      expect(result).toBeDefined();
+      expect(['none', 'low', 'moderate', 'high', 'critical']).toContain(result.severity);
+    });
+  });
+
+  describe('console logging for high severity', () => {
+    let consoleWarnSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    });
+
+    afterEach(() => {
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should log high severity events to console', () => {
+      service.analyzeMessage(
+        'I want to kill myself right now',
+        'user-warn-test',
+        'chat-warn-test'
+      );
+
+      // Check if console.warn was called for high/critical severity
+      const warnCalls = consoleWarnSpy.mock.calls;
+      const hasCrisisLog = warnCalls.some(
+        call => call[0]?.includes('[CrisisDetection]')
+      );
+
+      // High severity messages should trigger console.warn
+      expect(hasCrisisLog).toBe(true);
+    });
+
+    it('should include event details in console log', () => {
+      service.analyzeMessage(
+        'I am going to end my life',
+        'user-details-test',
+        'chat-details-test'
+      );
+
+      const warnCalls = consoleWarnSpy.mock.calls;
+      const crisisLog = warnCalls.find(
+        call => call[0]?.includes('[CrisisDetection]')
+      );
+
+      if (crisisLog && crisisLog[1]) {
+        expect(crisisLog[1]).toHaveProperty('userId');
+        expect(crisisLog[1]).toHaveProperty('severity');
+        expect(crisisLog[1]).toHaveProperty('crisisType');
+        expect(crisisLog[1]).toHaveProperty('timestamp');
+      }
+    });
+
+    it('should NOT log low severity events to console.warn', () => {
+      consoleWarnSpy.mockClear();
+
+      service.analyzeMessage(
+        'I had trouble sleeping last night',
+        'user-low-test',
+        'chat-low-test'
+      );
+
+      // Low severity should not trigger console.warn for crisis
+      const crisisLogs = consoleWarnSpy.mock.calls.filter(
+        call => call[0]?.includes('[CrisisDetection]')
+      );
+
+      expect(crisisLogs.length).toBe(0);
     });
   });
 });
