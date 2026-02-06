@@ -1124,6 +1124,292 @@ describe('SleepCoreAPI', () => {
     });
   });
 
+  // ==========================================================================
+  // Hook Methods (ISI Scheduling, Notifications, Crisis Screening)
+  // Lines 309-396 in SleepCoreAPI.ts
+  // ==========================================================================
+
+  describe('ISI Scheduling Hook', () => {
+    describe('setISISchedulingHook()', () => {
+      it('should register ISI scheduling hook', () => {
+        const mockHook = jest.fn();
+        api.setISISchedulingHook(mockHook);
+
+        // Verify hook is called when enrollISISchedule is invoked
+        api.enrollISISchedule('user-123', 12345, 'TestUser', 18);
+
+        expect(mockHook).toHaveBeenCalledWith('user-123', 12345, 'TestUser', 18);
+      });
+
+      it('should allow hook to be replaced', () => {
+        const firstHook = jest.fn();
+        const secondHook = jest.fn();
+
+        api.setISISchedulingHook(firstHook);
+        api.setISISchedulingHook(secondHook);
+
+        api.enrollISISchedule('user-456', 99999, 'User2', 15);
+
+        expect(firstHook).not.toHaveBeenCalled();
+        expect(secondHook).toHaveBeenCalledWith('user-456', 99999, 'User2', 15);
+      });
+    });
+
+    describe('enrollISISchedule()', () => {
+      it('should call hook with all parameters', () => {
+        const mockHook = jest.fn();
+        api.setISISchedulingHook(mockHook);
+
+        api.enrollISISchedule('user-isi', 54321, 'ISIUser', 22);
+
+        expect(mockHook).toHaveBeenCalledTimes(1);
+        expect(mockHook).toHaveBeenCalledWith('user-isi', 54321, 'ISIUser', 22);
+      });
+
+      it('should handle optional userName parameter', () => {
+        const mockHook = jest.fn();
+        api.setISISchedulingHook(mockHook);
+
+        api.enrollISISchedule('user-no-name', 11111);
+
+        expect(mockHook).toHaveBeenCalledWith('user-no-name', 11111, undefined, undefined);
+      });
+
+      it('should handle optional baselineISI parameter', () => {
+        const mockHook = jest.fn();
+        api.setISISchedulingHook(mockHook);
+
+        api.enrollISISchedule('user-no-isi', 22222, 'UserNoISI');
+
+        expect(mockHook).toHaveBeenCalledWith('user-no-isi', 22222, 'UserNoISI', undefined);
+      });
+
+      it('should do nothing when hook not configured', () => {
+        // No hook set - should not throw
+        expect(() => api.enrollISISchedule('user-nohook', 33333, 'NoHook', 10)).not.toThrow();
+      });
+
+      it('should handle edge case ISI scores', () => {
+        const mockHook = jest.fn();
+        api.setISISchedulingHook(mockHook);
+
+        // Minimum ISI
+        api.enrollISISchedule('user-min', 1, 'MinUser', 0);
+        expect(mockHook).toHaveBeenLastCalledWith('user-min', 1, 'MinUser', 0);
+
+        // Maximum ISI
+        api.enrollISISchedule('user-max', 2, 'MaxUser', 28);
+        expect(mockHook).toHaveBeenLastCalledWith('user-max', 2, 'MaxUser', 28);
+      });
+    });
+  });
+
+  describe('Notification Hook', () => {
+    describe('setNotificationHook()', () => {
+      it('should register notification hook', () => {
+        const mockHook = jest.fn();
+        api.setNotificationHook(mockHook);
+
+        api.registerForNotifications('user-notify', 44444, 'NotifyUser');
+
+        expect(mockHook).toHaveBeenCalledWith('user-notify', 44444, 'NotifyUser');
+      });
+
+      it('should allow hook to be replaced', () => {
+        const firstHook = jest.fn();
+        const secondHook = jest.fn();
+
+        api.setNotificationHook(firstHook);
+        api.setNotificationHook(secondHook);
+
+        api.registerForNotifications('user-2nd', 55555, 'SecondUser');
+
+        expect(firstHook).not.toHaveBeenCalled();
+        expect(secondHook).toHaveBeenCalledWith('user-2nd', 55555, 'SecondUser');
+      });
+    });
+
+    describe('registerForNotifications()', () => {
+      it('should call hook with all parameters', () => {
+        const mockHook = jest.fn();
+        api.setNotificationHook(mockHook);
+
+        api.registerForNotifications('user-full', 66666, 'FullParams');
+
+        expect(mockHook).toHaveBeenCalledTimes(1);
+        expect(mockHook).toHaveBeenCalledWith('user-full', 66666, 'FullParams');
+      });
+
+      it('should handle optional userName parameter', () => {
+        const mockHook = jest.fn();
+        api.setNotificationHook(mockHook);
+
+        api.registerForNotifications('user-anon', 77777);
+
+        expect(mockHook).toHaveBeenCalledWith('user-anon', 77777, undefined);
+      });
+
+      it('should do nothing when hook not configured', () => {
+        // No hook set - should not throw
+        expect(() => api.registerForNotifications('user-silent', 88888, 'Silent')).not.toThrow();
+      });
+
+      it('should handle multiple registrations', () => {
+        const mockHook = jest.fn();
+        api.setNotificationHook(mockHook);
+
+        api.registerForNotifications('user-a', 1, 'A');
+        api.registerForNotifications('user-b', 2, 'B');
+        api.registerForNotifications('user-c', 3, 'C');
+
+        expect(mockHook).toHaveBeenCalledTimes(3);
+      });
+    });
+  });
+
+  describe('Crisis Screening Hook', () => {
+    describe('setCrisisScreeningHook()', () => {
+      it('should register crisis screening hook', async () => {
+        const mockHook = jest.fn().mockResolvedValue({
+          isCrisis: false,
+          severity: undefined,
+          action: undefined,
+        });
+        api.setCrisisScreeningHook(mockHook);
+
+        const result = await api.screenForCrisis('user-crisis', 'Не могу уснуть');
+
+        expect(mockHook).toHaveBeenCalledWith('user-crisis', 'Не могу уснуть');
+        expect(result).toEqual({ isCrisis: false, severity: undefined, action: undefined });
+      });
+
+      it('should allow hook to be replaced', async () => {
+        const firstHook = jest.fn().mockResolvedValue({ isCrisis: false });
+        const secondHook = jest.fn().mockResolvedValue({ isCrisis: true, severity: 'high' });
+
+        api.setCrisisScreeningHook(firstHook);
+        api.setCrisisScreeningHook(secondHook);
+
+        const result = await api.screenForCrisis('user-2nd', 'test text');
+
+        expect(firstHook).not.toHaveBeenCalled();
+        expect(secondHook).toHaveBeenCalledWith('user-2nd', 'test text');
+        expect(result?.isCrisis).toBe(true);
+      });
+    });
+
+    describe('screenForCrisis()', () => {
+      it('should return null when hook not configured', async () => {
+        // No hook set
+        const result = await api.screenForCrisis('user-no-hook', 'Some text');
+
+        expect(result).toBeNull();
+      });
+
+      it('should return crisis result when detected', async () => {
+        const mockHook = jest.fn().mockResolvedValue({
+          isCrisis: true,
+          severity: 'urgent',
+          action: 'escalate_to_admin',
+        });
+        api.setCrisisScreeningHook(mockHook);
+
+        const result = await api.screenForCrisis('user-urgent', 'Хочу умереть');
+
+        expect(result).toEqual({
+          isCrisis: true,
+          severity: 'urgent',
+          action: 'escalate_to_admin',
+        });
+      });
+
+      it('should return non-crisis result when not detected', async () => {
+        const mockHook = jest.fn().mockResolvedValue({
+          isCrisis: false,
+        });
+        api.setCrisisScreeningHook(mockHook);
+
+        const result = await api.screenForCrisis('user-ok', 'Спал хорошо сегодня');
+
+        expect(result).toEqual({ isCrisis: false });
+      });
+
+      it('should handle hook errors gracefully (return null)', async () => {
+        const mockHook = jest.fn().mockRejectedValue(new Error('Service unavailable'));
+        api.setCrisisScreeningHook(mockHook);
+
+        // Should not throw, should return null
+        const result = await api.screenForCrisis('user-error', 'Test text');
+
+        expect(result).toBeNull();
+      });
+
+      it('should log error when hook fails', async () => {
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const mockHook = jest.fn().mockRejectedValue(new Error('Network error'));
+        api.setCrisisScreeningHook(mockHook);
+
+        await api.screenForCrisis('user-log', 'Test');
+
+        expect(consoleSpy).toHaveBeenCalledWith(
+          '[SleepCoreAPI] Crisis screening error:',
+          expect.any(Error)
+        );
+        consoleSpy.mockRestore();
+      });
+
+      it('should handle empty text input', async () => {
+        const mockHook = jest.fn().mockResolvedValue({ isCrisis: false });
+        api.setCrisisScreeningHook(mockHook);
+
+        await api.screenForCrisis('user-empty', '');
+
+        expect(mockHook).toHaveBeenCalledWith('user-empty', '');
+      });
+
+      it('should handle long text input', async () => {
+        const mockHook = jest.fn().mockResolvedValue({ isCrisis: false });
+        api.setCrisisScreeningHook(mockHook);
+
+        const longText = 'Я чувствую себя очень плохо. '.repeat(100);
+        await api.screenForCrisis('user-long', longText);
+
+        expect(mockHook).toHaveBeenCalledWith('user-long', longText);
+      });
+
+      it('should handle special characters in text', async () => {
+        const mockHook = jest.fn().mockResolvedValue({ isCrisis: false });
+        api.setCrisisScreeningHook(mockHook);
+
+        const specialText = '😢💔 Не могу больше... <script>alert("x")</script>';
+        await api.screenForCrisis('user-special', specialText);
+
+        expect(mockHook).toHaveBeenCalledWith('user-special', specialText);
+      });
+
+      it('should screen different severity levels correctly', async () => {
+        const severities = ['low', 'moderate', 'high', 'urgent', 'emergency'];
+
+        for (const severity of severities) {
+          const mockHook = jest.fn().mockResolvedValue({
+            isCrisis: true,
+            severity,
+            action: `action_${severity}`,
+          });
+
+          // Create fresh API for each test
+          const testApi = new SleepCoreAPI();
+          testApi.setCrisisScreeningHook(mockHook);
+
+          const result = await testApi.screenForCrisis(`user-${severity}`, 'Crisis text');
+
+          expect(result?.severity).toBe(severity);
+          expect(result?.action).toBe(`action_${severity}`);
+        }
+      });
+    });
+  });
+
   describe('processNewDiaryEntry - treatment completion at Week 8', () => {
     it('should end session at week 8 with ISI ≤ 7 (remission)', async () => {
       // Setup: User with plan at week 8 with low ISI
