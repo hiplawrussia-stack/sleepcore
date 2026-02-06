@@ -46,17 +46,44 @@ describe('HelpCommand', () => {
       assertSuccessWithMessage(result);
     });
 
-    it('should list all available commands', async () => {
+    it('should list all 25 available commands', async () => {
       const ctx = createMockContext();
       const result = await command.execute(ctx);
 
+      // Core program
       assertContainsText(result, '/start');
       assertContainsText(result, '/diary');
       assertContainsText(result, '/today');
+      assertContainsText(result, '/therapy');
+      assertContainsText(result, '/progress');
+
+      // Techniques
       assertContainsText(result, '/relax');
       assertContainsText(result, '/mindful');
-      assertContainsText(result, '/progress');
+      assertContainsText(result, '/rehearsal');
+      assertContainsText(result, '/recall');
+
+      // Safety (IEC 62366-1: must be in primary disclosure)
       assertContainsText(result, '/sos');
+      assertContainsText(result, '/safety');
+      assertContainsText(result, '/aereport');
+
+      // Analytics
+      assertContainsText(result, '/insights');
+      assertContainsText(result, '/predict');
+      assertContainsText(result, '/explain');
+      assertContainsText(result, '/whatif');
+      assertContainsText(result, '/twin');
+      assertContainsText(result, '/chronotype');
+      assertContainsText(result, '/smart_tips');
+
+      // Gamification
+      assertContainsText(result, '/quest');
+      assertContainsText(result, '/badges');
+      assertContainsText(result, '/profile');
+      assertContainsText(result, '/sonya');
+
+      // Service
       assertContainsText(result, '/help');
     });
 
@@ -92,6 +119,29 @@ describe('HelpCommand', () => {
 
       // Commands should be grouped or organized
       expect(result.message?.length).toBeGreaterThan(200);
+    });
+
+    it('should list safety commands first (IEC 62366-1 / ISO 14971)', async () => {
+      const ctx = createMockContext();
+      const result = await command.execute(ctx);
+
+      // Safety category must appear before other command categories
+      const sosIndex = result.message!.indexOf('/sos');
+      const startIndex = result.message!.indexOf('/start');
+      const relaxIndex = result.message!.indexOf('/relax');
+
+      expect(sosIndex).toBeLessThan(startIndex);
+      expect(sosIndex).toBeLessThan(relaxIndex);
+    });
+
+    it('should include category headers', async () => {
+      const ctx = createMockContext();
+      const result = await command.execute(ctx);
+
+      assertContainsText(result, 'Экстренная помощь');
+      assertContainsText(result, 'Основная программа');
+      assertContainsText(result, 'Техники и практики');
+      assertContainsText(result, 'Аналитика и AI');
     });
   });
 

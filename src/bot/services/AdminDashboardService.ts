@@ -434,8 +434,8 @@ export class AdminDashboardService {
    * Get safety metrics
    */
   private async getSafetyMetrics(): Promise<IDashboardMetrics['safety']> {
-    // Get AE statistics from the service
-    const aeStats = this.aeService.getStatistics();
+    // Get AE statistics from the service (now async)
+    const aeStats = await this.aeService.getStatistics();
 
     // ISI worsening (≥7 point increase from baseline)
     const isiWorsening = await this.db.queryOne<{ count: number }>(
@@ -466,22 +466,22 @@ export class AdminDashboardService {
   /**
    * Get safety alerts for admin view
    */
-  getSafetyAlerts(): ISafetyAlert[] {
+  async getSafetyAlerts(): Promise<ISafetyAlert[]> {
     return this.aeService.getUnacknowledgedAlerts();
   }
 
   /**
    * Get all safety alerts (including acknowledged)
    */
-  getAllSafetyAlerts(limit: number = 100): ISafetyAlert[] {
+  async getAllSafetyAlerts(limit: number = 100): Promise<ISafetyAlert[]> {
     return this.aeService.getAllAlerts(limit);
   }
 
   /**
    * Acknowledge safety alert
    */
-  acknowledgeSafetyAlert(index: number, adminId: string): boolean {
-    return this.aeService.acknowledgeAlert(index, adminId);
+  async acknowledgeSafetyAlert(id: number, adminId: string): Promise<boolean> {
+    return this.aeService.acknowledgeAlert(id, adminId);
   }
 
   /**

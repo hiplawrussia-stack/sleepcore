@@ -273,7 +273,10 @@ enum ISISeverity {
 
 ```
 src/
-├── SleepCoreAPI.ts              # Main facade (entry point)
+├── main.ts                      # PRIMARY INTEGRATION HUB (2800+ lines!)
+│                                #   bot.command() handlers, callback_query routing,
+│                                #   message handlers, cron jobs, 32+ service imports
+├── SleepCoreAPI.ts              # Main facade (engine access)
 ├── index.ts                     # Public exports
 ├── assessment/                  # Clinical instruments (ISI, MEQ, MCTQ)
 ├── cbt-i/                       # 5-component CBT-I engines
@@ -314,7 +317,9 @@ src/
 │   └── ThirdWaveCoordinator.ts
 └── bot/                         # Telegram bot services
     ├── commands/                # 25 bot commands
-    └── services/                # Crisis, proactive, prediction
+    │   └── registry/            # ContextAwareMenuService (dynamic menus)
+    └── services/                # 32+ services (crisis, proactive, prediction,
+                                 #   gamification, visualization, metacognitive, etc.)
 ```
 
 ### 6.2. Ключевые архитектурные решения
@@ -419,18 +424,19 @@ const SLEEP_ACTIONS = [
 | Functions | 50.32% | 50% ✓ |
 | Lines | 46.55% | 45% ✓ |
 
-### 8.2. Покрытие по модулям
+### 8.2. Покрытие по модулям (обновлено Февраль 2026)
 
 | Модуль | Покрытие | Статус |
 |--------|----------|--------|
 | CBT-I Engines | 98.59% | Отлично |
 | Assessment | 98.9% | Отлично |
-| Circadian | 100% | Отлично |
+| Circadian | 100% (54 теста) | Отлично |
 | Third-Wave | 94.67% | Отлично |
 | Platform | 99.1% | Отлично |
 | Gamification | 82.94% | Хорошо |
-| **Bot Services** | **0.93%** | **КРИТИЧНО** |
+| **Bot Services** | **~5-10%** | **КРИТИЧНО** (32 сервиса, тесты есть для ~5) |
 | **Bot Adapters** | **0%** | **КРИТИЧНО** |
+| **Infrastructure** | **~0%** | **КРИТИЧНО** (encryption, audit, repositories) |
 
 ### 8.3. Типы тестов
 
@@ -595,9 +601,235 @@ Traefik v3 (Reverse Proxy, SSL)
 
 ---
 
-## 13. Научные источники
+## 13. Принципы интеграции компонентов
 
-### 13.1. CBT-I Foundation
+> **Урок аудита Январь 2026:** Все 43 E2E теста проходили, но компоненты не были
+> интегрированы в единый цикл лечения. Тесты проверяли части, а не целое.
+
+### 13.1. Вертикальные слайсы вместо горизонтальных слоёв
+
+```
+❌ НЕПРАВИЛЬНО (горизонтальная разработка):
+
+Sprint 1: Все движки (CBTIEngine, SleepRestrictionEngine, ...)
+Sprint 2: Все сервисы (40+ штук)
+Sprint 3: Все команды (25 штук)
+Sprint 4: "Интеграция" ← часто забывается
+
+✅ ПРАВИЛЬНО (вертикальные слайсы):
+
+Sprint 1: ISI Journey
+  /start → ISIAssessment → Severity → Направление/План
+  ↳ Тест: Пользователь проходит ISI от начала до результата
+
+Sprint 2: Diary Journey
+  /diary × 7 дней → processCheckIn() → initializePlan()
+  ↳ Тест: 7 записей дневника создают план лечения
+
+Sprint 3: Treatment Journey
+  План → /therapy → CBTIEngine → Рекомендации
+  ↳ Тест: Пользователь получает персонализированную терапию
+
+Sprint 4: Outcome Journey
+  Неделя 8 → ISI повторно → Ремиссия/Response/Non-response
+  ↳ Тест: Полный цикл от ISI 18 до ISI ≤7
+```
+
+**Правило:** Каждый спринт заканчивается работающим вертикальным путём пользователя.
+
+### 13.2. Интеграционные тесты как приёмочные критерии
+
+```typescript
+// ❌ НЕДОСТАТОЧНО — изолированные тесты
+describe('CBTIEngine', () => {
+  it('should create plan', () => {
+    const plan = engine.initializePlan(userId, mockData);
+    expect(plan).toBeDefined(); // ✅ Проходит, но...
+  });
+});
+
+describe('DiaryCommand', () => {
+  it('should save entry', () => {
+    await command.execute(ctx);
+    expect(addDiaryEntry).toHaveBeenCalled(); // ✅ Проходит, но...
+  });
+});
+// ...ничто не проверяет что DiaryCommand ВЫЗЫВАЕТ initializePlan()
+
+// ✅ ОБЯЗАТЕЛЬНО — интеграционный тест полного пути
+describe('Treatment Journey Integration', () => {
+  it('should complete ISI → Diary × 7 → Plan → Therapy → Remission', async () => {
+    // 1. Начало
+    await sendCommand('/start');
+
+    // 2. ISI оценка
+    await completeISIAssessment({ score: 18 }); // Moderate insomnia
+
+    // 3. 7 дней дневника → должен создать план
+    for (let day = 1; day <= 7; day++) {
+      await sendCommand('/diary');
+      await completeDiaryEntry(mockDayData[day]);
+    }
+
+    // КРИТИЧЕСКАЯ ПРОВЕРКА: план создан
+    const session = sleepCore.getSession(userId);
+    expect(session.plan).not.toBeNull(); // ← Этот тест УПАЛ БЫ
+
+    // 4. Терапия использует движки
+    await sendCommand('/therapy');
+    expect(CBTIEngine.getNextIntervention).toHaveBeenCalled();
+
+    // 5. Неделя 8 — ремиссия
+    await simulateWeeks(8);
+    await completeISIAssessment({ score: 5 });
+    expect(getOutcome()).toBe('remission');
+  });
+});
+```
+
+**Правило:** Фича не считается готовой, пока интеграционный тест полного пути не проходит.
+
+### 13.3. Связь команда → метод → движок
+
+> **Урок аудита Февраль 2026:** `main.ts` (2800+ строк) — ГЛАВНЫЙ интеграционный хаб.
+> Он импортирует и напрямую использует 32+ сервисов, содержит bot.command() хендлеры,
+> callback_query роутинг и message хендлеры. Аудит только по commands/ и SleepCoreAPI
+> приводит к ложным выводам об "orphan" модулях.
+
+Перед добавлением команды проверь цепочку вызовов **по ВСЕМ точкам входа:**
+
+```
+                    ┌────────────────────────────────┐
+                    │         main.ts                │
+                    │   (PRIMARY INTEGRATION HUB)     │
+                    │   bot.command(), callback_query, │
+                    │   message handlers, cron jobs   │
+                    └──────┬──────────┬──────────┬───┘
+                           │          │          │
+              ┌────────────┘          │          └────────────┐
+              ↓                       ↓                       ↓
+┌─────────────────┐     ┌──────────────────┐     ┌───────────────────┐
+│    Commands/    │     │   Services (32+)  │     │   SleepCoreAPI    │
+│  TherapyCommand │     │ Direct usage in   │     │   Facade          │
+│  DiaryCommand   │     │ middleware/handlers│     │   → Engines       │
+└────────┬────────┘     └──────────────────┘     └────────┬──────────┘
+         │                                                │
+         └──────────────→ SleepCoreAPI ───────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    ↓                   ↓
+              ┌──────────┐      ┌──────────────┐
+              │ CBT-I    │      │ Third-Wave   │
+              │ Engines  │      │ Coordinator  │
+              └──────────┘      └──────────────┘
+```
+
+**6 точек входа для аудита связей (ВСЕ обязательны):**
+
+| # | Точка входа | Что искать | Примерный объём |
+|---|-------------|------------|-----------------|
+| 1 | `src/main.ts` | bot.command(), callback_query, imports сервисов | 2800+ строк |
+| 2 | `src/bot/commands/` | Command классы, execute(), handleCallback() | 25 команд |
+| 3 | `src/SleepCoreAPI.ts` | Фасадные методы, вызовы движков | ~500 строк |
+| 4 | Service → Service imports | Внутренние зависимости (MetacognitiveEngine → ATT, DM, Worry) | grep по src/ |
+| 5 | `src/bot/commands/registry/` | ContextAwareMenuService | Динамическое меню |
+| 6 | `index.ts` файлы | Re-exports | По всем модулям |
+
+**Чеклист для каждой команды:**
+
+| Команда | Метод SleepCoreAPI | Движок | Статус |
+|---------|-------------------|--------|--------|
+| /start | startSession() | — | ✅ |
+| /diary | addDiaryEntry() | — | ✅ |
+| /diary ×7 | processCheckIn() | CBTIEngine.initializePlan() | ❓ |
+| /therapy | getNextIntervention() | CBTIEngine | ❓ |
+| /relax | getRelaxationRecommendation() | RelaxationEngine | ❓ |
+
+**Правило:** Если команда не вызывает соответствующий движок — это баг архитектуры.
+**Правило:** При аудите "orphan" модулей — grep по ВСЕМУ `src/`, не по отдельным папкам.
+
+### 13.4. Запрет хардкода клинического контента
+
+```typescript
+// ❌ ЗАПРЕЩЕНО — хардкод терапевтического контента
+const contentMap: Record<TherapyCore, string> = {
+  sleep_behavior_1: `*🛏️ Ограничение сна...*
+    Рассчитываем TIB = TST + 30 мин...`,  // ← Статический текст
+};
+
+// ✅ ОБЯЗАТЕЛЬНО — вычисления через движки
+async function showSleepBehavior(ctx: Context): Promise<void> {
+  const diaryData = await getDiaryData(ctx.userId, 7);
+  const sleepWindow = sleepRestrictionEngine.calculateSleepWindow(diaryData);
+
+  const content = formatSleepRestrictionPlan({
+    tib: sleepWindow.tib,           // Рассчитано для пользователя
+    bedtime: sleepWindow.bedtime,   // Персонализировано
+    wakeTime: sleepWindow.wakeTime,
+    adjustmentHistory: sleepWindow.history
+  });
+
+  await ctx.reply(content);
+}
+```
+
+**Правило:** Всё, что зависит от данных пациента, вычисляется через движки, а не хардкодится.
+
+### 13.5. Трассируемость по IEC 62304
+
+```
+Требование ──→ Код ──→ Тест ──→ Валидация
+    ↓            ↓        ↓          ↓
+REQ-001      CBTIEngine  test.ts   E2E Journey
+```
+
+**Матрица трассируемости (пример):**
+
+| Требование | Компонент | Unit Test | Integration Test | E2E Test |
+|------------|-----------|-----------|------------------|----------|
+| REQ-SRT-001: TIB ≥ 5h | SleepRestrictionEngine | ✅ | ✅ | ✅ |
+| REQ-ISI-001: Severity classification | ISIRussian | ✅ | ✅ | ✅ |
+| REQ-TREAT-001: Plan creation after 7 days | CBTIEngine + DiaryCommand | ✅ | ❌ | ❌ |
+
+**Правило:** Пустые ячейки в матрице = пробелы в интеграции.
+
+### 13.6. Smoke-тест в CI/CD
+
+```yaml
+# .github/workflows/integration.yml
+integration-test:
+  steps:
+    - name: Start test bot
+      run: npm run bot:test &
+
+    - name: Run journey smoke test
+      run: npm run test:journey
+      # Реальный Telegram test account проходит:
+      # /start → ISI → diary ×7 → /therapy → проверка плана
+
+    - name: Verify component connections
+      run: npm run audit:connections
+      # Проверяет что все команды вызывают нужные методы
+```
+
+**Правило:** PR не мержится, если smoke-тест полного пути не проходит.
+
+### 13.7. Definition of Done для фичи
+
+```
+□ Unit тесты компонента проходят
+□ Интеграционный тест пути пользователя проходит
+□ Команда → SleepCoreAPI → Engine цепочка замкнута
+□ Нет хардкода клинических данных
+□ Матрица трассируемости обновлена
+□ Smoke-тест в CI проходит
+```
+
+---
+
+## 14. Научные источники
+
+### 14.1. CBT-I Foundation
 
 | Источник | Применение |
 |----------|------------|
@@ -608,7 +840,7 @@ Traefik v3 (Reverse Proxy, SSL)
 | Hauri, 1977 | Sleep Hygiene |
 | Jacobson, 1938 | Progressive Muscle Relaxation |
 
-### 13.2. Third-Wave Therapies
+### 14.2. Third-Wave Therapies
 
 | Источник | Применение |
 |----------|------------|
@@ -617,7 +849,7 @@ Traefik v3 (Reverse Proxy, SSL)
 | Meadows et al., 2024 | "The Sleep Book" ACT approach |
 | Wells, 2000 | Metacognitive Therapy |
 
-### 13.3. Guidelines & Meta-analyses
+### 14.3. Guidelines & Meta-analyses
 
 | Источник | Применение |
 |----------|------------|
@@ -626,7 +858,7 @@ Traefik v3 (Reverse Proxy, SSL)
 | Trauer et al., 2015 | 9,475 participant meta-analysis |
 | Bastien et al., 2001 | ISI validation |
 
-### 13.4. AI/ML
+### 14.4. AI/ML
 
 | Источник | Применение |
 |----------|------------|
@@ -637,9 +869,9 @@ Traefik v3 (Reverse Proxy, SSL)
 
 ---
 
-## 14. Эскалация и поддержка
+## 15. Эскалация и поддержка
 
-### 14.1. Когда эскалировать
+### 15.1. Когда эскалировать
 
 | Ситуация | Действие |
 |----------|----------|
@@ -649,7 +881,7 @@ Traefik v3 (Reverse Proxy, SSL)
 | Safety module changes | Обязательный 2-person review |
 | PHI breach suspected | Немедленная эскалация + audit |
 
-### 14.2. Контакты
+### 15.2. Контакты
 
 - **Технические вопросы**: tech@awfond.ru
 - **Клинические вопросы**: Согласовать с медицинским советником
@@ -657,7 +889,7 @@ Traefik v3 (Reverse Proxy, SSL)
 
 ---
 
-## 15. Финальное напоминание
+## 16. Финальное напоминание
 
 > Мы создаём цифровую терапию для людей с хронической бессонницей.
 >
@@ -670,6 +902,143 @@ Traefik v3 (Reverse Proxy, SSL)
 
 ---
 
-*Версия: 1.0 | Дата: Январь 2026 | БФ «Другой путь»*
+## 17. Ключевые файлы типов (Quick Reference)
+
+> **Правило:** Перед написанием кода/тестов, использующих типы — ОБЯЗАТЕЛЬНО прочитать исходные файлы.
+> Это предотвращает ошибки типизации и неправильное использование интерфейсов.
+
+### 17.1. Основные типы
+
+| Файл | Содержит | Когда читать |
+|------|----------|--------------|
+| `src/cbt-i/types.ts` | ICBTIPlan, ICBTISession, ICBTIProgress | Работа с планами лечения |
+| `src/diary/types.ts` | SleepQualityRating, IDiaryEntry, ISleepWindow | Работа с дневником сна |
+| `src/assessment/types.ts` | ISIData, ISISeverity, IAssessmentResult | Работа с опросниками |
+| `src/sleep/types.ts` | ISleepMetrics, ISleepStage | Метрики сна |
+
+### 17.2. Bot-специфичные типы
+
+| Файл | Содержит | Когда читать |
+|------|----------|--------------|
+| `src/bot/commands/BaseCommand.ts` | ICommandResult, callback conventions | Написание команд |
+| `src/bot/types.ts` | IContext, ISleepCoreContext | Работа с контекстом бота |
+| `src/bot/services/types.ts` | Service interfaces | Работа с сервисами |
+
+### 17.3. Важные соглашения
+
+**Callback формат:**
+```typescript
+// Формат: 'command:action' или 'command:action_subaction'
+'start:consent_accept'    // ✅ Правильно
+'start:consent:accept'    // ❌ Неправильно (лишнее двоеточие)
+```
+
+**SleepQualityRating:**
+```typescript
+type SleepQualityRating = 'very_poor' | 'poor' | 'fair' | 'good' | 'excellent';
+// НЕ 'very_good' — такого значения нет
+```
+
+**ISI данные:**
+```typescript
+// Формат для ISI ответов
+{ isiAnswers: number[] }  // ✅ Массив из 7 чисел (0-4)
+{ isiResponses: {...} }   // ❌ Неправильный формат
+```
+
+**ICBTIPlan структура:**
+```typescript
+// Доступ к метрикам плана
+plan.progress.sleepEfficiencyBaseline     // ✅ Правильно
+plan.baselineMetrics                       // ❌ Не существует
+
+// Доступ к sleep restriction
+plan.activeComponents.sleepRestriction.prescribedTIB  // ✅ Правильно
+plan.sleepRestriction                                  // ❌ Не существует
+```
+
+### 17.4. Чеклист перед написанием кода
+
+```
+□ Прочитал файлы типов для используемых интерфейсов?
+□ Проверил формат callback для команды?
+□ Убедился в правильных именах полей (не по памяти)?
+□ Проверил enum/union значения в исходниках?
+```
+
+---
+
+## 18. Конфигурация Claude Code
+
+### 18.1. Структура файлов конфигурации
+
+```
+.claude/
+├── settings.json        # Командный конфиг (в git) — разрешения для всех разработчиков
+├── settings.local.json  # Личный конфиг (gitignored) — SSH, python, специфичные домены
+└── commands/            # Кастомные команды (в git) — workflow автоматизация
+    ├── auto.md          # Авто-маршрутизация по типу задачи
+    ├── investigate.md   # Глубокое исследование проблемы
+    ├── p-issue.md       # Реализация priority issue
+    ├── safety-review.md # Safety review по IEC 62304
+    └── test-service.md  # Написание тестов для bot service
+```
+
+**Правило:** `.gitignore` настроен так: `.claude/*` игнорирует всё, `!.claude/settings.json` и `!.claude/commands/` — исключения для командного конфига и команд.
+
+### 18.2. Командный конфиг (settings.json)
+
+Содержит паттерны разрешений, общие для всей команды:
+
+| Категория | Паттерны | Назначение |
+|-----------|----------|------------|
+| **npm** | `npm run test:*`, `npm run build`, `npm run lint:*`, `npm test` | CI/CD операции |
+| **git** | `git add:*`, `git commit:*`, `git push:*`, `git diff:*`, `git branch:*`, `git worktree:*`, `git stash:*`, `git reset:*` | Version control |
+| **gh** | `gh pr:*`, `gh issue:*`, `gh run list:*` | GitHub CLI |
+| **node** | `npx jest:*`, `npx tsc:*`, `npx tsc --noEmit:*`, `node -e:*` | Инструменты разработки |
+| **util** | `ls:*`, `wc:*`, `NODE_OPTIONS=*` | Утилиты |
+| **env** | `ENABLE_TOOL_SEARCH: "auto:5"` | Автопоиск MCP-инструментов |
+
+**Hooks:**
+- `Stop` — при завершении сессии показывает staged файлы и количество изменённых .ts файлов
+
+### 18.2.1. Кастомные команды (/command)
+
+| Команда | Файл | Назначение |
+|---------|------|------------|
+| `/auto` | auto.md | Авто-определение типа задачи → маршрутизация в нужный workflow |
+| `/investigate` | investigate.md | Глубокое исследование с обязательной проверкой 6 точек входа |
+| `/p-issue` | p-issue.md | Реализация priority issue с confidence level и safety отчётом |
+| `/safety-review` | safety-review.md | Чеклист IEC 62304 Class C по клинической/данным/код безопасности |
+| `/test-service` | test-service.md | Написание полного набора unit-тестов для bot service |
+
+### 18.3. Личный конфиг (settings.local.json)
+
+Содержит паттерны, специфичные для конкретного разработчика:
+- `ssh:*` — доступ к серверам
+- `python:*`, `pip:*` — ML-инструменты
+- `docker:*` — контейнеры
+- `WebFetch(domain:...)` — научные базы (PubMed, Nature, arXiv, etc.)
+
+### 18.4. Принципы конфигурации
+
+1. **Паттерны вместо конкретных команд** — `ssh:*` вместо 15 отдельных SSH-команд
+2. **Командное vs личное** — общие инструменты в settings.json, специфичные в settings.local.json
+3. **Минимум разрешений** — только то, что реально используется
+4. **ENABLE_TOOL_SEARCH** — автоматический поиск MCP-серверов для расширения возможностей
+
+### 18.5. Обновление конфигурации
+
+При добавлении нового инструмента:
+```
+□ Нужен всей команде? → settings.json (коммитится в git)
+□ Только мне? → settings.local.json (gitignored)
+□ Паттерн покрывает случай? → Не добавлять новую запись
+□ Безопасность: не добавлять паттерны для деструктивных операций без `deny`
+```
+
+---
+
+*Версия: 1.3 | Дата: Февраль 2026 | БФ «Другой путь»*
 *Основано на принципах «Конституции Claude» (Anthropic, 2025)*
 *Клиническая база: European Insomnia Guideline 2023, Spielman et al. 1987*

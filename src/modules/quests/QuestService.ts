@@ -353,6 +353,34 @@ export class QuestService {
   }
 
   /**
+   * Abandon an active quest
+   *
+   * Sets the quest status to 'failed' and removes it from active quests.
+   * Does NOT add to completed list (can be restarted later).
+   *
+   * @param userId - User ID
+   * @param questId - Quest ID to abandon
+   * @returns true if quest was found and abandoned, false otherwise
+   */
+  abandonQuest(userId: string, questId: string): boolean {
+    const userActive = this.activeQuests.get(userId);
+    if (!userActive) {
+      return false;
+    }
+
+    const questIndex = userActive.findIndex((q) => q.questId === questId && q.status === 'active');
+    if (questIndex === -1) {
+      return false;
+    }
+
+    // Mark as failed and remove from active
+    userActive[questIndex].status = 'failed';
+    userActive.splice(questIndex, 1);
+
+    return true;
+  }
+
+  /**
    * Update progress for a metric
    * Returns completed quests if any
    */

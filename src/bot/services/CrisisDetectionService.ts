@@ -468,6 +468,14 @@ export class CrisisDetectionService {
   }
 
   /**
+   * Record an externally-created crisis event (e.g., user-initiated /sos)
+   * Used when the crisis is reported by the user, not detected from text analysis.
+   */
+  recordSosEvent(event: ICrisisEvent): void {
+    this.logEvent(event);
+  }
+
+  /**
    * Log crisis event
    */
   private logEvent(event: ICrisisEvent): void {

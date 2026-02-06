@@ -22,6 +22,15 @@
  */
 
 import type { IDatabaseConnection } from '../../infrastructure/database/interfaces/IDatabaseConnection';
+import {
+  AdverseEventRepository,
+  SafetyAlertRepository,
+  type IAdverseEventEntity,
+  type ISafetyAlertEntity,
+  type ReportStatus as DBReportStatus,
+  createAdverseEventRepository,
+  createSafetyAlertRepository,
+} from '../../infrastructure/database';
 
 // ==================== Types ====================
 
@@ -280,15 +289,19 @@ const AE_CONFIG = {
 /**
  * Adverse Event Reporting Service
  * Manages AE tracking, classification, and regulatory compliance
+ *
+ * **UPDATED 2026-01-26:** Now uses real database via AdverseEventRepository
+ * instead of in-memory storage. Full 21 CFR Part 11 audit trail enabled.
  */
 export class AdverseEventService {
-  private db: IDatabaseConnection;
-  private events: Map<number, IAdverseEventReport> = new Map();
-  private alerts: ISafetyAlert[] = [];
-  private nextEventId = 1;
+  private readonly db: IDatabaseConnection;
+  private readonly aeRepository: AdverseEventRepository;
+  private readonly alertRepository: SafetyAlertRepository;
 
   constructor(db: IDatabaseConnection) {
     this.db = db;
+    this.aeRepository = createAdverseEventRepository(db);
+    this.alertRepository = createSafetyAlertRepository(db);
   }
 
   // ==================== Event Reporting ====================
@@ -296,14 +309,14 @@ export class AdverseEventService {
   /**
    * Report new adverse event
    * Auto-calculates regulatory deadlines based on seriousness
+   * Now persists to database with full audit trail (21 CFR Part 11)
    */
   async reportAdverseEvent(
     report: Omit<IAdverseEventReport, 'id' | 'reportedAt' | 'regulatoryDeadline' | 'reportStatus'>
   ): Promise<IAdverseEventReport> {
-    const id = this.nextEventId++;
     const reportedAt = new Date();
 
-    // Calculate regulatory deadline
+    // Calculate regulatory deadline (ICH E2A / Roszdravnadzor Order 200n)
     let deadlineDays: number;
     if (report.isSerious) {
       if (report.seriousnessCriteria?.includes('death') ||
@@ -319,27 +332,64 @@ export class AdverseEventService {
     const regulatoryDeadline = new Date(reportedAt);
     regulatoryDeadline.setDate(regulatoryDeadline.getDate() + deadlineDays);
 
-    const fullReport: IAdverseEventReport = {
-      ...report,
-      id,
-      reportedAt,
-      regulatoryDeadline,
+    // Convert IAdverseEventReport to IAdverseEventEntity format
+    const entityData: Omit<IAdverseEventEntity, 'id' | 'uuid' | 'createdAt' | 'updatedAt'> = {
+      userId: report.userId,
+      userInternalId: report.userInternalId,
+      reporterType: report.cioms.reporterType,
+      reporterName: report.cioms.reporterName,
+      reporterContact: report.cioms.reporterContact,
+      patientInitials: report.cioms.patientInitials,
+      patientAge: report.cioms.patientAge,
+      patientSex: report.cioms.patientSex,
+      productName: report.cioms.productName,
+      productVersion: report.cioms.productVersion,
+      reactionTerm: report.cioms.reactionTerm,
+      reactionOnsetDate: report.cioms.reactionOnsetDate,
+      severity: report.severity,
+      isSerious: report.isSerious,
+      seriousnessCriteria: report.seriousnessCriteria,
+      expectedness: report.expectedness,
+      dtxCategory: report.dtxCategory,
+      customTerm: report.customTerm,
+      description: report.description,
+      onsetDate: report.onsetDate,
+      resolutionDate: report.resolutionDate,
+      outcome: report.outcome,
+      causality: report.causality,
+      actionTaken: report.actionTaken,
+      currentIsi: report.currentISI,
+      baselineIsi: report.baselineISI,
+      currentWeek: report.currentWeek,
       reportStatus: 'draft',
+      regulatoryDeadline,
+      reportedAt,
+      reportedBy: report.reportedBy,
+      createdBy: report.reportedBy,
+      notes: report.notes,
     };
 
-    this.events.set(id, fullReport);
+    // Insert with audit trail (21 CFR Part 11 compliance)
+    const inserted = await this.aeRepository.insertWithAudit(
+      entityData,
+      report.reportedBy,
+      {} // context can include ipAddress, userAgent, sessionId
+    );
+
+    // Convert back to IAdverseEventReport format
+    const fullReport = this.entityToReport(inserted);
 
     // Log to console (audit trail)
     this.logAEAction('REPORT_CREATED', fullReport);
 
     // Create safety alert if serious
     if (fullReport.isSerious) {
-      this.createSafetyAlert({
+      await this.createSafetyAlert({
         type: 'SERIOUS_AE',
         severity: 'critical',
         userId: fullReport.userId,
         message: `Serious AE reported: ${fullReport.cioms.reactionTerm}`,
-        eventId: id,
+        eventId: fullReport.id,
         createdAt: new Date(),
         acknowledged: false,
       });
@@ -347,12 +397,12 @@ export class AdverseEventService {
 
     // Check for SUSAR (unexpected serious)
     if (fullReport.isSerious && fullReport.expectedness === 'unexpected') {
-      this.createSafetyAlert({
+      await this.createSafetyAlert({
         type: 'SUSAR',
         severity: 'critical',
         userId: fullReport.userId,
         message: `SUSAR: ${fullReport.cioms.reactionTerm} - Requires expedited reporting`,
-        eventId: id,
+        eventId: fullReport.id,
         createdAt: new Date(),
         acknowledged: false,
       });
@@ -363,21 +413,40 @@ export class AdverseEventService {
 
   /**
    * Update existing AE report
+   * Persists to database with audit trail (21 CFR Part 11)
    */
   async updateAdverseEvent(
     id: number,
-    updates: Partial<IAdverseEventReport>
+    updates: Partial<IAdverseEventReport>,
+    changedBy: string = 'system',
+    reason?: string
   ): Promise<IAdverseEventReport | null> {
-    const existing = this.events.get(id);
-    if (!existing) return null;
+    // Build entity updates object (without readonly constraints)
+    const entityUpdates: Record<string, unknown> = {};
 
-    const updated: IAdverseEventReport = {
-      ...existing,
-      ...updates,
-      lastUpdatedAt: new Date(),
-    };
+    if (updates.severity !== undefined) entityUpdates['severity'] = updates.severity;
+    if (updates.isSerious !== undefined) entityUpdates['isSerious'] = updates.isSerious;
+    if (updates.seriousnessCriteria !== undefined) entityUpdates['seriousnessCriteria'] = updates.seriousnessCriteria;
+    if (updates.expectedness !== undefined) entityUpdates['expectedness'] = updates.expectedness;
+    if (updates.outcome !== undefined) entityUpdates['outcome'] = updates.outcome;
+    if (updates.causality !== undefined) entityUpdates['causality'] = updates.causality;
+    if (updates.actionTaken !== undefined) entityUpdates['actionTaken'] = updates.actionTaken;
+    if (updates.description !== undefined) entityUpdates['description'] = updates.description;
+    if (updates.resolutionDate !== undefined) entityUpdates['resolutionDate'] = updates.resolutionDate;
+    if (updates.reportStatus !== undefined) entityUpdates['reportStatus'] = updates.reportStatus;
+    if (updates.regulatoryDeadline !== undefined) entityUpdates['regulatoryDeadline'] = updates.regulatoryDeadline;
+    if (updates.notes !== undefined) entityUpdates['notes'] = updates.notes;
 
-    this.events.set(id, updated);
+    const updatedEntity = await this.aeRepository.updateWithAudit(
+      id,
+      entityUpdates as Partial<IAdverseEventEntity>,
+      changedBy,
+      reason
+    );
+
+    if (!updatedEntity) return null;
+
+    const updated = this.entityToReport(updatedEntity);
     this.logAEAction('REPORT_UPDATED', updated);
 
     return updated;
@@ -553,7 +622,7 @@ export class AdverseEventService {
       : 'unexpected';
 
     // Calculate onset date
-    let onsetDate = new Date();
+    const onsetDate = new Date();
     switch (answers.onset) {
       case 'yesterday':
         onsetDate.setDate(onsetDate.getDate() - 1);
@@ -597,9 +666,32 @@ export class AdverseEventService {
 
   /**
    * Create safety alert
+   * Now persists to database for regulatory compliance
    */
-  private createSafetyAlert(alert: ISafetyAlert): void {
-    this.alerts.push(alert);
+  private async createSafetyAlert(alert: ISafetyAlert): Promise<void> {
+    // Check for duplicate unacknowledged alert
+    if (alert.eventId) {
+      const hasDuplicate = await this.alertRepository.hasDuplicateAlert(
+        alert.type as ISafetyAlertEntity['type'],
+        alert.eventId
+      );
+      if (hasDuplicate) {
+        console.log(`[AE Service] Duplicate alert suppressed: ${alert.type} for event ${alert.eventId}`);
+        return;
+      }
+    }
+
+    await this.alertRepository.create({
+      type: alert.type as ISafetyAlertEntity['type'],
+      severity: alert.severity,
+      userId: alert.userId,
+      userDisplayName: alert.userDisplayName,
+      message: alert.message,
+      adverseEventId: alert.eventId,
+      acknowledged: false,
+      escalated: false,
+    });
+
     console.log(
       `[AE Service] SAFETY ALERT: ${alert.type} | ${alert.severity} | User: ${alert.userId} | ${alert.message}`
     );
@@ -608,28 +700,24 @@ export class AdverseEventService {
   /**
    * Get all unacknowledged safety alerts
    */
-  getUnacknowledgedAlerts(): ISafetyAlert[] {
-    return this.alerts.filter((a) => !a.acknowledged);
+  async getUnacknowledgedAlerts(): Promise<ISafetyAlert[]> {
+    const entities = await this.alertRepository.findUnacknowledged();
+    return entities.map((e) => this.alertEntityToAlert(e));
   }
 
   /**
    * Get all safety alerts
    */
-  getAllAlerts(limit: number = 100): ISafetyAlert[] {
-    return this.alerts.slice(-limit);
+  async getAllAlerts(limit: number = 100): Promise<ISafetyAlert[]> {
+    const entities = await this.alertRepository.findAll(limit);
+    return entities.map((e) => this.alertEntityToAlert(e));
   }
 
   /**
    * Acknowledge safety alert
    */
-  acknowledgeAlert(index: number, acknowledgedBy: string): boolean {
-    if (index < 0 || index >= this.alerts.length) return false;
-
-    this.alerts[index].acknowledged = true;
-    this.alerts[index].acknowledgedBy = acknowledgedBy;
-    this.alerts[index].acknowledgedAt = new Date();
-
-    return true;
+  async acknowledgeAlert(id: number, acknowledgedBy: string): Promise<boolean> {
+    return this.alertRepository.acknowledge(id, acknowledgedBy);
   }
 
   // ==================== Deadline Monitoring ====================
@@ -638,38 +726,36 @@ export class AdverseEventService {
    * Check for approaching deadlines
    * Should be called daily by cron job
    */
-  checkDeadlines(): ISafetyAlert[] {
+  async checkDeadlines(): Promise<ISafetyAlert[]> {
     const now = new Date();
     const newAlerts: ISafetyAlert[] = [];
 
-    for (const [id, event] of this.events) {
-      if (!event.regulatoryDeadline) continue;
-      if (event.reportStatus === 'closed') continue;
-      if (event.reportStatus === 'submitted_roszdravnadzor') continue;
+    // Get events with approaching deadlines from database
+    const eventsApproaching = await this.aeRepository.findApproachingDeadlines(
+      AE_CONFIG.deadlineReminderDays
+    );
+
+    for (const entity of eventsApproaching) {
+      if (!entity.regulatoryDeadline) continue;
 
       const daysUntilDeadline = Math.ceil(
-        (event.regulatoryDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        (entity.regulatoryDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
       );
 
-      if (daysUntilDeadline <= AE_CONFIG.deadlineReminderDays && daysUntilDeadline > 0) {
+      if (daysUntilDeadline > 0) {
         const alert: ISafetyAlert = {
           type: 'DEADLINE_APPROACHING',
           severity: daysUntilDeadline <= 1 ? 'critical' : 'warning',
-          userId: event.userId,
-          message: `AE Report #${id} deadline in ${daysUntilDeadline} days: ${event.cioms.reactionTerm}`,
-          eventId: id,
+          userId: entity.userId,
+          message: `AE Report #${entity.id} deadline in ${daysUntilDeadline} days: ${entity.reactionTerm}`,
+          eventId: entity.id,
           createdAt: new Date(),
           acknowledged: false,
         };
 
-        // Avoid duplicate alerts
-        const existingAlert = this.alerts.find(
-          (a) => a.type === 'DEADLINE_APPROACHING' && a.eventId === id && !a.acknowledged
-        );
-        if (!existingAlert) {
-          this.createSafetyAlert(alert);
-          newAlerts.push(alert);
-        }
+        // createSafetyAlert now handles duplicate checking
+        await this.createSafetyAlert(alert);
+        newAlerts.push(alert);
       }
     }
 
@@ -681,66 +767,57 @@ export class AdverseEventService {
   /**
    * Get all AE reports
    */
-  getAllReports(filters?: {
+  async getAllReports(filters?: {
     userId?: string;
     isSerious?: boolean;
     status?: ReportStatus;
-  }): IAdverseEventReport[] {
-    let reports = Array.from(this.events.values());
+  }): Promise<IAdverseEventReport[]> {
+    let entities: IAdverseEventEntity[];
 
     if (filters?.userId) {
-      reports = reports.filter((r) => r.userId === filters.userId);
-    }
-    if (filters?.isSerious !== undefined) {
-      reports = reports.filter((r) => r.isSerious === filters.isSerious);
-    }
-    if (filters?.status) {
-      reports = reports.filter((r) => r.reportStatus === filters.status);
+      entities = await this.aeRepository.findByUserId(filters.userId);
+    } else if (filters?.isSerious !== undefined) {
+      const all = await (filters.isSerious
+        ? this.aeRepository.findSerious()
+        : this.aeRepository.findAll());
+      entities = filters.isSerious ? all : all.filter((e) => !e.isSerious);
+    } else if (filters?.status) {
+      entities = await this.aeRepository.findByStatus(filters.status);
+    } else {
+      entities = await this.aeRepository.findAll();
     }
 
-    return reports.sort((a, b) => b.reportedAt.getTime() - a.reportedAt.getTime());
+    // Apply additional filters if needed
+    if (filters?.userId && filters?.isSerious !== undefined) {
+      entities = entities.filter((e) => e.isSerious === filters.isSerious);
+    }
+    if (filters?.userId && filters?.status) {
+      entities = entities.filter((e) => e.reportStatus === filters.status);
+    }
+
+    return entities.map((e) => this.entityToReport(e));
   }
 
   /**
    * Get AE report by ID
    */
-  getReportById(id: number): IAdverseEventReport | undefined {
-    return this.events.get(id);
+  async getReportById(id: number): Promise<IAdverseEventReport | undefined> {
+    const entity = await this.aeRepository.findById(id);
+    return entity ? this.entityToReport(entity) : undefined;
   }
 
   /**
    * Get AE statistics for dashboard
    */
-  getStatistics(): {
+  async getStatistics(): Promise<{
     total: number;
     serious: number;
     nonSerious: number;
     pending: number;
     byCategory: Record<string, number>;
     bySeverity: Record<string, number>;
-  } {
-    const reports = Array.from(this.events.values());
-
-    const byCategory: Record<string, number> = {};
-    const bySeverity: Record<string, number> = { mild: 0, moderate: 0, severe: 0 };
-
-    for (const report of reports) {
-      // By category
-      const cat = report.dtxCategory || 'OTHER';
-      byCategory[cat] = (byCategory[cat] || 0) + 1;
-
-      // By severity
-      bySeverity[report.severity]++;
-    }
-
-    return {
-      total: reports.length,
-      serious: reports.filter((r) => r.isSerious).length,
-      nonSerious: reports.filter((r) => !r.isSerious).length,
-      pending: reports.filter((r) => r.reportStatus !== 'closed').length,
-      byCategory,
-      bySeverity,
-    };
+  }> {
+    return this.aeRepository.getStatistics();
   }
 
   // ==================== Export ====================
@@ -749,8 +826,8 @@ export class AdverseEventService {
    * Export AE report in CIOMS-like format
    * For regulatory submission
    */
-  exportCIOMSFormat(id: number): string | null {
-    const report = this.events.get(id);
+  async exportCIOMSFormat(id: number): Promise<string | null> {
+    const report = await this.getReportById(id);
     if (!report) return null;
 
     const lines = [
@@ -818,6 +895,73 @@ export class AdverseEventService {
         `ID: ${report.id} | User: ${report.userId} | ` +
         `Serious: ${report.isSerious} | Term: ${report.cioms.reactionTerm}`
     );
+  }
+
+  // ==================== Conversion Helpers ====================
+
+  /**
+   * Convert database entity to service report format
+   */
+  private entityToReport(entity: IAdverseEventEntity): IAdverseEventReport {
+    return {
+      id: entity.id,
+      userId: entity.userId,
+      userInternalId: entity.userInternalId,
+      cioms: {
+        reporterType: entity.reporterType,
+        reporterName: entity.reporterName,
+        reporterContact: entity.reporterContact,
+        patientId: entity.userId,
+        patientInitials: entity.patientInitials,
+        patientAge: entity.patientAge,
+        patientSex: entity.patientSex,
+        productName: entity.productName,
+        productVersion: entity.productVersion,
+        reactionTerm: entity.reactionTerm,
+        reactionOnsetDate: entity.reactionOnsetDate,
+      },
+      severity: entity.severity,
+      isSerious: entity.isSerious,
+      seriousnessCriteria: entity.seriousnessCriteria,
+      expectedness: entity.expectedness,
+      dtxCategory: entity.dtxCategory as keyof typeof DTX_AE_CATEGORIES | undefined,
+      customTerm: entity.customTerm,
+      description: entity.description || '',
+      onsetDate: entity.onsetDate,
+      resolutionDate: entity.resolutionDate,
+      outcome: entity.outcome || 'unknown',
+      causality: entity.causality || 'unassessable',
+      actionTaken: entity.actionTaken || 'none',
+      currentISI: entity.currentIsi,
+      baselineISI: entity.baselineIsi,
+      currentWeek: entity.currentWeek,
+      reportStatus: entity.reportStatus,
+      regulatoryDeadline: entity.regulatoryDeadline,
+      submittedToRoszdravnadzor: entity.submittedToRoszdravnadzor,
+      submittedToEthics: entity.submittedToEthics,
+      reportedAt: entity.reportedAt,
+      reportedBy: entity.reportedBy,
+      lastUpdatedAt: entity.updatedAt,
+      notes: entity.notes,
+    };
+  }
+
+  /**
+   * Convert safety alert entity to service alert format
+   */
+  private alertEntityToAlert(entity: ISafetyAlertEntity): ISafetyAlert {
+    return {
+      type: entity.type as ISafetyAlert['type'],
+      severity: entity.severity,
+      userId: entity.userId,
+      userDisplayName: entity.userDisplayName,
+      message: entity.message,
+      eventId: entity.adverseEventId,
+      createdAt: entity.createdAt || new Date(),
+      acknowledged: entity.acknowledged,
+      acknowledgedBy: entity.acknowledgedBy,
+      acknowledgedAt: entity.acknowledgedAt,
+    };
   }
 }
 

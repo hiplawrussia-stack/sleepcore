@@ -22,7 +22,132 @@ import {
   type Expectedness,
 } from '../AdverseEventService';
 
-// Create mock database connection
+// Mock database infrastructure — provides in-memory implementations
+// so AdverseEventService repository calls work without a real DB
+jest.mock('../../../infrastructure/database', () => {
+  class MockAdverseEventRepository {
+    private store = new Map<number, any>();
+    private idCounter = 0;
+
+    async insertWithAudit(entity: any, _changedBy: string, _context?: any) {
+      const id = ++this.idCounter;
+      const now = new Date();
+      const fullEntity = { ...entity, id, uuid: `ae-${id}`, createdAt: now, updatedAt: now };
+      this.store.set(id, fullEntity);
+      return fullEntity;
+    }
+
+    async updateWithAudit(id: number, updates: any, _changedBy: string, _reason?: string) {
+      const entity = this.store.get(id);
+      if (!entity) return null;
+      const updated = { ...entity, ...updates, updatedAt: new Date() };
+      this.store.set(id, updated);
+      return updated;
+    }
+
+    async findById(id: number) {
+      return this.store.get(id) || null;
+    }
+
+    async findByUserId(userId: string) {
+      return [...this.store.values()]
+        .filter((e) => e.userId === userId)
+        .sort((a, b) => b.reportedAt.getTime() - a.reportedAt.getTime());
+    }
+
+    async findSerious() {
+      return [...this.store.values()]
+        .filter((e) => e.isSerious)
+        .sort((a, b) => b.reportedAt.getTime() - a.reportedAt.getTime());
+    }
+
+    async findByStatus(status: string) {
+      return [...this.store.values()]
+        .filter((e) => e.reportStatus === status)
+        .sort((a, b) => b.reportedAt.getTime() - a.reportedAt.getTime());
+    }
+
+    async findAll() {
+      return [...this.store.values()]
+        .sort((a, b) => b.reportedAt.getTime() - a.reportedAt.getTime());
+    }
+
+    async findApproachingDeadlines(days: number) {
+      const now = new Date();
+      const threshold = new Date(now);
+      threshold.setDate(threshold.getDate() + days);
+      return [...this.store.values()].filter((e) => {
+        if (!e.regulatoryDeadline) return false;
+        if (e.reportStatus === 'closed') return false;
+        return e.regulatoryDeadline.getTime() <= threshold.getTime() &&
+               e.regulatoryDeadline.getTime() > now.getTime();
+      });
+    }
+
+    async getStatistics() {
+      const events = [...this.store.values()];
+      const byCategory: Record<string, number> = {};
+      const bySeverity: Record<string, number> = {};
+      for (const e of events) {
+        if (e.dtxCategory) byCategory[e.dtxCategory] = (byCategory[e.dtxCategory] || 0) + 1;
+        if (e.severity) bySeverity[e.severity] = (bySeverity[e.severity] || 0) + 1;
+      }
+      return {
+        total: events.length,
+        serious: events.filter((e) => e.isSerious).length,
+        nonSerious: events.filter((e) => !e.isSerious).length,
+        pending: events.filter((e) => e.reportStatus !== 'closed').length,
+        byCategory,
+        bySeverity,
+      };
+    }
+  }
+
+  class MockSafetyAlertRepository {
+    private store = new Map<number, any>();
+    private idCounter = 0;
+
+    async create(alert: any) {
+      const id = ++this.idCounter;
+      const fullAlert = { ...alert, id, createdAt: new Date() };
+      this.store.set(id, fullAlert);
+      return fullAlert;
+    }
+
+    async hasDuplicateAlert(type: string, eventId: number) {
+      return [...this.store.values()].some(
+        (a) => a.type === type && a.adverseEventId === eventId && !a.acknowledged
+      );
+    }
+
+    async findUnacknowledged() {
+      return [...this.store.values()].filter((a) => !a.acknowledged);
+    }
+
+    async findAll(limit: number = 100) {
+      return [...this.store.values()].slice(0, limit);
+    }
+
+    async acknowledge(id: number, acknowledgedBy: string) {
+      const alert = this.store.get(id);
+      if (!alert) return false;
+      alert.acknowledged = true;
+      alert.acknowledgedBy = acknowledgedBy;
+      alert.acknowledgedAt = new Date();
+      return true;
+    }
+  }
+
+  return {
+    __esModule: true,
+    AdverseEventRepository: MockAdverseEventRepository,
+    SafetyAlertRepository: MockSafetyAlertRepository,
+    createAdverseEventRepository: () => new MockAdverseEventRepository(),
+    createSafetyAlertRepository: () => new MockSafetyAlertRepository(),
+  };
+});
+
+// Create mock database connection (passed to constructor but not used by mocked repos)
 const createMockDb = () => ({
   queryOne: jest.fn(),
   query: jest.fn(),
@@ -172,7 +297,7 @@ describe('AdverseEventService', () => {
         })
       );
 
-      const alerts = service.getUnacknowledgedAlerts();
+      const alerts = await service.getUnacknowledgedAlerts();
       expect(alerts.some((a) => a.type === 'SERIOUS_AE')).toBe(true);
     });
 
@@ -187,7 +312,7 @@ describe('AdverseEventService', () => {
         })
       );
 
-      const alerts = service.getUnacknowledgedAlerts();
+      const alerts = await service.getUnacknowledgedAlerts();
       expect(alerts.some((a) => a.type === 'SUSAR')).toBe(true);
     });
 
@@ -276,7 +401,7 @@ describe('AdverseEventService', () => {
     it('should create safety alert for ISI worsening', async () => {
       await service.checkISIDeterioration(testUserId, 10, 18, 3);
 
-      const alerts = service.getUnacknowledgedAlerts();
+      const alerts = await service.getUnacknowledgedAlerts();
       expect(alerts.some((a) => a.type === 'ISI_WORSENING')).toBe(true);
     });
 
@@ -475,7 +600,7 @@ describe('AdverseEventService', () => {
         createMinimalReport({ isSerious: true, seriousnessCriteria: ['hospitalization'] })
       );
 
-      const alerts = service.getUnacknowledgedAlerts();
+      const alerts = await service.getUnacknowledgedAlerts();
       expect(alerts.length).toBeGreaterThan(0);
       expect(alerts.every((a) => !a.acknowledged)).toBe(true);
     });
@@ -488,7 +613,7 @@ describe('AdverseEventService', () => {
         );
       }
 
-      const allAlerts = service.getAllAlerts(3);
+      const allAlerts = await service.getAllAlerts(3);
       expect(allAlerts.length).toBeLessThanOrEqual(3);
     });
 
@@ -497,15 +622,15 @@ describe('AdverseEventService', () => {
         createMinimalReport({ isSerious: true, seriousnessCriteria: ['hospitalization'] })
       );
 
-      const result = service.acknowledgeAlert(0, 'admin123');
+      const result = await service.acknowledgeAlert(1, 'admin123');
       expect(result).toBe(true);
 
-      const alerts = service.getUnacknowledgedAlerts();
+      const alerts = await service.getUnacknowledgedAlerts();
       expect(alerts.length).toBe(0);
     });
 
-    it('should return false for invalid alert index', () => {
-      const result = service.acknowledgeAlert(999, 'admin123');
+    it('should return false for invalid alert index', async () => {
+      const result = await service.acknowledgeAlert(999, 'admin123');
       expect(result).toBe(false);
     });
 
@@ -514,9 +639,9 @@ describe('AdverseEventService', () => {
         createMinimalReport({ isSerious: true, seriousnessCriteria: ['hospitalization'] })
       );
 
-      service.acknowledgeAlert(0, 'admin123');
+      await service.acknowledgeAlert(1, 'admin123');
 
-      const allAlerts = service.getAllAlerts();
+      const allAlerts = await service.getAllAlerts();
       expect(allAlerts[0].acknowledgedBy).toBe('admin123');
       expect(allAlerts[0].acknowledgedAt).toBeInstanceOf(Date);
     });
@@ -539,7 +664,7 @@ describe('AdverseEventService', () => {
       nearDeadline.setDate(nearDeadline.getDate() + 2);
       await service.updateAdverseEvent(report.id!, { regulatoryDeadline: nearDeadline });
 
-      const alerts = service.checkDeadlines();
+      const alerts = await service.checkDeadlines();
       expect(alerts.some((a) => a.type === 'DEADLINE_APPROACHING')).toBe(true);
     });
 
@@ -547,7 +672,7 @@ describe('AdverseEventService', () => {
       await service.reportAdverseEvent(createMinimalReport({ isSerious: false }));
       // Non-serious has 90-day deadline
 
-      const alerts = service.checkDeadlines();
+      const alerts = await service.checkDeadlines();
       expect(alerts.filter((a) => a.type === 'DEADLINE_APPROACHING').length).toBe(0);
     });
 
@@ -561,7 +686,7 @@ describe('AdverseEventService', () => {
         reportStatus: 'closed',
       });
 
-      const alerts = service.checkDeadlines();
+      const alerts = await service.checkDeadlines();
       expect(alerts.filter((a) => a.type === 'DEADLINE_APPROACHING').length).toBe(0);
     });
 
@@ -572,7 +697,7 @@ describe('AdverseEventService', () => {
       tomorrowDeadline.setDate(tomorrowDeadline.getDate() + 1);
       await service.updateAdverseEvent(report.id!, { regulatoryDeadline: tomorrowDeadline });
 
-      const alerts = service.checkDeadlines();
+      const alerts = await service.checkDeadlines();
       const deadlineAlert = alerts.find((a) => a.type === 'DEADLINE_APPROACHING');
       expect(deadlineAlert?.severity).toBe('critical');
     });
@@ -591,35 +716,35 @@ describe('AdverseEventService', () => {
       await service.reportAdverseEvent(createMinimalReport({ userId: 'user2', isSerious: false }));
     });
 
-    it('should get all reports', () => {
-      const reports = service.getAllReports();
+    it('should get all reports', async () => {
+      const reports = await service.getAllReports();
       expect(reports.length).toBe(3);
     });
 
-    it('should filter reports by userId', () => {
-      const reports = service.getAllReports({ userId: 'user1' });
+    it('should filter reports by userId', async () => {
+      const reports = await service.getAllReports({ userId: 'user1' });
       expect(reports.length).toBe(2);
       expect(reports.every((r) => r.userId === 'user1')).toBe(true);
     });
 
-    it('should filter reports by seriousness', () => {
-      const serious = service.getAllReports({ isSerious: true });
+    it('should filter reports by seriousness', async () => {
+      const serious = await service.getAllReports({ isSerious: true });
       expect(serious.length).toBe(1);
 
-      const nonSerious = service.getAllReports({ isSerious: false });
+      const nonSerious = await service.getAllReports({ isSerious: false });
       expect(nonSerious.length).toBe(2);
     });
 
-    it('should filter reports by status', () => {
-      const drafts = service.getAllReports({ status: 'draft' });
+    it('should filter reports by status', async () => {
+      const drafts = await service.getAllReports({ status: 'draft' });
       expect(drafts.length).toBe(3);
 
-      const closed = service.getAllReports({ status: 'closed' });
+      const closed = await service.getAllReports({ status: 'closed' });
       expect(closed.length).toBe(0);
     });
 
-    it('should sort reports by date descending', () => {
-      const reports = service.getAllReports();
+    it('should sort reports by date descending', async () => {
+      const reports = await service.getAllReports();
       for (let i = 1; i < reports.length; i++) {
         expect(reports[i - 1].reportedAt.getTime()).toBeGreaterThanOrEqual(
           reports[i].reportedAt.getTime()
@@ -627,14 +752,14 @@ describe('AdverseEventService', () => {
       }
     });
 
-    it('should get report by ID', () => {
-      const report = service.getReportById(1);
+    it('should get report by ID', async () => {
+      const report = await service.getReportById(1);
       expect(report).toBeDefined();
       expect(report?.id).toBe(1);
     });
 
-    it('should return undefined for non-existent ID', () => {
-      const report = service.getReportById(999);
+    it('should return undefined for non-existent ID', async () => {
+      const report = await service.getReportById(999);
       expect(report).toBeUndefined();
     });
   });
@@ -658,30 +783,30 @@ describe('AdverseEventService', () => {
       );
     });
 
-    it('should calculate total count', () => {
-      const stats = service.getStatistics();
+    it('should calculate total count', async () => {
+      const stats = await service.getStatistics();
       expect(stats.total).toBe(3);
     });
 
-    it('should count serious vs non-serious', () => {
-      const stats = service.getStatistics();
+    it('should count serious vs non-serious', async () => {
+      const stats = await service.getStatistics();
       expect(stats.serious).toBe(1);
       expect(stats.nonSerious).toBe(2);
     });
 
-    it('should count pending reports', () => {
-      const stats = service.getStatistics();
+    it('should count pending reports', async () => {
+      const stats = await service.getStatistics();
       expect(stats.pending).toBe(3); // All are drafts
     });
 
-    it('should break down by category', () => {
-      const stats = service.getStatistics();
+    it('should break down by category', async () => {
+      const stats = await service.getStatistics();
       expect(stats.byCategory['FATIGUE']).toBe(2);
       expect(stats.byCategory['HEADACHE']).toBe(1);
     });
 
-    it('should break down by severity', () => {
-      const stats = service.getStatistics();
+    it('should break down by severity', async () => {
+      const stats = await service.getStatistics();
       expect(stats.bySeverity['mild']).toBe(1);
       expect(stats.bySeverity['moderate']).toBe(1);
       expect(stats.bySeverity['severe']).toBe(1);
@@ -699,6 +824,7 @@ describe('AdverseEventService', () => {
     it('should export report in CIOMS format', async () => {
       await service.reportAdverseEvent(
         createMinimalReport({
+          userId: 'patient123',
           cioms: {
             reporterType: 'patient',
             patientId: 'patient123',
@@ -717,7 +843,7 @@ describe('AdverseEventService', () => {
         })
       );
 
-      const cioms = service.exportCIOMSFormat(1);
+      const cioms = await service.exportCIOMSFormat(1);
 
       expect(cioms).toContain('CIOMS FORM I');
       expect(cioms).toContain('Report ID: 1');
@@ -728,8 +854,8 @@ describe('AdverseEventService', () => {
       expect(cioms).toContain('Current ISI: 20');
     });
 
-    it('should return null for non-existent report', () => {
-      const cioms = service.exportCIOMSFormat(999);
+    it('should return null for non-existent report', async () => {
+      const cioms = await service.exportCIOMSFormat(999);
       expect(cioms).toBeNull();
     });
 
@@ -741,7 +867,7 @@ describe('AdverseEventService', () => {
         })
       );
 
-      const cioms = service.exportCIOMSFormat(1);
+      const cioms = await service.exportCIOMSFormat(1);
       expect(cioms).toContain('Serious: Yes');
       expect(cioms).toContain('hospitalization');
     });
@@ -750,7 +876,7 @@ describe('AdverseEventService', () => {
       await service.reportAdverseEvent(createMinimalReport());
       await service.updateAdverseEvent(1, { reportStatus: 'pending_review' });
 
-      const cioms = service.exportCIOMSFormat(1);
+      const cioms = await service.exportCIOMSFormat(1);
       expect(cioms).toContain('Status: pending_review');
     });
   });
@@ -818,8 +944,8 @@ describe('AdverseEventService', () => {
       expect(report.cioms.reactionTerm).toBe('Patient-reported event');
     });
 
-    it('should handle negative alert index', () => {
-      const result = service.acknowledgeAlert(-1, 'admin');
+    it('should handle negative alert index', async () => {
+      const result = await service.acknowledgeAlert(-1, 'admin');
       expect(result).toBe(false);
     });
 
@@ -831,10 +957,10 @@ describe('AdverseEventService', () => {
       await service.updateAdverseEvent(report.id!, { regulatoryDeadline: nearDeadline });
 
       // Check deadlines twice
-      service.checkDeadlines();
-      service.checkDeadlines();
+      await service.checkDeadlines();
+      await service.checkDeadlines();
 
-      const alerts = service.getAllAlerts();
+      const alerts = await service.getAllAlerts();
       const deadlineAlerts = alerts.filter((a) => a.type === 'DEADLINE_APPROACHING');
       expect(deadlineAlerts.length).toBe(1);
     });
@@ -843,7 +969,7 @@ describe('AdverseEventService', () => {
       await service.reportAdverseEvent(createMinimalReport());
       await service.updateAdverseEvent(1, { regulatoryDeadline: undefined });
 
-      const alerts = service.checkDeadlines();
+      const alerts = await service.checkDeadlines();
       expect(alerts.filter((a) => a.eventId === 1).length).toBe(0);
     });
 
@@ -852,12 +978,12 @@ describe('AdverseEventService', () => {
       await service.reportAdverseEvent(createMinimalReport({ userId: 'user1', isSerious: false }));
       await service.reportAdverseEvent(createMinimalReport({ userId: 'user2', isSerious: true, seriousnessCriteria: ['hospitalization'] }));
 
-      const filtered = service.getAllReports({ userId: 'user1', isSerious: true });
+      const filtered = await service.getAllReports({ userId: 'user1', isSerious: true });
       expect(filtered.length).toBe(1);
     });
 
-    it('should handle empty events map in statistics', () => {
-      const stats = service.getStatistics();
+    it('should handle empty events map in statistics', async () => {
+      const stats = await service.getStatistics();
 
       expect(stats.total).toBe(0);
       expect(stats.serious).toBe(0);

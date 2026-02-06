@@ -269,7 +269,32 @@ export interface IStimulusControlEngine {
 // =============================================================================
 
 /**
+ * Sleep-related emotions commonly experienced with insomnia
+ *
+ * Scientific basis:
+ * - Harvey (2002) cognitive model of insomnia
+ * - Pre-Sleep Arousal Scale (PSAS) cognitive subscale
+ * - JAMA Network Open (2025) emotional processing in CBT-I
+ *
+ * @see https://pmc.ncbi.nlm.nih.gov/articles/PMC6796223/
+ * @see https://pmc.ncbi.nlm.nih.gov/articles/PMC11868973/
+ */
+export type SleepRelatedEmotion =
+  | 'anxiety'       // Pre-sleep worry, anticipatory anxiety about not sleeping
+  | 'frustration'   // Frustration from inability to sleep (conditioned arousal)
+  | 'hopelessness'  // "Nothing will help my sleep" (DBAS helplessness)
+  | 'fear'          // Fear of consequences of poor sleep (catastrophizing)
+  | 'anger'         // Irritability, anger associated with sleep deprivation
+  | 'worry';        // Rumination, perseverative thinking about sleep
+
+/**
  * Sleep-related dysfunctional belief
+ *
+ * Extended with emotional component following Beck's CBT model:
+ * Situation → Automatic Thought → Emotion → Behavior
+ *
+ * @see Beck (1976) Cognitive Therapy and the Emotional Disorders
+ * @see Blueprint.ai CBT Thought Record clinical standard
  */
 export interface IDysfunctionalBelief {
   readonly id: string;
@@ -287,6 +312,30 @@ export interface IDysfunctionalBelief {
   readonly evidenceAgainst: string[]; // Evidence against (therapeutic)
   readonly alternativeThought: string; // Balanced alternative
   readonly isActive: boolean;
+
+  /**
+   * Primary emotion associated with this belief
+   * Part of Beck's cognitive triad: thought → emotion → behavior
+   *
+   * @see Harvey (2002) cognitive model of insomnia
+   */
+  readonly emotion?: SleepRelatedEmotion;
+
+  /**
+   * Intensity of the emotion (0.0-1.0)
+   * Maps to 0-100% scale used in clinical thought records
+   *
+   * @see Psychology Tools thought record format
+   */
+  readonly emotionIntensity?: number;
+
+  /**
+   * Emotion intensity after cognitive restructuring (0.0-1.0)
+   * Used to track emotional improvement from reframing
+   *
+   * Clinical standard: re-rate emotion after generating alternative thought
+   */
+  readonly emotionIntensityAfter?: number;
 }
 
 /**
@@ -348,7 +397,135 @@ export interface ICognitiveRestructuringEngine {
    */
   calculateImprovement(
     beliefHistory: IDysfunctionalBelief[][]
-  ): { dbasReduction: number; topImprovedBeliefs: string[] };
+  ): ICognitiveImprovementResult;
+
+  /**
+   * Generate structured progress report for cognitive restructuring
+   *
+   * Produces a table-format report showing:
+   * - Belief → Emotion → Category → Alternative Thought
+   * - Intensity changes over time
+   *
+   * @see ChatCBT summary table format
+   * @see Blueprint.ai thought record format
+   */
+  generateCognitiveProgressReport(
+    beliefHistory: IDysfunctionalBelief[][]
+  ): ICognitiveProgressReport;
+
+  /**
+   * Infer emotion from belief category and content
+   * Used when emotion is not explicitly provided
+   */
+  inferEmotionFromBelief(belief: IDysfunctionalBelief): SleepRelatedEmotion;
+}
+
+/**
+ * Result of cognitive improvement calculation
+ */
+export interface ICognitiveImprovementResult {
+  /** Overall DBAS score reduction (0-1) */
+  readonly dbasReduction: number;
+
+  /** Beliefs with most improvement */
+  readonly topImprovedBeliefs: string[];
+
+  /** Emotional improvement metrics (new) */
+  readonly emotionalImprovement: {
+    /** Average reduction in emotion intensity */
+    readonly avgEmotionReduction: number;
+    /** Emotions with most improvement */
+    readonly improvedEmotions: SleepRelatedEmotion[];
+  };
+}
+
+/**
+ * Single row in cognitive progress report
+ *
+ * Format inspired by CBT thought record + ChatCBT summary table
+ */
+export interface ICognitiveProgressRow {
+  /** Date of belief identification */
+  readonly date: string;
+
+  /** The dysfunctional belief text */
+  readonly belief: string;
+
+  /** Belief category (DBAS-based) */
+  readonly category: IDysfunctionalBelief['category'];
+
+  /** Associated emotion */
+  readonly emotion: SleepRelatedEmotion;
+
+  /** Initial emotion intensity (0-100 for display) */
+  readonly emotionIntensityBefore: number;
+
+  /** Emotion intensity after restructuring (0-100 for display) */
+  readonly emotionIntensityAfter: number;
+
+  /** Belief intensity before (0-100 for display) */
+  readonly beliefIntensityBefore: number;
+
+  /** Belief intensity after (0-100 for display) */
+  readonly beliefIntensityAfter: number;
+
+  /** Alternative balanced thought */
+  readonly alternativeThought: string;
+
+  /** Whether restructuring was successful (intensity reduced >20%) */
+  readonly restructuringSuccess: boolean;
+}
+
+/**
+ * Cognitive progress report
+ *
+ * Structured table format for tracking cognitive-emotional journey
+ *
+ * @see JAMA Network Open (2025) - emotional processing in dCBT-I
+ */
+export interface ICognitiveProgressReport {
+  /** Report generation date */
+  readonly generatedAt: string;
+
+  /** User ID */
+  readonly userId: string;
+
+  /** Period covered by report */
+  readonly periodStart: string;
+  readonly periodEnd: string;
+
+  /** Individual belief rows */
+  readonly rows: ICognitiveProgressRow[];
+
+  /** Summary statistics */
+  readonly summary: {
+    /** Total beliefs tracked */
+    readonly totalBeliefs: number;
+
+    /** Beliefs successfully restructured */
+    readonly successfulRestructurings: number;
+
+    /** Success rate (0-100) */
+    readonly successRate: number;
+
+    /** Average belief intensity reduction */
+    readonly avgBeliefReduction: number;
+
+    /** Average emotion intensity reduction */
+    readonly avgEmotionReduction: number;
+
+    /** Most common emotion */
+    readonly dominantEmotion: SleepRelatedEmotion;
+
+    /** Category with most beliefs */
+    readonly dominantCategory: IDysfunctionalBelief['category'];
+  };
+
+  /**
+   * Format report as markdown table
+   * For display in UI or export
+   */
+  toMarkdownTable(): string;
 }
 
 // =============================================================================

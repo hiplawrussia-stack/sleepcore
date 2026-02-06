@@ -103,11 +103,13 @@ describe('SleepPredictionService', () => {
       expect(DEFAULT_SLEEP_PREDICTION_CONFIG.normalization.maxTST).toBe(12);
     });
 
-    it('should have early warning thresholds', () => {
-      expect(DEFAULT_SLEEP_PREDICTION_CONFIG.earlyWarning.seDropThreshold).toBe(10);
-      expect(DEFAULT_SLEEP_PREDICTION_CONFIG.earlyWarning.solIncreaseThreshold).toBe(15);
-      expect(DEFAULT_SLEEP_PREDICTION_CONFIG.earlyWarning.wasoIncreaseThreshold).toBe(20);
-      expect(DEFAULT_SLEEP_PREDICTION_CONFIG.earlyWarning.varianceThreshold).toBe(1.5);
+    it('should have conservative early warning thresholds (Smit et al. 2025)', () => {
+      // Conservative thresholds per Smit et al. 2025 (PNAS):
+      // EWS sensitivity ~32.9% — prioritize specificity to reduce false positives
+      expect(DEFAULT_SLEEP_PREDICTION_CONFIG.earlyWarning.seDropThreshold).toBe(12);
+      expect(DEFAULT_SLEEP_PREDICTION_CONFIG.earlyWarning.solIncreaseThreshold).toBe(20);
+      expect(DEFAULT_SLEEP_PREDICTION_CONFIG.earlyWarning.wasoIncreaseThreshold).toBe(25);
+      expect(DEFAULT_SLEEP_PREDICTION_CONFIG.earlyWarning.varianceThreshold).toBe(1.8);
     });
 
     it('should have prediction horizons', () => {
@@ -444,6 +446,82 @@ describe('SleepPredictionService', () => {
     });
   });
 });
+
+  describe('ESN cold-start fallback', () => {
+    it('should return ESN prediction for 3-6 days of data', () => {
+      const newService = createSleepPredictionService();
+      const userId = 'cold-start-user';
+
+      // Add 5 days of history
+      for (let i = 4; i >= 0; i--) {
+        newService.addSleepEntry(createMockHistoryEntry(i, userId, {
+          sleepEfficiency: 80 + i,
+          sleepOnsetLatency: 20,
+          wakeAfterSleepOnset: 30,
+        }));
+      }
+
+      const prediction = newService.predict(userId, 'medium');
+
+      expect(prediction).not.toBeNull();
+      expect(prediction?.source).toBe('esn_cold_start');
+      expect(prediction?.earlyWarnings).toHaveLength(0);
+      expect(prediction?.trend).toBe('stable');
+      expect(prediction?.deteriorationRisk).toBe(0);
+    });
+
+    it('should return null for fewer than 3 days', () => {
+      const newService = createSleepPredictionService();
+      const userId = 'too-few-user';
+
+      newService.addSleepEntry(createMockHistoryEntry(1, userId));
+      newService.addSleepEntry(createMockHistoryEntry(0, userId));
+
+      const prediction = newService.predict(userId, 'short');
+      expect(prediction).toBeNull();
+    });
+
+    it('should return PLRNN prediction for 7+ days with source field', () => {
+      const newService = createSleepPredictionService();
+      const userId = 'plrnn-user';
+
+      for (let i = 7; i >= 0; i--) {
+        newService.addSleepEntry(createMockHistoryEntry(i, userId, {
+          sleepEfficiency: 85 - i,
+        }));
+      }
+
+      const prediction = newService.predict(userId, 'short');
+
+      expect(prediction).not.toBeNull();
+      expect(prediction?.source).toBe('plrnn');
+    });
+
+    it('should clean up ESN predictor when user reaches 7 days', () => {
+      const newService = createSleepPredictionService();
+      const userId = 'transition-user';
+
+      // Add 6 days
+      for (let i = 5; i >= 0; i--) {
+        newService.addSleepEntry(createMockHistoryEntry(i, userId, {
+          sleepEfficiency: 80,
+        }));
+      }
+
+      // Should use ESN
+      const esnPrediction = newService.predict(userId, 'short');
+      expect(esnPrediction?.source).toBe('esn_cold_start');
+
+      // Add 7th day — should trigger ESN cleanup
+      newService.addSleepEntry(createMockHistoryEntry(0, userId, {
+        sleepEfficiency: 82,
+      }));
+
+      // Now should use PLRNN
+      const plrnnPrediction = newService.predict(userId, 'short');
+      expect(plrnnPrediction?.source).toBe('plrnn');
+    });
+  });
 
 // ==================== Integration Tests ====================
 

@@ -27,6 +27,15 @@ interface CommandInfo {
 }
 
 /**
+ * Command category for organized display
+ */
+interface CommandCategory {
+  title: string;
+  icon: string;
+  commands: CommandInfo[];
+}
+
+/**
  * /help Command Implementation
  */
 export class HelpCommand implements ICommand {
@@ -36,49 +45,169 @@ export class HelpCommand implements ICommand {
   readonly requiresSession = false;
 
   /**
-   * All available commands
+   * All available commands organized by category.
+   *
+   * IEC 62366-1: Safety-critical commands (/sos, /safety, /aereport)
+   * MUST be in primary disclosure tier — not hidden behind secondary navigation.
+   * ISO 14971: Undiscoverable safety features = unacceptable risk.
    */
-  private readonly commands: CommandInfo[] = [
+  private readonly categories: CommandCategory[] = [
     {
-      name: '/start',
-      icon: '🚀',
-      description: 'Начать программу, пройти оценку сна',
+      title: 'Экстренная помощь',
+      icon: '🚨',
+      commands: [
+        {
+          name: '/sos',
+          icon: '🆘',
+          description: 'Экстренная психологическая помощь',
+        },
+        {
+          name: '/safety',
+          icon: '🛡️',
+          description: 'Статус безопасности и мониторинг',
+        },
+        {
+          name: '/aereport',
+          icon: '⚠️',
+          description: 'Сообщить о проблеме или побочном эффекте',
+        },
+      ],
     },
     {
-      name: '/diary',
-      icon: '📓',
-      description: 'Записать сон в дневник (3 клика)',
-      example: 'Заполняйте каждое утро',
+      title: 'Основная программа',
+      icon: '📋',
+      commands: [
+        {
+          name: '/start',
+          icon: '🚀',
+          description: 'Начать программу, пройти оценку сна',
+        },
+        {
+          name: '/diary',
+          icon: '📓',
+          description: 'Записать сон в дневник',
+          example: 'Заполняйте каждое утро',
+        },
+        {
+          name: '/today',
+          icon: '📅',
+          description: 'Задание на сегодня',
+        },
+        {
+          name: '/therapy',
+          icon: '💊',
+          description: 'Терапевтические сессии КПТ-И',
+        },
+        {
+          name: '/progress',
+          icon: '📊',
+          description: 'Ваш прогресс за неделю',
+        },
+      ],
     },
     {
-      name: '/today',
-      icon: '📅',
-      description: 'Персональное задание на сегодня',
-    },
-    {
-      name: '/relax',
+      title: 'Техники и практики',
       icon: '🧘',
-      description: 'Техники релаксации перед сном',
+      commands: [
+        {
+          name: '/relax',
+          icon: '🧘',
+          description: 'Техники релаксации',
+        },
+        {
+          name: '/mindful',
+          icon: '🧠',
+          description: 'Практики осознанности (MBT-I, ACT-I)',
+        },
+        {
+          name: '/rehearsal',
+          icon: '🌙',
+          description: 'Вечерняя репетиция сна',
+        },
+        {
+          name: '/recall',
+          icon: '☀️',
+          description: 'Утренний тест памяти',
+        },
+      ],
     },
     {
-      name: '/mindful',
-      icon: '🧠',
-      description: 'Практики осознанности (MBT-I, ACT-I)',
+      title: 'Аналитика и AI',
+      icon: '🤖',
+      commands: [
+        {
+          name: '/insights',
+          icon: '🔍',
+          description: 'Персональный анализ сна',
+        },
+        {
+          name: '/predict',
+          icon: '🔮',
+          description: 'Прогноз сна на 7 дней',
+        },
+        {
+          name: '/explain',
+          icon: '💡',
+          description: 'Объяснение рекомендаций AI',
+        },
+        {
+          name: '/whatif',
+          icon: '🧪',
+          description: 'Моделирование сценариев',
+        },
+        {
+          name: '/twin',
+          icon: '👤',
+          description: 'Цифровой двойник',
+        },
+        {
+          name: '/chronotype',
+          icon: '🕐',
+          description: 'Определить хронотип (жаворонок/сова)',
+        },
+        {
+          name: '/smart_tips',
+          icon: '✨',
+          description: 'Умные рекомендации',
+        },
+      ],
     },
     {
-      name: '/progress',
-      icon: '📊',
-      description: 'Ваш еженедельный прогресс',
+      title: 'Игровые элементы',
+      icon: '🎮',
+      commands: [
+        {
+          name: '/quest',
+          icon: '⚔️',
+          description: 'Квесты и задания',
+        },
+        {
+          name: '/badges',
+          icon: '🏅',
+          description: 'Бейджи и достижения',
+        },
+        {
+          name: '/profile',
+          icon: '👤',
+          description: 'Профиль игрока',
+        },
+        {
+          name: '/sonya',
+          icon: '🌟',
+          description: 'Эволюция Сони',
+        },
+      ],
     },
     {
-      name: '/sos',
-      icon: '🆘',
-      description: 'Экстренная психологическая помощь',
-    },
-    {
-      name: '/help',
-      icon: '❓',
-      description: 'Эта справка',
+      title: 'Сервис',
+      icon: '⚙️',
+      commands: [
+        {
+          name: '/help',
+          icon: '❓',
+          description: 'Эта справка',
+        },
+      ],
     },
   ];
 
@@ -92,9 +221,14 @@ export class HelpCommand implements ICommand {
   // ==================== Response Handlers ====================
 
   private async showHelp(_ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const commandsList = this.commands
-      .map((cmd) => `${cmd.icon} *${cmd.name}* — ${cmd.description}`)
-      .join('\n');
+    const categorySections = this.categories
+      .map((cat) => {
+        const cmds = cat.commands
+          .map((cmd) => `${cmd.icon} *${cmd.name}* — ${cmd.description}`)
+          .join('\n');
+        return `*${cat.icon} ${cat.title}*\n${cmds}`;
+      })
+      .join('\n\n');
 
     const message = `
 ${sonya.emoji} *${sonya.name}*
@@ -103,18 +237,7 @@ ${sonya.emoji} *${sonya.name}*
 
 ${formatter.header('SleepCore — Справка')}
 
-*Доступные команды:*
-
-${commandsList}
-
-${formatter.divider()}
-
-*📚 О программе:*
-
-SleepCore — цифровая терапия инсомнии на основе:
-• КПТ-И (Grade A, European Guideline 2023)
-• MBT-I / ACT-I (терапии третьей волны)
-• POMDP-алгоритм персонализации
+${categorySections}
 
 ${formatter.divider()}
 

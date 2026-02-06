@@ -10,10 +10,7 @@ import {
   VoiceBiomarkerService,
   createVoiceBiomarkerService,
   voiceBiomarkerService,
-  DEFAULT_VOICE_BIOMARKER_CONFIG,
   type IAcousticFeatures,
-  type IVoiceBiomarkerResult,
-  type IVoiceBaseline,
 } from '../VoiceBiomarkerService';
 
 describe('VoiceBiomarkerService', () => {

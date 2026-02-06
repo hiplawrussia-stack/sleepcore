@@ -15,27 +15,18 @@ import {
   createMetacognitiveEngineService,
   metacognitiveEngineService,
   DEFAULT_MCT_ENGINE_CONFIG,
-  type IMCTStatus,
-  type IMCTResponse,
-  type MCTTrigger,
 } from '../MetacognitiveEngineService';
 
 import {
   WorryPostponementService,
   createWorryPostponementService,
   worryPostponementService,
-  DEFAULT_WORRY_CONFIG,
-  type IWorryEntry,
-  type IWorrySession,
 } from '../WorryPostponementService';
 
 import {
   ATTService,
   createATTService,
   attService,
-  DEFAULT_ATT_CONFIG,
-  type IATTSessionRecord,
-  type IATTProgress,
   type ATTPhase,
 } from '../ATTService';
 
@@ -44,7 +35,6 @@ import {
   createMCQ30AssessmentService,
   MCQ30_ITEMS,
   MCQ30_SUBSCALES,
-  type IMCQ30Result,
   type IMCQ30Response,
 } from '../MCQ30AssessmentService';
 
@@ -53,7 +43,6 @@ import {
   createDetachedMindfulnessService,
   detachedMindfulnessService,
   DM_EXERCISES,
-  type IDMSessionRecord,
   type DMExerciseType,
 } from '../DetachedMindfulnessService';
 

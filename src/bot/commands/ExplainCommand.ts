@@ -152,14 +152,21 @@ ${sonya.tip('Прозрачность — основа доверия. Спра�
   }
 
   private async explainRecommendation(
-    _ctx: ISleepCoreContext,
+    ctx: ISleepCoreContext,
     _recommendationId?: string
   ): Promise<ICommandResult> {
-    const message = `
-${formatter.header('📊 Как формируются рекомендации')}
+    // Try to get real explanation from CogniCore ExplainabilityService
+    let personalizedSection = '';
+    try {
+      const explanation = await ctx.sleepCore.explainCurrentIntervention(ctx.userId);
+      if (explanation) {
+        personalizedSection = this.formatExplanation(explanation);
+      }
+    } catch {
+      // Fall through to generic explanation
+    }
 
-Каждая рекомендация SleepCore основана на:
-
+    const genericSection = `
 *1. Ваших данных:*
 • Дневник сна (время, качество, пробуждения)
 • Ответы на опросники (ISI, DBAS)
@@ -175,11 +182,90 @@ ${formatter.header('📊 Как формируются рекомендации'
 *3. Персонализации через AI:*
 • Thompson Sampling для выбора интервенций
 • PLRNN для прогнозирования эффекта
-• Digital Twin для симуляции сценариев
+• Digital Twin для симуляции сценариев`;
+
+    const message = `
+${formatter.header('📊 Как формируются рекомендации')}
+
+Каждая рекомендация SleepCore основана на:
+
+${genericSection}
 
 ${formatter.divider()}
 
-*Пример объяснения рекомендации:*
+${personalizedSection || this.getStaticExample()}
+
+${formatter.divider()}
+
+${sonya.tip('Каждая рекомендация — это не догадка, а расчёт на основе данных и науки!')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🔮 Как строятся прогнозы?', callbackData: 'explain:prediction' }],
+      [{ text: '← Назад', callbackData: 'explain:menu' }],
+    ];
+
+    return { success: true, message, keyboard };
+  }
+
+  /**
+   * Format real SHAP-style explanation from CogniCore ExplainabilityService
+   */
+  private formatExplanation(explanation: {
+    summaryRu: string;
+    reasoningRu: string;
+    keyFactors: Array<{
+      nameRu: string;
+      value: string;
+      impact: 'helps' | 'hurts' | 'neutral';
+      emoji: string;
+      explanationRu: string;
+    }>;
+    confidence: { level: string; emoji: string; descriptionRu: string };
+    actionableAdviceRu: string[];
+    limitationsRu: string[];
+    disclaimerRu: string;
+  }): string {
+    const lines: string[] = [];
+    lines.push('*📋 Объяснение текущей рекомендации:*');
+    lines.push('');
+    lines.push(`→ *Суть:* ${explanation.summaryRu}`);
+    lines.push('');
+    lines.push(`→ *Обоснование:* ${explanation.reasoningRu}`);
+
+    if (explanation.keyFactors.length > 0) {
+      lines.push('');
+      lines.push('→ *Ключевые факторы:*');
+      explanation.keyFactors.slice(0, 5).forEach(f => {
+        const impactIcon = f.impact === 'helps' ? '✅' : f.impact === 'hurts' ? '⚠️' : '➖';
+        lines.push(`  ${f.emoji} ${f.nameRu}: ${f.value} ${impactIcon}`);
+      });
+    }
+
+    lines.push('');
+    lines.push(`→ *Уверенность:* ${explanation.confidence.emoji} ${explanation.confidence.descriptionRu}`);
+
+    if (explanation.actionableAdviceRu.length > 0) {
+      lines.push('');
+      lines.push('→ *Что вы можете сделать:*');
+      explanation.actionableAdviceRu.slice(0, 3).forEach(a => {
+        lines.push(`  • ${a}`);
+      });
+    }
+
+    if (explanation.disclaimerRu) {
+      lines.push('');
+      lines.push(`_${explanation.disclaimerRu}_`);
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Static example shown when no personalized explanation is available
+   */
+  private getStaticExample(): string {
+    return `*Пример объяснения рекомендации:*
 
 📋 *"Сократить время в кровати до 6.5 часов"*
 
@@ -193,19 +279,7 @@ ${formatter.divider()}
 
 → *Ожидаемый эффект:* SE ↑ до 85% за 2 недели
 
-→ *Доказательная база:* Spielman et al. (1987), Morin (2006)
-
-${formatter.divider()}
-
-${sonya.tip('Каждая рекомендация — это не догадка, а расчёт на основе данных и науки!')}
-    `.trim();
-
-    const keyboard: IInlineButton[][] = [
-      [{ text: '🔮 Как строятся прогнозы?', callbackData: 'explain:prediction' }],
-      [{ text: '← Назад', callbackData: 'explain:menu' }],
-    ];
-
-    return { success: true, message, keyboard };
+→ *Доказательная база:* Spielman et al. (1987), Morin (2006)`;
   }
 
   private async explainPrediction(_ctx: ISleepCoreContext): Promise<ICommandResult> {

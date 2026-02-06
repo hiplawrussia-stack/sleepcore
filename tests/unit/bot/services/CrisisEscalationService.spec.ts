@@ -62,18 +62,15 @@ describe('CrisisEscalationService', () => {
 
     it('should accept custom configuration', () => {
       const customService = createCrisisEscalationService({
-        enabled: false,
         notifyOnHigh: false,
       });
       expect(customService).toBeInstanceOf(CrisisEscalationService);
-      expect(customService.getConfig().enabled).toBe(false);
       expect(customService.getConfig().notifyOnHigh).toBe(false);
     });
   });
 
   describe('DEFAULT_ESCALATION_CONFIG', () => {
     it('should have sensible defaults', () => {
-      expect(DEFAULT_ESCALATION_CONFIG.enabled).toBe(true);
       expect(DEFAULT_ESCALATION_CONFIG.adminUserIds).toEqual([]);
       expect(DEFAULT_ESCALATION_CONFIG.adminChatId).toBeUndefined();
       expect(DEFAULT_ESCALATION_CONFIG.notifyOnHigh).toBe(true);
@@ -81,6 +78,10 @@ describe('CrisisEscalationService', () => {
       expect(DEFAULT_ESCALATION_CONFIG.autoCreateAE).toBe(true);
       expect(DEFAULT_ESCALATION_CONFIG.escalationTimeoutMinutes).toBe(30);
       expect(DEFAULT_ESCALATION_CONFIG.enableSafetyPlan).toBe(true);
+    });
+
+    it('should NOT have enabled field — crisis escalation is always active (ISO 14971)', () => {
+      expect('enabled' in DEFAULT_ESCALATION_CONFIG).toBe(false);
     });
   });
 
@@ -95,24 +96,18 @@ describe('CrisisEscalationService', () => {
       expect(config.adminUserIds).toEqual(['admin-1', 'admin-2']);
       expect(config.notifyOnHigh).toBe(false);
       // Other values should remain default
-      expect(config.enabled).toBe(true);
+      expect(config.notifyOnCritical).toBe(true);
     });
   });
 
   describe('escalate()', () => {
-    describe('with disabled service', () => {
-      it('should return no escalation when disabled', async () => {
-        const disabledService = createCrisisEscalationService({
-          enabled: false,
-        });
-
+    describe('always-active escalation (ISO 14971)', () => {
+      it('should ALWAYS escalate critical events — no disable mechanism exists', async () => {
         const event = createMockCrisisEvent('critical');
-        const result = await disabledService.escalate(event);
+        const result = await service.escalate(event);
 
-        expect(result.escalated).toBe(false);
-        expect(result.level).toBe('none');
-        expect(result.notificationsSent).toBe(0);
-        expect(result.aeCreated).toBe(false);
+        expect(result.escalated).toBe(true);
+        expect(result.level).toBe('emergency');
       });
     });
 

@@ -4,6 +4,9 @@
  * Implements cognitive therapy techniques based on Beck (1979) and
  * Morin's cognitive model of insomnia.
  *
+ * Enhanced with emotional component following Beck's CBT model:
+ * Situation → Automatic Thought → Emotion → Behavior
+ *
  * Targets dysfunctional beliefs about sleep using:
  * - Socratic questioning
  * - Behavioral experiments
@@ -17,6 +20,11 @@
  * - "I have no control over my sleep"
  * - "I must stay in bed to catch up on sleep"
  *
+ * Scientific basis for emotional component:
+ * - Beck (1976) Cognitive Therapy and the Emotional Disorders
+ * - Harvey (2002) Cognitive model of insomnia
+ * - JAMA Network Open (2025) Emotional processing in dCBT-I
+ *
  * @packageDocumentation
  * @module @sleepcore/cbt-i
  */
@@ -24,6 +32,10 @@
 import type {
   ICognitiveRestructuringEngine,
   IDysfunctionalBelief,
+  ICognitiveImprovementResult,
+  ICognitiveProgressReport,
+  ICognitiveProgressRow,
+  SleepRelatedEmotion,
 } from '../interfaces/ICBTIComponents';
 import type { ISleepState } from '../../sleep/interfaces/ISleepState';
 
@@ -146,11 +158,53 @@ const ALTERNATIVE_THOUGHTS: Record<string, string[]> = {
 };
 
 /**
+ * Mapping of belief categories to typical emotions
+ *
+ * Based on:
+ * - Harvey (2002) cognitive model of insomnia
+ * - Pre-Sleep Arousal Scale (PSAS) cognitive subscale
+ * - Network analysis of insomnia-anxiety-depression symptoms (Nature 2025)
+ *
+ * @see https://www.nature.com/articles/s41598-025-09746-w
+ */
+const CATEGORY_EMOTION_MAP: Record<IDysfunctionalBelief['category'], SleepRelatedEmotion> = {
+  expectations: 'anxiety',       // Anxiety about not meeting sleep requirements
+  consequences: 'fear',          // Fear of catastrophic outcomes
+  control: 'hopelessness',       // Helplessness about inability to control sleep
+  medication: 'anxiety',         // Anxiety about dependence
+  causes: 'frustration',         // Frustration about unchangeable factors
+};
+
+/**
+ * Keywords that indicate specific emotions in user text
+ *
+ * Based on PSAS cognitive subscale and clinical CBT practice
+ */
+const EMOTION_KEYWORDS: Record<SleepRelatedEmotion, string[]> = {
+  anxiety: ['тревога', 'волнуюсь', 'беспокоюсь', 'переживаю', 'нервничаю', 'страшно'],
+  frustration: ['разочарован', 'устал', 'надоело', 'раздражает', 'бесит', 'достало'],
+  hopelessness: ['безнадёжно', 'бесполезно', 'никогда', 'невозможно', 'сдаюсь', 'отчаяние'],
+  fear: ['боюсь', 'страх', 'ужас', 'пугает', 'опасаюсь'],
+  anger: ['злюсь', 'злость', 'гнев', 'бешусь', 'ненавижу', 'ярость'],
+  worry: ['думаю', 'мысли', 'не могу перестать', 'кручу', 'зациклился', 'руминация'],
+};
+
+/**
+ * Emotion intensity modifiers based on language intensity
+ */
+const INTENSITY_MODIFIERS: { keywords: string[]; modifier: number }[] = [
+  { keywords: ['очень', 'сильно', 'ужасно', 'невыносимо', 'крайне'], modifier: 0.2 },
+  { keywords: ['немного', 'слегка', 'чуть-чуть', 'иногда'], modifier: -0.2 },
+];
+
+/**
  * Cognitive Restructuring Engine
  */
 export class CognitiveRestructuringEngine implements ICognitiveRestructuringEngine {
   /**
    * Identify dysfunctional beliefs from user text
+   *
+   * Enhanced with emotion detection following Beck's CBT model
    */
   identifyBeliefs(userText: string, sleepState: ISleepState): IDysfunctionalBelief[] {
     const beliefs: IDysfunctionalBelief[] = [];
@@ -168,9 +222,14 @@ export class CognitiveRestructuringEngine implements ICognitiveRestructuringEngi
         // Check cognitive state for existing beliefs
         const existingBeliefStrength = this.getExistingBeliefStrength(sleepState, category);
 
+        // Detect emotion from text or infer from category
+        const typedCategory = category as IDysfunctionalBelief['category'];
+        const detectedEmotion = this.detectEmotionFromText(lowerText, typedCategory);
+        const emotionIntensity = this.calculateEmotionIntensity(lowerText, intensity);
+
         beliefs.push({
           id: `belief_${category}_${Date.now()}`,
-          category: category as IDysfunctionalBelief['category'],
+          category: typedCategory,
           belief: this.extractBestMatchingBelief(lowerText, pattern.beliefs),
           intensity: Math.max(intensity, existingBeliefStrength),
           frequency: 0.5, // Default, would need history for accurate value
@@ -178,6 +237,9 @@ export class CognitiveRestructuringEngine implements ICognitiveRestructuringEngi
           evidenceAgainst: [],
           alternativeThought: '',
           isActive: true,
+          // New emotional fields
+          emotion: detectedEmotion,
+          emotionIntensity: emotionIntensity,
         });
       }
     }
@@ -285,13 +347,19 @@ export class CognitiveRestructuringEngine implements ICognitiveRestructuringEngi
 
   /**
    * Calculate cognitive improvement over time
+   *
+   * Enhanced with emotional improvement metrics
    */
-  calculateImprovement(beliefHistory: IDysfunctionalBelief[][]): {
-    dbasReduction: number;
-    topImprovedBeliefs: string[];
-  } {
+  calculateImprovement(beliefHistory: IDysfunctionalBelief[][]): ICognitiveImprovementResult {
     if (beliefHistory.length < 2) {
-      return { dbasReduction: 0, topImprovedBeliefs: [] };
+      return {
+        dbasReduction: 0,
+        topImprovedBeliefs: [],
+        emotionalImprovement: {
+          avgEmotionReduction: 0,
+          improvedEmotions: [],
+        },
+      };
     }
 
     const firstWeek = beliefHistory[0];
@@ -323,7 +391,139 @@ export class CognitiveRestructuringEngine implements ICognitiveRestructuringEngi
     improvements.sort((a, b) => b.reduction - a.reduction);
     const topImprovedBeliefs = improvements.slice(0, 3).map((i) => i.belief);
 
-    return { dbasReduction, topImprovedBeliefs };
+    // Calculate emotional improvement
+    const emotionalImprovement = this.calculateEmotionalImprovement(firstWeek, lastWeek);
+
+    return {
+      dbasReduction,
+      topImprovedBeliefs,
+      emotionalImprovement,
+    };
+  }
+
+  /**
+   * Generate structured progress report for cognitive restructuring
+   *
+   * Produces a table-format report showing:
+   * - Belief → Emotion → Category → Alternative Thought
+   * - Intensity changes over time
+   */
+  generateCognitiveProgressReport(
+    beliefHistory: IDysfunctionalBelief[][],
+    userId: string = 'unknown'
+  ): ICognitiveProgressReport {
+    const rows: ICognitiveProgressRow[] = [];
+
+    // Group beliefs by id to track changes
+    const beliefGroups = new Map<string, IDysfunctionalBelief[]>();
+
+    for (const weekBeliefs of beliefHistory) {
+      for (const belief of weekBeliefs) {
+        const key = `${belief.category}_${belief.belief}`;
+        if (!beliefGroups.has(key)) {
+          beliefGroups.set(key, []);
+        }
+        beliefGroups.get(key)!.push(belief);
+      }
+    }
+
+    // Create rows for each belief tracked
+    for (const [_key, beliefs] of beliefGroups) {
+      const firstBelief = beliefs[0];
+      const lastBelief = beliefs[beliefs.length - 1];
+
+      const emotion = firstBelief.emotion ?? this.inferEmotionFromBelief(firstBelief);
+      const emotionBefore = firstBelief.emotionIntensity ?? firstBelief.intensity;
+      const emotionAfter = lastBelief.emotionIntensityAfter ?? lastBelief.emotionIntensity ?? emotionBefore * 0.7;
+
+      const beliefReduction = firstBelief.intensity - lastBelief.intensity;
+
+      rows.push({
+        date: new Date().toISOString().split('T')[0],
+        belief: firstBelief.belief,
+        category: firstBelief.category,
+        emotion,
+        emotionIntensityBefore: Math.round(emotionBefore * 100),
+        emotionIntensityAfter: Math.round(emotionAfter * 100),
+        beliefIntensityBefore: Math.round(firstBelief.intensity * 100),
+        beliefIntensityAfter: Math.round(lastBelief.intensity * 100),
+        alternativeThought: lastBelief.alternativeThought || '',
+        restructuringSuccess: beliefReduction > 0.2,
+      });
+    }
+
+    // Calculate summary statistics
+    const successfulRestructurings = rows.filter((r) => r.restructuringSuccess).length;
+    const avgBeliefReduction =
+      rows.length > 0
+        ? rows.reduce((sum, r) => sum + (r.beliefIntensityBefore - r.beliefIntensityAfter), 0) / rows.length
+        : 0;
+    const avgEmotionReduction =
+      rows.length > 0
+        ? rows.reduce((sum, r) => sum + (r.emotionIntensityBefore - r.emotionIntensityAfter), 0) / rows.length
+        : 0;
+
+    // Find dominant emotion and category
+    const emotionCounts = new Map<SleepRelatedEmotion, number>();
+    const categoryCounts = new Map<IDysfunctionalBelief['category'], number>();
+
+    for (const row of rows) {
+      emotionCounts.set(row.emotion, (emotionCounts.get(row.emotion) || 0) + 1);
+      categoryCounts.set(row.category, (categoryCounts.get(row.category) || 0) + 1);
+    }
+
+    const dominantEmotion = this.findMostCommon(emotionCounts) ?? 'anxiety';
+    const dominantCategory = this.findMostCommon(categoryCounts) ?? 'expectations';
+
+    // Determine period
+    const periodStart = beliefHistory.length > 0 ? new Date().toISOString().split('T')[0] : '';
+    const periodEnd = new Date().toISOString().split('T')[0];
+
+    return {
+      generatedAt: new Date().toISOString(),
+      userId,
+      periodStart,
+      periodEnd,
+      rows,
+      summary: {
+        totalBeliefs: rows.length,
+        successfulRestructurings,
+        successRate: rows.length > 0 ? Math.round((successfulRestructurings / rows.length) * 100) : 0,
+        avgBeliefReduction: Math.round(avgBeliefReduction),
+        avgEmotionReduction: Math.round(avgEmotionReduction),
+        dominantEmotion,
+        dominantCategory,
+      },
+      toMarkdownTable: () => this.formatReportAsMarkdown(rows, {
+        totalBeliefs: rows.length,
+        successfulRestructurings,
+        successRate: rows.length > 0 ? Math.round((successfulRestructurings / rows.length) * 100) : 0,
+        avgBeliefReduction: Math.round(avgBeliefReduction),
+        avgEmotionReduction: Math.round(avgEmotionReduction),
+        dominantEmotion,
+        dominantCategory,
+      }),
+    };
+  }
+
+  /**
+   * Infer emotion from belief category and content
+   * Used when emotion is not explicitly provided
+   */
+  inferEmotionFromBelief(belief: IDysfunctionalBelief): SleepRelatedEmotion {
+    // First check if emotion keywords are in the belief text
+    const lowerBelief = belief.belief.toLowerCase();
+
+    for (const [emotion, keywords] of Object.entries(EMOTION_KEYWORDS)) {
+      for (const keyword of keywords) {
+        if (lowerBelief.includes(keyword)) {
+          return emotion as SleepRelatedEmotion;
+        }
+      }
+    }
+
+    // Fall back to category-based inference
+    return CATEGORY_EMOTION_MAP[belief.category];
   }
 
   /**
@@ -362,5 +562,207 @@ export class CognitiveRestructuringEngine implements ICognitiveRestructuringEngi
       default:
         return 0.5;
     }
+  }
+
+  /**
+   * Detect emotion from user text or infer from category
+   *
+   * Uses keyword matching based on PSAS cognitive subscale
+   */
+  private detectEmotionFromText(
+    text: string,
+    category: IDysfunctionalBelief['category']
+  ): SleepRelatedEmotion {
+    // Check for explicit emotion keywords
+    for (const [emotion, keywords] of Object.entries(EMOTION_KEYWORDS)) {
+      for (const keyword of keywords) {
+        if (text.includes(keyword)) {
+          return emotion as SleepRelatedEmotion;
+        }
+      }
+    }
+
+    // Fall back to category-based inference
+    return CATEGORY_EMOTION_MAP[category];
+  }
+
+  /**
+   * Calculate emotion intensity from text and belief intensity
+   *
+   * Uses intensity modifiers (очень, сильно, немного, etc.)
+   * Based on clinical thought record practice (0-100 scale normalized to 0-1)
+   */
+  private calculateEmotionIntensity(text: string, beliefIntensity: number): number {
+    let intensity = beliefIntensity;
+
+    // Apply modifiers based on language intensity
+    for (const { keywords, modifier } of INTENSITY_MODIFIERS) {
+      for (const keyword of keywords) {
+        if (text.includes(keyword)) {
+          intensity += modifier;
+          break; // Only apply one modifier per group
+        }
+      }
+    }
+
+    // Clamp to 0-1 range
+    return Math.max(0, Math.min(1, intensity));
+  }
+
+  /**
+   * Calculate emotional improvement between two time periods
+   */
+  private calculateEmotionalImprovement(
+    firstWeek: IDysfunctionalBelief[],
+    lastWeek: IDysfunctionalBelief[]
+  ): { avgEmotionReduction: number; improvedEmotions: SleepRelatedEmotion[] } {
+    // Group by emotion type and calculate reduction
+    const emotionReductions = new Map<SleepRelatedEmotion, { first: number; last: number; count: number }>();
+
+    // Process first week
+    for (const belief of firstWeek) {
+      const emotion = belief.emotion ?? this.inferEmotionFromBelief(belief);
+      const intensity = belief.emotionIntensity ?? belief.intensity;
+
+      const existing = emotionReductions.get(emotion) || { first: 0, last: 0, count: 0 };
+      existing.first += intensity;
+      existing.count++;
+      emotionReductions.set(emotion, existing);
+    }
+
+    // Process last week
+    for (const belief of lastWeek) {
+      const emotion = belief.emotion ?? this.inferEmotionFromBelief(belief);
+      const intensity = belief.emotionIntensityAfter ?? belief.emotionIntensity ?? belief.intensity;
+
+      const existing = emotionReductions.get(emotion);
+      if (existing) {
+        existing.last += intensity;
+      }
+    }
+
+    // Calculate improvements
+    let totalReduction = 0;
+    let totalCount = 0;
+    const improvedEmotions: SleepRelatedEmotion[] = [];
+
+    for (const [emotion, data] of emotionReductions) {
+      if (data.count > 0) {
+        const avgFirst = data.first / data.count;
+        const avgLast = data.last / data.count;
+        const reduction = avgFirst - avgLast;
+
+        totalReduction += reduction;
+        totalCount++;
+
+        if (reduction > 0.1) {
+          improvedEmotions.push(emotion);
+        }
+      }
+    }
+
+    return {
+      avgEmotionReduction: totalCount > 0 ? totalReduction / totalCount : 0,
+      improvedEmotions,
+    };
+  }
+
+  /**
+   * Find most common element in a map of counts
+   */
+  private findMostCommon<T>(counts: Map<T, number>): T | undefined {
+    let maxCount = 0;
+    let mostCommon: T | undefined;
+
+    for (const [item, count] of counts) {
+      if (count > maxCount) {
+        maxCount = count;
+        mostCommon = item;
+      }
+    }
+
+    return mostCommon;
+  }
+
+  /**
+   * Format cognitive progress report as markdown table
+   *
+   * Inspired by ChatCBT summary table format
+   */
+  private formatReportAsMarkdown(
+    rows: ICognitiveProgressRow[],
+    summary: ICognitiveProgressReport['summary']
+  ): string {
+    const lines: string[] = [];
+
+    // Header
+    lines.push('## Отчёт о когнитивном прогрессе');
+    lines.push('');
+
+    // Summary section
+    lines.push('### Сводка');
+    lines.push(`- **Всего убеждений:** ${summary.totalBeliefs}`);
+    lines.push(`- **Успешных реструктуризаций:** ${summary.successfulRestructurings} (${summary.successRate}%)`);
+    lines.push(`- **Среднее снижение убеждений:** ${summary.avgBeliefReduction}%`);
+    lines.push(`- **Среднее снижение эмоций:** ${summary.avgEmotionReduction}%`);
+    lines.push(`- **Преобладающая эмоция:** ${this.getEmotionLabel(summary.dominantEmotion)}`);
+    lines.push(`- **Преобладающая категория:** ${this.getCategoryLabel(summary.dominantCategory)}`);
+    lines.push('');
+
+    // Table
+    if (rows.length > 0) {
+      lines.push('### Детализация');
+      lines.push('');
+      lines.push('| Убеждение | Эмоция | До | После | Альтернативная мысль | Успех |');
+      lines.push('|-----------|--------|-----|-------|---------------------|-------|');
+
+      for (const row of rows) {
+        const emotionLabel = this.getEmotionLabel(row.emotion);
+        const success = row.restructuringSuccess ? '✓' : '—';
+        const beliefShort = row.belief.length > 40 ? row.belief.substring(0, 37) + '...' : row.belief;
+        const altShort = row.alternativeThought.length > 30
+          ? row.alternativeThought.substring(0, 27) + '...'
+          : row.alternativeThought || '—';
+
+        lines.push(
+          `| ${beliefShort} | ${emotionLabel} | ${row.emotionIntensityBefore}% | ${row.emotionIntensityAfter}% | ${altShort} | ${success} |`
+        );
+      }
+    }
+
+    lines.push('');
+    lines.push('---');
+    lines.push('*Формат отчёта основан на Beck (1976) и ChatCBT summary table*');
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Get Russian label for emotion
+   */
+  private getEmotionLabel(emotion: SleepRelatedEmotion): string {
+    const labels: Record<SleepRelatedEmotion, string> = {
+      anxiety: 'Тревога',
+      frustration: 'Разочарование',
+      hopelessness: 'Безнадёжность',
+      fear: 'Страх',
+      anger: 'Гнев',
+      worry: 'Беспокойство',
+    };
+    return labels[emotion];
+  }
+
+  /**
+   * Get Russian label for category
+   */
+  private getCategoryLabel(category: IDysfunctionalBelief['category']): string {
+    const labels: Record<IDysfunctionalBelief['category'], string> = {
+      expectations: 'Ожидания от сна',
+      consequences: 'Последствия',
+      control: 'Контроль',
+      medication: 'Медикаменты',
+      causes: 'Причины',
+    };
+    return labels[category];
   }
 }

@@ -469,6 +469,10 @@ ${formatter.divider()}
     // Log consent for audit (21 CFR Part 11 compliance)
     console.log(`[Consent] User ${ctx.userId} accepted consent at ${consentTimestamp}`);
 
+    // Register user for proactive notifications after consent
+    // Research: Push notifications increase adherence P<.001 (JMIR 2025)
+    ctx.sleepCore.registerForNotifications(ctx.userId, ctx.chatId, ctx.displayName);
+
     // Note: UserRepository.recordConsent() should be called here
     // This requires database integration in the bot context
     // For now, we store in metadata and log
@@ -650,6 +654,10 @@ ${progress}
       severity,
       data.isiAnswers
     );
+
+    // Enroll user in biweekly ISI reassessment schedule
+    // Schedule: W0, W2, W4, W6, W8, W12 (Morin et al., 2011; Somryst protocol)
+    ctx.sleepCore.enrollISISchedule(ctx.userId, ctx.chatId, ctx.displayName, isiScore);
 
     // Traffic light color indicator (KANOPEE pattern)
     let colorIndicator: string;

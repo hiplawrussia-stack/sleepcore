@@ -63,12 +63,13 @@ export interface IAnalysisContext {
  */
 const EMOTION_KEYWORDS: Record<EmotionalState, string[]> = {
   positive: [
-    // Positive words
+    // Positive words (avoid short words that overlap with phrases in other categories)
     'хорошо', 'отлично', 'супер', 'класс', 'здорово', 'прекрасно',
-    'замечательно', 'великолепно', 'чудесно', 'рад', 'рада', 'счастлив',
+    'замечательно', 'замечательный', 'великолепно', 'чудесно', 'рад', 'рада', 'счастлив',
     'доволен', 'довольна', 'ура', 'йес', 'да!', 'получилось', 'удалось',
-    'выспался', 'выспалась', 'спал хорошо', 'спала хорошо', 'бодрый',
-    'бодрая', 'энергия', 'сила', 'лучше', 'улучшение', 'прогресс',
+    'хорошо выспался', 'хорошо выспалась', 'отлично выспался', 'отлично выспалась',
+    'спал хорошо', 'спала хорошо', 'бодрый', 'бодрая', 'энергия',
+    'улучшение', 'прогресс', 'стало лучше',
   ],
 
   tired: [
@@ -91,35 +92,35 @@ const EMOTION_KEYWORDS: Record<EmotionalState, string[]> = {
 
   anxious: [
     // Anxiety words
-    'тревога', 'тревожно', 'беспокоюсь', 'волнуюсь', 'переживаю',
+    'тревога', 'тревожусь', 'тревожно', 'беспокоюсь', 'волнуюсь', 'переживаю',
     'страшно', 'боюсь', 'паника', 'нервничаю', 'нервы', 'стресс',
     'напряжен', 'напряжена', 'не могу расслабиться', 'мысли крутятся',
     'не могу уснуть', 'лежу и думаю', 'голова не отключается',
-    'сердце', 'дыхание', 'потею', 'дрожу', 'тошнит',
+    'сердце колотится', 'дыхание', 'потею', 'дрожу', 'тошнит',
   ],
 
   hopeful: [
-    // Hope words
-    'надеюсь', 'надежда', 'верю', 'получится', 'справлюсь', 'смогу',
-    'попробую', 'буду стараться', 'хочу', 'мотивация', 'цель',
+    // Hope words (removed 'хочу' - too generic, conflicts with tired/discouraged)
+    'надеюсь', 'надежда', 'верю', 'в лучшее', 'получится', 'справлюсь', 'смогу',
+    'попробую', 'буду стараться', 'мотивация', 'цель',
     'план', 'решил', 'решила', 'начинаю', 'пробую', 'эксперимент',
     'интересно', 'любопытно', 'может быть', 'вдруг', 'посмотрим',
   ],
 
   discouraged: [
-    // Discouragement words
-    'не могу', 'не получается', 'бессмысленно', 'безнадежно', 'сдаюсь',
-    'хочу бросить', 'зачем', 'смысл', 'толку', 'ничего не меняется',
+    // Discouragement words (removed 'не могу' - too short, use specific phrases)
+    'не получается', 'бессмысленно', 'безнадежно', 'сдаюсь',
+    'хочу бросить', 'хочу сдаться', 'зачем', 'какой смысл', 'толку', 'ничего не меняется',
     'всё так же', 'хуже', 'ухудшение', 'откат', 'провал', 'неудача',
     'плохо', 'ужасно', 'кошмар', 'депрессия', 'грустно', 'печально',
-    'одиноко', 'никто не понимает', 'устал от всего',
+    'одиноко', 'никто не понимает', 'устал от всего', 'всё бессмысленно',
   ],
 
   neutral: [
-    // Neutral/informational
-    'ок', 'окей', 'понял', 'поняла', 'ясно', 'хорошо', 'ладно',
-    'да', 'нет', 'может', 'наверное', 'возможно', 'думаю',
-    'вопрос', 'как', 'что', 'когда', 'сколько', 'информация',
+    // Neutral/informational (only very specific neutral words)
+    'ок', 'окей', 'понял', 'поняла', 'ясно', 'ладно',
+    'наверное', 'возможно', 'думаю',
+    'вопрос', 'информация',
   ],
 };
 
@@ -273,7 +274,7 @@ export class SentimentAnalysisService {
    */
   private analyzeKeywords(text: string): Record<EmotionalState, number> {
     const scores: Record<EmotionalState, number> = {
-      neutral: 0.3, // Base neutral score
+      neutral: 0.1, // Low base neutral - keywords should override
       positive: 0,
       tired: 0,
       frustrated: 0,
@@ -285,7 +286,7 @@ export class SentimentAnalysisService {
     for (const [emotion, keywords] of Object.entries(EMOTION_KEYWORDS)) {
       for (const keyword of keywords) {
         if (text.includes(keyword)) {
-          scores[emotion as EmotionalState] += 0.2;
+          scores[emotion as EmotionalState] += 0.4; // Increased from 0.2 for better detection
         }
       }
     }
@@ -332,8 +333,8 @@ export class SentimentAnalysisService {
 
     // CAPS detection (Russian and Latin)
     const capsRatio = (text.match(/[A-ZА-ЯЁ]/g) || []).length / Math.max(text.length, 1);
-    if (capsRatio > 0.5 && text.length > 5) {
-      intensity += 0.3;
+    if (capsRatio > 0.4 && text.length > 5) {
+      intensity += 0.35;
     }
 
     // Ellipsis (often indicates uncertainty/sadness in Russian)
@@ -441,7 +442,7 @@ export class SentimentAnalysisService {
       discouraged: 0.4,
     };
 
-    return Math.min(arousalMap[emotion] + intensity * 0.2, 1);
+    return Math.min(arousalMap[emotion] + intensity * 0.4, 1);
   }
 
   /**

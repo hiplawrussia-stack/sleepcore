@@ -4,7 +4,7 @@
  */
 
 import { CognitiveRestructuringEngine } from '../../../src/cbt-i/engines/CognitiveRestructuringEngine';
-import type { IDysfunctionalBelief } from '../../../src/cbt-i/interfaces/ICBTIComponents';
+import type { IDysfunctionalBelief, SleepRelatedEmotion } from '../../../src/cbt-i/interfaces/ICBTIComponents';
 import type { ISleepState } from '../../../src/sleep/interfaces/ISleepState';
 
 describe('CognitiveRestructuringEngine', () => {
@@ -458,6 +458,440 @@ describe('CognitiveRestructuringEngine', () => {
       expect(result.topImprovedBeliefs.length).toBeLessThanOrEqual(3);
       // Belief A improved most (0.6), then Belief B (0.2), then Belief C (0.1)
       expect(result.topImprovedBeliefs[0]).toBe('Belief A');
+    });
+
+    it('should calculate emotional improvement metrics', () => {
+      const beliefHistory: IDysfunctionalBelief[][] = [
+        [
+          {
+            id: 'b1',
+            category: 'expectations',
+            belief: 'Belief A',
+            intensity: 0.8,
+            frequency: 0.5,
+            evidenceFor: [],
+            evidenceAgainst: [],
+            alternativeThought: '',
+            isActive: true,
+            emotion: 'anxiety',
+            emotionIntensity: 0.9,
+          }
+        ],
+        [
+          {
+            id: 'b1',
+            category: 'expectations',
+            belief: 'Belief A',
+            intensity: 0.4,
+            frequency: 0.5,
+            evidenceFor: [],
+            evidenceAgainst: [],
+            alternativeThought: 'Alternative thought',
+            isActive: true,
+            emotion: 'anxiety',
+            emotionIntensity: 0.5,
+            emotionIntensityAfter: 0.4,
+          }
+        ]
+      ];
+
+      const result = engine.calculateImprovement(beliefHistory);
+
+      expect(result.emotionalImprovement).toBeDefined();
+      expect(result.emotionalImprovement.avgEmotionReduction).toBeGreaterThan(0);
+    });
+  });
+
+  // ============================================================================
+  // EMOTION TRACKING TESTS (Beck's CBT Model Integration)
+  // ============================================================================
+
+  describe('Emotion Detection in identifyBeliefs()', () => {
+    it('should detect anxiety emotion from keywords', () => {
+      const sleepState = createTestSleepState();
+      const text = 'Я очень тревожусь и волнуюсь что не высплюсь';
+
+      const beliefs = engine.identifyBeliefs(text, sleepState);
+
+      expect(beliefs.length).toBeGreaterThan(0);
+      expect(beliefs[0].emotion).toBe('anxiety');
+    });
+
+    it('should detect frustration emotion from keywords', () => {
+      const sleepState = createTestSleepState();
+      const text = 'Мне надоело не спать, это гены и наследственность';
+
+      const beliefs = engine.identifyBeliefs(text, sleepState);
+
+      expect(beliefs.some(b => b.emotion === 'frustration')).toBe(true);
+    });
+
+    it('should detect hopelessness emotion from keywords', () => {
+      const sleepState = createTestSleepState();
+      const text = 'Это безнадёжно, я не могу контролировать сон, ничего не помогает';
+
+      const beliefs = engine.identifyBeliefs(text, sleepState);
+
+      expect(beliefs.some(b => b.emotion === 'hopelessness')).toBe(true);
+    });
+
+    it('should detect fear emotion from keywords', () => {
+      const sleepState = createTestSleepState();
+      const text = 'Боюсь что бессонница разрушит моё здоровье';
+
+      const beliefs = engine.identifyBeliefs(text, sleepState);
+
+      expect(beliefs.some(b => b.emotion === 'fear')).toBe(true);
+    });
+
+    it('should infer emotion from category when no keywords present', () => {
+      const sleepState = createTestSleepState();
+      const text = 'Мне нужно спать 8 часов минимум';
+
+      const beliefs = engine.identifyBeliefs(text, sleepState);
+
+      expect(beliefs.length).toBeGreaterThan(0);
+      expect(beliefs[0].emotion).toBeDefined();
+      // expectations category -> anxiety
+      expect(beliefs[0].emotion).toBe('anxiety');
+    });
+
+    it('should include emotionIntensity in identified beliefs', () => {
+      const sleepState = createTestSleepState();
+      const text = 'Мне нужно спать 8 часов';
+
+      const beliefs = engine.identifyBeliefs(text, sleepState);
+
+      expect(beliefs.length).toBeGreaterThan(0);
+      expect(beliefs[0].emotionIntensity).toBeDefined();
+      expect(beliefs[0].emotionIntensity).toBeGreaterThanOrEqual(0);
+      expect(beliefs[0].emotionIntensity).toBeLessThanOrEqual(1);
+    });
+
+    it('should increase emotion intensity with intensity modifiers', () => {
+      const sleepState = createTestSleepState();
+      const textNormal = 'Мне нужно спать 8 часов';
+      const textIntense = 'Мне очень сильно нужно спать 8 часов';
+
+      const beliefsNormal = engine.identifyBeliefs(textNormal, sleepState);
+      const beliefsIntense = engine.identifyBeliefs(textIntense, sleepState);
+
+      if (beliefsNormal.length > 0 && beliefsIntense.length > 0) {
+        expect(beliefsIntense[0].emotionIntensity!).toBeGreaterThan(beliefsNormal[0].emotionIntensity!);
+      }
+    });
+  });
+
+  describe('inferEmotionFromBelief()', () => {
+    it('should infer anxiety from expectations category', () => {
+      const belief: IDysfunctionalBelief = {
+        id: 'test',
+        category: 'expectations',
+        belief: 'Test belief',
+        intensity: 0.5,
+        frequency: 0.5,
+        evidenceFor: [],
+        evidenceAgainst: [],
+        alternativeThought: '',
+        isActive: true,
+      };
+
+      const emotion = engine.inferEmotionFromBelief(belief);
+
+      expect(emotion).toBe('anxiety');
+    });
+
+    it('should infer fear from consequences category', () => {
+      const belief: IDysfunctionalBelief = {
+        id: 'test',
+        category: 'consequences',
+        belief: 'Test belief',
+        intensity: 0.5,
+        frequency: 0.5,
+        evidenceFor: [],
+        evidenceAgainst: [],
+        alternativeThought: '',
+        isActive: true,
+      };
+
+      const emotion = engine.inferEmotionFromBelief(belief);
+
+      expect(emotion).toBe('fear');
+    });
+
+    it('should infer hopelessness from control category', () => {
+      const belief: IDysfunctionalBelief = {
+        id: 'test',
+        category: 'control',
+        belief: 'Test belief',
+        intensity: 0.5,
+        frequency: 0.5,
+        evidenceFor: [],
+        evidenceAgainst: [],
+        alternativeThought: '',
+        isActive: true,
+      };
+
+      const emotion = engine.inferEmotionFromBelief(belief);
+
+      expect(emotion).toBe('hopelessness');
+    });
+
+    it('should infer frustration from causes category', () => {
+      const belief: IDysfunctionalBelief = {
+        id: 'test',
+        category: 'causes',
+        belief: 'Test belief',
+        intensity: 0.5,
+        frequency: 0.5,
+        evidenceFor: [],
+        evidenceAgainst: [],
+        alternativeThought: '',
+        isActive: true,
+      };
+
+      const emotion = engine.inferEmotionFromBelief(belief);
+
+      expect(emotion).toBe('frustration');
+    });
+
+    it('should detect emotion from belief text keywords', () => {
+      const belief: IDysfunctionalBelief = {
+        id: 'test',
+        category: 'expectations',
+        belief: 'Я боюсь что не высплюсь',
+        intensity: 0.5,
+        frequency: 0.5,
+        evidenceFor: [],
+        evidenceAgainst: [],
+        alternativeThought: '',
+        isActive: true,
+      };
+
+      const emotion = engine.inferEmotionFromBelief(belief);
+
+      // "боюсь" keyword -> fear (overrides category-based inference)
+      expect(emotion).toBe('fear');
+    });
+  });
+
+  describe('generateCognitiveProgressReport()', () => {
+    it('should generate report with empty history', () => {
+      const report = engine.generateCognitiveProgressReport([], 'test-user');
+
+      expect(report.userId).toBe('test-user');
+      expect(report.rows).toEqual([]);
+      expect(report.summary.totalBeliefs).toBe(0);
+    });
+
+    it('should generate report with belief history', () => {
+      const beliefHistory: IDysfunctionalBelief[][] = [
+        [
+          {
+            id: 'b1',
+            category: 'expectations',
+            belief: 'Мне нужно спать 8 часов',
+            intensity: 0.8,
+            frequency: 0.5,
+            evidenceFor: [],
+            evidenceAgainst: [],
+            alternativeThought: '',
+            isActive: true,
+            emotion: 'anxiety',
+            emotionIntensity: 0.9,
+          }
+        ],
+        [
+          {
+            id: 'b1',
+            category: 'expectations',
+            belief: 'Мне нужно спать 8 часов',
+            intensity: 0.4,
+            frequency: 0.5,
+            evidenceFor: [],
+            evidenceAgainst: ['Вчера спал 6 часов и был продуктивен'],
+            alternativeThought: 'Мой организм адаптируется',
+            isActive: true,
+            emotion: 'anxiety',
+            emotionIntensity: 0.5,
+            emotionIntensityAfter: 0.4,
+          }
+        ]
+      ];
+
+      const report = engine.generateCognitiveProgressReport(beliefHistory, 'user-123');
+
+      expect(report.userId).toBe('user-123');
+      expect(report.rows.length).toBe(1);
+      expect(report.summary.totalBeliefs).toBe(1);
+    });
+
+    it('should include correct summary statistics', () => {
+      const beliefHistory: IDysfunctionalBelief[][] = [
+        [
+          { id: 'b1', category: 'expectations', belief: 'Belief A', intensity: 0.9, frequency: 0.5, evidenceFor: [], evidenceAgainst: [], alternativeThought: '', isActive: true, emotion: 'anxiety' as SleepRelatedEmotion, emotionIntensity: 0.9 },
+          { id: 'b2', category: 'consequences', belief: 'Belief B', intensity: 0.8, frequency: 0.5, evidenceFor: [], evidenceAgainst: [], alternativeThought: '', isActive: true, emotion: 'fear' as SleepRelatedEmotion, emotionIntensity: 0.85 },
+        ],
+        [
+          { id: 'b1', category: 'expectations', belief: 'Belief A', intensity: 0.3, frequency: 0.5, evidenceFor: [], evidenceAgainst: [], alternativeThought: 'Alternative A', isActive: true, emotion: 'anxiety' as SleepRelatedEmotion, emotionIntensity: 0.4 },
+          { id: 'b2', category: 'consequences', belief: 'Belief B', intensity: 0.7, frequency: 0.5, evidenceFor: [], evidenceAgainst: [], alternativeThought: '', isActive: true, emotion: 'fear' as SleepRelatedEmotion, emotionIntensity: 0.75 },
+        ]
+      ];
+
+      const report = engine.generateCognitiveProgressReport(beliefHistory);
+
+      expect(report.summary.totalBeliefs).toBe(2);
+      // Belief A reduced by 0.6 (>0.2), Belief B reduced by 0.1 (<0.2)
+      expect(report.summary.successfulRestructurings).toBe(1);
+      expect(report.summary.successRate).toBe(50);
+    });
+
+    it('should identify dominant emotion and category', () => {
+      const beliefHistory: IDysfunctionalBelief[][] = [
+        [
+          { id: 'b1', category: 'expectations', belief: 'Belief A', intensity: 0.8, frequency: 0.5, evidenceFor: [], evidenceAgainst: [], alternativeThought: '', isActive: true, emotion: 'anxiety' as SleepRelatedEmotion, emotionIntensity: 0.8 },
+          { id: 'b2', category: 'expectations', belief: 'Belief B', intensity: 0.7, frequency: 0.5, evidenceFor: [], evidenceAgainst: [], alternativeThought: '', isActive: true, emotion: 'anxiety' as SleepRelatedEmotion, emotionIntensity: 0.7 },
+          { id: 'b3', category: 'control', belief: 'Belief C', intensity: 0.6, frequency: 0.5, evidenceFor: [], evidenceAgainst: [], alternativeThought: '', isActive: true, emotion: 'hopelessness' as SleepRelatedEmotion, emotionIntensity: 0.6 },
+        ],
+        [
+          { id: 'b1', category: 'expectations', belief: 'Belief A', intensity: 0.4, frequency: 0.5, evidenceFor: [], evidenceAgainst: [], alternativeThought: '', isActive: true },
+          { id: 'b2', category: 'expectations', belief: 'Belief B', intensity: 0.3, frequency: 0.5, evidenceFor: [], evidenceAgainst: [], alternativeThought: '', isActive: true },
+          { id: 'b3', category: 'control', belief: 'Belief C', intensity: 0.5, frequency: 0.5, evidenceFor: [], evidenceAgainst: [], alternativeThought: '', isActive: true },
+        ]
+      ];
+
+      const report = engine.generateCognitiveProgressReport(beliefHistory);
+
+      expect(report.summary.dominantEmotion).toBe('anxiety');
+      expect(report.summary.dominantCategory).toBe('expectations');
+    });
+
+    it('should generate valid markdown table', () => {
+      const beliefHistory: IDysfunctionalBelief[][] = [
+        [
+          {
+            id: 'b1',
+            category: 'expectations',
+            belief: 'Мне нужно спать 8 часов',
+            intensity: 0.8,
+            frequency: 0.5,
+            evidenceFor: [],
+            evidenceAgainst: [],
+            alternativeThought: '',
+            isActive: true,
+            emotion: 'anxiety',
+            emotionIntensity: 0.8,
+          }
+        ],
+        [
+          {
+            id: 'b1',
+            category: 'expectations',
+            belief: 'Мне нужно спать 8 часов',
+            intensity: 0.3,
+            frequency: 0.5,
+            evidenceFor: [],
+            evidenceAgainst: [],
+            alternativeThought: 'Мой организм адаптируется',
+            isActive: true,
+            emotion: 'anxiety',
+            emotionIntensity: 0.4,
+          }
+        ]
+      ];
+
+      const report = engine.generateCognitiveProgressReport(beliefHistory);
+      const markdown = report.toMarkdownTable();
+
+      expect(markdown).toContain('## Отчёт о когнитивном прогрессе');
+      expect(markdown).toContain('### Сводка');
+      expect(markdown).toContain('### Детализация');
+      expect(markdown).toContain('| Убеждение | Эмоция | До | После | Альтернативная мысль | Успех |');
+      expect(markdown).toContain('Тревога'); // Russian label for anxiety
+      expect(markdown).toContain('✓'); // Success marker
+    });
+
+    it('should include row details with emotion intensity', () => {
+      const beliefHistory: IDysfunctionalBelief[][] = [
+        [
+          {
+            id: 'b1',
+            category: 'consequences',
+            belief: 'Бессонница разрушит здоровье',
+            intensity: 0.9,
+            frequency: 0.5,
+            evidenceFor: [],
+            evidenceAgainst: [],
+            alternativeThought: '',
+            isActive: true,
+            emotion: 'fear',
+            emotionIntensity: 0.85,
+          }
+        ],
+        [
+          {
+            id: 'b1',
+            category: 'consequences',
+            belief: 'Бессонница разрушит здоровье',
+            intensity: 0.4,
+            frequency: 0.5,
+            evidenceFor: [],
+            evidenceAgainst: [],
+            alternativeThought: 'Тело восстанавливается',
+            isActive: true,
+            emotion: 'fear',
+            emotionIntensity: 0.4,
+            emotionIntensityAfter: 0.3,
+          }
+        ]
+      ];
+
+      const report = engine.generateCognitiveProgressReport(beliefHistory);
+
+      expect(report.rows.length).toBe(1);
+      expect(report.rows[0].emotion).toBe('fear');
+      expect(report.rows[0].emotionIntensityBefore).toBe(85); // 0.85 * 100
+      expect(report.rows[0].beliefIntensityBefore).toBe(90); // 0.9 * 100
+      expect(report.rows[0].beliefIntensityAfter).toBe(40); // 0.4 * 100
+      expect(report.rows[0].restructuringSuccess).toBe(true);
+    });
+
+    it('should handle beliefs without explicit emotion', () => {
+      const beliefHistory: IDysfunctionalBelief[][] = [
+        [
+          {
+            id: 'b1',
+            category: 'control',
+            belief: 'Я не контролирую сон',
+            intensity: 0.7,
+            frequency: 0.5,
+            evidenceFor: [],
+            evidenceAgainst: [],
+            alternativeThought: '',
+            isActive: true,
+            // No emotion field - should be inferred
+          }
+        ],
+        [
+          {
+            id: 'b1',
+            category: 'control',
+            belief: 'Я не контролирую сон',
+            intensity: 0.3,
+            frequency: 0.5,
+            evidenceFor: [],
+            evidenceAgainst: [],
+            alternativeThought: 'У меня есть некоторое влияние',
+            isActive: true,
+          }
+        ]
+      ];
+
+      const report = engine.generateCognitiveProgressReport(beliefHistory);
+
+      expect(report.rows.length).toBe(1);
+      // control category -> hopelessness
+      expect(report.rows[0].emotion).toBe('hopelessness');
     });
   });
 });

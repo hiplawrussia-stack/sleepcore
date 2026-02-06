@@ -466,8 +466,8 @@ export interface ITelegramConfig {
   /** Webhook secret token */
   webhookSecretToken?: string;
 
-  /** Use webhooks instead of polling */
-  useWebhooks: boolean;
+  /** Use webhooks instead of polling (default: false) */
+  useWebhooks?: boolean;
 
   /** Webhook port */
   webhookPort?: number;

@@ -293,6 +293,33 @@ describe('StartCommand', () => {
       // ISI >= 22 must recommend specialist referral (CLAUDE.md Red Line 2.1)
       assertContainsText(result, 'консультация специалиста');
     });
+
+    it('should enroll user in ISI scheduling after ISI completion', async () => {
+      const ctx = createMockContext();
+      const answers = [2, 3, 2, 3, 2, 1, 2]; // score = 15
+      await command.handleStep(ctx, 'isi_result', { isiAnswers: answers });
+
+      expect(ctx.sleepCore.enrollISISchedule).toHaveBeenCalledWith(
+        ctx.userId,
+        ctx.chatId,
+        ctx.displayName,
+        15
+      );
+    });
+  });
+
+  describe('consent flow - notification registration', () => {
+    it('should register user for notifications after consent acceptance', async () => {
+      const ctx = createMockContext();
+      const result = await command.handleCallback(ctx, 'start:consent_accept', {});
+
+      expect(result.success).toBe(true);
+      expect(ctx.sleepCore.registerForNotifications).toHaveBeenCalledWith(
+        ctx.userId,
+        ctx.chatId,
+        ctx.displayName
+      );
+    });
   });
 
   describe('singleton export', () => {

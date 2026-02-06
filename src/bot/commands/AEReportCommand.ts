@@ -78,18 +78,27 @@ export class AEReportCommand implements ICommand, IConversationCommand {
     'submitted',
   ];
 
-  private aeService: AdverseEventService | null = null;
+  private aeServiceCache: Map<string, AdverseEventService> = new Map();
 
   /**
    * Get or create AE service instance
+   * Now uses real database from SleepCoreAPI context (21 CFR Part 11 compliant)
    */
   private getAEService(ctx: ISleepCoreContext): AdverseEventService {
-    if (!this.aeService) {
-      // For now, create with a mock DB connection
-      // In production, this would use the real database
-      this.aeService = createAdverseEventService({} as never);
+    // Use cached service per user to avoid re-creating repositories
+    const cacheKey = ctx.userId;
+
+    if (!this.aeServiceCache.has(cacheKey)) {
+      const db = ctx.sleepCore.db;
+      if (!db) {
+        console.error('[AE Command] Database not available - using fallback');
+        // This should not happen in production; throw error for safety
+        throw new Error('Database connection not available for adverse event reporting');
+      }
+      this.aeServiceCache.set(cacheKey, createAdverseEventService(db));
     }
-    return this.aeService;
+
+    return this.aeServiceCache.get(cacheKey)!;
   }
 
   /**
@@ -627,7 +636,7 @@ ${formatter.tip('Продолжай программу и следи за сво
   /**
    * Cancel report
    */
-  private cancelReport(ctx: ISleepCoreContext): ICommandResult {
+  private cancelReport(_ctx: ISleepCoreContext): ICommandResult {
     const message = `
 ${sonya.emoji} Хорошо, отменено.
 
