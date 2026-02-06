@@ -439,6 +439,248 @@ describe('PATAdapter', () => {
       const delayedProb = prediction.phenotype.probabilities['delayed_phase'];
       expect(delayedProb).toBeGreaterThan(0);
     });
+
+    it('should classify advanced phase pattern', async () => {
+      await adapter.initialize();
+
+      // Create session with early activity onset (waking before 5 AM)
+      const session = createAdvancedPhaseSession();
+      const prediction = await adapter.predict(session);
+
+      // Advanced phase should have higher probability
+      const advancedProb = prediction.phenotype.probabilities['advanced_phase'];
+      expect(advancedProb).toBeGreaterThan(0);
+    });
+
+    it('should classify irregular pattern with high day-to-day variability', async () => {
+      await adapter.initialize();
+
+      // Create session with irregular patterns
+      const session = createIrregularSleepSession();
+      const prediction = await adapter.predict(session);
+
+      // Irregular or social jetlag should have higher probability
+      const irregularProb = prediction.phenotype.probabilities['irregular'];
+      const socialJetlagProb = prediction.phenotype.probabilities['social_jetlag'];
+      expect(irregularProb + socialJetlagProb).toBeGreaterThan(0.1);
+    });
+
+    it('should report variable stability for high variability patterns', async () => {
+      await adapter.initialize();
+
+      const session = createHighVariabilitySession();
+      const prediction = await adapter.predict(session);
+
+      // High variability should result in 'variable' or 'transitioning' stability
+      expect(['variable', 'transitioning']).toContain(prediction.phenotype.stability);
+    });
+
+    it('should report stable stability for consistent patterns', async () => {
+      await adapter.initialize();
+
+      const session = createRegularSleepSession();
+      const prediction = await adapter.predict(session);
+
+      // Regular pattern should result in 'stable'
+      expect(prediction.phenotype.stability).toBe('stable');
+    });
+  });
+
+  // ==========================================================================
+  // Different Backends
+  // ==========================================================================
+  describe('Backend Variants', () => {
+    it('should initialize with tfjs backend (falls back to simulated)', async () => {
+      const tfjsAdapter = new PATAdapter({ backend: 'tfjs' });
+      await tfjsAdapter.initialize();
+
+      expect(tfjsAdapter.isReady()).toBe(true);
+      // Falls back to simulated since tfjs not implemented
+      expect(tfjsAdapter.getModelInfo().version).toContain('simulated');
+    });
+
+    it('should initialize with onnx backend (falls back to simulated)', async () => {
+      const onnxAdapter = new PATAdapter({ backend: 'onnx' });
+      await onnxAdapter.initialize();
+
+      expect(onnxAdapter.isReady()).toBe(true);
+      // Falls back to simulated since onnx not implemented
+      expect(onnxAdapter.getModelInfo().version).toContain('simulated');
+    });
+
+    it('should initialize with remote backend when URL provided', async () => {
+      const remoteAdapter = new PATAdapter({
+        backend: 'remote',
+        remoteUrl: 'https://api.example.com/pat',
+      });
+      await remoteAdapter.initialize();
+
+      expect(remoteAdapter.isReady()).toBe(true);
+      expect(remoteAdapter.getModelInfo().version).toContain('remote');
+    });
+
+    it('should throw error for remote backend without URL', async () => {
+      const remoteAdapter = new PATAdapter({ backend: 'remote' });
+
+      await expect(remoteAdapter.initialize()).rejects.toThrow('Remote backend requires remoteUrl');
+    });
+
+    it('should predict using tfjs backend', async () => {
+      const tfjsAdapter = new PATAdapter({ backend: 'tfjs' });
+      await tfjsAdapter.initialize();
+
+      const session = createRegularSleepSession();
+      const prediction = await tfjsAdapter.predict(session);
+
+      expect(prediction).toBeDefined();
+      expect(prediction.phenotype).toBeDefined();
+    });
+
+    it('should predict using onnx backend', async () => {
+      const onnxAdapter = new PATAdapter({ backend: 'onnx' });
+      await onnxAdapter.initialize();
+
+      const session = createRegularSleepSession();
+      const prediction = await onnxAdapter.predict(session);
+
+      expect(prediction).toBeDefined();
+      expect(prediction.phenotype).toBeDefined();
+    });
+  });
+
+  // ==========================================================================
+  // Normalization Strategies
+  // ==========================================================================
+  describe('Normalization Strategies', () => {
+    it('should normalize using minmax strategy', () => {
+      const minmaxAdapter = new PATAdapter({
+        preprocessing: {
+          targetEpochSeconds: 60,
+          nonWearAlgorithm: 'choi',
+          nonWearThreshold: 90,
+          minValidWearHours: 10,
+          smoothingWindow: 1,
+          normalization: 'minmax',
+          missingDataStrategy: 'zero',
+          outlierPercentile: 100,
+        },
+      });
+
+      const session = createRegularSleepSession();
+      const input = minmaxAdapter.preprocessSession(session);
+
+      // All values should be between 0 and 1
+      for (const val of input.activitySequence) {
+        expect(val).toBeGreaterThanOrEqual(0);
+        expect(val).toBeLessThanOrEqual(1);
+      }
+    });
+
+    it('should normalize using log strategy', () => {
+      const logAdapter = new PATAdapter({
+        preprocessing: {
+          targetEpochSeconds: 60,
+          nonWearAlgorithm: 'choi',
+          nonWearThreshold: 90,
+          minValidWearHours: 10,
+          smoothingWindow: 1,
+          normalization: 'log',
+          missingDataStrategy: 'zero',
+          outlierPercentile: 100,
+        },
+      });
+
+      const session = createRegularSleepSession();
+      const input = logAdapter.preprocessSession(session);
+
+      // All values should be between 0 and 1
+      for (const val of input.activitySequence) {
+        expect(val).toBeGreaterThanOrEqual(0);
+        expect(val).toBeLessThanOrEqual(1);
+      }
+    });
+
+    it('should normalize using zscore strategy', () => {
+      const zscoreAdapter = new PATAdapter({
+        preprocessing: {
+          targetEpochSeconds: 60,
+          nonWearAlgorithm: 'choi',
+          nonWearThreshold: 90,
+          minValidWearHours: 10,
+          smoothingWindow: 1,
+          normalization: 'zscore',
+          missingDataStrategy: 'zero',
+          outlierPercentile: 100,
+        },
+      });
+
+      const session = createRegularSleepSession();
+      const input = zscoreAdapter.preprocessSession(session);
+
+      // Z-score normalized values should be between 0 and 1 (clipped to -3,3 then rescaled)
+      for (const val of input.activitySequence) {
+        expect(val).toBeGreaterThanOrEqual(0);
+        expect(val).toBeLessThanOrEqual(1);
+      }
+    });
+  });
+
+  // ==========================================================================
+  // Missing Data Handling
+  // ==========================================================================
+  describe('Missing Data Handling', () => {
+    it('should interpolate missing data when configured', () => {
+      const interpolateAdapter = new PATAdapter({
+        preprocessing: {
+          targetEpochSeconds: 60,
+          nonWearAlgorithm: 'choi',
+          nonWearThreshold: 90,
+          minValidWearHours: 10,
+          smoothingWindow: 1,
+          normalization: 'none',
+          missingDataStrategy: 'interpolate',
+          outlierPercentile: 100,
+        },
+      });
+
+      // Create session with some non-worn periods in the middle
+      const session = createSessionWithMissingData();
+      const input = interpolateAdapter.preprocessSession(session);
+
+      // Should still produce valid output
+      expect(input.activitySequence.length).toBe(session.epochs.length);
+    });
+  });
+
+  // ==========================================================================
+  // Non-wear Detection
+  // ==========================================================================
+  describe('Non-wear Detection', () => {
+    it('should detect non-wear periods from zero count streaks', () => {
+      // Create session with a streak of zero counts
+      const session = createSessionWithZeroStreak();
+      const input = adapter.preprocessSession(session);
+
+      // Check that zero streak region is marked as non-worn
+      const zeroStreakStart = 100;
+      const zeroStreakEnd = 200;
+
+      for (let i = zeroStreakStart; i < zeroStreakEnd; i++) {
+        expect(input.validMask[i]).toBe(0);
+      }
+    });
+
+    it('should not mark short zero streaks as non-wear', () => {
+      // Choi algorithm requires 90+ consecutive zeros by default
+      const session = createSessionWithShortZeroStreak();
+      const input = adapter.preprocessSession(session);
+
+      // Short streak should remain as worn
+      for (let i = 100; i < 130; i++) {
+        // 30 minute streak is too short
+        expect(input.validMask[i]).toBe(1);
+      }
+    });
   });
 });
 
@@ -594,6 +836,308 @@ function createDelayedPhaseSession(): IActigraphySession {
       nonWearMinutes: 0,
       validWearHours: 24,
     })),
+    dataQuality: 0.95,
+  };
+}
+
+function createAdvancedPhaseSession(): IActigraphySession {
+  const epochs: IActivityCount[] = [];
+  const startTime = new Date('2025-01-20T00:00:00Z');
+  const days = 5;
+
+  for (let d = 0; d < days; d++) {
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m++) {
+        const i = d * 1440 + h * 60 + m;
+        // Advanced: activity onset at 04:00, offset at 19:00
+        const isNight = h >= 19 || h < 4;
+        const count = isNight
+          ? Math.round(5 + Math.random() * 10)
+          : Math.round(300 + Math.random() * 200);
+
+        epochs.push({
+          timestamp: startTime.getTime() + i * 60000,
+          epochSeconds: 60,
+          count,
+          vectorMagnitude: count / 1000,
+          steps: Math.round(count / 100),
+          isWorn: true,
+        });
+      }
+    }
+  }
+
+  return {
+    userId: 'test-user',
+    sessionId: 'advanced-session',
+    source: 'apple_watch',
+    startTime,
+    endTime: new Date(startTime.getTime() + days * 86400000),
+    epochLength: 60,
+    epochs,
+    dailySummaries: Array(days).fill(null).map((_, d) => ({
+      date: new Date(startTime.getTime() + d * 86400000).toISOString().split('T')[0],
+      totalActivityCounts: 45000,
+      totalSteps: 6500,
+      sedentaryMinutes: 520,
+      lightActivityMinutes: 340,
+      moderateActivityMinutes: 30,
+      vigorousActivityMinutes: 10,
+      mvpaMinutes: 40,
+      nonWearMinutes: 0,
+      validWearHours: 24,
+    })),
+    dataQuality: 0.95,
+  };
+}
+
+function createIrregularSleepSession(): IActigraphySession {
+  const epochs: IActivityCount[] = [];
+  const startTime = new Date('2025-01-20T00:00:00Z');
+  const days = 7;
+
+  for (let d = 0; d < days; d++) {
+    // Vary sleep timing by day - simulate social jetlag
+    const sleepStartHour = d < 5 ? 23 : (d % 2 === 0 ? 1 : 2); // Later on weekends
+    const wakeHour = d < 5 ? 7 : (d % 2 === 0 ? 10 : 11); // Later wake on weekends
+
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m++) {
+        const i = d * 1440 + h * 60 + m;
+        const isNight = (h >= sleepStartHour && sleepStartHour < 12) ||
+                       (h < wakeHour && wakeHour <= 12) ||
+                       (sleepStartHour >= 12 && (h >= sleepStartHour || h < wakeHour));
+        const count = isNight
+          ? Math.round(5 + Math.random() * 15)
+          : Math.round(250 + Math.random() * 250);
+
+        epochs.push({
+          timestamp: startTime.getTime() + i * 60000,
+          epochSeconds: 60,
+          count,
+          vectorMagnitude: count / 1000,
+          steps: Math.round(count / 100),
+          isWorn: true,
+        });
+      }
+    }
+  }
+
+  return {
+    userId: 'test-user',
+    sessionId: 'irregular-session',
+    source: 'apple_watch',
+    startTime,
+    endTime: new Date(startTime.getTime() + days * 86400000),
+    epochLength: 60,
+    epochs,
+    dailySummaries: Array(days).fill(null).map((_, d) => ({
+      date: new Date(startTime.getTime() + d * 86400000).toISOString().split('T')[0],
+      totalActivityCounts: 40000 + Math.random() * 20000, // Variable
+      totalSteps: 6000 + Math.random() * 4000,
+      sedentaryMinutes: 480 + Math.round(Math.random() * 120),
+      lightActivityMinutes: 300 + Math.round(Math.random() * 100),
+      moderateActivityMinutes: 20 + Math.round(Math.random() * 40),
+      vigorousActivityMinutes: 5 + Math.round(Math.random() * 20),
+      mvpaMinutes: 30 + Math.round(Math.random() * 40),
+      nonWearMinutes: 0,
+      validWearHours: 24,
+    })),
+    dataQuality: 0.92,
+  };
+}
+
+function createHighVariabilitySession(): IActigraphySession {
+  const epochs: IActivityCount[] = [];
+  const startTime = new Date('2025-01-20T00:00:00Z');
+  const days = 7;
+
+  // Create dramatic day-to-day variability by making some days very active
+  // and others very sedentary. This produces high coefficient of variation.
+  // Pattern: Low, High, Very Low, Very High, Low, High, Very Low
+  const dailyActivityMultipliers = [0.3, 1.5, 0.15, 2.0, 0.25, 1.8, 0.2];
+
+  for (let d = 0; d < days; d++) {
+    const multiplier = dailyActivityMultipliers[d];
+    const sleepStartHour = 22;
+    const wakeHour = 7;
+
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m++) {
+        const i = d * 1440 + h * 60 + m;
+        const isNight = h >= sleepStartHour || h < wakeHour;
+
+        // Apply daily multiplier to create dramatic differences
+        // Low multiplier days: ~30-50 average activity
+        // High multiplier days: ~600-800 average activity
+        const baseActivity = isNight ? 10 : 400;
+        const count = Math.round((baseActivity * multiplier) + Math.random() * 20);
+
+        epochs.push({
+          timestamp: startTime.getTime() + i * 60000,
+          epochSeconds: 60,
+          count: Math.max(0, count),
+          vectorMagnitude: count / 1000,
+          steps: Math.round(count / 100),
+          isWorn: true,
+        });
+      }
+    }
+  }
+
+  return {
+    userId: 'test-user',
+    sessionId: 'high-variability-session',
+    source: 'apple_watch',
+    startTime,
+    endTime: new Date(startTime.getTime() + days * 86400000),
+    epochLength: 60,
+    epochs,
+    dailySummaries: Array(days).fill(null).map((_, d) => ({
+      date: new Date(startTime.getTime() + d * 86400000).toISOString().split('T')[0],
+      totalActivityCounts: Math.round(100000 * dailyActivityMultipliers[d]),
+      totalSteps: Math.round(8000 * dailyActivityMultipliers[d]),
+      sedentaryMinutes: Math.round(600 / dailyActivityMultipliers[d]),
+      lightActivityMinutes: Math.round(300 * dailyActivityMultipliers[d]),
+      moderateActivityMinutes: Math.round(40 * dailyActivityMultipliers[d]),
+      vigorousActivityMinutes: Math.round(20 * dailyActivityMultipliers[d]),
+      mvpaMinutes: Math.round(60 * dailyActivityMultipliers[d]),
+      nonWearMinutes: 0,
+      validWearHours: 24,
+    })),
+    dataQuality: 0.88,
+  };
+}
+
+function createSessionWithMissingData(): IActigraphySession {
+  const epochs: IActivityCount[] = [];
+  const startTime = new Date('2025-01-20T00:00:00Z');
+  const days = 3;
+
+  for (let d = 0; d < days; d++) {
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m++) {
+        const i = d * 1440 + h * 60 + m;
+        const isNight = h >= 23 || h < 7;
+
+        // Mark some epochs as non-worn (missing data)
+        const minuteOfDay = h * 60 + m;
+        const isNonWorn = (minuteOfDay >= 720 && minuteOfDay < 780); // 12:00-13:00 missing
+
+        const count = isNight
+          ? Math.round(5 + Math.random() * 10)
+          : Math.round(300 + Math.random() * 200);
+
+        epochs.push({
+          timestamp: startTime.getTime() + i * 60000,
+          epochSeconds: 60,
+          count: isNonWorn ? 0 : count,
+          vectorMagnitude: isNonWorn ? 0 : count / 1000,
+          steps: isNonWorn ? 0 : Math.round(count / 100),
+          isWorn: !isNonWorn,
+        });
+      }
+    }
+  }
+
+  return {
+    userId: 'test-user',
+    sessionId: 'missing-data-session',
+    source: 'apple_watch',
+    startTime,
+    endTime: new Date(startTime.getTime() + days * 86400000),
+    epochLength: 60,
+    epochs,
+    dailySummaries: Array(days).fill(null).map((_, d) => ({
+      date: new Date(startTime.getTime() + d * 86400000).toISOString().split('T')[0],
+      totalActivityCounts: 48000,
+      totalSteps: 7000,
+      sedentaryMinutes: 500,
+      lightActivityMinutes: 350,
+      moderateActivityMinutes: 35,
+      vigorousActivityMinutes: 15,
+      mvpaMinutes: 50,
+      nonWearMinutes: 60,
+      validWearHours: 23,
+    })),
+    dataQuality: 0.90,
+  };
+}
+
+function createSessionWithZeroStreak(): IActigraphySession {
+  const epochs: IActivityCount[] = [];
+  const startTime = new Date('2025-01-20T00:00:00Z');
+  const totalMinutes = 1440 * 3; // 3 days
+
+  for (let i = 0; i < totalMinutes; i++) {
+    const hour = Math.floor(i / 60) % 24;
+    const isNight = hour >= 23 || hour < 7;
+
+    // Create a 100-minute zero streak from minute 100 to 200
+    const isZeroStreak = (i >= 100 && i < 200);
+
+    const count = isZeroStreak ? 0 : (isNight
+      ? Math.round(5 + Math.random() * 10)
+      : Math.round(300 + Math.random() * 200));
+
+    epochs.push({
+      timestamp: startTime.getTime() + i * 60000,
+      epochSeconds: 60,
+      count,
+      vectorMagnitude: count / 1000,
+      steps: Math.round(count / 100),
+      isWorn: true, // Originally marked as worn, Choi algorithm will detect
+    });
+  }
+
+  return {
+    userId: 'test-user',
+    sessionId: 'zero-streak-session',
+    source: 'apple_watch',
+    startTime,
+    endTime: new Date(startTime.getTime() + totalMinutes * 60000),
+    epochLength: 60,
+    epochs,
+    dailySummaries: [],
+    dataQuality: 0.85,
+  };
+}
+
+function createSessionWithShortZeroStreak(): IActigraphySession {
+  const epochs: IActivityCount[] = [];
+  const startTime = new Date('2025-01-20T00:00:00Z');
+  const totalMinutes = 1440 * 3; // 3 days
+
+  for (let i = 0; i < totalMinutes; i++) {
+    const hour = Math.floor(i / 60) % 24;
+    const isNight = hour >= 23 || hour < 7;
+
+    // Create a 30-minute zero streak (below 90-minute threshold)
+    const isZeroStreak = (i >= 100 && i < 130);
+
+    const count = isZeroStreak ? 0 : (isNight
+      ? Math.round(5 + Math.random() * 10)
+      : Math.round(300 + Math.random() * 200));
+
+    epochs.push({
+      timestamp: startTime.getTime() + i * 60000,
+      epochSeconds: 60,
+      count,
+      vectorMagnitude: count / 1000,
+      steps: Math.round(count / 100),
+      isWorn: true,
+    });
+  }
+
+  return {
+    userId: 'test-user',
+    sessionId: 'short-zero-session',
+    source: 'apple_watch',
+    startTime,
+    endTime: new Date(startTime.getTime() + totalMinutes * 60000),
+    epochLength: 60,
+    epochs,
+    dailySummaries: [],
     dataQuality: 0.95,
   };
 }
