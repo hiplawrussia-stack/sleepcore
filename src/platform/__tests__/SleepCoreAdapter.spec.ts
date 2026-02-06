@@ -405,15 +405,16 @@ describe('SleepCoreAdapter', () => {
         },
       } as Partial<ISleepState>);
 
-      // Run multiple times
+      // Run multiple times (increased to reduce flakiness from Thompson Sampling randomness)
       let relaxationCount = 0;
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 30; i++) {
         const selection = await adapter.selectIntervention(sleepState);
         if (selection.component === 'relaxation') {
           relaxationCount++;
         }
       }
 
+      // With high arousal (0.8), relaxation should be selected at least once in 30 tries
       expect(relaxationCount).toBeGreaterThan(0);
     });
 

@@ -1,6 +1,7 @@
 'use strict';
 
-var crypto = require('crypto');
+var crypto$1 = require('crypto');
+var uuid = require('uuid');
 
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
@@ -542,11 +543,114 @@ var INDEX_THRESHOLDS = {
   }
 };
 function getComponentStatus(score) {
-  if (score >= 0.8) return "excellent";
-  if (score >= 0.6) return "good";
-  if (score >= 0.4) return "moderate";
-  if (score >= 0.2) return "concerning";
+  if (score >= 0.8) {
+    return "excellent";
+  }
+  if (score >= 0.6) {
+    return "good";
+  }
+  if (score >= 0.4) {
+    return "moderate";
+  }
+  if (score >= 0.2) {
+    return "concerning";
+  }
   return "critical";
+}
+function generateSecureId(prefix) {
+  const uuid = crypto$1.randomUUID();
+  return prefix ? `${prefix}_${uuid}` : uuid;
+}
+function generateShortSecureId(prefix) {
+  const timestamp = Date.now();
+  const randomHex = crypto$1.randomBytes(5).toString("hex");
+  return prefix ? `${prefix}_${timestamp}_${randomHex}` : `${timestamp}_${randomHex}`;
+}
+function secureRandom() {
+  const buffer = crypto$1.randomBytes(4);
+  const value = buffer.readUInt32BE(0);
+  return value / 4294967296;
+}
+function secureRandomInt(min, max) {
+  return crypto$1.randomInt(min, max + 1);
+}
+function boxMullerSecure(mean = 0, stdDev = 1) {
+  let u1;
+  do {
+    u1 = secureRandom();
+  } while (u1 === 0);
+  const u2 = secureRandom();
+  const mag = stdDev * Math.sqrt(-2 * Math.log(u1));
+  const z0 = mag * Math.cos(2 * Math.PI * u2) + mean;
+  const z1 = mag * Math.sin(2 * Math.PI * u2) + mean;
+  return [z0, z1];
+}
+function gaussianSecure(mean = 0, stdDev = 1) {
+  return boxMullerSecure(mean, stdDev)[0];
+}
+function betaSampleSecure(alpha, beta) {
+  const gammaA = gammaSampleSecure(alpha, 1);
+  const gammaB = gammaSampleSecure(beta, 1);
+  return gammaA / (gammaA + gammaB);
+}
+function gammaSampleSecure(shape, scale) {
+  if (shape < 1) {
+    const u = secureRandom();
+    return gammaSampleSecure(shape + 1, scale) * Math.pow(u, 1 / shape);
+  }
+  const d = shape - 1 / 3;
+  const c = 1 / Math.sqrt(9 * d);
+  while (true) {
+    let x, v;
+    do {
+      x = gaussianSecure();
+      v = 1 + c * x;
+    } while (v <= 0);
+    v = v * v * v;
+    const u = secureRandom();
+    if (u < 1 - 0.0331 * (x * x) * (x * x)) {
+      return d * v * scale;
+    }
+    if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) {
+      return d * v * scale;
+    }
+  }
+}
+function shuffleSecure(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = crypto$1.randomInt(0, i + 1);
+    const temp = array[i];
+    array[i] = array[j];
+    array[j] = temp;
+  }
+  return array;
+}
+function randomElementSecure(array) {
+  if (array.length === 0) {
+    throw new Error("Cannot select from empty array");
+  }
+  return array[crypto$1.randomInt(0, array.length)];
+}
+function randomBooleanSecure(probability) {
+  return secureRandom() < probability;
+}
+function weightedRandomIndexSecure(weights) {
+  if (weights.length === 0) {
+    throw new Error("Cannot select from empty weights array");
+  }
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+  if (totalWeight === 0) {
+    throw new Error("Total weight must be greater than zero");
+  }
+  let random = secureRandom() * totalWeight;
+  for (let i = 0; i < weights.length; i++) {
+    const weight = weights[i] ?? 0;
+    random -= weight;
+    if (random <= 0) {
+      return i;
+    }
+  }
+  return weights.length - 1;
 }
 
 // src/belief/BeliefStateAdapter.ts
@@ -587,7 +691,7 @@ function beliefStateToPLRNNState(belief, hiddenUnits = 16) {
   return {
     latentState: observation,
     // Use observation as initial latent state
-    hiddenActivations: new Array(hiddenUnits).fill(0).map(() => Math.random() * 0.1),
+    hiddenActivations: new Array(hiddenUnits).fill(0).map(() => secureRandom() * 0.1),
     observedState: observation,
     uncertainty,
     timestamp: belief.timestamp,
@@ -620,7 +724,7 @@ function beliefStateToKalmanFormerState(belief, _contextWindow = 24) {
     predictedState: observation,
     predictedCovariance: covariance,
     // Innovation (zero for initial state)
-    innovation: new Array(dim).fill(0),
+    innovation: Array.from({ length: dim }, () => 0),
     innovationCovariance: covariance,
     // Kalman gain (identity-like for initial)
     kalmanGain: new Array(dim).fill(0).map(
@@ -637,7 +741,7 @@ function beliefStateToKalmanFormerState(belief, _contextWindow = 24) {
   };
   return {
     kalmanState,
-    transformerHidden: [new Array(64).fill(0)],
+    transformerHidden: [Array.from({ length: 64 }, () => 0)],
     // Placeholder for transformer hidden
     observationHistory: [{
       observation,
@@ -1168,7 +1272,9 @@ var FeatureAttributionEngine = class {
     const baselineValue = 0.5;
     for (const [featureId, value] of Object.entries(features)) {
       const definition = this.featureDefinitions.get(featureId);
-      if (!definition) continue;
+      if (!definition) {
+        continue;
+      }
       const attribution = this.calculateSingleAttribution(
         featureId,
         value,
@@ -1186,7 +1292,7 @@ var FeatureAttributionEngine = class {
       prediction.confidence
     );
     return {
-      predictionId: crypto.randomUUID(),
+      predictionId: crypto$1.randomUUID(),
       prediction: prediction.outcome,
       predictionValue: prediction.value,
       baselineValue,
@@ -1280,7 +1386,7 @@ var FeatureAttributionEngine = class {
    */
   calculateCategoricalContribution(featureId, value, definition) {
     const featureContributions = CATEGORICAL_CONTRIBUTIONS[featureId];
-    if (featureContributions && featureContributions[value] !== void 0) {
+    if (featureContributions?.[value] !== void 0) {
       return featureContributions[value] * definition.defaultWeight;
     }
     return 0;
@@ -1300,7 +1406,9 @@ var FeatureAttributionEngine = class {
    * Get causal pathway for feature
    */
   getCausalPathway(featureId, definition) {
-    if (!definition.isCausalFactor) return void 0;
+    if (!definition.isCausalFactor) {
+      return void 0;
+    }
     const parents = definition.causalParents?.join(", ") || "root cause";
     const children = definition.causalChildren?.join(", ") || "outcome";
     return `${parents} -> ${featureId} -> ${children}`;
@@ -1310,7 +1418,9 @@ var FeatureAttributionEngine = class {
    */
   generateCausalSummary(attributions, _features) {
     const causalAttributions = attributions.filter((a) => a.isCausallyRelevant);
-    if (causalAttributions.length === 0) return void 0;
+    if (causalAttributions.length === 0) {
+      return void 0;
+    }
     const primaryCauseAttr = causalAttributions.reduce(
       (max, curr) => curr.absoluteImportance > max.absoluteImportance ? curr : max
     );
@@ -1329,7 +1439,9 @@ var FeatureAttributionEngine = class {
   calculateUncertainty(attributions, _confidence) {
     const standardErrors = attributions.map((a) => {
       const interval = a.confidenceInterval;
-      if (!interval) return 0;
+      if (!interval) {
+        return 0;
+      }
       return (interval.upper - interval.lower) / (2 * 1.96);
     });
     const avgStandardError = standardErrors.length > 0 ? standardErrors.reduce((a, b) => a + b, 0) / standardErrors.length : 0;
@@ -1365,13 +1477,13 @@ var FeatureAttributionEngine = class {
     if (explanation.topPositiveFeatures.length > 0) {
       lines.push("\n\u2705 \u041F\u043E\u043B\u043E\u0436\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u0444\u0430\u043A\u0442\u043E\u0440\u044B:");
       for (const attr of explanation.topPositiveFeatures) {
-        lines.push(`  ${attr.emoji} ${attr.featureNameRu}: ${attr.featureValue}`);
+        lines.push(`  ${attr.emoji ?? "\u{1F4CC}"} ${attr.featureNameRu ?? attr.featureName}: ${attr.featureValue}`);
       }
     }
     if (explanation.topNegativeFeatures.length > 0) {
       lines.push("\n\u26A0\uFE0F \u0423\u0447\u0442\u0451\u043D\u043D\u044B\u0435 \u0441\u043B\u043E\u0436\u043D\u043E\u0441\u0442\u0438:");
       for (const attr of explanation.topNegativeFeatures) {
-        lines.push(`  ${attr.emoji} ${attr.featureNameRu}: ${attr.featureValue}`);
+        lines.push(`  ${attr.emoji ?? "\u{1F4CC}"} ${attr.featureNameRu ?? attr.featureName}: ${attr.featureValue}`);
       }
     }
     if (explanation.causalSummary) {
@@ -1433,9 +1545,15 @@ var FeatureAttributionEngine = class {
     }
   }
   getConfidenceEmoji(confidence) {
-    if (confidence >= 0.9) return "\u2705";
-    if (confidence >= 0.7) return "\u{1F44D}";
-    if (confidence >= 0.5) return "\u{1F914}";
+    if (confidence >= 0.9) {
+      return "\u2705";
+    }
+    if (confidence >= 0.7) {
+      return "\u{1F44D}";
+    }
+    if (confidence >= 0.5) {
+      return "\u{1F914}";
+    }
     return "\u26A0\uFE0F";
   }
   // ==========================================================================
@@ -1741,13 +1859,17 @@ var CounterfactualExplainer = class {
       const scenario = this.generateScenarioFromRule(rule, currentFeatures);
       if (scenario) {
         if (options?.requireRobust && options.minRobustness) {
-          if (scenario.robustness < options.minRobustness) continue;
+          if (scenario.robustness < options.minRobustness) {
+            continue;
+          }
         }
         if (options?.feasibilityThreshold) {
           if (!this.meetsFeasibilityThreshold(
             scenario.feasibility,
             options.feasibilityThreshold
-          )) continue;
+          )) {
+            continue;
+          }
         }
         scenarios.push(scenario);
       }
@@ -1775,7 +1897,7 @@ var CounterfactualExplainer = class {
     );
     const { advice, adviceRu } = this.generateActionableAdvice(diverseScenarios);
     return {
-      predictionId: crypto.randomUUID(),
+      predictionId: crypto$1.randomUUID(),
       currentOutcome,
       currentOutcomeRu: this.translateOutcome(currentOutcome),
       currentValue: 0.5,
@@ -1844,7 +1966,9 @@ var CounterfactualExplainer = class {
         }
       }
     }
-    if (changes.length === 0) return null;
+    if (changes.length === 0) {
+      return null;
+    }
     const robustness = this.calculateRobustness({
       id: "",
       changes,
@@ -1865,7 +1989,7 @@ var CounterfactualExplainer = class {
       totalFeasibility = "risky";
     }
     return {
-      id: crypto.randomUUID(),
+      id: crypto$1.randomUUID(),
       description: `To get "${rule.targetOutcome}"`,
       descriptionRu: `\u0427\u0442\u043E\u0431\u044B \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u044C "${rule.targetOutcomeRu}"`,
       changes,
@@ -1930,13 +2054,15 @@ var CounterfactualExplainer = class {
       });
     }
     const smallestChange = singleChanges[0];
-    if (!smallestChange) return null;
+    if (!smallestChange) {
+      return null;
+    }
     const robustness = 0.85;
     const plausibility = 0.9;
     const sparsity = 1;
     const recourseScore = (robustness + plausibility + sparsity) / 3;
     return {
-      id: crypto.randomUUID(),
+      id: crypto$1.randomUUID(),
       description: "Minimal Change",
       descriptionRu: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u043E\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435",
       changes: [smallestChange],
@@ -1961,7 +2087,9 @@ var CounterfactualExplainer = class {
    * Higher = more robust to perturbations
    */
   calculateRobustness(scenario) {
-    if (!scenario.changes || scenario.changes.length === 0) return 0;
+    if (!scenario.changes || scenario.changes.length === 0) {
+      return 0;
+    }
     const sparsityFactor = 1 / Math.sqrt(scenario.changes.length);
     const riskFactors = scenario.changes.map((c) => {
       switch (c.changeRisk) {
@@ -1985,10 +2113,14 @@ var CounterfactualExplainer = class {
    * Higher = more realistic given the context
    */
   calculatePlausibility(scenario, _contextFeatures) {
-    if (!scenario.changes || scenario.changes.length === 0) return 0;
+    if (!scenario.changes || scenario.changes.length === 0) {
+      return 0;
+    }
     const plausibilityScores = scenario.changes.map((change) => {
       const definition = this.featureDefinitions.get(change.featureId);
-      if (!definition) return 0.5;
+      if (!definition) {
+        return 0.5;
+      }
       const currentNum = typeof change.currentValue === "number" ? change.currentValue : 0;
       const suggestedNum = typeof change.suggestedValue === "number" ? change.suggestedValue : 0;
       if (definition.valueType === "numeric" && definition.maxValue && definition.minValue) {
@@ -2023,11 +2155,15 @@ var CounterfactualExplainer = class {
    * Select diverse subset of counterfactuals
    */
   selectDiverseScenarios(scenarios, maxCount) {
-    if (scenarios.length <= maxCount) return scenarios;
+    if (scenarios.length <= maxCount) {
+      return scenarios;
+    }
     const selected = [];
     const usedCategories = /* @__PURE__ */ new Set();
     for (const scenario of scenarios) {
-      if (selected.length >= maxCount) break;
+      if (selected.length >= maxCount) {
+        break;
+      }
       const category = this.getScenarioCategory(scenario);
       if (!usedCategories.has(category)) {
         selected.push(scenario);
@@ -2035,7 +2171,9 @@ var CounterfactualExplainer = class {
       }
     }
     for (const scenario of scenarios) {
-      if (selected.length >= maxCount) break;
+      if (selected.length >= maxCount) {
+        break;
+      }
       if (!selected.includes(scenario)) {
         selected.push(scenario);
       }
@@ -2047,7 +2185,9 @@ var CounterfactualExplainer = class {
    */
   getScenarioCategory(scenario) {
     const firstChange = scenario.changes[0];
-    if (!firstChange) return "unknown";
+    if (!firstChange) {
+      return "unknown";
+    }
     const featureId = firstChange.featureId;
     const definition = this.featureDefinitions.get(featureId);
     return definition?.category || "unknown";
@@ -2056,7 +2196,9 @@ var CounterfactualExplainer = class {
    * Calculate diversity score for selected scenarios
    */
   calculateDiversityScore(scenarios) {
-    if (scenarios.length <= 1) return 0;
+    if (scenarios.length <= 1) {
+      return 0;
+    }
     const categories = scenarios.map((s) => this.getScenarioCategory(s));
     const uniqueCategories = new Set(categories);
     return uniqueCategories.size / scenarios.length;
@@ -2065,7 +2207,9 @@ var CounterfactualExplainer = class {
    * Calculate overall robustness of explanation
    */
   calculateOverallRobustness(scenarios) {
-    if (scenarios.length === 0) return 0;
+    if (scenarios.length === 0) {
+      return 0;
+    }
     const robustnessValues = scenarios.map((s) => s.robustness);
     return robustnessValues.reduce((a, b) => a + b, 0) / robustnessValues.length;
   }
@@ -2076,7 +2220,9 @@ var CounterfactualExplainer = class {
    * Find closest counterfactual (easiest to achieve)
    */
   findClosestCounterfactual(scenarios) {
-    if (scenarios.length === 0) return void 0;
+    if (scenarios.length === 0) {
+      return void 0;
+    }
     return [...scenarios].sort((a, b) => {
       const feasibilityOrder = {
         easy: 0,
@@ -2086,7 +2232,9 @@ var CounterfactualExplainer = class {
         risky: 4
       };
       const feasibilityDiff = feasibilityOrder[a.feasibility] - feasibilityOrder[b.feasibility];
-      if (feasibilityDiff !== 0) return feasibilityDiff;
+      if (feasibilityDiff !== 0) {
+        return feasibilityDiff;
+      }
       return a.changes.length - b.changes.length;
     })[0];
   }
@@ -2094,14 +2242,18 @@ var CounterfactualExplainer = class {
    * Find most robust counterfactual
    */
   findMostRobust(scenarios) {
-    if (scenarios.length === 0) return void 0;
+    if (scenarios.length === 0) {
+      return void 0;
+    }
     return [...scenarios].sort((a, b) => b.robustness - a.robustness)[0];
   }
   /**
    * Find easiest counterfactual
    */
   findEasiest(scenarios) {
-    if (scenarios.length === 0) return void 0;
+    if (scenarios.length === 0) {
+      return void 0;
+    }
     const easyScenarios = scenarios.filter((s) => s.feasibility === "easy");
     if (easyScenarios.length > 0) {
       return easyScenarios.sort((a, b) => b.recourseScore - a.recourseScore)[0];
@@ -2311,6 +2463,60 @@ ${scenario.descriptionRu}:
 };
 
 // src/explainability/services/NarrativeGenerator.ts
+var COMMON_EMOJI_CODEPOINTS = /* @__PURE__ */ new Set([
+  // Common narrative emojis used in templates
+  127775,
+  // 🌟
+  128640,
+  // 🚀
+  128161,
+  // 💡
+  10024,
+  // ✨
+  127919,
+  // 🎯
+  128214,
+  // 📖
+  129300,
+  // 🤔
+  128221,
+  // 📝
+  9989,
+  // ✅
+  128077,
+  // 👍
+  128588,
+  // 🙌
+  127774,
+  // 🌞
+  127752,
+  // 🌈
+  128170,
+  // 💪
+  10084,
+  // ❤
+  128578
+  // 🙂
+]);
+function containsEmoji(str) {
+  for (const char of str) {
+    const codePoint = char.codePointAt(0);
+    if (codePoint !== void 0 && (COMMON_EMOJI_CODEPOINTS.has(codePoint) || codePoint >= 127744 && codePoint <= 129535)) {
+      return true;
+    }
+  }
+  return false;
+}
+function removeEmojis(str) {
+  let result = "";
+  for (const char of str) {
+    const codePoint = char.codePointAt(0);
+    if (codePoint === void 0 || (codePoint < 127744 || codePoint > 129535) && !COMMON_EMOJI_CODEPOINTS.has(codePoint)) {
+      result += char;
+    }
+  }
+  return result;
+}
 var NARRATIVE_TEMPLATES_RU = {
   journey: {
     child: {
@@ -2756,50 +2962,50 @@ var NarrativeGenerator = class {
     if (explanation.localExplanation) {
       const topPositive = explanation.localExplanation.topPositiveFeatures[0];
       const topNegative = explanation.localExplanation.topNegativeFeatures[0];
-      variables["key_factor"] = topPositive?.featureNameRu || "\u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435";
-      variables["key_factor_value"] = String(topPositive?.featureValue || "");
-      variables["challenge"] = topNegative?.featureNameRu || "";
-      variables["initial_state"] = "\u043D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u043E\u0435 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435";
-      variables["current_state"] = explanation.localExplanation.prediction;
-      variables["key_change"] = `\u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 ${variables["key_factor"]}`;
+      variables.key_factor = topPositive?.featureNameRu || "\u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435";
+      variables.key_factor_value = String(topPositive?.featureValue || "");
+      variables.challenge = topNegative?.featureNameRu || "";
+      variables.initial_state = "\u043D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u043E\u0435 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435";
+      variables.current_state = explanation.localExplanation.prediction;
+      variables.key_change = `\u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 ${variables.key_factor}`;
     }
     if (explanation.counterfactualExplanation) {
       const easiest = explanation.counterfactualExplanation.easiestCounterfactual;
       const firstChange = easiest?.changes?.[0];
       if (firstChange) {
-        variables["action"] = firstChange.changeDescriptionRu || firstChange.changeDescription;
+        variables.action = firstChange.changeDescriptionRu || firstChange.changeDescription;
       }
     }
     if (explanation.causalExplanation) {
       const primaryChain = explanation.causalExplanation.primaryChain;
-      if (primaryChain && primaryChain.nodes && primaryChain.nodes.length >= 2) {
+      if (primaryChain?.nodes && primaryChain.nodes.length >= 2) {
         const firstNode = primaryChain.nodes[0];
         const lastNode = primaryChain.nodes[primaryChain.nodes.length - 1];
         if (firstNode) {
-          variables["cause"] = firstNode.variableRu || firstNode.variable;
+          variables.cause = firstNode.variableRu || firstNode.variable;
         }
         if (lastNode) {
-          variables["effect"] = lastNode.variableRu || lastNode.variable;
+          variables.effect = lastNode.variableRu || lastNode.variable;
         }
       }
       const firstEdge = primaryChain?.edges?.[0];
       if (firstEdge) {
-        variables["mechanism"] = firstEdge.mechanismRu || firstEdge.mechanism || "\u043F\u0440\u044F\u043C\u043E\u0435 \u0432\u043B\u0438\u044F\u043D\u0438\u0435";
-        variables["strength"] = `${Math.round(firstEdge.strength * 100)}%`;
+        variables.mechanism = firstEdge.mechanismRu || firstEdge.mechanism || "\u043F\u0440\u044F\u043C\u043E\u0435 \u0432\u043B\u0438\u044F\u043D\u0438\u0435";
+        variables.strength = `${Math.round(firstEdge.strength * 100)}%`;
       }
     }
     if (explanation.userExplanation) {
-      variables["observation"] = explanation.userExplanation.summaryRu || explanation.userExplanation.summary;
-      variables["recommendation"] = explanation.userExplanation.actionableAdviceRu?.[0] || explanation.userExplanation.actionableAdvice?.[0] || "\u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u043F\u0440\u0430\u043A\u0442\u0438\u043A\u0443";
-      variables["reasoning"] = explanation.userExplanation.reasoningRu || explanation.userExplanation.reasoning;
+      variables.observation = explanation.userExplanation.summaryRu || explanation.userExplanation.summary;
+      variables.recommendation = explanation.userExplanation.actionableAdviceRu?.[0] || explanation.userExplanation.actionableAdvice?.[0] || "\u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u043F\u0440\u0430\u043A\u0442\u0438\u043A\u0443";
+      variables.reasoning = explanation.userExplanation.reasoningRu || explanation.userExplanation.reasoning;
     }
-    variables["feeling"] = variables["key_factor"] || "\u0442\u0435\u043A\u0443\u0449\u0435\u0435 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435";
-    variables["technique"] = variables["recommendation"] || "\u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u043C\u0430\u044F \u0442\u0435\u0445\u043D\u0438\u043A\u0430";
-    variables["stats"] = "\u044D\u0444\u0444\u0435\u043A\u0442\u0438\u0432\u043D\u043E\u0441\u0442\u044C 70%+";
-    variables["analogy"] = "\u0434\u043E\u043C\u0438\u043D\u043E - \u043E\u0434\u043D\u043E \u0442\u043E\u043B\u043A\u0430\u0435\u0442 \u0434\u0440\u0443\u0433\u043E\u0435";
-    variables["expected_effect"] = "\u0443\u043B\u0443\u0447\u0448\u0435\u043D\u0438\u0435 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u044F";
-    if (!variables["action"]) {
-      variables["action"] = variables["recommendation"] || "\u043D\u0430\u0447\u0430\u0442\u044C \u043F\u0440\u0430\u043A\u0442\u0438\u043A\u0443";
+    variables.feeling = variables.key_factor || "\u0442\u0435\u043A\u0443\u0449\u0435\u0435 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435";
+    variables.technique = variables.recommendation || "\u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u043C\u0430\u044F \u0442\u0435\u0445\u043D\u0438\u043A\u0430";
+    variables.stats = "\u044D\u0444\u0444\u0435\u043A\u0442\u0438\u0432\u043D\u043E\u0441\u0442\u044C 70%+";
+    variables.analogy = "\u0434\u043E\u043C\u0438\u043D\u043E - \u043E\u0434\u043D\u043E \u0442\u043E\u043B\u043A\u0430\u0435\u0442 \u0434\u0440\u0443\u0433\u043E\u0435";
+    variables.expected_effect = "\u0443\u043B\u0443\u0447\u0448\u0435\u043D\u0438\u0435 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u044F";
+    if (!variables.action) {
+      variables.action = variables.recommendation || "\u043D\u0430\u0447\u0430\u0442\u044C \u043F\u0440\u0430\u043A\u0442\u0438\u043A\u0443";
     }
     return variables;
   }
@@ -2823,8 +3029,10 @@ var NarrativeGenerator = class {
           templateIndex = Math.floor(templates.length / 2);
           break;
         case "visual":
-          templateIndex = templates.findIndex((t) => /[\u{1F300}-\u{1F9FF}]/u.test(t));
-          if (templateIndex === -1) templateIndex = 0;
+          templateIndex = templates.findIndex((t) => containsEmoji(t));
+          if (templateIndex === -1) {
+            templateIndex = 0;
+          }
           break;
       }
     }
@@ -2907,7 +3115,7 @@ var NarrativeGenerator = class {
       "Recommendation": "\u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F",
       "Personal Recommendation": "\u041F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u044C\u043D\u0430\u044F \u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u044F"
     };
-    const cleanTitle = title.replace(/[\u{1F300}-\u{1F9FF}]/gu, "").trim();
+    const cleanTitle = removeEmojis(title).trim();
     return translations[cleanTitle] || title;
   }
   // ==========================================================================
@@ -2951,7 +3159,9 @@ var NarrativeGenerator = class {
     const ratio = maxWords / totalWords;
     const truncateToWords = (text, maxW) => {
       const words = text.split(/\s+/);
-      if (words.length <= maxW) return text;
+      if (words.length <= maxW) {
+        return text;
+      }
       return words.slice(0, maxW).join(" ") + "...";
     };
     const openingWords = Math.ceil(opening.split(/\s+/).length * ratio);
@@ -3025,7 +3235,7 @@ var ExplainabilityService = class {
       request.cognitiveStyle
     );
     const response = {
-      requestId: crypto.randomUUID(),
+      requestId: crypto$1.randomUUID(),
       predictionId: request.predictionId,
       localExplanation,
       counterfactualExplanation,
@@ -3085,7 +3295,9 @@ var ExplainabilityService = class {
    */
   async generateGlobalExplanation(predictionType) {
     const cached = this.getCachedGlobalExplanation(predictionType);
-    if (cached) return cached;
+    if (cached) {
+      return cached;
+    }
     const featureImportance = this.calculateGlobalFeatureImportance(predictionType);
     const decisionRules = this.extractDecisionRules(predictionType);
     const explanation = {
@@ -3124,12 +3336,21 @@ var ExplainabilityService = class {
    * Generate clinician-facing explanation
    */
   async generateClinicianExplanation(sessionData) {
+    const userId = typeof sessionData.userId === "string" || typeof sessionData.userId === "number" ? String(sessionData.userId) : "anonymous";
+    const sessionId = typeof sessionData.sessionId === "string" ? sessionData.sessionId : crypto$1.randomUUID();
+    const presentingConcern = typeof sessionData.presentingConcern === "string" ? sessionData.presentingConcern : "Digital wellness concern";
+    const presentingConcernRu = typeof sessionData.presentingConcernRu === "string" ? sessionData.presentingConcernRu : "\u041F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0446\u0438\u0444\u0440\u043E\u0432\u043E\u0433\u043E \u0431\u043B\u0430\u0433\u043E\u043F\u043E\u043B\u0443\u0447\u0438\u044F";
+    const primaryConcern = typeof sessionData.primaryConcern === "string" ? sessionData.primaryConcern : "Digital overuse";
+    const riskLevel = typeof sessionData.riskLevel === "string" ? sessionData.riskLevel : "low";
+    const reasoning = typeof sessionData.reasoning === "string" ? sessionData.reasoning : "Based on user-reported data and interaction patterns";
+    const reasoningRu = typeof sessionData.reasoningRu === "string" ? sessionData.reasoningRu : "\u041D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u0434\u0430\u043D\u043D\u044B\u0445 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u0438 \u043F\u0430\u0442\u0442\u0435\u0440\u043D\u043E\u0432 \u0432\u0437\u0430\u0438\u043C\u043E\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F";
+    const selectedIntervention = typeof sessionData.selectedIntervention === "string" ? sessionData.selectedIntervention : "Coping technique";
     return {
-      patientId: String(sessionData.userId || "anonymous"),
-      sessionId: String(sessionData.sessionId || crypto.randomUUID()),
+      patientId: userId,
+      sessionId,
       clinicalContext: {
-        presentingConcern: String(sessionData.presentingConcern || "Digital wellness concern"),
-        presentingConcernRu: String(sessionData.presentingConcernRu || "\u041F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0446\u0438\u0444\u0440\u043E\u0432\u043E\u0433\u043E \u0431\u043B\u0430\u0433\u043E\u043F\u043E\u043B\u0443\u0447\u0438\u044F"),
+        presentingConcern,
+        presentingConcernRu,
         relevantHistory: sessionData.relevantHistory || [],
         currentSymptoms: sessionData.currentSymptoms || [],
         riskFactors: sessionData.riskFactors || [],
@@ -3137,17 +3358,17 @@ var ExplainabilityService = class {
         familyContext: sessionData.familyContext
       },
       aiAssessment: {
-        primaryConcern: String(sessionData.primaryConcern || "Digital overuse"),
+        primaryConcern,
         severity: sessionData.severity || "mild",
-        riskLevel: String(sessionData.riskLevel || "low"),
+        riskLevel,
         confidence: Number(sessionData.confidence) || 0.7,
-        reasoning: String(sessionData.reasoning || "Based on user-reported data and interaction patterns"),
-        reasoningRu: String(sessionData.reasoningRu || "\u041D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u0434\u0430\u043D\u043D\u044B\u0445 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u0438 \u043F\u0430\u0442\u0442\u0435\u0440\u043D\u043E\u0432 \u0432\u0437\u0430\u0438\u043C\u043E\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F"),
+        reasoning,
+        reasoningRu,
         causalFactors: sessionData.causalFactors,
         mechanismHypothesis: sessionData.mechanismHypothesis
       },
       interventionRationale: {
-        selectedIntervention: String(sessionData.selectedIntervention || "Coping technique"),
+        selectedIntervention,
         therapeuticApproach: "CBT-based digital wellness support",
         evidenceBasis: [
           "Beck Cognitive Therapy framework",
@@ -3236,7 +3457,7 @@ provide clinical diagnosis or treatment recommendations.
     const edges = nodes.slice(0, -1).map((node, index) => ({
       from: node.variable,
       to: nodes[index + 1]?.variable ?? "",
-      strength: 0.6 + Math.random() * 0.3,
+      strength: 0.6 + secureRandom() * 0.3,
       mechanism: "\u041F\u0440\u044F\u043C\u043E\u0435 \u0432\u043B\u0438\u044F\u043D\u0438\u0435",
       mechanismRu: "\u041F\u0440\u044F\u043C\u043E\u0435 \u0432\u043B\u0438\u044F\u043D\u0438\u0435"
     }));
@@ -3248,7 +3469,7 @@ provide clinical diagnosis or treatment recommendations.
       recommendationRu: `\u0412\u043E\u0437\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u043D\u0430 ${f.nameRu.toLowerCase()}`
     }));
     const primaryChain = {
-      id: crypto.randomUUID(),
+      id: crypto$1.randomUUID(),
       description: `Causal pathway to ${outcome}`,
       descriptionRu: `\u041F\u0440\u0438\u0447\u0438\u043D\u043D\u044B\u0439 \u043F\u0443\u0442\u044C \u043A "${outcome}"`,
       nodes,
@@ -3263,7 +3484,7 @@ provide clinical diagnosis or treatment recommendations.
     }));
     const rootCauseNames = rootCauses.map((r) => r.variableRu.toLowerCase()).join(", ");
     return {
-      predictionId: crypto.randomUUID(),
+      predictionId: crypto$1.randomUUID(),
       primaryChain,
       rootCauses,
       narrativeSummary: `The outcome "${outcome}" is primarily influenced by ${rootCauseNames}.`,
@@ -3288,7 +3509,7 @@ provide clinical diagnosis or treatment recommendations.
    * Generate user-friendly explanation
    */
   generateUserExplanation(localExplanation, counterfactualExplanation, causalExplanation, ageGroup = "adult", cognitiveStyle) {
-    const explanationId = crypto.randomUUID();
+    const explanationId = crypto$1.randomUUID();
     const keyFactors = [];
     if (localExplanation) {
       for (const attr of localExplanation.attributions.slice(0, 3)) {
@@ -3385,9 +3606,13 @@ provide clinical diagnosis or treatment recommendations.
     };
   }
   generateWhyThisMatters(localExplanation, language, ageGroup) {
-    if (!localExplanation || ageGroup === "child") return void 0;
+    if (!localExplanation || ageGroup === "child") {
+      return void 0;
+    }
     const topFactor = localExplanation.topPositiveFeatures[0];
-    if (!topFactor) return void 0;
+    if (!topFactor) {
+      return void 0;
+    }
     if (language === "ru") {
       return ageGroup === "teen" ? `\u042D\u0442\u043E \u0432\u0430\u0436\u043D\u043E, \u043F\u043E\u0442\u043E\u043C\u0443 \u0447\u0442\u043E ${topFactor.featureNameRu.toLowerCase()} \u0432\u043B\u0438\u044F\u0435\u0442 \u043D\u0430 \u0442\u043E, \u043A\u0430\u043A \u0442\u044B \u0441\u0435\u0431\u044F \u0447\u0443\u0432\u0441\u0442\u0432\u0443\u0435\u0448\u044C.` : `\u041F\u043E\u043D\u0438\u043C\u0430\u043D\u0438\u0435 \u0444\u0430\u043A\u0442\u043E\u0440\u043E\u0432 \u043F\u043E\u043C\u043E\u0433\u0430\u0435\u0442 \u043E\u0441\u043E\u0437\u043D\u0430\u043D\u043D\u043E \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u0442\u044C \u0441\u0432\u043E\u0438\u043C \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435\u043C.`;
     }
@@ -3454,7 +3679,9 @@ ${user.reasoningRu}
   }
   formatForClinician(explanation, _level) {
     const clinician = explanation.clinicianExplanation;
-    if (!clinician) return "No clinician explanation available";
+    if (!clinician) {
+      return "No clinician explanation available";
+    }
     return `
 \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 CLINICAL EXPLANATION REPORT
@@ -3545,7 +3772,9 @@ ${clinician.disclaimer}
    * Record explanation feedback
    */
   async recordExplanationFeedback(feedback) {
-    if (!feedback.explanationId) return;
+    if (!feedback.explanationId) {
+      return;
+    }
     const existing = this.effectivenessStore.get(feedback.explanationId);
     const updated = {
       explanationId: feedback.explanationId,
@@ -3570,7 +3799,9 @@ ${clinician.disclaimer}
    */
   getCachedGlobalExplanation(predictionType) {
     const cached = this.globalExplanationCache.get(predictionType);
-    if (!cached) return null;
+    if (!cached) {
+      return null;
+    }
     const age = Date.now() - cached.timestamp;
     if (age > this.config.cacheExpirationMs) {
       this.globalExplanationCache.delete(predictionType);
@@ -3594,8 +3825,10 @@ ${clinician.disclaimer}
   normalizePrediction(prediction) {
     if (typeof prediction === "object" && prediction !== null) {
       const pred = prediction;
+      const outcomeCandidate = pred.outcome ?? pred.result ?? pred.intervention ?? "unknown";
+      const outcomeStr = typeof outcomeCandidate === "string" ? outcomeCandidate : "unknown";
       return {
-        outcome: String(pred.outcome || pred.result || pred.intervention || "unknown"),
+        outcome: outcomeStr,
         value: Number(pred.value || pred.score || 0.5),
         confidence: Number(pred.confidence || 0.7)
       };
@@ -3607,10 +3840,18 @@ ${clinician.disclaimer}
     };
   }
   getConfidenceLabel(confidence) {
-    if (confidence >= 0.9) return "Very High";
-    if (confidence >= 0.7) return "High";
-    if (confidence >= 0.5) return "Medium";
-    if (confidence >= 0.3) return "Low";
+    if (confidence >= 0.9) {
+      return "Very High";
+    }
+    if (confidence >= 0.7) {
+      return "High";
+    }
+    if (confidence >= 0.5) {
+      return "Medium";
+    }
+    if (confidence >= 0.3) {
+      return "Low";
+    }
     return "Very Low";
   }
   getConfidenceDescription(confidence, ageGroup, language) {
@@ -4385,7 +4626,7 @@ var MotivationalStateBuilder = class {
     };
   }
   generateId() {
-    return `ms_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    return generateShortSecureId("ms");
   }
   setUserId(userId) {
     this.state.userId = userId;
@@ -4644,8 +4885,11 @@ var MotivationalStateFactory = class {
       const earlier = utterances.slice(-10, -5);
       const recentRatio = recent.filter((u) => u.category === "change_talk").length / recent.length;
       const earlierRatio = earlier.filter((u) => u.category === "change_talk").length / earlier.length;
-      if (recentRatio > earlierRatio + 0.1) trend = "increasing";
-      else if (recentRatio < earlierRatio - 0.1) trend = "decreasing";
+      if (recentRatio > earlierRatio + 0.1) {
+        trend = "increasing";
+      } else if (recentRatio < earlierRatio - 0.1) {
+        trend = "decreasing";
+      }
     }
     return {
       changeTalkCount,
@@ -4712,8 +4956,12 @@ var MotivationalStateFactory = class {
   }
   inferStage(balance, profile, currentStage) {
     if (profile.mobilizingPresent && profile.mobilizingRatio > 0.3) {
-      if (profile.takingSteps >= 2) return "action";
-      if (profile.commitment >= 2 || profile.activation >= 2) return "preparation";
+      if (profile.takingSteps >= 2) {
+        return "action";
+      }
+      if (profile.commitment >= 2 || profile.activation >= 2) {
+        return "preparation";
+      }
     }
     if (balance.changeTalkRatio < 0.3) {
       return "precontemplation";
@@ -4722,7 +4970,9 @@ var MotivationalStateFactory = class {
       return "contemplation";
     }
     if (balance.changeTalkRatio > 0.7) {
-      if (profile.dominantPreparatory !== "none") return "preparation";
+      if (profile.dominantPreparatory !== "none") {
+        return "preparation";
+      }
     }
     return currentStage ?? "contemplation";
   }
@@ -4883,7 +5133,7 @@ var MotivationalEngine = class {
       evidenceSpans = bestStMatch.spans;
     }
     return {
-      id: `utt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: generateShortSecureId("utt"),
       text,
       timestamp: /* @__PURE__ */ new Date(),
       category,
@@ -4951,7 +5201,8 @@ var MotivationalEngine = class {
         expectedImpact: "increase_ct"
       });
     }
-    const template = templates[Math.floor(Math.random() * templates.length)];
+    const templateIndex = secureRandomInt(0, templates.length - 1);
+    const template = templates[templateIndex];
     const text = context.language === "ru" ? template.templateRu : template.template;
     return this.createResponse({
       text,
@@ -4986,7 +5237,8 @@ var MotivationalEngine = class {
         expectedImpact: "neutral"
       });
     }
-    const template = templates[Math.floor(Math.random() * templates.length)];
+    const templateIndex = secureRandomInt(0, templates.length - 1);
+    const template = templates[templateIndex];
     const text = context.language === "ru" ? template.templateRu : template.template;
     return this.createResponse({
       text,
@@ -5062,7 +5314,8 @@ var MotivationalEngine = class {
   async respondToDiscord(discordType, context) {
     const strategy = DISCORD_RESPONSE_STRATEGIES[discordType];
     const templates = context.language === "ru" ? strategy.templatesRu : strategy.templates;
-    const text = templates[Math.floor(Math.random() * templates.length)];
+    const textIndex = secureRandomInt(0, templates.length - 1);
+    const text = templates[textIndex];
     return this.createResponse({
       text,
       textRu: strategy.templatesRu[0],
@@ -5205,18 +5458,38 @@ var MotivationalEngine = class {
     const lowDiscord = state.discord.level < 0.3;
     const readinessHigh = state.readinessRuler.readiness >= 7;
     const ambivalenceResolved = state.ambivalence.level < 0.4;
-    if (ctRatioHigh) reasons.push("High change talk ratio");
-    if (mobilizingPresent) reasons.push("Mobilizing language present");
-    if (lowDiscord) reasons.push("Good therapeutic rapport");
-    if (readinessHigh) reasons.push("High readiness scores");
-    if (ambivalenceResolved) reasons.push("Ambivalence largely resolved");
+    if (ctRatioHigh) {
+      reasons.push("High change talk ratio");
+    }
+    if (mobilizingPresent) {
+      reasons.push("Mobilizing language present");
+    }
+    if (lowDiscord) {
+      reasons.push("Good therapeutic rapport");
+    }
+    if (readinessHigh) {
+      reasons.push("High readiness scores");
+    }
+    if (ambivalenceResolved) {
+      reasons.push("Ambivalence largely resolved");
+    }
     const ready = reasons.length >= 3;
     if (!ready) {
-      if (!ctRatioHigh) nextSteps.push("Continue evoking change talk");
-      if (!mobilizingPresent) nextSteps.push("Elicit commitment language");
-      if (!lowDiscord) nextSteps.push("Address therapeutic relationship");
-      if (!readinessHigh) nextSteps.push("Build importance and confidence");
-      if (!ambivalenceResolved) nextSteps.push("Explore remaining ambivalence");
+      if (!ctRatioHigh) {
+        nextSteps.push("Continue evoking change talk");
+      }
+      if (!mobilizingPresent) {
+        nextSteps.push("Elicit commitment language");
+      }
+      if (!lowDiscord) {
+        nextSteps.push("Address therapeutic relationship");
+      }
+      if (!readinessHigh) {
+        nextSteps.push("Build importance and confidence");
+      }
+      if (!ambivalenceResolved) {
+        nextSteps.push("Explore remaining ambivalence");
+      }
     }
     return { ready, reasons, nextSteps };
   }
@@ -5242,8 +5515,12 @@ var MotivationalEngine = class {
       return prep[0].type;
     }
     if (profile.mobilizingRatio < 0.5) {
-      if (profile.commitment < profile.activation) return "commitment";
-      if (profile.activation < profile.takingSteps) return "activation";
+      if (profile.commitment < profile.activation) {
+        return "commitment";
+      }
+      if (profile.activation < profile.takingSteps) {
+        return "activation";
+      }
       return "taking_steps";
     }
     return "commitment";
@@ -5284,9 +5561,15 @@ var MotivationalEngine = class {
       "confront",
       "direct"
     ];
-    if (adherentBehaviors.includes(behavior)) return 0.9;
-    if (neutralBehaviors.includes(behavior)) return 0.7;
-    if (nonAdherentBehaviors.includes(behavior)) return 0.3;
+    if (adherentBehaviors.includes(behavior)) {
+      return 0.9;
+    }
+    if (neutralBehaviors.includes(behavior)) {
+      return 0.7;
+    }
+    if (nonAdherentBehaviors.includes(behavior)) {
+      return 0.3;
+    }
     return 0.6;
   }
   determineFidelityLevel(counts) {
@@ -5372,15 +5655,15 @@ var KalmanFormerEngine = class {
       keyWeights: this.initTransformerWeights(numLayers, numHeads, embedDim, headDim),
       valueWeights: this.initTransformerWeights(numLayers, numHeads, embedDim, headDim),
       outputProjection: this.initRandomMatrix(embedDim, embedDim),
-      feedforward: Array(numLayers).fill(null).map(() => ({
+      feedforward: Array.from({ length: numLayers }, () => ({
         linear1: this.initRandomMatrix(embedDim, embedDim * 4),
         linear2: this.initRandomMatrix(embedDim * 4, embedDim),
-        bias1: new Array(embedDim * 4).fill(0),
-        bias2: new Array(embedDim).fill(0)
+        bias1: Array.from({ length: embedDim * 4 }, () => 0),
+        bias2: Array.from({ length: embedDim }, () => 0)
       })),
-      layerNorm: Array(numLayers * 2).fill(null).map(() => ({
-        gamma: new Array(embedDim).fill(1),
-        beta: new Array(embedDim).fill(0)
+      layerNorm: Array.from({ length: numLayers * 2 }, () => ({
+        gamma: Array.from({ length: embedDim }, () => 1),
+        beta: Array.from({ length: embedDim }, () => 0)
       }))
     };
     const embedding = {
@@ -5390,10 +5673,10 @@ var KalmanFormerEngine = class {
     };
     const gainPredictor = this.config.learnedGain ? {
       weights: this.initRandomMatrix(embedDim, stateDim * obsDim),
-      bias: new Array(stateDim * obsDim).fill(0)
+      bias: Array.from({ length: stateDim * obsDim }, () => 0)
     } : void 0;
     const blendPredictor = {
-      weights: new Array(embedDim).fill(0).map(() => Math.random() * 0.1),
+      weights: Array.from({ length: embedDim }, () => secureRandom() * 0.1),
       bias: 0.5
       // Start with equal blend
     };
@@ -5609,7 +5892,9 @@ var KalmanFormerEngine = class {
     for (let t = 0; t < predictions.length; t++) {
       const predRow = predictions[t];
       const actualRow = actuals[t];
-      if (!predRow || !actualRow) continue;
+      if (!predRow || !actualRow) {
+        continue;
+      }
       for (let i = 0; i < predRow.length; i++) {
         totalError += Math.pow((predRow[i] ?? 0) - (actualRow[i] ?? 0), 2);
       }
@@ -5638,12 +5923,16 @@ var KalmanFormerEngine = class {
     for (const sample of samples) {
       const firstObs = sample.observations[0];
       const firstTimestamp = sample.timestamps[0];
-      if (!firstObs || !firstTimestamp) continue;
+      if (!firstObs || !firstTimestamp) {
+        continue;
+      }
       let state = this.initializeState(firstObs, firstTimestamp);
       for (let t = 1; t < sample.observations.length; t++) {
         const obs = sample.observations[t];
         const ts = sample.timestamps[t];
-        if (!obs || !ts) continue;
+        if (!obs || !ts) {
+          continue;
+        }
         state = this.update(state, obs, ts);
         const target = sample.groundTruth?.[t];
         if (target) {
@@ -5694,7 +5983,7 @@ var KalmanFormerEngine = class {
         errorCovariance: this.initDiagonalMatrix(n, 0.1),
         predictedState: [...plrnnState.latentState],
         predictedCovariance: this.initDiagonalMatrix(n, 0.1),
-        innovation: new Array(n).fill(0),
+        innovation: Array.from({ length: n }, () => 0),
         innovationCovariance: this.initDiagonalMatrix(n, 0.1),
         kalmanGain: this.initIdentityMatrix(n),
         normalized_innovation_squared: 0,
@@ -5743,7 +6032,7 @@ var KalmanFormerEngine = class {
         errorCovariance: this.initDiagonalMatrix(n, 0.1),
         predictedState: [...observation],
         predictedCovariance: this.initDiagonalMatrix(n, 0.1),
-        innovation: new Array(n).fill(0),
+        innovation: Array.from({ length: n }, () => 0),
         innovationCovariance: this.initDiagonalMatrix(n, 0.1),
         kalmanGain: this.initIdentityMatrix(n),
         normalized_innovation_squared: 0,
@@ -5812,7 +6101,7 @@ var KalmanFormerEngine = class {
     if (!this.weights.gainPredictor) {
       throw new Error("Gain predictor not initialized");
     }
-    const lastContext = contextEncoding[contextEncoding.length - 1] || new Array(this.config.embedDim).fill(0);
+    const lastContext = contextEncoding[contextEncoding.length - 1] || Array.from({ length: this.config.embedDim }, () => 0);
     const gainVector = this.matVec(
       [this.weights.gainPredictor.weights.map((row) => row[0] || 0)],
       lastContext
@@ -5857,7 +6146,7 @@ var KalmanFormerEngine = class {
   }
   encodeContext(history) {
     if (history.length === 0) {
-      return [new Array(this.config.embedDim).fill(0)];
+      return [Array.from({ length: this.config.embedDim }, () => 0)];
     }
     const embeddings = history.map(
       (h, i) => h.embedding || this.embedObservation(h.observation, h.timestamp, i)
@@ -5885,11 +6174,15 @@ var KalmanFormerEngine = class {
       for (let i = 0; i < seqLen; i++) {
         const scoreRow = [];
         const Qi = Q[i];
-        if (!Qi) continue;
+        if (!Qi) {
+          continue;
+        }
         for (let j = 0; j < seqLen; j++) {
           let score = 0;
           const Kj = K[j];
-          if (!Kj) continue;
+          if (!Kj) {
+            continue;
+          }
           for (let k = 0; k < headDim; k++) {
             score += (Qi[k] ?? 0) * (Kj[k] ?? 0);
           }
@@ -5901,17 +6194,23 @@ var KalmanFormerEngine = class {
         scores[i] = expScores.map((e) => e / sumExp);
       }
       for (let i = 0; i < seqLen; i++) {
-        const attended = new Array(headDim).fill(0);
+        const attended = Array.from({ length: headDim }, () => 0);
         const scoresI = scores[i];
-        if (!scoresI) continue;
+        if (!scoresI) {
+          continue;
+        }
         for (let j = 0; j < seqLen; j++) {
           const Vj = V[j];
-          if (!Vj) continue;
+          if (!Vj) {
+            continue;
+          }
           for (let k = 0; k < headDim; k++) {
-            attended[k] += (scoresI[j] ?? 0) * (Vj[k] ?? 0);
+            attended[k] = (attended[k] ?? 0) + (scoresI[j] ?? 0) * (Vj[k] ?? 0);
           }
         }
-        if (!headOutputs[i]) headOutputs[i] = [];
+        if (!headOutputs[i]) {
+          headOutputs[i] = [];
+        }
         headOutputs[i].push(...attended);
       }
     }
@@ -5947,11 +6246,11 @@ var KalmanFormerEngine = class {
   }
   transformerPredict(_history, contextEncoding) {
     if (contextEncoding.length === 0) {
-      return new Array(this.config.stateDim).fill(0);
+      return Array.from({ length: this.config.stateDim }, () => 0);
     }
     const lastEncoding = contextEncoding[contextEncoding.length - 1];
     if (!lastEncoding) {
-      return new Array(this.config.stateDim).fill(0);
+      return Array.from({ length: this.config.stateDim }, () => 0);
     }
     return this.matVec(this.weights.outputProjection, lastEncoding);
   }
@@ -5959,7 +6258,7 @@ var KalmanFormerEngine = class {
     if (!this.weights.blendPredictor) {
       return this.config.blendRatio;
     }
-    const lastContext = contextEncoding[contextEncoding.length - 1] ?? new Array(this.config.embedDim).fill(0);
+    const lastContext = contextEncoding[contextEncoding.length - 1] ?? Array.from({ length: this.config.embedDim }, () => 0);
     const logit = lastContext.reduce(
       (sum, v, i) => sum + v * (this.weights.blendPredictor.weights[i] ?? 0),
       0
@@ -5989,11 +6288,15 @@ var KalmanFormerEngine = class {
     for (let i = 0; i < seqLen; i++) {
       const weightRow = [];
       const embI = embeddings[i];
-      if (!embI) continue;
+      if (!embI) {
+        continue;
+      }
       for (let j = 0; j < seqLen; j++) {
         let score = 0;
         const embJ = embeddings[j];
-        if (!embJ) continue;
+        if (!embJ) {
+          continue;
+        }
         for (let k = 0; k < embedDim; k++) {
           score += (embI[k] ?? 0) * (embJ[k] ?? 0);
         }
@@ -6007,7 +6310,9 @@ var KalmanFormerEngine = class {
     return weights;
   }
   findMostInfluentialDimension(observation) {
-    if (observation.length === 0) return "unknown";
+    if (observation.length === 0) {
+      return "unknown";
+    }
     let maxIdx = 0;
     let maxVal = Math.abs(observation[0] ?? 0);
     for (let i = 1; i < observation.length; i++) {
@@ -6020,28 +6325,35 @@ var KalmanFormerEngine = class {
     return STATE_DIMENSIONS[maxIdx] ?? `dim_${maxIdx}`;
   }
   detectPatternMatching(attentionWeights) {
-    if (attentionWeights.length < 3) return false;
+    if (attentionWeights.length < 3) {
+      return false;
+    }
     const lastRow = attentionWeights[attentionWeights.length - 1];
-    if (!lastRow || lastRow.length < 2) return false;
+    if (!lastRow || lastRow.length < 2) {
+      return false;
+    }
     const adjacentWeight = (lastRow[lastRow.length - 2] ?? 0) + (lastRow[lastRow.length - 1] ?? 0);
     const totalWeight = lastRow.reduce((a, b) => a + b, 0);
     return totalWeight > 0 && adjacentWeight / totalWeight < 0.5;
   }
   // Matrix operations
   initIdentityMatrix(n) {
-    return Array(n).fill(null).map(
-      (_, i) => Array(n).fill(0).map((_2, j) => i === j ? 1 : 0)
+    return Array.from(
+      { length: n },
+      (_, i) => Array.from({ length: n }, (_2, j) => i === j ? 1 : 0)
     );
   }
   initDiagonalMatrix(n, value) {
-    return Array(n).fill(null).map(
-      (_, i) => Array(n).fill(0).map((_2, j) => i === j ? value : 0)
+    return Array.from(
+      { length: n },
+      (_, i) => Array.from({ length: n }, (_2, j) => i === j ? value : 0)
     );
   }
   initRandomMatrix(rows, cols) {
     const scale = Math.sqrt(2 / (rows + cols));
-    return Array(rows).fill(null).map(
-      () => Array(cols).fill(0).map(() => (Math.random() - 0.5) * 2 * scale)
+    return Array.from(
+      { length: rows },
+      () => Array.from({ length: cols }, () => (secureRandom() - 0.5) * 2 * scale)
     );
   }
   initPositionalEmbedding(maxLen, embedDim) {
@@ -6057,10 +6369,11 @@ var KalmanFormerEngine = class {
     return pe;
   }
   initTransformerWeights(numLayers, numHeads, embedDim, headDim) {
-    return Array(numLayers).fill(null).map(
-      () => Array(numHeads).fill(null).map(() => {
+    return Array.from(
+      { length: numLayers },
+      () => Array.from({ length: numHeads }, () => {
         const matrix = this.initRandomMatrix(embedDim, headDim);
-        return matrix[0] ?? new Array(headDim).fill(0);
+        return matrix[0] ?? Array.from({ length: headDim }, () => 0);
       })
     );
   }
@@ -6071,20 +6384,23 @@ var KalmanFormerEngine = class {
     const rowsA = A.length;
     const colsB = B[0]?.length || 0;
     const colsA = A[0]?.length || 0;
-    return Array(rowsA).fill(null).map(
-      (_, i) => Array(colsB).fill(0).map(
-        (_2, j) => Array(colsA).fill(0).reduce(
-          (sum, _3, k) => sum + (A[i]?.[k] ?? 0) * (B[k]?.[j] ?? 0),
-          0
-        )
-      )
+    return Array.from(
+      { length: rowsA },
+      (_, i) => Array.from({ length: colsB }, (_2, j) => {
+        let sum = 0;
+        for (let k = 0; k < colsA; k++) {
+          sum += (A[i]?.[k] ?? 0) * (B[k]?.[j] ?? 0);
+        }
+        return sum;
+      })
     );
   }
   transpose(A) {
     const rows = A.length;
     const cols = A[0]?.length || 0;
-    return Array(cols).fill(null).map(
-      (_, i) => Array(rows).fill(0).map((_2, j) => A[j]?.[i] || 0)
+    return Array.from(
+      { length: cols },
+      (_, i) => Array.from({ length: rows }, (_2, j) => A[j]?.[i] || 0)
     );
   }
   matAdd(A, B) {
@@ -6096,15 +6412,19 @@ var KalmanFormerEngine = class {
   matInverse(A) {
     const n = A.length;
     const identity = this.initIdentityMatrix(n);
-    const augmented = A.map((row, i) => [...row, ...identity[i] ?? Array(n).fill(0)]);
+    const augmented = A.map((row, i) => [...row, ...identity[i] ?? Array.from({ length: n }, () => 0)]);
     for (let i = 0; i < n; i++) {
       let maxRow = i;
       const rowI = augmented[i];
-      if (!rowI) continue;
+      if (!rowI) {
+        continue;
+      }
       for (let k = i + 1; k < n; k++) {
         const rowK = augmented[k];
         const rowMax2 = augmented[maxRow];
-        if (!rowK || !rowMax2) continue;
+        if (!rowK || !rowMax2) {
+          continue;
+        }
         if (Math.abs(rowK[i] ?? 0) > Math.abs(rowMax2[i] ?? 0)) {
           maxRow = k;
         }
@@ -6115,7 +6435,9 @@ var KalmanFormerEngine = class {
         augmented[maxRow] = rowI;
       }
       const currentRow = augmented[i];
-      if (!currentRow) continue;
+      if (!currentRow) {
+        continue;
+      }
       const pivotVal = currentRow[i] ?? 0;
       if (Math.abs(pivotVal) < 1e-10) {
         return this.initDiagonalMatrix(n, 1);
@@ -6123,7 +6445,9 @@ var KalmanFormerEngine = class {
       for (let k = 0; k < n; k++) {
         if (k !== i) {
           const rowK = augmented[k];
-          if (!rowK) continue;
+          if (!rowK) {
+            continue;
+          }
           const factor = (rowK[i] ?? 0) / pivotVal;
           for (let j = 0; j < 2 * n; j++) {
             rowK[j] = (rowK[j] ?? 0) - factor * (currentRow[j] ?? 0);
@@ -6171,11 +6495,11 @@ var PLRNNEngine = class {
       this.config = { ...this.config, ...config };
     }
     const n = this.config.latentDim;
-    const A = Array(n).fill(0).map(() => 0.85 + Math.random() * 0.1);
+    const A = Array.from({ length: n }, () => 0.85 + secureRandom() * 0.1);
     const W = this.initializeMatrix(n, n, "sparse_stable");
     const B = this.initializeMatrix(n, n, "near_identity");
-    const biasLatent = Array(n).fill(0).map(() => 0);
-    const biasObserved = Array(n).fill(0).map(() => 0);
+    const biasLatent = Array.from({ length: n }, () => 0);
+    const biasObserved = Array.from({ length: n }, () => 0);
     let dendriticWeights;
     let C;
     if (this.config.connectivity === "dendritic" && this.config.dendriticBases) {
@@ -6253,7 +6577,7 @@ var PLRNNEngine = class {
     const phiZ = z.map((v) => Math.max(0, v));
     const Az = z.map((zi, i) => (A[i] ?? 0.9) * zi);
     const WphiZ = this.matVec(W, phiZ);
-    let dendriticTerm = Array(n).fill(0);
+    let dendriticTerm = Array.from({ length: n }, () => 0);
     if (this.config.connectivity === "dendritic" && dendriticWeights && C) {
       const bases = dendriticWeights.map(
         (row) => row.reduce((sum, w, i) => sum + w * (z[i % z.length] ?? 0), 0)
@@ -6263,7 +6587,7 @@ var PLRNNEngine = class {
         (row) => row.reduce((sum, c, i) => sum + c * (activatedBases[i] ?? 0), 0)
       );
     }
-    let inputTerm = Array(n).fill(0);
+    let inputTerm = Array.from({ length: n }, () => 0);
     if (input && C) {
       inputTerm = C.map(
         (row) => row.reduce((sum, c, i) => sum + c * (input[i] || 0), 0)
@@ -6399,13 +6723,15 @@ var PLRNNEngine = class {
    * Call this after each observation to maintain state synchronization
    */
   updateKalmanFormerState(observation, timestamp) {
-    if (!this.kalmanFormer) return;
+    if (!this.kalmanFormer) {
+      return;
+    }
     if (!this.kalmanFormerState) {
       const initialState = {
         latentState: [...observation],
         hiddenActivations: observation.map((v) => Math.max(0, v)),
         observedState: [...observation],
-        uncertainty: Array(observation.length).fill(0.1),
+        uncertainty: Array.from({ length: observation.length }, () => 0.1),
         timestamp,
         timestep: 0
       };
@@ -6445,7 +6771,9 @@ var PLRNNEngine = class {
     const significanceThreshold = 0.1;
     for (let i = 0; i < n; i++) {
       const row = W[i];
-      if (!row) continue;
+      if (!row) {
+        continue;
+      }
       for (let j = 0; j < n; j++) {
         const weight = row[j] ?? 0;
         if (i !== j && Math.abs(weight) > significanceThreshold) {
@@ -6485,7 +6813,7 @@ var PLRNNEngine = class {
     if (targetIdx === -1) {
       throw new Error(`Unknown target dimension: ${target}`);
     }
-    const input = Array(this.config.latentDim).fill(0);
+    const input = Array.from({ length: this.config.latentDim }, () => 0);
     switch (intervention) {
       case "increase":
         input[targetIdx] = magnitude;
@@ -6514,7 +6842,9 @@ var PLRNNEngine = class {
     for (let t = 0; t < horizon; t++) {
       const intState = interventionTrajectory.trajectory[t];
       const baseState = baselineTrajectory.trajectory[t];
-      if (!intState || !baseState) continue;
+      if (!intState || !baseState) {
+        continue;
+      }
       const effect = Math.abs(
         (intState.observedState[targetIdx] ?? 0) - (baseState.observedState[targetIdx] ?? 0)
       );
@@ -6533,7 +6863,9 @@ var PLRNNEngine = class {
     for (let t = Math.floor(timeToPeak / this.config.dt); t < horizon; t++) {
       const intState = interventionTrajectory.trajectory[t];
       const baseState = baselineTrajectory.trajectory[t];
-      if (!intState || !baseState) continue;
+      if (!intState || !baseState) {
+        continue;
+      }
       const effect = Math.abs(
         (intState.observedState[targetIdx] ?? 0) - (baseState.observedState[targetIdx] ?? 0)
       );
@@ -6665,11 +6997,13 @@ var PLRNNEngine = class {
     for (let t = 0; t < observations.length - 1; t++) {
       const predicted = this.forward(state);
       const target = observations[t + 1];
-      if (!target) continue;
+      if (!target) {
+        continue;
+      }
       const loss = this.calculateLoss([predicted.observedState], [target]);
       totalLoss += loss;
       this.updateWeightsOnline(state, predicted, target);
-      if (Math.random() < this.config.teacherForcingRatio) {
+      if (randomBooleanSecure(this.config.teacherForcingRatio)) {
         state = this.initializeState(target);
         state.timestep = predicted.timestep;
       } else {
@@ -6716,7 +7050,9 @@ var PLRNNEngine = class {
     for (let t = 0; t < predicted.length; t++) {
       const predRow = predicted[t];
       const actualRow = actual[t];
-      if (!predRow || !actualRow) continue;
+      if (!predRow || !actualRow) {
+        continue;
+      }
       for (let i = 0; i < predRow.length; i++) {
         const diff = (predRow[i] ?? 0) - (actualRow[i] ?? 0);
         loss += diff * diff;
@@ -6735,9 +7071,13 @@ var PLRNNEngine = class {
     let totalCount = 0;
     for (let i = 0; i < n; i++) {
       const row = W[i];
-      if (!row) continue;
+      if (!row) {
+        continue;
+      }
       for (let j = 0; j < n; j++) {
-        if (Math.abs(row[j] ?? 0) < 0.01) zeroCount++;
+        if (Math.abs(row[j] ?? 0) < 0.01) {
+          zeroCount++;
+        }
         totalCount++;
       }
     }
@@ -6763,14 +7103,14 @@ var PLRNNEngine = class {
         if (type === "identity") {
           row[j] = i === j ? 1 : 0;
         } else if (type === "near_identity") {
-          row[j] = i === j ? 1 + (Math.random() - 0.5) * 0.1 : (Math.random() - 0.5) * 0.02;
+          row[j] = i === j ? 1 + (secureRandom() - 0.5) * 0.1 : (secureRandom() - 0.5) * 0.02;
         } else if (type === "sparse") {
-          row[j] = Math.random() < 0.2 ? (Math.random() - 0.5) * 2 * scale : 0;
+          row[j] = randomBooleanSecure(0.2) ? (secureRandom() - 0.5) * 2 * scale : 0;
         } else if (type === "sparse_stable") {
           const smallScale = scale * 0.3;
-          row[j] = Math.random() < 0.3 ? (Math.random() - 0.5) * 2 * smallScale : 0;
+          row[j] = randomBooleanSecure(0.3) ? (secureRandom() - 0.5) * 2 * smallScale : 0;
         } else {
-          row[j] = (Math.random() - 0.5) * 2 * scale;
+          row[j] = (secureRandom() - 0.5) * 2 * scale;
         }
       }
       matrix[i] = row;
@@ -6790,7 +7130,7 @@ var PLRNNEngine = class {
       latentState: [...obs],
       hiddenActivations: obs.map((v) => Math.max(0, v)),
       observedState: [...obs],
-      uncertainty: Array(n).fill(0.1),
+      uncertainty: Array.from({ length: n }, () => 0.1),
       timestamp: /* @__PURE__ */ new Date(),
       timestep: 0
     };
@@ -6826,10 +7166,14 @@ var PLRNNEngine = class {
     for (let i = 0; i < n; i++) {
       const rowI = W[i];
       const rowJ_check = W;
-      if (!rowI) continue;
+      if (!rowI) {
+        continue;
+      }
       for (let j = i + 1; j < n; j++) {
         const rowJ = rowJ_check[j];
-        if (!rowJ) continue;
+        if (!rowJ) {
+          continue;
+        }
         const wij = rowI[j] ?? 0;
         const wji = rowJ[i] ?? 0;
         if (Math.abs(wij) > threshold && Math.abs(wji) > threshold) {
@@ -6842,7 +7186,9 @@ var PLRNNEngine = class {
     return loops;
   }
   calculateAutocorrelation(series) {
-    if (series.length < 3) return 0;
+    if (series.length < 3) {
+      return 0;
+    }
     const mean = series.reduce((a, b) => a + b, 0) / series.length;
     let numerator = 0;
     let denominator = 0;
@@ -6858,13 +7204,17 @@ var PLRNNEngine = class {
     return denominator > 0 ? numerator / denominator : 0;
   }
   calculateVariance(series) {
-    if (series.length < 2) return 0;
+    if (series.length < 2) {
+      return 0;
+    }
     const mean = series.reduce((a, b) => a + b, 0) / series.length;
     const variance = series.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (series.length - 1);
     return variance;
   }
   detectFlickering(series) {
-    if (series.length < 5) return 0;
+    if (series.length < 5) {
+      return 0;
+    }
     const mean = series.reduce((a, b) => a + b, 0) / series.length;
     let crossings = 0;
     for (let t = 1; t < series.length; t++) {
@@ -6879,7 +7229,9 @@ var PLRNNEngine = class {
     return Math.max(0, flickering - 1);
   }
   estimateTransitionTime(autocorrelation) {
-    if (autocorrelation < 0.7) return null;
+    if (autocorrelation < 0.7) {
+      return null;
+    }
     const timeScale = 1 / (1 - autocorrelation);
     return Math.min(48, timeScale * this.config.dt);
   }
@@ -6907,7 +7259,9 @@ var PLRNNEngine = class {
   }
   calculateCorrelation(x, y) {
     const n = x.length;
-    if (n < 3) return 0;
+    if (n < 3) {
+      return 0;
+    }
     const meanX = x.reduce((a, b) => a + b, 0) / n;
     const meanY = y.reduce((a, b) => a + b, 0) / n;
     let numerator = 0;
@@ -6924,7 +7278,9 @@ var PLRNNEngine = class {
     return denom > 0 ? numerator / denom : 0;
   }
   updateWeightsOnline(prevState, predicted, target) {
-    if (!this.weights || !this.adamState) return;
+    if (!this.weights || !this.adamState) {
+      return;
+    }
     const { A, W, B, biasLatent, biasObserved } = this.weights;
     const lr = this.config.learningRate;
     const clip = this.config.gradientClip;
@@ -6937,7 +7293,9 @@ var PLRNNEngine = class {
     );
     for (let i = 0; i < B.length; i++) {
       const rowB = B[i];
-      if (!rowB) continue;
+      if (!rowB) {
+        continue;
+      }
       const errI = outputError[i] ?? 0;
       for (let j = 0; j < rowB.length; j++) {
         let grad = -errI * (predicted.latentState[j] ?? 0);
@@ -6963,7 +7321,9 @@ var PLRNNEngine = class {
     const phiZ = prevState.latentState.map((v) => Math.max(0, v));
     for (let i = 0; i < W.length; i++) {
       const rowW = W[i];
-      if (!rowW) continue;
+      if (!rowW) {
+        continue;
+      }
       const latErr = latentError[i] ?? 0;
       for (let j = 0; j < rowW.length; j++) {
         const phi = phiZ[j] ?? 0;
@@ -6981,15 +7341,17 @@ var PLRNNEngine = class {
   }
   approximateMaxEigenvalue(W) {
     const n = W.length;
-    let v = Array(n).fill(1 / Math.sqrt(n));
+    let v = Array.from({ length: n }, () => 1 / Math.sqrt(n));
     for (let iter = 0; iter < 20; iter++) {
       const Av2 = this.matVec(W, v);
       const norm = Math.sqrt(Av2.reduce((sum, x) => sum + x * x, 0));
-      if (norm < 1e-10) return 0;
+      if (norm < 1e-10) {
+        return 0;
+      }
       v = Av2.map((x) => x / norm);
     }
     const Av = this.matVec(W, v);
-    return Av.reduce((sum, x, i) => sum + x * v[i], 0);
+    return Av.reduce((sum, x, i) => sum + x * (v[i] ?? 0), 0);
   }
   // ============================================================================
   // BPTT SUPPORT METHODS (for PLRNNTrainer)
@@ -7102,38 +7464,40 @@ var PLRNNEngine = class {
     const biasCorrection1 = 1 - Math.pow(beta1, t);
     const biasCorrection2 = 1 - Math.pow(beta2, t);
     const clip = (g) => Math.max(-gradClip, Math.min(gradClip, g));
-    if (!this.adamState.m["A"]) {
-      this.adamState.m["A"] = [Array(n).fill(0)];
-      this.adamState.v["A"] = [Array(n).fill(0)];
+    if (!this.adamState.m.A) {
+      this.adamState.m.A = [Array.from({ length: n }, () => 0)];
+      this.adamState.v.A = [Array.from({ length: n }, () => 0)];
     }
     for (let i = 0; i < n; i++) {
       let grad = gradients.dA[i] ?? 0;
       grad += l2Reg * (A[i] ?? 0);
       grad = clip(grad);
-      const mA = this.adamState.m["A"][0];
-      const vA = this.adamState.v["A"][0];
+      const mA = this.adamState.m.A[0];
+      const vA = this.adamState.v.A[0];
       mA[i] = beta1 * (mA[i] ?? 0) + (1 - beta1) * grad;
       vA[i] = beta2 * (vA[i] ?? 0) + (1 - beta2) * grad * grad;
       const mHat = mA[i] / biasCorrection1;
       const vHat = vA[i] / biasCorrection2;
       A[i] = (A[i] ?? 0.9) - learningRate * mHat / (Math.sqrt(vHat) + epsilon);
     }
-    if (!this.adamState.m["W"]) {
-      this.adamState.m["W"] = Array(n).fill(null).map(() => Array(n).fill(0));
-      this.adamState.v["W"] = Array(n).fill(null).map(() => Array(n).fill(0));
+    if (!this.adamState.m.W) {
+      this.adamState.m.W = Array.from({ length: n }, () => Array.from({ length: n }, () => 0));
+      this.adamState.v.W = Array.from({ length: n }, () => Array.from({ length: n }, () => 0));
     }
     for (let i = 0; i < n; i++) {
       const wRow = W[i];
       const dWRow = gradients.dW[i];
-      if (!wRow || !dWRow) continue;
+      if (!wRow || !dWRow) {
+        continue;
+      }
       for (let j = 0; j < n; j++) {
         let grad = dWRow[j] ?? 0;
         const wij = wRow[j] ?? 0;
         grad += l1Reg * Math.sign(wij);
         grad += l2Reg * wij;
         grad = clip(grad);
-        const mW = this.adamState.m["W"];
-        const vW = this.adamState.v["W"];
+        const mW = this.adamState.m.W;
+        const vW = this.adamState.v.W;
         mW[i][j] = beta1 * (mW[i][j] ?? 0) + (1 - beta1) * grad;
         vW[i][j] = beta2 * (vW[i][j] ?? 0) + (1 - beta2) * grad * grad;
         const mHat = mW[i][j] / biasCorrection1;
@@ -7141,20 +7505,22 @@ var PLRNNEngine = class {
         wRow[j] = wij - learningRate * mHat / (Math.sqrt(vHat) + epsilon);
       }
     }
-    if (!this.adamState.m["B"]) {
-      this.adamState.m["B"] = Array(n).fill(null).map(() => Array(n).fill(0));
-      this.adamState.v["B"] = Array(n).fill(null).map(() => Array(n).fill(0));
+    if (!this.adamState.m.B) {
+      this.adamState.m.B = Array.from({ length: n }, () => Array.from({ length: n }, () => 0));
+      this.adamState.v.B = Array.from({ length: n }, () => Array.from({ length: n }, () => 0));
     }
     for (let i = 0; i < n; i++) {
       const bRow = B[i];
       const dBRow = gradients.dB[i];
-      if (!bRow || !dBRow) continue;
+      if (!bRow || !dBRow) {
+        continue;
+      }
       for (let j = 0; j < n; j++) {
         let grad = dBRow[j] ?? 0;
         grad += l2Reg * (bRow[j] ?? 0);
         grad = clip(grad);
-        const mB = this.adamState.m["B"];
-        const vB = this.adamState.v["B"];
+        const mB = this.adamState.m.B;
+        const vB = this.adamState.v.B;
         mB[i][j] = beta1 * (mB[i][j] ?? 0) + (1 - beta1) * grad;
         vB[i][j] = beta2 * (vB[i][j] ?? 0) + (1 - beta2) * grad * grad;
         const mHat = mB[i][j] / biasCorrection1;
@@ -7162,28 +7528,28 @@ var PLRNNEngine = class {
         bRow[j] = (bRow[j] ?? 0) - learningRate * mHat / (Math.sqrt(vHat) + epsilon);
       }
     }
-    if (!this.adamState.m["biasLatent"]) {
-      this.adamState.m["biasLatent"] = [Array(n).fill(0)];
-      this.adamState.v["biasLatent"] = [Array(n).fill(0)];
+    if (!this.adamState.m.biasLatent) {
+      this.adamState.m.biasLatent = [Array.from({ length: n }, () => 0)];
+      this.adamState.v.biasLatent = [Array.from({ length: n }, () => 0)];
     }
     for (let i = 0; i < n; i++) {
-      let grad = clip(gradients.dBiasLatent[i] ?? 0);
-      const mBL = this.adamState.m["biasLatent"][0];
-      const vBL = this.adamState.v["biasLatent"][0];
+      const grad = clip(gradients.dBiasLatent[i] ?? 0);
+      const mBL = this.adamState.m.biasLatent[0];
+      const vBL = this.adamState.v.biasLatent[0];
       mBL[i] = beta1 * (mBL[i] ?? 0) + (1 - beta1) * grad;
       vBL[i] = beta2 * (vBL[i] ?? 0) + (1 - beta2) * grad * grad;
       const mHat = mBL[i] / biasCorrection1;
       const vHat = vBL[i] / biasCorrection2;
       biasLatent[i] = (biasLatent[i] ?? 0) - learningRate * mHat / (Math.sqrt(vHat) + epsilon);
     }
-    if (!this.adamState.m["biasObserved"]) {
-      this.adamState.m["biasObserved"] = [Array(n).fill(0)];
-      this.adamState.v["biasObserved"] = [Array(n).fill(0)];
+    if (!this.adamState.m.biasObserved) {
+      this.adamState.m.biasObserved = [Array.from({ length: n }, () => 0)];
+      this.adamState.v.biasObserved = [Array.from({ length: n }, () => 0)];
     }
     for (let i = 0; i < n; i++) {
-      let grad = clip(gradients.dBiasObserved[i] ?? 0);
-      const mBO = this.adamState.m["biasObserved"][0];
-      const vBO = this.adamState.v["biasObserved"][0];
+      const grad = clip(gradients.dBiasObserved[i] ?? 0);
+      const mBO = this.adamState.m.biasObserved[0];
+      const vBO = this.adamState.v.biasObserved[0];
       mBO[i] = beta1 * (mBO[i] ?? 0) + (1 - beta1) * grad;
       vBO[i] = beta2 * (vBO[i] ?? 0) + (1 - beta2) * grad * grad;
       const mHat = mBO[i] / biasCorrection1;
@@ -8373,8 +8739,18 @@ var PROTECTIVE_FACTORS = [
   /хочу\s+(?:измени|помощ)/i,
   // English - more specific patterns
   // CRITICAL: Use negative lookbehind to avoid "don't want to live" as protective
-  /but\s+(?:i\s+)?(?:want to|will|trying|there's hope)/i,
-  /(?:i\s+)?don'?t\s+(?:want to die|going to|actually)/i,
+  // Fixed: Avoid nested optional groups with quantifiers (ReDoS prevention)
+  /but i want to/i,
+  /but want to/i,
+  /but i will/i,
+  /but will/i,
+  /but i'?m trying/i,
+  /but trying/i,
+  /but there'?s hope/i,
+  /i don'?t want to die/i,
+  /don'?t want to die/i,
+  /i'?m not going to/i,
+  /not actually/i,
   /help me/i,
   /need help/i,
   /(?<!don'?t\s)want to\s+(?:live|change|get help)/i
@@ -8478,13 +8854,20 @@ var CrisisDetector = class {
     }
   }
   calculateLayer1Confidence(indicators) {
-    if (indicators.length === 0) return 0;
+    if (indicators.length === 0) {
+      return 0;
+    }
     let score = 0;
     for (const indicator of indicators) {
-      if (indicator.includes("suicidal")) score += 0.4;
-      else if (indicator.includes("selfharm")) score += 0.3;
-      else if (indicator.includes("hopeless")) score += 0.2;
-      else score += 0.1;
+      if (indicator.includes("suicidal")) {
+        score += 0.4;
+      } else if (indicator.includes("selfharm")) {
+        score += 0.3;
+      } else if (indicator.includes("hopeless")) {
+        score += 0.2;
+      } else {
+        score += 0.1;
+      }
     }
     return Math.min(1, score);
   }
@@ -8514,15 +8897,24 @@ var CrisisDetector = class {
     };
   }
   calculateLayer2Confidence(indicators) {
-    if (indicators.length === 0) return 0;
+    if (indicators.length === 0) {
+      return 0;
+    }
     let score = 0;
     for (const indicator of indicators) {
-      if (indicator.includes("planning")) score += 0.5;
-      else if (indicator.includes("farewell")) score += 0.4;
-      else if (indicator.includes("giving_away")) score += 0.3;
-      else if (indicator.includes("urgency")) score += 0.4;
-      else if (indicator.includes("absolutes")) score += 0.2;
-      else score += 0.1;
+      if (indicator.includes("planning")) {
+        score += 0.5;
+      } else if (indicator.includes("farewell")) {
+        score += 0.4;
+      } else if (indicator.includes("giving_away")) {
+        score += 0.3;
+      } else if (indicator.includes("urgency")) {
+        score += 0.4;
+      } else if (indicator.includes("absolutes")) {
+        score += 0.2;
+      } else {
+        score += 0.1;
+      }
     }
     return Math.min(1, score);
   }
@@ -8561,7 +8953,9 @@ var CrisisDetector = class {
     };
   }
   calculateLayer3Confidence(stateRisk, indicators) {
-    if (indicators.length === 0) return 0;
+    if (indicators.length === 0) {
+      return 0;
+    }
     const riskScore = stateRisk.overallRiskLevel * 0.3 + stateRisk.suicidalIdeation * 0.4 + stateRisk.selfHarmRisk * 0.3;
     return Math.min(1, riskScore);
   }
@@ -8699,8 +9093,12 @@ var CrisisDetector = class {
     const latinPattern = /[a-z]/i;
     const hasCyrillic = cyrillicPattern.test(text);
     const hasLatin = latinPattern.test(text);
-    if (hasCyrillic && hasLatin) return "both";
-    if (hasCyrillic) return "ru";
+    if (hasCyrillic && hasLatin) {
+      return "both";
+    }
+    if (hasCyrillic) {
+      return "ru";
+    }
     return "en";
   }
   emptyLayerResult() {
@@ -8735,6 +9133,2308 @@ function createCrisisDetector(config) {
 }
 var defaultCrisisDetector = createCrisisDetector();
 
+// src/errors/ErrorCodes.ts
+var ErrorCode = /* @__PURE__ */ ((ErrorCode2) => {
+  ErrorCode2["DOMAIN_BELIEF_UPDATE_FAILED"] = "DOMAIN_BELIEF_UPDATE_FAILED";
+  ErrorCode2["DOMAIN_BELIEF_INVALID_OBSERVATION"] = "DOMAIN_BELIEF_INVALID_OBSERVATION";
+  ErrorCode2["DOMAIN_BELIEF_DIMENSION_NOT_FOUND"] = "DOMAIN_BELIEF_DIMENSION_NOT_FOUND";
+  ErrorCode2["DOMAIN_TEMPORAL_NOT_INITIALIZED"] = "DOMAIN_TEMPORAL_NOT_INITIALIZED";
+  ErrorCode2["DOMAIN_TEMPORAL_PREDICTION_FAILED"] = "DOMAIN_TEMPORAL_PREDICTION_FAILED";
+  ErrorCode2["DOMAIN_TEMPORAL_INVALID_TRAJECTORY"] = "DOMAIN_TEMPORAL_INVALID_TRAJECTORY";
+  ErrorCode2["DOMAIN_CRISIS_DETECTION_FAILED"] = "DOMAIN_CRISIS_DETECTION_FAILED";
+  ErrorCode2["DOMAIN_CRISIS_INVALID_STATE"] = "DOMAIN_CRISIS_INVALID_STATE";
+  ErrorCode2["DOMAIN_INTERVENTION_NOT_FOUND"] = "DOMAIN_INTERVENTION_NOT_FOUND";
+  ErrorCode2["DOMAIN_INTERVENTION_SELECTION_FAILED"] = "DOMAIN_INTERVENTION_SELECTION_FAILED";
+  ErrorCode2["DOMAIN_INTERVENTION_NO_ELIGIBLE"] = "DOMAIN_INTERVENTION_NO_ELIGIBLE";
+  ErrorCode2["DOMAIN_METACOGNITION_INVALID_ITEM"] = "DOMAIN_METACOGNITION_INVALID_ITEM";
+  ErrorCode2["DOMAIN_METACOGNITION_ANALYSIS_FAILED"] = "DOMAIN_METACOGNITION_ANALYSIS_FAILED";
+  ErrorCode2["DOMAIN_CAUSAL_NODE_NOT_FOUND"] = "DOMAIN_CAUSAL_NODE_NOT_FOUND";
+  ErrorCode2["DOMAIN_CAUSAL_INVALID_GRAPH"] = "DOMAIN_CAUSAL_INVALID_GRAPH";
+  ErrorCode2["APP_SESSION_NOT_FOUND"] = "APP_SESSION_NOT_FOUND";
+  ErrorCode2["APP_SESSION_EXPIRED"] = "APP_SESSION_EXPIRED";
+  ErrorCode2["APP_SESSION_START_FAILED"] = "APP_SESSION_START_FAILED";
+  ErrorCode2["APP_SESSION_END_FAILED"] = "APP_SESSION_END_FAILED";
+  ErrorCode2["APP_MESSAGE_PROCESSING_FAILED"] = "APP_MESSAGE_PROCESSING_FAILED";
+  ErrorCode2["APP_MESSAGE_INVALID_FORMAT"] = "APP_MESSAGE_INVALID_FORMAT";
+  ErrorCode2["APP_PIPELINE_STAGE_FAILED"] = "APP_PIPELINE_STAGE_FAILED";
+  ErrorCode2["APP_PIPELINE_TIMEOUT"] = "APP_PIPELINE_TIMEOUT";
+  ErrorCode2["APP_VOICE_PROCESSING_FAILED"] = "APP_VOICE_PROCESSING_FAILED";
+  ErrorCode2["APP_VOICE_TRANSCRIPTION_FAILED"] = "APP_VOICE_TRANSCRIPTION_FAILED";
+  ErrorCode2["APP_EXPORT_FAILED"] = "APP_EXPORT_FAILED";
+  ErrorCode2["APP_IMPORT_FAILED"] = "APP_IMPORT_FAILED";
+  ErrorCode2["APP_DELETE_FAILED"] = "APP_DELETE_FAILED";
+  ErrorCode2["INFRA_STORAGE_READ_FAILED"] = "INFRA_STORAGE_READ_FAILED";
+  ErrorCode2["INFRA_STORAGE_WRITE_FAILED"] = "INFRA_STORAGE_WRITE_FAILED";
+  ErrorCode2["INFRA_STORAGE_CONNECTION_FAILED"] = "INFRA_STORAGE_CONNECTION_FAILED";
+  ErrorCode2["INFRA_EXTERNAL_SERVICE_UNAVAILABLE"] = "INFRA_EXTERNAL_SERVICE_UNAVAILABLE";
+  ErrorCode2["INFRA_EXTERNAL_SERVICE_TIMEOUT"] = "INFRA_EXTERNAL_SERVICE_TIMEOUT";
+  ErrorCode2["INFRA_EXTERNAL_SERVICE_ERROR"] = "INFRA_EXTERNAL_SERVICE_ERROR";
+  ErrorCode2["INFRA_NLP_SERVICE_FAILED"] = "INFRA_NLP_SERVICE_FAILED";
+  ErrorCode2["INFRA_AI_MODEL_NOT_LOADED"] = "INFRA_AI_MODEL_NOT_LOADED";
+  ErrorCode2["VALIDATION_REQUIRED_FIELD"] = "VALIDATION_REQUIRED_FIELD";
+  ErrorCode2["VALIDATION_INVALID_FORMAT"] = "VALIDATION_INVALID_FORMAT";
+  ErrorCode2["VALIDATION_OUT_OF_RANGE"] = "VALIDATION_OUT_OF_RANGE";
+  ErrorCode2["VALIDATION_INVALID_TYPE"] = "VALIDATION_INVALID_TYPE";
+  ErrorCode2["VALIDATION_EMPTY_ARRAY"] = "VALIDATION_EMPTY_ARRAY";
+  ErrorCode2["VALIDATION_INVALID_ID"] = "VALIDATION_INVALID_ID";
+  ErrorCode2["UNKNOWN_ERROR"] = "UNKNOWN_ERROR";
+  ErrorCode2["INTERNAL_ERROR"] = "INTERNAL_ERROR";
+  ErrorCode2["NOT_IMPLEMENTED"] = "NOT_IMPLEMENTED";
+  return ErrorCode2;
+})(ErrorCode || {});
+var ErrorSeverity = /* @__PURE__ */ ((ErrorSeverity2) => {
+  ErrorSeverity2["LOW"] = "low";
+  ErrorSeverity2["MEDIUM"] = "medium";
+  ErrorSeverity2["HIGH"] = "high";
+  ErrorSeverity2["CRITICAL"] = "critical";
+  return ErrorSeverity2;
+})(ErrorSeverity || {});
+var ErrorCategory = /* @__PURE__ */ ((ErrorCategory2) => {
+  ErrorCategory2["DOMAIN"] = "domain";
+  ErrorCategory2["APPLICATION"] = "application";
+  ErrorCategory2["INFRASTRUCTURE"] = "infrastructure";
+  ErrorCategory2["VALIDATION"] = "validation";
+  ErrorCategory2["UNKNOWN"] = "unknown";
+  return ErrorCategory2;
+})(ErrorCategory || {});
+function getErrorCategory(code) {
+  if (code.startsWith("DOMAIN_")) {
+    return "domain" /* DOMAIN */;
+  }
+  if (code.startsWith("APP_")) {
+    return "application" /* APPLICATION */;
+  }
+  if (code.startsWith("INFRA_")) {
+    return "infrastructure" /* INFRASTRUCTURE */;
+  }
+  if (code.startsWith("VALIDATION_")) {
+    return "validation" /* VALIDATION */;
+  }
+  return "unknown" /* UNKNOWN */;
+}
+function getDefaultSeverity(code) {
+  if (code.includes("CRISIS")) {
+    return "critical" /* CRITICAL */;
+  }
+  if (code.startsWith("INFRA_")) {
+    return "high" /* HIGH */;
+  }
+  if (code === "INTERNAL_ERROR" /* INTERNAL_ERROR */) {
+    return "high" /* HIGH */;
+  }
+  if (code.startsWith("DOMAIN_")) {
+    return "medium" /* MEDIUM */;
+  }
+  if (code.startsWith("APP_")) {
+    return "medium" /* MEDIUM */;
+  }
+  if (code.startsWith("VALIDATION_")) {
+    return "low" /* LOW */;
+  }
+  return "medium" /* MEDIUM */;
+}
+
+// src/errors/BaseError.ts
+var CogniCoreError = class _CogniCoreError extends Error {
+  constructor(code, message, context = {}, options) {
+    super(message, { cause: options?.cause });
+    __publicField(this, "code");
+    __publicField(this, "category");
+    __publicField(this, "severity");
+    __publicField(this, "context");
+    __publicField(this, "timestamp");
+    __publicField(this, "isOperational");
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = this.constructor.name;
+    this.code = code;
+    this.category = getErrorCategory(code);
+    this.severity = options?.severity ?? getDefaultSeverity(code);
+    this.context = context;
+    this.timestamp = /* @__PURE__ */ new Date();
+    this.isOperational = options?.isOperational ?? true;
+    Error.captureStackTrace(this, this.constructor);
+  }
+  /**
+   * Serialize error for logging or API response
+   */
+  toJSON() {
+    return {
+      code: this.code,
+      message: this.message,
+      category: this.category,
+      severity: this.severity,
+      timestamp: this.timestamp.toISOString(),
+      context: Object.keys(this.context).length > 0 ? this.context : void 0,
+      cause: this.cause instanceof Error ? this.cause.message : void 0,
+      stack: process.env.NODE_ENV === "development" ? this.stack : void 0
+    };
+  }
+  /**
+   * Create a safe version of error for client response (no sensitive data)
+   */
+  toClientResponse() {
+    return {
+      code: this.code,
+      message: this.message,
+      timestamp: this.timestamp.toISOString()
+    };
+  }
+  /**
+   * Create CogniCoreError from unknown error
+   */
+  static fromUnknown(error, defaultCode = "UNKNOWN_ERROR" /* UNKNOWN_ERROR */, context = {}) {
+    if (error instanceof _CogniCoreError) {
+      return error;
+    }
+    if (error instanceof Error) {
+      return new _CogniCoreError(defaultCode, error.message, context, {
+        cause: error
+      });
+    }
+    return new _CogniCoreError(
+      defaultCode,
+      typeof error === "string" ? error : "An unknown error occurred",
+      context
+    );
+  }
+  /**
+   * Check if error is a specific type
+   */
+  static isErrorCode(error, code) {
+    return error instanceof _CogniCoreError && error.code === code;
+  }
+  /**
+   * Check if error belongs to a category
+   */
+  static isCategory(error, category) {
+    return error instanceof _CogniCoreError && error.category === category;
+  }
+};
+
+// src/errors/DomainErrors.ts
+var BeliefUpdateError = class extends CogniCoreError {
+  constructor(message, context, cause) {
+    super("DOMAIN_BELIEF_UPDATE_FAILED" /* DOMAIN_BELIEF_UPDATE_FAILED */, message, {
+      component: "BeliefUpdateEngine",
+      ...context
+    }, { cause });
+  }
+};
+var InvalidObservationError = class extends CogniCoreError {
+  constructor(observationType, context, cause) {
+    super(
+      "DOMAIN_BELIEF_INVALID_OBSERVATION" /* DOMAIN_BELIEF_INVALID_OBSERVATION */,
+      `Invalid observation type: ${observationType}`,
+      { component: "BeliefUpdateEngine", ...context },
+      { cause }
+    );
+    this.observationType = observationType;
+  }
+};
+var DimensionNotFoundError = class extends CogniCoreError {
+  constructor(dimensionId, context) {
+    super(
+      "DOMAIN_BELIEF_DIMENSION_NOT_FOUND" /* DOMAIN_BELIEF_DIMENSION_NOT_FOUND */,
+      `Dimension not found: ${dimensionId}`,
+      { component: "BeliefUpdateEngine", ...context }
+    );
+    this.dimensionId = dimensionId;
+  }
+};
+var TemporalNotInitializedError = class extends CogniCoreError {
+  constructor(engineType, context) {
+    super(
+      "DOMAIN_TEMPORAL_NOT_INITIALIZED" /* DOMAIN_TEMPORAL_NOT_INITIALIZED */,
+      `${engineType} engine not initialized. Call initialize() first.`,
+      { component: `${engineType}Engine`, ...context }
+    );
+    this.engineType = engineType;
+  }
+};
+var PredictionError = class extends CogniCoreError {
+  constructor(message, context, cause) {
+    super("DOMAIN_TEMPORAL_PREDICTION_FAILED" /* DOMAIN_TEMPORAL_PREDICTION_FAILED */, message, {
+      component: "TemporalEngine",
+      ...context
+    }, { cause });
+  }
+};
+var InvalidTrajectoryError = class extends CogniCoreError {
+  constructor(reason, context) {
+    super(
+      "DOMAIN_TEMPORAL_INVALID_TRAJECTORY" /* DOMAIN_TEMPORAL_INVALID_TRAJECTORY */,
+      `Invalid trajectory: ${reason}`,
+      { component: "TemporalEngine", ...context }
+    );
+    this.reason = reason;
+  }
+};
+var CrisisDetectionError = class extends CogniCoreError {
+  constructor(message, context, cause) {
+    super("DOMAIN_CRISIS_DETECTION_FAILED" /* DOMAIN_CRISIS_DETECTION_FAILED */, message, {
+      component: "CrisisDetector",
+      ...context
+    }, { cause, severity: "critical" /* CRITICAL */ });
+  }
+};
+var InvalidCrisisStateError = class extends CogniCoreError {
+  constructor(currentState, attemptedAction, context) {
+    super(
+      "DOMAIN_CRISIS_INVALID_STATE" /* DOMAIN_CRISIS_INVALID_STATE */,
+      `Cannot ${attemptedAction} in crisis state: ${currentState}`,
+      { component: "CrisisManager", ...context },
+      { severity: "critical" /* CRITICAL */ }
+    );
+    this.currentState = currentState;
+    this.attemptedAction = attemptedAction;
+  }
+};
+var InterventionNotFoundError = class extends CogniCoreError {
+  constructor(interventionId, context) {
+    super(
+      "DOMAIN_INTERVENTION_NOT_FOUND" /* DOMAIN_INTERVENTION_NOT_FOUND */,
+      `Intervention not found: ${interventionId}`,
+      { component: "InterventionOptimizer", ...context }
+    );
+    this.interventionId = interventionId;
+  }
+};
+var InterventionSelectionError = class extends CogniCoreError {
+  constructor(message, context, cause) {
+    super("DOMAIN_INTERVENTION_SELECTION_FAILED" /* DOMAIN_INTERVENTION_SELECTION_FAILED */, message, {
+      component: "InterventionOptimizer",
+      ...context
+    }, { cause });
+  }
+};
+var NoEligibleInterventionsError = class extends CogniCoreError {
+  constructor(reason, context) {
+    super(
+      "DOMAIN_INTERVENTION_NO_ELIGIBLE" /* DOMAIN_INTERVENTION_NO_ELIGIBLE */,
+      `No eligible interventions: ${reason}`,
+      { component: "InterventionOptimizer", ...context }
+    );
+    this.reason = reason;
+  }
+};
+var InvalidMetacognitionItemError = class extends CogniCoreError {
+  constructor(itemId, context) {
+    super(
+      "DOMAIN_METACOGNITION_INVALID_ITEM" /* DOMAIN_METACOGNITION_INVALID_ITEM */,
+      `Invalid MCQ-30 item ID: ${itemId}`,
+      { component: "MetacognitiveEngine", ...context }
+    );
+    this.itemId = itemId;
+  }
+};
+var MetacognitionAnalysisError = class extends CogniCoreError {
+  constructor(message, context, cause) {
+    super("DOMAIN_METACOGNITION_ANALYSIS_FAILED" /* DOMAIN_METACOGNITION_ANALYSIS_FAILED */, message, {
+      component: "MetacognitiveEngine",
+      ...context
+    }, { cause });
+  }
+};
+var CausalNodeNotFoundError = class extends CogniCoreError {
+  constructor(nodeId, context) {
+    super(
+      "DOMAIN_CAUSAL_NODE_NOT_FOUND" /* DOMAIN_CAUSAL_NODE_NOT_FOUND */,
+      `Causal node not found: ${nodeId}`,
+      { component: "CausalEngine", ...context }
+    );
+    this.nodeId = nodeId;
+  }
+};
+var InvalidCausalGraphError = class extends CogniCoreError {
+  constructor(reason, context) {
+    super(
+      "DOMAIN_CAUSAL_INVALID_GRAPH" /* DOMAIN_CAUSAL_INVALID_GRAPH */,
+      `Invalid causal graph: ${reason}`,
+      { component: "CausalEngine", ...context }
+    );
+    this.reason = reason;
+  }
+};
+
+// src/errors/ApplicationErrors.ts
+var SessionNotFoundError = class extends CogniCoreError {
+  constructor(sessionId, context) {
+    super(
+      "APP_SESSION_NOT_FOUND" /* APP_SESSION_NOT_FOUND */,
+      `Session not found: ${sessionId}`,
+      { component: "SessionManager", ...context }
+    );
+    this.sessionId = sessionId;
+  }
+};
+var SessionExpiredError = class extends CogniCoreError {
+  constructor(sessionId, expiredAt, context) {
+    super(
+      "APP_SESSION_EXPIRED" /* APP_SESSION_EXPIRED */,
+      `Session expired: ${sessionId} at ${expiredAt.toISOString()}`,
+      { component: "SessionManager", ...context }
+    );
+    this.sessionId = sessionId;
+    this.expiredAt = expiredAt;
+  }
+};
+var SessionStartError = class extends CogniCoreError {
+  constructor(message, context, cause) {
+    super("APP_SESSION_START_FAILED" /* APP_SESSION_START_FAILED */, message, {
+      component: "SessionManager",
+      ...context
+    }, { cause });
+  }
+};
+var SessionEndError = class extends CogniCoreError {
+  constructor(sessionId, message, context, cause) {
+    super("APP_SESSION_END_FAILED" /* APP_SESSION_END_FAILED */, message, {
+      component: "SessionManager",
+      sessionId,
+      ...context
+    }, { cause });
+    this.sessionId = sessionId;
+  }
+};
+var MessageProcessingError = class extends CogniCoreError {
+  constructor(message, context, cause) {
+    super("APP_MESSAGE_PROCESSING_FAILED" /* APP_MESSAGE_PROCESSING_FAILED */, message, {
+      component: "MessageProcessor",
+      ...context
+    }, { cause });
+  }
+};
+var InvalidMessageFormatError = class extends CogniCoreError {
+  constructor(expectedFormat, received, context) {
+    super(
+      "APP_MESSAGE_INVALID_FORMAT" /* APP_MESSAGE_INVALID_FORMAT */,
+      `Invalid message format. Expected: ${expectedFormat}, received: ${received}`,
+      { component: "MessageProcessor", ...context }
+    );
+    this.expectedFormat = expectedFormat;
+    this.received = received;
+  }
+};
+var PipelineStageError = class extends CogniCoreError {
+  constructor(stageName, message, context, cause) {
+    super("APP_PIPELINE_STAGE_FAILED" /* APP_PIPELINE_STAGE_FAILED */, message, {
+      component: "MessageProcessingPipeline",
+      operation: stageName,
+      ...context
+    }, { cause });
+    this.stageName = stageName;
+  }
+};
+var PipelineTimeoutError = class extends CogniCoreError {
+  constructor(stageName, timeoutMs, context) {
+    super(
+      "APP_PIPELINE_TIMEOUT" /* APP_PIPELINE_TIMEOUT */,
+      `Pipeline stage '${stageName}' timed out after ${timeoutMs}ms`,
+      { component: "MessageProcessingPipeline", operation: stageName, ...context }
+    );
+    this.stageName = stageName;
+    this.timeoutMs = timeoutMs;
+  }
+};
+var VoiceProcessingError = class extends CogniCoreError {
+  constructor(message, context, cause) {
+    super("APP_VOICE_PROCESSING_FAILED" /* APP_VOICE_PROCESSING_FAILED */, message, {
+      component: "VoiceInputAdapter",
+      ...context
+    }, { cause });
+  }
+};
+var TranscriptionError = class extends CogniCoreError {
+  constructor(message, context, cause) {
+    super("APP_VOICE_TRANSCRIPTION_FAILED" /* APP_VOICE_TRANSCRIPTION_FAILED */, message, {
+      component: "VoiceInputAdapter",
+      ...context
+    }, { cause });
+  }
+};
+var DataExportError = class extends CogniCoreError {
+  constructor(userId, message, context, cause) {
+    super("APP_EXPORT_FAILED" /* APP_EXPORT_FAILED */, message, {
+      component: "DataExporter",
+      userId,
+      ...context
+    }, { cause });
+    this.userId = userId;
+  }
+};
+var DataImportError = class extends CogniCoreError {
+  constructor(message, context, cause) {
+    super("APP_IMPORT_FAILED" /* APP_IMPORT_FAILED */, message, {
+      component: "DataImporter",
+      ...context
+    }, { cause });
+  }
+};
+var DataDeleteError = class extends CogniCoreError {
+  constructor(userId, message, context, cause) {
+    super("APP_DELETE_FAILED" /* APP_DELETE_FAILED */, message, {
+      component: "DataManager",
+      userId,
+      ...context
+    }, { cause });
+    this.userId = userId;
+  }
+};
+
+// src/errors/InfrastructureErrors.ts
+var StorageReadError = class extends CogniCoreError {
+  constructor(storageType, message, context, cause) {
+    super("INFRA_STORAGE_READ_FAILED" /* INFRA_STORAGE_READ_FAILED */, message, {
+      component: storageType,
+      ...context
+    }, { cause, severity: "high" /* HIGH */ });
+    this.storageType = storageType;
+  }
+};
+var StorageWriteError = class extends CogniCoreError {
+  constructor(storageType, message, context, cause) {
+    super("INFRA_STORAGE_WRITE_FAILED" /* INFRA_STORAGE_WRITE_FAILED */, message, {
+      component: storageType,
+      ...context
+    }, { cause, severity: "high" /* HIGH */ });
+    this.storageType = storageType;
+  }
+};
+var StorageConnectionError = class extends CogniCoreError {
+  constructor(storageType, message, context, cause) {
+    super("INFRA_STORAGE_CONNECTION_FAILED" /* INFRA_STORAGE_CONNECTION_FAILED */, message, {
+      component: storageType,
+      ...context
+    }, { cause, severity: "critical" /* CRITICAL */ });
+    this.storageType = storageType;
+  }
+};
+var ExternalServiceUnavailableError = class extends CogniCoreError {
+  constructor(serviceName, context, cause) {
+    super(
+      "INFRA_EXTERNAL_SERVICE_UNAVAILABLE" /* INFRA_EXTERNAL_SERVICE_UNAVAILABLE */,
+      `External service unavailable: ${serviceName}`,
+      { component: serviceName, ...context },
+      { cause, severity: "high" /* HIGH */ }
+    );
+    this.serviceName = serviceName;
+  }
+};
+var ExternalServiceTimeoutError = class extends CogniCoreError {
+  constructor(serviceName, timeoutMs, context) {
+    super(
+      "INFRA_EXTERNAL_SERVICE_TIMEOUT" /* INFRA_EXTERNAL_SERVICE_TIMEOUT */,
+      `External service '${serviceName}' timed out after ${timeoutMs}ms`,
+      { component: serviceName, ...context },
+      { severity: "high" /* HIGH */ }
+    );
+    this.serviceName = serviceName;
+    this.timeoutMs = timeoutMs;
+  }
+};
+var ExternalServiceError = class extends CogniCoreError {
+  constructor(serviceName, message, context, cause) {
+    super("INFRA_EXTERNAL_SERVICE_ERROR" /* INFRA_EXTERNAL_SERVICE_ERROR */, message, {
+      component: serviceName,
+      ...context
+    }, { cause, severity: "high" /* HIGH */ });
+    this.serviceName = serviceName;
+  }
+};
+var NLPServiceError = class extends CogniCoreError {
+  constructor(message, context, cause) {
+    super("INFRA_NLP_SERVICE_FAILED" /* INFRA_NLP_SERVICE_FAILED */, message, {
+      component: "NLPService",
+      ...context
+    }, { cause, severity: "high" /* HIGH */ });
+  }
+};
+var AIModelNotLoadedError = class extends CogniCoreError {
+  constructor(modelName, context) {
+    super(
+      "INFRA_AI_MODEL_NOT_LOADED" /* INFRA_AI_MODEL_NOT_LOADED */,
+      `AI model not loaded: ${modelName}`,
+      { component: "AIModelLoader", ...context },
+      { severity: "high" /* HIGH */ }
+    );
+    this.modelName = modelName;
+  }
+};
+
+// src/errors/ValidationErrors.ts
+var RequiredFieldError = class extends CogniCoreError {
+  constructor(fieldName, context) {
+    super(
+      "VALIDATION_REQUIRED_FIELD" /* VALIDATION_REQUIRED_FIELD */,
+      `Required field missing: ${fieldName}`,
+      { component: "Validator", ...context },
+      { severity: "low" /* LOW */ }
+    );
+    this.fieldName = fieldName;
+  }
+};
+var InvalidFormatError = class extends CogniCoreError {
+  constructor(fieldName, expectedFormat, context) {
+    super(
+      "VALIDATION_INVALID_FORMAT" /* VALIDATION_INVALID_FORMAT */,
+      `Invalid format for '${fieldName}'. Expected: ${expectedFormat}`,
+      { component: "Validator", ...context },
+      { severity: "low" /* LOW */ }
+    );
+    this.fieldName = fieldName;
+    this.expectedFormat = expectedFormat;
+  }
+};
+var OutOfRangeError = class extends CogniCoreError {
+  constructor(fieldName, min, max, actual, context) {
+    super(
+      "VALIDATION_OUT_OF_RANGE" /* VALIDATION_OUT_OF_RANGE */,
+      `Value for '${fieldName}' out of range. Expected: ${min}-${max}, got: ${actual}`,
+      { component: "Validator", ...context },
+      { severity: "low" /* LOW */ }
+    );
+    this.fieldName = fieldName;
+    this.min = min;
+    this.max = max;
+    this.actual = actual;
+  }
+};
+var InvalidTypeError = class extends CogniCoreError {
+  constructor(fieldName, expectedType, actualType, context) {
+    super(
+      "VALIDATION_INVALID_TYPE" /* VALIDATION_INVALID_TYPE */,
+      `Invalid type for '${fieldName}'. Expected: ${expectedType}, got: ${actualType}`,
+      { component: "Validator", ...context },
+      { severity: "low" /* LOW */ }
+    );
+    this.fieldName = fieldName;
+    this.expectedType = expectedType;
+    this.actualType = actualType;
+  }
+};
+var EmptyArrayError = class extends CogniCoreError {
+  constructor(fieldName, context) {
+    super(
+      "VALIDATION_EMPTY_ARRAY" /* VALIDATION_EMPTY_ARRAY */,
+      `Array '${fieldName}' cannot be empty`,
+      { component: "Validator", ...context },
+      { severity: "low" /* LOW */ }
+    );
+    this.fieldName = fieldName;
+  }
+};
+var InvalidIdError = class extends CogniCoreError {
+  constructor(idType, invalidValue, context) {
+    super(
+      "VALIDATION_INVALID_ID" /* VALIDATION_INVALID_ID */,
+      `Invalid ${idType} ID: ${invalidValue}`,
+      { component: "Validator", ...context },
+      { severity: "low" /* LOW */ }
+    );
+    this.idType = idType;
+    this.invalidValue = invalidValue;
+  }
+};
+
+// src/errors/ErrorHandler.ts
+var defaultLogger = {
+  debug: (msg, meta) => {
+    console.debug(`[DEBUG] ${msg}`, meta ?? "");
+  },
+  info: (msg, meta) => {
+    console.info(`[INFO] ${msg}`, meta ?? "");
+  },
+  warn: (msg, meta) => {
+    console.warn(`[WARN] ${msg}`, meta ?? "");
+  },
+  error: (msg, meta) => {
+    console.error(`[ERROR] ${msg}`, meta ?? "");
+  }
+};
+var _ErrorHandler = class _ErrorHandler {
+  constructor(config = {}) {
+    __publicField(this, "config");
+    __publicField(this, "errorCounts", /* @__PURE__ */ new Map());
+    this.config = {
+      logger: config.logger ?? defaultLogger,
+      includeStackTrace: config.includeStackTrace ?? true,
+      onCriticalError: config.onCriticalError ?? (() => {
+      }),
+      onError: config.onError ?? (() => {
+      }),
+      environment: config.environment ?? "development"
+    };
+  }
+  /**
+   * Get singleton instance
+   */
+  static getInstance(config) {
+    if (!_ErrorHandler.instance) {
+      _ErrorHandler.instance = new _ErrorHandler(config);
+    }
+    return _ErrorHandler.instance;
+  }
+  /**
+   * Reset instance (for testing)
+   */
+  static resetInstance() {
+    _ErrorHandler.instance = void 0;
+  }
+  /**
+   * Update configuration
+   */
+  configure(config) {
+    this.config = { ...this.config, ...config };
+  }
+  /**
+   * Handle an error - the main entry point
+   *
+   * @param error - The error to handle (can be any type)
+   * @param context - Additional context for logging
+   * @param defaultCode - Default error code if error is not CogniCoreError
+   * @returns The normalized CogniCoreError
+   */
+  handle(error, context = {}, defaultCode = "UNKNOWN_ERROR" /* UNKNOWN_ERROR */) {
+    const normalizedError = CogniCoreError.fromUnknown(error, defaultCode, context);
+    this.incrementErrorCount(normalizedError.code);
+    this.logError(normalizedError);
+    this.config.onError(normalizedError);
+    if (normalizedError.severity === "critical" /* CRITICAL */) {
+      this.config.onCriticalError(normalizedError);
+    }
+    return normalizedError;
+  }
+  /**
+   * Handle error and return a safe response for API
+   */
+  handleForResponse(error, context = {}, defaultCode = "UNKNOWN_ERROR" /* UNKNOWN_ERROR */) {
+    const normalizedError = this.handle(error, context, defaultCode);
+    return normalizedError.toClientResponse();
+  }
+  /**
+   * Wrap an async function with error handling
+   */
+  wrapAsync(fn, context = {}, defaultCode = "UNKNOWN_ERROR" /* UNKNOWN_ERROR */) {
+    return async (...args) => {
+      try {
+        return await fn(...args);
+      } catch (error) {
+        throw this.handle(error, context, defaultCode);
+      }
+    };
+  }
+  /**
+   * Wrap a sync function with error handling
+   */
+  wrapSync(fn, context = {}, defaultCode = "UNKNOWN_ERROR" /* UNKNOWN_ERROR */) {
+    return (...args) => {
+      try {
+        return fn(...args);
+      } catch (error) {
+        throw this.handle(error, context, defaultCode);
+      }
+    };
+  }
+  /**
+   * Log error based on severity
+   */
+  logError(error) {
+    const serialized = error.toJSON();
+    const logData = {
+      code: serialized.code,
+      category: serialized.category,
+      severity: serialized.severity,
+      timestamp: serialized.timestamp,
+      context: serialized.context
+    };
+    if (this.config.includeStackTrace && serialized.stack) {
+      logData.stack = serialized.stack;
+    }
+    if (serialized.cause) {
+      logData.cause = serialized.cause;
+    }
+    const message = `[${error.code}] ${error.message}`;
+    switch (error.severity) {
+      case "low" /* LOW */:
+        this.config.logger.debug(message, logData);
+        break;
+      case "medium" /* MEDIUM */:
+        this.config.logger.info(message, logData);
+        break;
+      case "high" /* HIGH */:
+        this.config.logger.warn(message, logData);
+        break;
+      case "critical" /* CRITICAL */:
+        this.config.logger.error(message, logData);
+        break;
+    }
+  }
+  /**
+   * Increment error count for tracking
+   */
+  incrementErrorCount(code) {
+    const current = this.errorCounts.get(code) ?? 0;
+    this.errorCounts.set(code, current + 1);
+  }
+  /**
+   * Get error statistics
+   */
+  getErrorStats() {
+    const byCode = {};
+    const byCategory = {
+      ["domain" /* DOMAIN */]: 0,
+      ["application" /* APPLICATION */]: 0,
+      ["infrastructure" /* INFRASTRUCTURE */]: 0,
+      ["validation" /* VALIDATION */]: 0,
+      ["unknown" /* UNKNOWN */]: 0
+    };
+    const bySeverity = {
+      ["low" /* LOW */]: 0,
+      ["medium" /* MEDIUM */]: 0,
+      ["high" /* HIGH */]: 0,
+      ["critical" /* CRITICAL */]: 0
+    };
+    let total = 0;
+    this.errorCounts.forEach((count, code) => {
+      byCode[code] = count;
+      total += count;
+      if (code.startsWith("DOMAIN_")) {
+        byCategory["domain" /* DOMAIN */] = (byCategory["domain" /* DOMAIN */] ?? 0) + count;
+      } else if (code.startsWith("APP_")) {
+        byCategory["application" /* APPLICATION */] = (byCategory["application" /* APPLICATION */] ?? 0) + count;
+      } else if (code.startsWith("INFRA_")) {
+        byCategory["infrastructure" /* INFRASTRUCTURE */] = (byCategory["infrastructure" /* INFRASTRUCTURE */] ?? 0) + count;
+      } else if (code.startsWith("VALIDATION_")) {
+        byCategory["validation" /* VALIDATION */] = (byCategory["validation" /* VALIDATION */] ?? 0) + count;
+      } else {
+        byCategory["unknown" /* UNKNOWN */] = (byCategory["unknown" /* UNKNOWN */] ?? 0) + count;
+      }
+      if (code.includes("CRISIS")) {
+        bySeverity["critical" /* CRITICAL */] = (bySeverity["critical" /* CRITICAL */] ?? 0) + count;
+      } else if (code.startsWith("INFRA_")) {
+        bySeverity["high" /* HIGH */] = (bySeverity["high" /* HIGH */] ?? 0) + count;
+      } else if (code.startsWith("VALIDATION_")) {
+        bySeverity["low" /* LOW */] = (bySeverity["low" /* LOW */] ?? 0) + count;
+      } else {
+        bySeverity["medium" /* MEDIUM */] = (bySeverity["medium" /* MEDIUM */] ?? 0) + count;
+      }
+    });
+    return { total, byCode, byCategory, bySeverity };
+  }
+  /**
+   * Reset error statistics
+   */
+  resetErrorStats() {
+    this.errorCounts.clear();
+  }
+  /**
+   * Check if error should crash the process (programmer error)
+   */
+  shouldCrash(error) {
+    return !error.isOperational;
+  }
+};
+__publicField(_ErrorHandler, "instance");
+var ErrorHandler = _ErrorHandler;
+var errorHandler = ErrorHandler.getInstance();
+
+// src/errors/GlobalErrorHandlers.ts
+var defaultOptions = {
+  exitOnUncaughtException: true,
+  exitOnUnhandledRejection: false,
+  // Node.js 15+ already exits by default
+  exitGracePeriod: 1e3,
+  onUncaughtException: () => {
+  },
+  onUnhandledRejection: () => {
+  }
+};
+var isInitialized = false;
+function initializeGlobalErrorHandlers(options = {}) {
+  if (isInitialized) {
+    console.warn("[GlobalErrorHandlers] Already initialized, skipping...");
+    return;
+  }
+  const config = { ...defaultOptions, ...options };
+  const handler = ErrorHandler.getInstance();
+  process.on("unhandledRejection", (reason, _promise) => {
+    const error = new CogniCoreError(
+      "INTERNAL_ERROR" /* INTERNAL_ERROR */,
+      `Unhandled Promise Rejection: ${reason instanceof Error ? reason.message : String(reason)}`,
+      {
+        component: "GlobalErrorHandler",
+        operation: "unhandledRejection",
+        metadata: {
+          promiseInfo: "[Promise]"
+        }
+      },
+      {
+        cause: reason instanceof Error ? reason : void 0,
+        severity: "high" /* HIGH */,
+        isOperational: false
+        // Programmer error
+      }
+    );
+    handler.handle(error);
+    config.onUnhandledRejection(reason);
+    if (config.exitOnUnhandledRejection) {
+      console.error("[FATAL] Exiting due to unhandled rejection...");
+      setTimeout(() => process.exit(1), config.exitGracePeriod);
+    }
+  });
+  process.on("uncaughtException", (error, origin) => {
+    const cogniError = new CogniCoreError(
+      "INTERNAL_ERROR" /* INTERNAL_ERROR */,
+      `Uncaught Exception: ${error.message}`,
+      {
+        component: "GlobalErrorHandler",
+        operation: "uncaughtException",
+        metadata: {
+          origin,
+          errorName: error.name
+        }
+      },
+      {
+        cause: error,
+        severity: "critical" /* CRITICAL */,
+        isOperational: false
+        // Programmer error - should crash
+      }
+    );
+    handler.handle(cogniError);
+    config.onUncaughtException(error);
+    if (config.exitOnUncaughtException) {
+      console.error("[FATAL] Exiting due to uncaught exception...");
+      setTimeout(() => process.exit(1), config.exitGracePeriod);
+    }
+  });
+  process.on("warning", (warning) => {
+    console.warn(`[PROCESS WARNING] ${warning.name}: ${warning.message}`);
+    if (warning.stack) {
+      console.warn(warning.stack);
+    }
+  });
+  isInitialized = true;
+  console.info("[GlobalErrorHandlers] Initialized successfully");
+}
+function isGlobalErrorHandlersInitialized() {
+  return isInitialized;
+}
+function resetGlobalErrorHandlers() {
+  isInitialized = false;
+}
+
+// src/events/IEvents.ts
+function createEventMetadata(source, options) {
+  return {
+    correlationId: options?.correlationId ?? crypto.randomUUID(),
+    causationId: options?.causationId,
+    userId: options?.userId,
+    sessionId: options?.sessionId,
+    source,
+    context: options?.context
+  };
+}
+function createPipelineContext(correlationId, userId, sessionId) {
+  return {
+    correlationId,
+    startedAt: /* @__PURE__ */ new Date(),
+    userId,
+    sessionId,
+    data: /* @__PURE__ */ new Map(),
+    metrics: {}
+  };
+}
+var DEFAULT_EVENT_BUS_CONFIG = {
+  enablePersistence: true,
+  enableAuditLog: true,
+  behaviors: [],
+  defaultRetry: {
+    maxAttempts: 3,
+    delayMs: 100,
+    backoffMultiplier: 2
+  },
+  maxConcurrentHandlers: 10,
+  handlerTimeoutMs: 3e4,
+  enableDeadLetterQueue: true
+};
+var DEFAULT_EVENT_STORE_CONFIG = {
+  backend: "memory",
+  retentionDays: 2190,
+  // 6 years (HIPAA requirement)
+  enableEncryption: true,
+  snapshotThreshold: 100,
+  enableCompression: true,
+  maxEventsPerQuery: 1e3
+};
+var CogniCoreEventBus = class {
+  constructor(config = {}) {
+    __publicField(this, "config");
+    __publicField(this, "handlers");
+    __publicField(this, "behaviors");
+    __publicField(this, "eventStore");
+    __publicField(this, "auditLogger");
+    __publicField(this, "deadLetterQueue");
+    __publicField(this, "isInitialized");
+    this.config = { ...DEFAULT_EVENT_BUS_CONFIG, ...config };
+    this.handlers = /* @__PURE__ */ new Map();
+    this.behaviors = [...this.config.behaviors ?? []].sort((a, b) => a.priority - b.priority);
+    this.deadLetterQueue = [];
+    this.isInitialized = false;
+  }
+  // ============================================================================
+  // INITIALIZATION
+  // ============================================================================
+  /**
+   * Initialize event bus with optional event store and audit logger
+   */
+  async initialize(eventStore, auditLogger) {
+    if (this.isInitialized) {
+      return;
+    }
+    this.eventStore = eventStore;
+    this.auditLogger = auditLogger;
+    this.isInitialized = true;
+  }
+  /**
+   * Check if event bus is initialized
+   */
+  get initialized() {
+    return this.isInitialized;
+  }
+  // ============================================================================
+  // PUBLISHING
+  // ============================================================================
+  /**
+   * Publish domain event
+   *
+   * @param event - Event to publish
+   */
+  async publish(event) {
+    const context = createPipelineContext(
+      event.metadata.correlationId,
+      event.metadata.userId,
+      event.metadata.sessionId
+    );
+    await this.executePipeline(event, context, async () => {
+      if (this.config.enablePersistence && this.eventStore) {
+        await this.eventStore.append(event);
+      }
+      await this.dispatchToHandlers(event, context);
+    });
+  }
+  /**
+   * Publish multiple events atomically
+   */
+  async publishBatch(events) {
+    if (this.config.enablePersistence && this.eventStore) {
+      await this.eventStore.appendBatch(events);
+    }
+    for (const event of events) {
+      await this.publish(event);
+    }
+  }
+  // ============================================================================
+  // SUBSCRIBING
+  // ============================================================================
+  /**
+   * Subscribe to event type
+   *
+   * @param eventType - Type of event to subscribe to
+   * @param handler - Handler function
+   * @returns Subscription for unsubscribing
+   */
+  subscribe(eventType, handler) {
+    const subscriptionId = uuid.v4();
+    let typeHandlers = this.handlers.get(eventType);
+    if (!typeHandlers) {
+      typeHandlers = /* @__PURE__ */ new Set();
+      this.handlers.set(eventType, typeHandlers);
+    }
+    const handlerEntry = { id: subscriptionId, handler };
+    typeHandlers.add(handlerEntry);
+    const subscription = {
+      id: subscriptionId,
+      eventType,
+      handler,
+      unsubscribe: () => {
+        this.unsubscribe(subscriptionId);
+      }
+    };
+    return subscription;
+  }
+  /**
+   * Subscribe to multiple event types
+   */
+  subscribeMany(eventTypes, handler) {
+    return eventTypes.map((eventType) => this.subscribe(eventType, handler));
+  }
+  /**
+   * Subscribe to all events (wildcard)
+   */
+  subscribeAll(handler) {
+    return this.subscribe("*", handler);
+  }
+  /**
+   * Unsubscribe by subscription ID
+   */
+  unsubscribe(subscriptionId) {
+    for (const [_eventType, typeHandlers] of this.handlers) {
+      for (const handlerEntry of typeHandlers) {
+        if (handlerEntry.id === subscriptionId) {
+          typeHandlers.delete(handlerEntry);
+          return;
+        }
+      }
+    }
+  }
+  /**
+   * Clear all subscriptions
+   */
+  clearAll() {
+    this.handlers.clear();
+  }
+  /**
+   * Get subscription count
+   */
+  getSubscriptionCount(eventType) {
+    if (eventType) {
+      return this.handlers.get(eventType)?.size ?? 0;
+    }
+    let count = 0;
+    for (const typeHandlers of this.handlers.values()) {
+      count += typeHandlers.size;
+    }
+    return count;
+  }
+  // ============================================================================
+  // BEHAVIORS
+  // ============================================================================
+  /**
+   * Add pipeline behavior
+   */
+  addBehavior(behavior) {
+    this.behaviors.push(behavior);
+    this.behaviors.sort((a, b) => a.priority - b.priority);
+  }
+  /**
+   * Remove pipeline behavior by name
+   */
+  removeBehavior(behaviorName) {
+    const index = this.behaviors.findIndex((b) => b.name === behaviorName);
+    if (index !== -1) {
+      this.behaviors.splice(index, 1);
+    }
+  }
+  /**
+   * Get all pipeline behaviors
+   */
+  getBehaviors() {
+    return this.behaviors;
+  }
+  // ============================================================================
+  // DEAD LETTER QUEUE
+  // ============================================================================
+  /**
+   * Get dead letter queue
+   */
+  getDeadLetterQueue() {
+    return this.deadLetterQueue;
+  }
+  /**
+   * Clear dead letter queue
+   */
+  clearDeadLetterQueue() {
+    this.deadLetterQueue.length = 0;
+  }
+  /**
+   * Retry dead letter events
+   */
+  async retryDeadLetterQueue() {
+    let succeeded = 0;
+    let failed = 0;
+    const eventsToRetry = [...this.deadLetterQueue];
+    this.clearDeadLetterQueue();
+    for (const { event } of eventsToRetry) {
+      try {
+        await this.publish(event);
+        succeeded++;
+      } catch {
+        failed++;
+      }
+    }
+    return { succeeded, failed };
+  }
+  // ============================================================================
+  // PRIVATE METHODS
+  // ============================================================================
+  /**
+   * Execute event through pipeline behaviors
+   */
+  async executePipeline(event, context, finalHandler) {
+    if (this.behaviors.length === 0) {
+      await finalHandler();
+      return;
+    }
+    let pipeline = finalHandler;
+    for (let i = this.behaviors.length - 1; i >= 0; i--) {
+      const behavior = this.behaviors[i];
+      const next = pipeline;
+      pipeline = async () => {
+        await behavior.handle(event, context, next);
+      };
+    }
+    await pipeline();
+  }
+  /**
+   * Dispatch event to handlers
+   */
+  async dispatchToHandlers(event, context) {
+    const typeHandlers = this.handlers.get(event.eventType) ?? /* @__PURE__ */ new Set();
+    const wildcardHandlers = this.handlers.get("*") ?? /* @__PURE__ */ new Set();
+    const allHandlers = [...typeHandlers, ...wildcardHandlers];
+    if (allHandlers.length === 0) {
+      return;
+    }
+    context.metrics.handlerCount = allHandlers.length;
+    const results = await Promise.allSettled(
+      allHandlers.map(
+        (handlerEntry) => this.executeHandler(handlerEntry.handler, event, context)
+      )
+    );
+    for (const result of results) {
+      if (result.status === "rejected") {
+        await this.handleFailure(event, result.reason);
+      }
+    }
+  }
+  /**
+   * Execute single handler with retry
+   */
+  async executeHandler(handler, event, _context) {
+    const { maxAttempts, delayMs, backoffMultiplier } = this.config.defaultRetry;
+    let lastError;
+    let attempt = 0;
+    while (attempt < maxAttempts) {
+      try {
+        await Promise.race([
+          handler(event),
+          this.timeout(this.config.handlerTimeoutMs)
+        ]);
+        return;
+      } catch (error) {
+        lastError = error;
+        attempt++;
+        if (attempt < maxAttempts) {
+          const delay = delayMs * Math.pow(backoffMultiplier, attempt - 1);
+          await this.sleep(delay);
+        }
+      }
+    }
+    throw lastError;
+  }
+  /**
+   * Handle event processing failure
+   */
+  async handleFailure(event, error) {
+    if (this.config.enableDeadLetterQueue) {
+      this.deadLetterQueue.push({
+        event,
+        error,
+        timestamp: /* @__PURE__ */ new Date()
+      });
+      if (this.config.deadLetterHandler) {
+        try {
+          await this.config.deadLetterHandler(event, error);
+        } catch (dlqError) {
+          console.error("[EventBus] Dead letter handler failed:", dlqError);
+        }
+      }
+    }
+    if (this.config.enableAuditLog && this.auditLogger) {
+      await this.auditLogger.log({
+        eventType: event.eventType,
+        eventId: event.eventId,
+        userId: event.metadata.userId,
+        sessionId: event.metadata.sessionId,
+        action: "handle",
+        resource: `event/${event.aggregateType}/${event.aggregateId}`,
+        outcome: "failure",
+        correlationId: event.metadata.correlationId,
+        details: {
+          error: error.message,
+          stack: error.stack
+        }
+      });
+    }
+  }
+  /**
+   * Create timeout promise
+   */
+  timeout(ms) {
+    return new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Handler timeout after ${ms}ms`));
+      }, ms);
+    });
+  }
+  /**
+   * Sleep for specified duration
+   */
+  sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+};
+function createEventBus(config) {
+  return new CogniCoreEventBus(config);
+}
+async function createInitializedEventBus(config, eventStore, auditLogger) {
+  const eventBus = new CogniCoreEventBus(config);
+  await eventBus.initialize(eventStore, auditLogger);
+  return eventBus;
+}
+var InMemoryEventStore = class {
+  constructor(config = {}) {
+    __publicField(this, "events");
+    __publicField(this, "eventIndex");
+    __publicField(this, "snapshots");
+    __publicField(this, "shreddedAggregates");
+    __publicField(this, "config");
+    __publicField(this, "globalSequence");
+    this.events = /* @__PURE__ */ new Map();
+    this.eventIndex = /* @__PURE__ */ new Map();
+    this.snapshots = /* @__PURE__ */ new Map();
+    this.shreddedAggregates = /* @__PURE__ */ new Set();
+    this.config = { ...DEFAULT_EVENT_STORE_CONFIG, ...config };
+    this.globalSequence = 0;
+  }
+  /**
+   * Append event to store
+   */
+  async append(event) {
+    const aggregateId = event.aggregateId;
+    if (this.shreddedAggregates.has(aggregateId)) {
+      throw new Error(`Aggregate ${aggregateId} has been crypto-shredded`);
+    }
+    const aggregateEvents = this.events.get(aggregateId) ?? [];
+    const sequenceNumber = aggregateEvents.length + 1;
+    this.globalSequence++;
+    const storedEvent = {
+      id: uuid.v4(),
+      sequenceNumber,
+      globalSequence: this.globalSequence,
+      event,
+      storedAt: /* @__PURE__ */ new Date(),
+      encryptionKeyId: this.config.enableEncryption ? this.config.encryptionKeyId : void 0,
+      checksum: this.calculateChecksum(event)
+    };
+    aggregateEvents.push(storedEvent);
+    this.events.set(aggregateId, aggregateEvents);
+    this.eventIndex.set(storedEvent.id, storedEvent);
+    if (sequenceNumber % this.config.snapshotThreshold === 0) ;
+    return storedEvent;
+  }
+  /**
+   * Append multiple events atomically
+   */
+  async appendBatch(events) {
+    const results = [];
+    const eventsByAggregate = /* @__PURE__ */ new Map();
+    for (const event of events) {
+      const aggregateEvents = eventsByAggregate.get(event.aggregateId) ?? [];
+      aggregateEvents.push(event);
+      eventsByAggregate.set(event.aggregateId, aggregateEvents);
+    }
+    for (const [aggregateId, aggregateEvents] of eventsByAggregate) {
+      if (this.shreddedAggregates.has(aggregateId)) {
+        throw new Error(`Aggregate ${aggregateId} has been crypto-shredded`);
+      }
+      for (const event of aggregateEvents) {
+        const stored = await this.append(event);
+        results.push(stored);
+      }
+    }
+    return results;
+  }
+  /**
+   * Get events by aggregate ID
+   */
+  async getEvents(aggregateId, fromVersion) {
+    if (this.shreddedAggregates.has(aggregateId)) {
+      return [];
+    }
+    const events = this.events.get(aggregateId) ?? [];
+    if (fromVersion !== void 0) {
+      return events.filter((e) => e.sequenceNumber > fromVersion);
+    }
+    return [...events];
+  }
+  /**
+   * Query events with filters
+   */
+  async queryEvents(options) {
+    let results = [];
+    if (options.aggregateId) {
+      const events = this.events.get(options.aggregateId);
+      if (events && !this.shreddedAggregates.has(options.aggregateId)) {
+        results = [...events];
+      }
+    } else {
+      for (const [aggregateId, events] of this.events) {
+        if (!this.shreddedAggregates.has(aggregateId)) {
+          results.push(...events);
+        }
+      }
+    }
+    if (options.aggregateType) {
+      results = results.filter((e) => e.event.aggregateType === options.aggregateType);
+    }
+    if (options.eventTypes && options.eventTypes.length > 0) {
+      results = results.filter((e) => options.eventTypes?.includes(e.event.eventType));
+    }
+    if (options.userId) {
+      results = results.filter((e) => e.event.metadata.userId === options.userId);
+    }
+    if (options.fromTimestamp) {
+      results = results.filter((e) => e.storedAt >= options.fromTimestamp);
+    }
+    if (options.toTimestamp) {
+      results = results.filter((e) => e.storedAt <= options.toTimestamp);
+    }
+    if (options.fromSequence !== void 0) {
+      results = results.filter((e) => e.globalSequence >= options.fromSequence);
+    }
+    if (options.order === "desc") {
+      results.sort((a, b) => b.globalSequence - a.globalSequence);
+    } else {
+      results.sort((a, b) => a.globalSequence - b.globalSequence);
+    }
+    const offset = options.offset ?? 0;
+    const limit = Math.min(options.limit ?? this.config.maxEventsPerQuery, this.config.maxEventsPerQuery);
+    return results.slice(offset, offset + limit);
+  }
+  /**
+   * Get events by type
+   */
+  async getEventsByType(eventType, options) {
+    return this.queryEvents({
+      ...options,
+      eventTypes: [eventType]
+    });
+  }
+  /**
+   * Create snapshot for aggregate
+   */
+  async createSnapshot(aggregateId, aggregateType, state, version) {
+    const snapshot = {
+      aggregateId,
+      aggregateType,
+      version,
+      state,
+      createdAt: /* @__PURE__ */ new Date(),
+      checksum: this.calculateChecksum(state)
+    };
+    this.snapshots.set(aggregateId, snapshot);
+    return snapshot;
+  }
+  /**
+   * Get latest snapshot for aggregate
+   */
+  async getSnapshot(aggregateId) {
+    if (this.shreddedAggregates.has(aggregateId)) {
+      return null;
+    }
+    const snapshot = this.snapshots.get(aggregateId);
+    return snapshot ?? null;
+  }
+  /**
+   * Get event count for aggregate
+   */
+  async getEventCount(aggregateId) {
+    if (this.shreddedAggregates.has(aggregateId)) {
+      return 0;
+    }
+    return this.events.get(aggregateId)?.length ?? 0;
+  }
+  /**
+   * Get global event count
+   */
+  async getTotalEventCount() {
+    return this.globalSequence;
+  }
+  /**
+   * Crypto-shred aggregate (GDPR compliance)
+   *
+   * Note: In a real implementation with encryption, this would
+   * destroy the encryption keys, making events unreadable.
+   * In this in-memory version, we mark the aggregate as shredded.
+   */
+  async cryptoShred(aggregateId) {
+    const events = this.events.get(aggregateId);
+    const count = events?.length ?? 0;
+    this.shreddedAggregates.add(aggregateId);
+    this.snapshots.delete(aggregateId);
+    return count;
+  }
+  /**
+   * Archive old events
+   *
+   * Note: In production, this would move events to cold storage.
+   * In this in-memory version, we just return the count.
+   */
+  async archiveEvents(beforeDate) {
+    let archivedCount = 0;
+    for (const [aggregateId, events] of this.events) {
+      if (this.shreddedAggregates.has(aggregateId)) {
+        continue;
+      }
+      const oldEvents = events.filter((e) => e.storedAt < beforeDate);
+      archivedCount += oldEvents.length;
+    }
+    return archivedCount;
+  }
+  /**
+   * Verify event integrity
+   */
+  async verifyIntegrity(eventId) {
+    const storedEvent = this.eventIndex.get(eventId);
+    if (!storedEvent) {
+      return false;
+    }
+    const calculatedChecksum = this.calculateChecksum(storedEvent.event);
+    return calculatedChecksum === storedEvent.checksum;
+  }
+  // ============================================================================
+  // ADDITIONAL METHODS (not in interface)
+  // ============================================================================
+  /**
+   * Get all aggregate IDs
+   */
+  getAllAggregateIds() {
+    return Array.from(this.events.keys()).filter(
+      (id) => !this.shreddedAggregates.has(id)
+    );
+  }
+  /**
+   * Get event by ID
+   */
+  getEventById(eventId) {
+    return this.eventIndex.get(eventId) ?? null;
+  }
+  /**
+   * Clear all data (for testing)
+   */
+  clear() {
+    this.events.clear();
+    this.eventIndex.clear();
+    this.snapshots.clear();
+    this.shreddedAggregates.clear();
+    this.globalSequence = 0;
+  }
+  /**
+   * Get statistics
+   */
+  getStatistics() {
+    return {
+      totalEvents: this.globalSequence,
+      totalAggregates: this.events.size,
+      totalSnapshots: this.snapshots.size,
+      shreddedAggregates: this.shreddedAggregates.size
+    };
+  }
+  // ============================================================================
+  // PRIVATE METHODS
+  // ============================================================================
+  /**
+   * Calculate checksum for integrity verification
+   */
+  calculateChecksum(data) {
+    const json = JSON.stringify(data);
+    return crypto$1.createHash("sha256").update(json).digest("hex");
+  }
+};
+var InMemoryAuditLogger = class {
+  constructor(retentionDays = 2190) {
+    __publicField(this, "entries");
+    __publicField(this, "retentionDays");
+    this.entries = /* @__PURE__ */ new Map();
+    this.retentionDays = retentionDays;
+  }
+  /**
+   * Log audit entry
+   */
+  async log(entry) {
+    const fullEntry = {
+      ...entry,
+      id: uuid.v4(),
+      timestamp: /* @__PURE__ */ new Date()
+    };
+    this.entries.set(fullEntry.id, fullEntry);
+  }
+  /**
+   * Query audit logs
+   */
+  async query(options) {
+    let results = Array.from(this.entries.values());
+    if (options.userId) {
+      results = results.filter((e) => e.userId === options.userId);
+    }
+    if (options.eventType) {
+      results = results.filter((e) => e.eventType === options.eventType);
+    }
+    if (options.action) {
+      results = results.filter((e) => e.action === options.action);
+    }
+    if (options.outcome) {
+      results = results.filter((e) => e.outcome === options.outcome);
+    }
+    if (options.fromTimestamp) {
+      results = results.filter((e) => e.timestamp >= options.fromTimestamp);
+    }
+    if (options.toTimestamp) {
+      results = results.filter((e) => e.timestamp <= options.toTimestamp);
+    }
+    results.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    const offset = options.offset ?? 0;
+    const limit = options.limit ?? 1e3;
+    return results.slice(offset, offset + limit);
+  }
+  /**
+   * Get audit log count
+   */
+  async count(options) {
+    if (!options) {
+      return this.entries.size;
+    }
+    const results = await this.query(options);
+    return results.length;
+  }
+  /**
+   * Export audit logs for compliance reporting
+   */
+  async export(options) {
+    const results = await this.query(options);
+    return results.map((entry) => JSON.stringify(entry)).join("\n");
+  }
+  /**
+   * Clear old entries based on retention policy
+   */
+  async cleanup() {
+    const cutoffDate = /* @__PURE__ */ new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - this.retentionDays);
+    let removedCount = 0;
+    for (const [id, entry] of this.entries) {
+      if (entry.timestamp < cutoffDate) {
+        this.entries.delete(id);
+        removedCount++;
+      }
+    }
+    return removedCount;
+  }
+  /**
+   * Clear all entries (for testing)
+   */
+  clear() {
+    this.entries.clear();
+  }
+  /**
+   * Get total entry count
+   */
+  getEntryCount() {
+    return this.entries.size;
+  }
+};
+function createInMemoryEventStore(config) {
+  return new InMemoryEventStore(config);
+}
+function createInMemoryAuditLogger(retentionDays) {
+  return new InMemoryAuditLogger(retentionDays);
+}
+
+// src/events/behaviors/index.ts
+var LoggingBehavior = class {
+  constructor(logger) {
+    __publicField(this, "name", "LoggingBehavior");
+    __publicField(this, "priority", 10);
+    __publicField(this, "logger");
+    this.logger = logger ?? {
+      debug: (msg, data) => console.debug(`[EventBus] ${msg}`, data ?? ""),
+      info: (msg, data) => console.info(`[EventBus] ${msg}`, data ?? ""),
+      warn: (msg, data) => console.warn(`[EventBus] ${msg}`, data ?? ""),
+      error: (msg, data) => console.error(`[EventBus] ${msg}`, data ?? "")
+    };
+  }
+  async handle(event, context, next) {
+    const startTime = Date.now();
+    this.logger.debug(`Publishing event: ${event.eventType}`, {
+      eventId: event.eventId,
+      aggregateId: event.aggregateId,
+      correlationId: context.correlationId
+    });
+    try {
+      await next();
+      const duration = Date.now() - startTime;
+      this.logger.info(`Event published: ${event.eventType}`, {
+        eventId: event.eventId,
+        durationMs: duration,
+        correlationId: context.correlationId
+      });
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.logger.error(`Event failed: ${event.eventType}`, {
+        eventId: event.eventId,
+        durationMs: duration,
+        error: error.message,
+        correlationId: context.correlationId
+      });
+      throw error;
+    }
+  }
+};
+var ValidationBehavior = class {
+  constructor() {
+    __publicField(this, "name", "ValidationBehavior");
+    __publicField(this, "priority", 20);
+    __publicField(this, "validators");
+    __publicField(this, "globalValidators");
+    // Default validators
+    __publicField(this, "validateRequiredFields", (event) => {
+      const errors = [];
+      if (!event.eventId) {
+        errors.push("eventId is required");
+      }
+      if (!event.eventType) {
+        errors.push("eventType is required");
+      }
+      if (!event.aggregateId) {
+        errors.push("aggregateId is required");
+      }
+      if (!event.aggregateType) {
+        errors.push("aggregateType is required");
+      }
+      if (!event.timestamp) {
+        errors.push("timestamp is required");
+      }
+      return { valid: errors.length === 0, errors };
+    });
+    __publicField(this, "validateMetadata", (event) => {
+      const errors = [];
+      if (!event.metadata) {
+        errors.push("metadata is required");
+      } else {
+        if (!event.metadata.correlationId) {
+          errors.push("metadata.correlationId is required");
+        }
+        if (!event.metadata.source) {
+          errors.push("metadata.source is required");
+        }
+      }
+      return { valid: errors.length === 0, errors };
+    });
+    this.validators = /* @__PURE__ */ new Map();
+    this.globalValidators = [];
+    this.addGlobalValidator(this.validateRequiredFields);
+    this.addGlobalValidator(this.validateMetadata);
+  }
+  /**
+   * Add validator for specific event type
+   */
+  addValidator(eventType, validator) {
+    const validators = this.validators.get(eventType) ?? [];
+    validators.push(validator);
+    this.validators.set(eventType, validators);
+  }
+  /**
+   * Add global validator for all events
+   */
+  addGlobalValidator(validator) {
+    this.globalValidators.push(validator);
+  }
+  async handle(event, _context, next) {
+    const errors = [];
+    for (const validator of this.globalValidators) {
+      const result = validator(event);
+      if (!result.valid) {
+        errors.push(...result.errors);
+      }
+    }
+    const typeValidators = this.validators.get(event.eventType) ?? [];
+    for (const validator of typeValidators) {
+      const result = validator(event);
+      if (!result.valid) {
+        errors.push(...result.errors);
+      }
+    }
+    if (errors.length > 0) {
+      throw new Error(`Event validation failed: ${errors.join("; ")}`);
+    }
+    await next();
+  }
+};
+var MetricsBehavior = class {
+  constructor(collector) {
+    __publicField(this, "name", "MetricsBehavior");
+    __publicField(this, "priority", 15);
+    __publicField(this, "collector");
+    this.collector = collector ?? this.createDefaultCollector();
+  }
+  async handle(event, _context, next) {
+    const startTime = Date.now();
+    const tags = {
+      eventType: event.eventType,
+      aggregateType: event.aggregateType
+    };
+    this.collector.incrementCounter("events.published", tags);
+    try {
+      await next();
+      const duration = Date.now() - startTime;
+      this.collector.recordHistogram("events.duration_ms", duration, tags);
+      this.collector.incrementCounter("events.success", tags);
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.collector.recordHistogram("events.duration_ms", duration, tags);
+      this.collector.incrementCounter("events.failure", { ...tags, error: error.name });
+      throw error;
+    }
+  }
+  createDefaultCollector() {
+    const counters = /* @__PURE__ */ new Map();
+    const histograms = /* @__PURE__ */ new Map();
+    return {
+      incrementCounter: (name, tags) => {
+        const key = `${name}:${JSON.stringify(tags ?? {})}`;
+        counters.set(key, (counters.get(key) ?? 0) + 1);
+      },
+      recordHistogram: (name, value, tags) => {
+        const key = `${name}:${JSON.stringify(tags ?? {})}`;
+        const values = histograms.get(key) ?? [];
+        values.push(value);
+        histograms.set(key, values);
+      },
+      recordGauge: (name, value, tags) => {
+        const key = `${name}:${JSON.stringify(tags ?? {})}`;
+        counters.set(key, value);
+      }
+    };
+  }
+};
+var AuditBehavior = class {
+  constructor(auditLogger) {
+    __publicField(this, "name", "AuditBehavior");
+    __publicField(this, "priority", 5);
+    __publicField(this, "auditLogger");
+    this.auditLogger = auditLogger;
+  }
+  async handle(event, context, next) {
+    const startTime = Date.now();
+    try {
+      await next();
+      await this.auditLogger.log({
+        eventType: event.eventType,
+        eventId: event.eventId,
+        userId: event.metadata.userId,
+        sessionId: event.metadata.sessionId,
+        action: "publish",
+        resource: `event/${event.aggregateType}/${event.aggregateId}`,
+        outcome: "success",
+        correlationId: context.correlationId,
+        details: {
+          durationMs: Date.now() - startTime
+        }
+      });
+    } catch (error) {
+      await this.auditLogger.log({
+        eventType: event.eventType,
+        eventId: event.eventId,
+        userId: event.metadata.userId,
+        sessionId: event.metadata.sessionId,
+        action: "publish",
+        resource: `event/${event.aggregateType}/${event.aggregateId}`,
+        outcome: "failure",
+        correlationId: context.correlationId,
+        details: {
+          durationMs: Date.now() - startTime,
+          error: error.message
+        }
+      });
+      throw error;
+    }
+  }
+};
+var RetryBehavior = class {
+  constructor(options) {
+    __publicField(this, "name", "RetryBehavior");
+    __publicField(this, "priority", 90);
+    __publicField(this, "maxAttempts");
+    __publicField(this, "delayMs");
+    __publicField(this, "backoffMultiplier");
+    __publicField(this, "retryableErrors");
+    this.maxAttempts = options?.maxAttempts ?? 3;
+    this.delayMs = options?.delayMs ?? 100;
+    this.backoffMultiplier = options?.backoffMultiplier ?? 2;
+    this.retryableErrors = new Set(options?.retryableErrors ?? [
+      "ECONNREFUSED",
+      "ETIMEDOUT",
+      "ECONNRESET",
+      "NetworkError",
+      "TimeoutError"
+    ]);
+  }
+  async handle(_event, context, next) {
+    let lastError;
+    let attempt = 0;
+    while (attempt < this.maxAttempts) {
+      try {
+        await next();
+        context.metrics.retryCount = attempt;
+        return;
+      } catch (error) {
+        lastError = error;
+        attempt++;
+        if (!this.isRetryable(lastError)) {
+          throw lastError;
+        }
+        if (attempt < this.maxAttempts) {
+          const delay = this.delayMs * Math.pow(this.backoffMultiplier, attempt - 1);
+          await this.sleep(delay);
+        }
+      }
+    }
+    context.metrics.retryCount = attempt;
+    throw lastError;
+  }
+  isRetryable(error) {
+    if (this.retryableErrors.has(error.name)) {
+      return true;
+    }
+    const errorWithCode = error;
+    if (errorWithCode.code && this.retryableErrors.has(errorWithCode.code)) {
+      return true;
+    }
+    return false;
+  }
+  sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+};
+var ThrottlingBehavior = class {
+  constructor(maxEventsPerSecond = 100) {
+    __publicField(this, "name", "ThrottlingBehavior");
+    __publicField(this, "priority", 25);
+    __publicField(this, "maxEventsPerSecond");
+    __publicField(this, "windowMs");
+    __publicField(this, "eventCounts");
+    this.maxEventsPerSecond = maxEventsPerSecond;
+    this.windowMs = 1e3;
+    this.eventCounts = /* @__PURE__ */ new Map();
+  }
+  async handle(event, _context, next) {
+    const key = event.metadata.userId ?? "global";
+    const now = Date.now();
+    let counter = this.eventCounts.get(key);
+    if (!counter || now >= counter.resetAt) {
+      counter = { count: 0, resetAt: now + this.windowMs };
+      this.eventCounts.set(key, counter);
+    }
+    if (counter.count >= this.maxEventsPerSecond) {
+      const waitTime = counter.resetAt - now;
+      throw new Error(`Rate limit exceeded. Try again in ${waitTime}ms`);
+    }
+    counter.count++;
+    await next();
+  }
+};
+var CrisisAlertBehavior = class {
+  constructor(alertHandler, crisisEventTypes) {
+    __publicField(this, "name", "CrisisAlertBehavior");
+    __publicField(this, "priority", 1);
+    __publicField(this, "alertHandler");
+    __publicField(this, "crisisEventTypes");
+    this.alertHandler = alertHandler;
+    this.crisisEventTypes = new Set(crisisEventTypes ?? [
+      "CRISIS_DETECTED",
+      "SUICIDAL_IDEATION_DETECTED",
+      "SELF_HARM_DETECTED",
+      "ACUTE_DISTRESS_DETECTED"
+    ]);
+  }
+  async handle(event, context, next) {
+    if (this.crisisEventTypes.has(event.eventType)) {
+      this.alertHandler(event).catch((error) => {
+        console.error("[CrisisAlertBehavior] Alert handler failed:", error);
+      });
+      context.data.set("isCrisisEvent", true);
+    }
+    await next();
+  }
+};
+function createDefaultBehaviors(auditLogger, metricsCollector) {
+  const behaviors = [
+    new LoggingBehavior(),
+    new ValidationBehavior(),
+    new MetricsBehavior(metricsCollector),
+    new ThrottlingBehavior()
+  ];
+  if (auditLogger) {
+    behaviors.push(new AuditBehavior(auditLogger));
+  }
+  return behaviors.sort((a, b) => a.priority - b.priority);
+}
+function createCrisisAwareBehaviors(alertHandler, auditLogger) {
+  const behaviors = createDefaultBehaviors(auditLogger);
+  behaviors.push(new CrisisAlertBehavior(alertHandler));
+  return behaviors.sort((a, b) => a.priority - b.priority);
+}
+
+// src/events/handlers/index.ts
+var BaseEventHandler = class {
+  constructor() {
+    __publicField(this, "async", false);
+  }
+  /**
+   * Get registration info
+   */
+  getRegistration() {
+    return {
+      name: this.name,
+      eventTypes: this.eventTypes,
+      priority: this.priority,
+      async: this.async
+    };
+  }
+  /**
+   * Check if this handler handles the event type
+   */
+  handles(eventType) {
+    return this.eventTypes.includes(eventType) || this.eventTypes.includes("*");
+  }
+  /**
+   * Register with event bus
+   */
+  register(eventBus) {
+    for (const eventType of this.eventTypes) {
+      eventBus.subscribe(eventType, this.handle.bind(this));
+    }
+  }
+};
+var CrisisEventHandler = class extends BaseEventHandler {
+  constructor(callback, escalationThreshold = 0.7) {
+    super();
+    __publicField(this, "name", "CrisisEventHandler");
+    __publicField(this, "eventTypes", ["CRISIS_DETECTED"]);
+    __publicField(this, "priority", 1);
+    __publicField(this, "async", false);
+    // Must be synchronous for immediate response
+    __publicField(this, "callback");
+    __publicField(this, "escalationThreshold");
+    this.callback = callback;
+    this.escalationThreshold = escalationThreshold;
+  }
+  async handle(event) {
+    const { payload } = event;
+    await this.callback.log(event);
+    await this.callback.notify(event);
+    if (payload.riskLevel >= this.escalationThreshold || payload.recommendedAction === "immediate_response" || payload.recommendedAction === "escalate") {
+      await this.callback.escalate(event);
+    }
+  }
+};
+var StateChangeEventHandler = class extends BaseEventHandler {
+  constructor(callback, significantChangeThreshold = 0.2) {
+    super();
+    __publicField(this, "name", "StateChangeEventHandler");
+    __publicField(this, "eventTypes", ["STATE_UPDATED"]);
+    __publicField(this, "priority", 10);
+    __publicField(this, "async", true);
+    // Can run async for non-critical processing
+    __publicField(this, "callback");
+    __publicField(this, "significantChangeThreshold");
+    this.callback = callback;
+    this.significantChangeThreshold = significantChangeThreshold;
+  }
+  async handle(event) {
+    const { payload } = event;
+    const { changes } = payload;
+    let totalChange = 0;
+    let improvementScore = 0;
+    let deteriorationScore = 0;
+    for (const change of changes) {
+      totalChange += Math.abs(change.magnitude);
+      if (change.changeType === "increase") {
+        if (this.isPositiveDimension(change.dimension, change.field)) {
+          improvementScore += change.magnitude;
+        } else {
+          deteriorationScore += change.magnitude;
+        }
+      } else if (change.changeType === "decrease") {
+        if (this.isPositiveDimension(change.dimension, change.field)) {
+          deteriorationScore += Math.abs(change.magnitude);
+        } else {
+          improvementScore += Math.abs(change.magnitude);
+        }
+      }
+    }
+    if (totalChange >= this.significantChangeThreshold) {
+      await this.callback.onSignificantChange(event, totalChange);
+    }
+    if (improvementScore > deteriorationScore && improvementScore > 0.1) {
+      await this.callback.onImprovement(event);
+    } else if (deteriorationScore > improvementScore && deteriorationScore > 0.1) {
+      await this.callback.onDeterioration(event);
+    }
+  }
+  /**
+   * Determine if increase in dimension/field is positive
+   */
+  isPositiveDimension(dimension, field) {
+    const positiveDimensions = {
+      emotional: ["valence", "stability", "positiveAffect"],
+      cognitive: ["clarity", "flexibility", "problemSolving"],
+      resource: ["socialSupport", "copingSkills", "energy"]
+    };
+    const negativeDimensions = {
+      emotional: ["arousal", "negativeAffect", "anxiety"],
+      cognitive: ["rumination", "catastrophizing"],
+      risk: ["crisisRisk", "selfHarmRisk", "suicidalIdeation"]
+    };
+    const positiveFields = positiveDimensions[dimension] ?? [];
+    const negativeFields = negativeDimensions[dimension] ?? [];
+    if (positiveFields.includes(field)) {
+      return true;
+    }
+    if (negativeFields.includes(field)) {
+      return false;
+    }
+    return true;
+  }
+};
+var InterventionOutcomeHandler = class extends BaseEventHandler {
+  constructor(callback) {
+    super();
+    __publicField(this, "name", "InterventionOutcomeHandler");
+    __publicField(this, "eventTypes", ["INTERVENTION_OUTCOME"]);
+    __publicField(this, "priority", 20);
+    __publicField(this, "async", true);
+    __publicField(this, "callback");
+    this.callback = callback;
+  }
+  async handle(event) {
+    await this.callback.logOutcome(event);
+    await this.callback.updateModel(event);
+  }
+};
+var VulnerabilityWindowHandler = class extends BaseEventHandler {
+  constructor(callback, minConfidenceThreshold = 0.6) {
+    super();
+    __publicField(this, "name", "VulnerabilityWindowHandler");
+    __publicField(this, "eventTypes", ["VULNERABILITY_WINDOW_DETECTED"]);
+    __publicField(this, "priority", 15);
+    __publicField(this, "async", true);
+    __publicField(this, "callback");
+    __publicField(this, "minConfidenceThreshold");
+    this.callback = callback;
+    this.minConfidenceThreshold = minConfidenceThreshold;
+  }
+  async handle(event) {
+    const { payload } = event;
+    const { window, recommendedInterventionTypes } = payload;
+    if (window.confidence < this.minConfidenceThreshold) {
+      return;
+    }
+    await this.callback.scheduleIntervention(
+      payload.userId,
+      window.startTime,
+      window.endTime,
+      recommendedInterventionTypes
+    );
+  }
+};
+var MessageAnalyticsHandler = class extends BaseEventHandler {
+  constructor(callback) {
+    super();
+    __publicField(this, "name", "MessageAnalyticsHandler");
+    __publicField(this, "eventTypes", ["MESSAGE_RECEIVED"]);
+    __publicField(this, "priority", 50);
+    __publicField(this, "async", true);
+    // Fire-and-forget analytics
+    __publicField(this, "callback");
+    this.callback = callback;
+  }
+  async handle(event) {
+    await this.callback.trackMessage(event);
+    await this.callback.updateSessionAnalytics(
+      event.payload.userId,
+      event.payload.sessionId
+    );
+  }
+};
+var CompositeEventHandler = class extends BaseEventHandler {
+  constructor(name, eventTypes, handlers, priority = 100) {
+    super();
+    __publicField(this, "name");
+    __publicField(this, "eventTypes");
+    __publicField(this, "priority");
+    __publicField(this, "handlers");
+    this.name = name;
+    this.eventTypes = eventTypes;
+    this.handlers = handlers.sort((a, b) => a.priority - b.priority);
+    this.priority = priority;
+  }
+  async handle(event) {
+    for (const handler of this.handlers) {
+      if (handler.handles(event.eventType)) {
+        await handler.handle(event);
+      }
+    }
+  }
+};
+var EventHandlerRegistry = class {
+  constructor() {
+    __publicField(this, "handlers");
+    __publicField(this, "handlersByName");
+    this.handlers = /* @__PURE__ */ new Map();
+    this.handlersByName = /* @__PURE__ */ new Map();
+  }
+  /**
+   * Register handler
+   */
+  register(handler) {
+    this.handlersByName.set(handler.name, handler);
+    for (const eventType of handler.eventTypes) {
+      const existing = this.handlers.get(eventType) ?? [];
+      existing.push(handler);
+      existing.sort((a, b) => a.priority - b.priority);
+      this.handlers.set(eventType, existing);
+    }
+  }
+  /**
+   * Unregister handler
+   */
+  unregister(handlerName) {
+    const handler = this.handlersByName.get(handlerName);
+    if (!handler) {
+      return;
+    }
+    this.handlersByName.delete(handlerName);
+    for (const eventType of handler.eventTypes) {
+      const existing = this.handlers.get(eventType);
+      if (existing) {
+        const index = existing.findIndex((h) => h.name === handlerName);
+        if (index !== -1) {
+          existing.splice(index, 1);
+        }
+      }
+    }
+  }
+  /**
+   * Get handlers for event type
+   */
+  getHandlers(eventType) {
+    const specific = this.handlers.get(eventType) ?? [];
+    const wildcard = this.handlers.get("*") ?? [];
+    return [...specific, ...wildcard].sort((a, b) => a.priority - b.priority);
+  }
+  /**
+   * Get handler by name
+   */
+  getHandler(name) {
+    return this.handlersByName.get(name);
+  }
+  /**
+   * Get all registered handlers
+   */
+  getAllHandlers() {
+    return Array.from(this.handlersByName.values());
+  }
+  /**
+   * Register all handlers with event bus
+   */
+  registerWithEventBus(eventBus) {
+    for (const handler of this.handlersByName.values()) {
+      handler.register(eventBus);
+    }
+  }
+  /**
+   * Clear all handlers
+   */
+  clear() {
+    this.handlers.clear();
+    this.handlersByName.clear();
+  }
+};
+function createDefaultHandlerRegistry() {
+  const registry = new EventHandlerRegistry();
+  return registry;
+}
+function createCrisisHandlerRegistry(crisisCallback, stateChangeCallback) {
+  const registry = new EventHandlerRegistry();
+  registry.register(new CrisisEventHandler(crisisCallback));
+  if (stateChangeCallback) {
+    registry.register(new StateChangeEventHandler(stateChangeCallback));
+  }
+  return registry;
+}
+
+// src/events/index.ts
+async function createEventSystem(config = {}) {
+  const {
+    eventBusConfig = {},
+    eventStoreConfig = {},
+    enablePersistence = true,
+    enableAuditLog = true,
+    crisisCallback
+  } = config;
+  const eventStore = new InMemoryEventStore(eventStoreConfig);
+  const auditLogger = new InMemoryAuditLogger(
+    eventStoreConfig.retentionDays ?? 2190
+  );
+  const behaviors = crisisCallback ? createCrisisAwareBehaviors(
+    async (event) => {
+      if (event.eventType === "CRISIS_DETECTED") {
+        await crisisCallback.notify(event);
+      }
+    },
+    enableAuditLog ? auditLogger : void 0
+  ) : createDefaultBehaviors(enableAuditLog ? auditLogger : void 0);
+  const eventBus = createEventBus({
+    ...eventBusConfig,
+    enablePersistence,
+    enableAuditLog,
+    behaviors
+  });
+  await eventBus.initialize(
+    enablePersistence ? eventStore : void 0,
+    enableAuditLog ? auditLogger : void 0
+  );
+  const handlerRegistry = new EventHandlerRegistry();
+  if (crisisCallback) {
+    handlerRegistry.register(new CrisisEventHandler(crisisCallback));
+    handlerRegistry.registerWithEventBus(eventBus);
+  }
+  const shutdown = async () => {
+    eventBus.clearAll();
+    handlerRegistry.clear();
+  };
+  return {
+    eventBus,
+    eventStore,
+    auditLogger,
+    handlerRegistry,
+    shutdown
+  };
+}
+function createMinimalEventSystem() {
+  const eventBus = createEventBus({
+    enablePersistence: false,
+    enableAuditLog: false,
+    behaviors: []
+  });
+  return {
+    eventBus,
+    shutdown: () => eventBus.clearAll()
+  };
+}
+
 // src/index.ts
 var COGNICORE_VERSION = {
   version: "2.0.0-alpha.1",
@@ -8752,12 +11452,25 @@ var COGNICORE_VERSION = {
 };
 
 exports.AFFIRMATION_TEMPLATES = AFFIRMATION_TEMPLATES;
+exports.AIModelNotLoadedError = AIModelNotLoadedError;
+exports.AuditBehavior = AuditBehavior;
+exports.BaseEventHandler = BaseEventHandler;
 exports.BeliefStateAdapter = BeliefStateAdapter;
+exports.BeliefUpdateError = BeliefUpdateError;
 exports.CHANGE_TALK_PATTERNS = CHANGE_TALK_PATTERNS;
 exports.COGNICORE_VERSION = COGNICORE_VERSION;
+exports.CausalNodeNotFoundError = CausalNodeNotFoundError;
+exports.CogniCoreError = CogniCoreError;
+exports.CogniCoreEventBus = CogniCoreEventBus;
+exports.CompositeEventHandler = CompositeEventHandler;
+exports.CrisisAlertBehavior = CrisisAlertBehavior;
+exports.CrisisDetectionError = CrisisDetectionError;
 exports.CrisisDetector = CrisisDetector;
+exports.CrisisEventHandler = CrisisEventHandler;
 exports.DEFAULT_CRISIS_CONFIG = DEFAULT_CRISIS_CONFIG;
 exports.DEFAULT_EMOTION_VAD = DEFAULT_EMOTION_VAD;
+exports.DEFAULT_EVENT_BUS_CONFIG = DEFAULT_EVENT_BUS_CONFIG;
+exports.DEFAULT_EVENT_STORE_CONFIG = DEFAULT_EVENT_STORE_CONFIG;
 exports.DEFAULT_KALMANFORMER_CONFIG = DEFAULT_KALMANFORMER_CONFIG;
 exports.DEFAULT_PLRNN_CONFIG = DEFAULT_PLRNN_CONFIG;
 exports.DEFAULT_VOICE_CONFIG = DEFAULT_VOICE_CONFIG;
@@ -8767,36 +11480,120 @@ exports.DISCORD_PATTERNS = DISCORD_PATTERNS;
 exports.DISCORD_RESPONSE_STRATEGIES = DISCORD_RESPONSE_STRATEGIES;
 exports.DISTORTION_INTERVENTIONS = DISTORTION_INTERVENTIONS;
 exports.DISTORTION_PATTERNS = DISTORTION_PATTERNS;
+exports.DataDeleteError = DataDeleteError;
+exports.DataExportError = DataExportError;
+exports.DataImportError = DataImportError;
+exports.DimensionNotFoundError = DimensionNotFoundError;
 exports.EMOTION_THERAPY_MAPPING = EMOTION_THERAPY_MAPPING;
+exports.EmptyArrayError = EmptyArrayError;
+exports.ErrorCategory = ErrorCategory;
+exports.ErrorCode = ErrorCode;
+exports.ErrorHandler = ErrorHandler;
+exports.ErrorSeverity = ErrorSeverity;
+exports.EventHandlerRegistry = EventHandlerRegistry;
 exports.ExplainabilityService = ExplainabilityService;
+exports.ExternalServiceError = ExternalServiceError;
+exports.ExternalServiceTimeoutError = ExternalServiceTimeoutError;
+exports.ExternalServiceUnavailableError = ExternalServiceUnavailableError;
 exports.INDEX_THRESHOLDS = INDEX_THRESHOLDS;
+exports.InMemoryAuditLogger = InMemoryAuditLogger;
+exports.InMemoryEventStore = InMemoryEventStore;
+exports.InterventionNotFoundError = InterventionNotFoundError;
+exports.InterventionOutcomeHandler = InterventionOutcomeHandler;
+exports.InterventionSelectionError = InterventionSelectionError;
+exports.InvalidCausalGraphError = InvalidCausalGraphError;
+exports.InvalidCrisisStateError = InvalidCrisisStateError;
+exports.InvalidFormatError = InvalidFormatError;
+exports.InvalidIdError = InvalidIdError;
+exports.InvalidMessageFormatError = InvalidMessageFormatError;
+exports.InvalidMetacognitionItemError = InvalidMetacognitionItemError;
+exports.InvalidObservationError = InvalidObservationError;
+exports.InvalidTrajectoryError = InvalidTrajectoryError;
+exports.InvalidTypeError = InvalidTypeError;
 exports.KalmanFormerEngine = KalmanFormerEngine;
+exports.LoggingBehavior = LoggingBehavior;
 exports.MITI_THRESHOLDS = MITI_THRESHOLDS;
+exports.MessageAnalyticsHandler = MessageAnalyticsHandler;
+exports.MessageProcessingError = MessageProcessingError;
+exports.MetacognitionAnalysisError = MetacognitionAnalysisError;
+exports.MetricsBehavior = MetricsBehavior;
 exports.MotivationalEngine = MotivationalEngine;
 exports.MotivationalStateBuilder = MotivationalStateBuilder;
 exports.MotivationalStateFactory = MotivationalStateFactory;
+exports.NLPServiceError = NLPServiceError;
+exports.NoEligibleInterventionsError = NoEligibleInterventionsError;
 exports.OPEN_QUESTION_TEMPLATES = OPEN_QUESTION_TEMPLATES;
+exports.OutOfRangeError = OutOfRangeError;
 exports.PLRNNEngine = PLRNNEngine;
+exports.PipelineStageError = PipelineStageError;
+exports.PipelineTimeoutError = PipelineTimeoutError;
+exports.PredictionError = PredictionError;
 exports.REFLECTION_TEMPLATES = REFLECTION_TEMPLATES;
+exports.RequiredFieldError = RequiredFieldError;
+exports.RetryBehavior = RetryBehavior;
 exports.STRATEGY_RECOMMENDATIONS = STRATEGY_RECOMMENDATIONS;
 exports.SUMMARY_TEMPLATES = SUMMARY_TEMPLATES;
 exports.SUSTAIN_TALK_PATTERNS = SUSTAIN_TALK_PATTERNS;
+exports.SessionEndError = SessionEndError;
+exports.SessionExpiredError = SessionExpiredError;
+exports.SessionNotFoundError = SessionNotFoundError;
+exports.SessionStartError = SessionStartError;
+exports.StateChangeEventHandler = StateChangeEventHandler;
+exports.StorageConnectionError = StorageConnectionError;
+exports.StorageReadError = StorageReadError;
+exports.StorageWriteError = StorageWriteError;
+exports.TemporalNotInitializedError = TemporalNotInitializedError;
+exports.ThrottlingBehavior = ThrottlingBehavior;
+exports.TranscriptionError = TranscriptionError;
+exports.ValidationBehavior = ValidationBehavior;
 exports.VoiceInputAdapter = VoiceInputAdapter;
+exports.VoiceProcessingError = VoiceProcessingError;
+exports.VulnerabilityWindowHandler = VulnerabilityWindowHandler;
 exports.WELLBEING_WEIGHTS = WELLBEING_WEIGHTS;
 exports.beliefStateToKalmanFormerState = beliefStateToKalmanFormerState;
 exports.beliefStateToObservation = beliefStateToObservation;
 exports.beliefStateToPLRNNState = beliefStateToPLRNNState;
 exports.beliefStateToUncertainty = beliefStateToUncertainty;
+exports.betaSampleSecure = betaSampleSecure;
+exports.boxMullerSecure = boxMullerSecure;
 exports.createBeliefStateAdapter = createBeliefStateAdapter;
+exports.createCrisisAwareBehaviors = createCrisisAwareBehaviors;
 exports.createCrisisDetector = createCrisisDetector;
+exports.createCrisisHandlerRegistry = createCrisisHandlerRegistry;
+exports.createDefaultBehaviors = createDefaultBehaviors;
+exports.createDefaultHandlerRegistry = createDefaultHandlerRegistry;
+exports.createEventBus = createEventBus;
+exports.createEventMetadata = createEventMetadata;
+exports.createEventSystem = createEventSystem;
 exports.createExplainabilityService = createExplainabilityService;
+exports.createInMemoryAuditLogger = createInMemoryAuditLogger;
+exports.createInMemoryEventStore = createInMemoryEventStore;
+exports.createInitializedEventBus = createInitializedEventBus;
 exports.createKalmanFormerEngine = createKalmanFormerEngine;
+exports.createMinimalEventSystem = createMinimalEventSystem;
 exports.createPLRNNEngine = createPLRNNEngine;
+exports.createPipelineContext = createPipelineContext;
 exports.createVoiceInputAdapter = createVoiceInputAdapter;
 exports.defaultCrisisDetector = defaultCrisisDetector;
+exports.errorHandler = errorHandler;
+exports.gammaSampleSecure = gammaSampleSecure;
+exports.gaussianSecure = gaussianSecure;
+exports.generateSecureId = generateSecureId;
+exports.generateShortSecureId = generateShortSecureId;
 exports.getComponentStatus = getComponentStatus;
+exports.getDefaultSeverity = getDefaultSeverity;
+exports.getErrorCategory = getErrorCategory;
+exports.initializeGlobalErrorHandlers = initializeGlobalErrorHandlers;
+exports.isGlobalErrorHandlersInitialized = isGlobalErrorHandlersInitialized;
 exports.kalmanFormerStateToBeliefUpdate = kalmanFormerStateToBeliefUpdate;
 exports.mergeHybridPredictions = mergeHybridPredictions;
 exports.plrnnStateToBeliefUpdate = plrnnStateToBeliefUpdate;
+exports.randomBooleanSecure = randomBooleanSecure;
+exports.randomElementSecure = randomElementSecure;
+exports.resetGlobalErrorHandlers = resetGlobalErrorHandlers;
+exports.secureRandom = secureRandom;
+exports.secureRandomInt = secureRandomInt;
+exports.shuffleSecure = shuffleSecure;
+exports.weightedRandomIndexSecure = weightedRandomIndexSecure;
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map

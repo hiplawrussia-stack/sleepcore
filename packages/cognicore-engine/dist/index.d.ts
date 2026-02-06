@@ -1,3 +1,5 @@
+export { CrisisDetectionResult, CrisisDetector, CrisisDetectorConfig, CrisisSeverity, CrisisType, DEFAULT_CRISIS_CONFIG, LayerResult, StateRiskData, createCrisisDetector, defaultCrisisDetector } from './crisis/index.js';
+
 /**
  * 🎭 EMOTIONAL STATE INTERFACE
  * ============================
@@ -354,10 +356,10 @@ interface CognitiveLoad {
     /**
      * Factors contributing to load
      */
-    readonly factors: Array<{
+    readonly factors: {
         readonly factor: 'stress' | 'fatigue' | 'multitasking' | 'emotional' | 'decision_fatigue' | 'information_overload';
         readonly contribution: number;
-    }>;
+    }[];
     /**
      * Available cognitive resources (0.0 - 1.0)
      */
@@ -588,12 +590,12 @@ interface NarrativeChapter {
  * Personal values and meaning
  */
 interface PersonalValues {
-    readonly identified: Array<{
+    readonly identified: {
         readonly value: string;
         readonly importance: number;
         readonly currentAlignment: number;
         readonly examples: string[];
-    }>;
+    }[];
     readonly meaningSource: 'relationships' | 'achievement' | 'growth' | 'contribution' | 'experience' | 'mixed';
     readonly purposeClarity: number;
 }
@@ -678,12 +680,12 @@ interface INarrativeState {
     /**
      * Stage transition history
      */
-    readonly stageHistory: Array<{
+    readonly stageHistory: {
         readonly stage: ChangeStage;
         readonly enteredAt: Date;
         readonly exitedAt?: Date;
         readonly duration: number;
-    }>;
+    }[];
     /**
      * Current narrative role
      */
@@ -691,12 +693,12 @@ interface INarrativeState {
     /**
      * Role evolution history
      */
-    readonly roleHistory: Array<{
+    readonly roleHistory: {
         readonly role: NarrativeRole;
         readonly startedAt: Date;
         readonly endedAt?: Date;
         readonly trigger?: string;
-    }>;
+    }[];
     /**
      * Overall progress percentage (0-100)
      * Composite of stage progress and role evolution
@@ -898,11 +900,11 @@ interface SupportNetwork {
     readonly quality: number;
     readonly accessibility: number;
     readonly diversity: number;
-    readonly primarySupports: Array<{
+    readonly primarySupports: {
         readonly relationship: string;
         readonly availability: 'always' | 'usually' | 'sometimes' | 'rarely';
         readonly quality: number;
-    }>;
+    }[];
     readonly lastContacted?: Date;
 }
 /**
@@ -1116,10 +1118,10 @@ interface EnergyLevel {
     /**
      * Factors affecting energy
      */
-    readonly factors: Array<{
+    readonly factors: {
         readonly factor: 'sleep' | 'nutrition' | 'exercise' | 'stress' | 'illness' | 'emotional_drain' | 'positive_interactions';
         readonly impact: number;
-    }>;
+    }[];
 }
 /**
  * Cognitive load/capacity
@@ -1140,10 +1142,10 @@ interface CognitiveCapacity {
     /**
      * Load sources
      */
-    readonly loadSources: Array<{
+    readonly loadSources: {
         readonly source: string;
         readonly load: number;
-    }>;
+    }[];
     /**
      * Time until recovery
      */
@@ -1164,12 +1166,12 @@ interface SelfEfficacy {
     /**
      * Recent mastery experiences
      */
-    readonly masteryExperiences: Array<{
+    readonly masteryExperiences: {
         readonly description: string;
         readonly domain: string;
         readonly impact: number;
         readonly timestamp: Date;
-    }>;
+    }[];
 }
 /**
  * Resilience assessment
@@ -1192,12 +1194,12 @@ interface Resilience {
     /**
      * Bounce-back history
      */
-    readonly recoveryHistory: Array<{
+    readonly recoveryHistory: {
         readonly challenge: string;
         readonly recoveryTime: number;
         readonly lessonsLearned: string[];
         readonly timestamp: Date;
-    }>;
+    }[];
 }
 /**
  * Social resources
@@ -1224,12 +1226,12 @@ interface SocialResources {
     /**
      * Key relationships
      */
-    readonly keyRelationships: Array<{
+    readonly keyRelationships: {
         readonly role: string;
         readonly quality: number;
         readonly frequency: 'daily' | 'weekly' | 'monthly' | 'rarely';
         readonly supportProvided: ('emotional' | 'instrumental' | 'informational' | 'companionship')[];
-    }>;
+    }[];
     /**
      * Isolation indicators
      */
@@ -1340,20 +1342,20 @@ interface IResourceState {
     /**
      * Resource depletion warnings
      */
-    readonly depletionWarnings: Array<{
+    readonly depletionWarnings: {
         readonly resource: string;
         readonly severity: 'low' | 'medium' | 'high';
         readonly trend: 'stable' | 'declining' | 'critical';
         readonly recommendedAction: string;
-    }>;
+    }[];
     /**
      * Resource strengths
      */
-    readonly strengths: Array<{
+    readonly strengths: {
         readonly resource: string;
         readonly score: number;
         readonly usable: boolean;
-    }>;
+    }[];
     /**
      * Overall resource availability (0.0 - 1.0)
      */
@@ -1657,11 +1659,11 @@ interface IStateVectorFactory {
     /**
      * Create from conversation history
      */
-    fromConversation(userId: string | number, messages: Array<{
+    fromConversation(userId: string | number, messages: {
         text: string;
         timestamp: Date;
         isUser: boolean;
-    }>, previousState?: IStateVector): Promise<IStateVector>;
+    }[], previousState?: IStateVector): Promise<IStateVector>;
     /**
      * Create from self-report assessment
      */
@@ -1715,10 +1717,10 @@ interface IStateVectorService {
      */
     getTrajectory(userId: string | number, component: 'emotional' | 'cognitive' | 'narrative' | 'risk' | 'resources'): Promise<{
         trend: 'improving' | 'stable' | 'declining' | 'volatile';
-        dataPoints: Array<{
+        dataPoints: {
             timestamp: Date;
             value: number;
-        }>;
+        }[];
         prediction: {
             value: number;
             confidence: number;
@@ -1990,12 +1992,12 @@ interface BeliefUpdateResult {
     /**
      * Significant changes detected
      */
-    readonly significantChanges: Array<{
+    readonly significantChanges: {
         readonly dimension: string;
         readonly changeType: 'improvement' | 'decline' | 'volatility' | 'stabilization';
         readonly magnitude: number;
         readonly clinicalSignificance: boolean;
-    }>;
+    }[];
 }
 /**
  * Belief Update Engine Interface
@@ -2043,12 +2045,12 @@ interface IBeliefUpdateEngine {
      */
     checkBeliefConsistency(belief: IFullBeliefState): {
         isConsistent: boolean;
-        inconsistencies: Array<{
+        inconsistencies: {
             dimension1: string;
             dimension2: string;
             conflictType: string;
             resolution: string;
-        }>;
+        }[];
     };
     /**
      * Decay beliefs over time (increase uncertainty)
@@ -2060,11 +2062,11 @@ interface IBeliefUpdateEngine {
     getBeliefHistory(userId: string | number, dimension: string, timeRange: {
         start: Date;
         end: Date;
-    }): Promise<Array<{
+    }): Promise<{
         timestamp: Date;
         mean: number;
         variance: number;
-    }>>;
+    }[]>;
 }
 
 /**
@@ -2230,10 +2232,10 @@ interface IInterventionSimulation {
         /** Duration of effect (hours) */
         duration: number;
         /** Side effects (unintended changes) */
-        sideEffects: Array<{
+        sideEffects: {
             dimension: string;
             effect: number;
-        }>;
+        }[];
     };
     /** Confidence in simulation */
     confidence: number;
@@ -2807,12 +2809,12 @@ interface IAttentionWeights {
     /** Cross-attention weights (if applicable) */
     crossAttention?: number[][][];
     /** Which historical observations influenced prediction most */
-    topInfluentialObservations: Array<{
+    topInfluentialObservations: {
         index: number;
         timestamp: Date;
         weight: number;
         dimension: string;
-    }>;
+    }[];
     /** Temporal attention pattern (recency vs. relevance) */
     temporalPattern: 'recency_bias' | 'pattern_matching' | 'uniform';
 }
@@ -2826,11 +2828,11 @@ interface IKalmanFormerState {
     /** Transformer hidden state (context encoding) */
     transformerHidden: number[][];
     /** Historical observation buffer */
-    observationHistory: Array<{
+    observationHistory: {
         observation: number[];
         timestamp: Date;
         embedding?: number[];
-    }>;
+    }[];
     /** Learned Kalman Gain (if enabled) */
     learnedGain?: number[][];
     /** Current blend ratio (may adapt) */
@@ -2934,11 +2936,11 @@ interface IKalmanFormerTrainingSample {
     /** User ID for personalization */
     userId: string | number;
     /** Context information (external factors) */
-    context?: Array<{
+    context?: {
         timeOfDay: number;
         dayOfWeek: number;
         eventType?: string;
-    }>;
+    }[];
 }
 /**
  * KalmanFormer Engine Interface
@@ -3042,11 +3044,11 @@ interface IHybridPrediction {
         /** Mean prediction at each horizon step */
         trajectory: number[][];
         /** Bayesian credible intervals */
-        credibleIntervals: Array<{
+        credibleIntervals: {
             lower: number[];
             upper: number[];
             level: number;
-        }>;
+        }[];
         /** Final prediction */
         finalPrediction: number[];
     };
@@ -3265,11 +3267,11 @@ interface PredictionPoint {
     /**
      * Factors contributing to prediction
      */
-    readonly contributingFactors: Array<{
+    readonly contributingFactors: {
         readonly factor: string;
         readonly weight: number;
         readonly direction: 'positive' | 'negative' | 'neutral';
-    }>;
+    }[];
 }
 /**
  * State trajectory (sequence of predictions)
@@ -3289,13 +3291,13 @@ interface StateTrajectory {
     /**
      * Detected phase transitions
      */
-    readonly phaseTransitions: Array<{
+    readonly phaseTransitions: {
         readonly type: PhaseTransition;
         readonly predictedTime: Date;
         readonly confidence: number;
         readonly preventable: boolean;
         readonly preventionActions: string[];
-    }>;
+    }[];
     /**
      * Vulnerability windows
      */
@@ -3342,14 +3344,14 @@ interface CircadianProfile {
     /**
      * Hour-by-hour typical state (0-23)
      */
-    readonly hourlyProfile: Array<{
+    readonly hourlyProfile: {
         readonly hour: number;
         readonly avgWellbeing: number;
         readonly avgRisk: number;
         readonly avgEnergy: number;
         readonly variability: number;
         readonly sampleCount: number;
-    }>;
+    }[];
     /**
      * Peak and trough times
      */
@@ -3362,12 +3364,12 @@ interface CircadianProfile {
     /**
      * Optimal intervention times
      */
-    readonly optimalInterventionWindows: Array<{
+    readonly optimalInterventionWindows: {
         readonly startHour: number;
         readonly endHour: number;
         readonly interventionType: string;
         readonly rationale: string;
-    }>;
+    }[];
 }
 /**
  * Temporal Echo Engine Interface
@@ -4303,11 +4305,11 @@ interface ISelectionReasoning {
     /** Primary selection factor */
     primaryFactor: string;
     /** Context features that influenced decision */
-    influentialFeatures: Array<{
+    influentialFeatures: {
         feature: string;
         value: number;
         influence: 'positive' | 'negative' | 'neutral';
-    }>;
+    }[];
     /** Why alternatives were rejected */
     rejectionReasons: Record<string, string>;
     /** Exploration vs exploitation explanation */
@@ -4328,10 +4330,10 @@ interface IOptimizerState {
     /** Recent decision points */
     recentDecisionPoints: IDecisionPoint[];
     /** Pending outcomes (awaiting measurement) */
-    pendingOutcomes: Array<{
+    pendingOutcomes: {
         decisionPointId: string;
         expectedOutcomeTime: Date;
-    }>;
+    }[];
     /** Global statistics */
     globalStats: IGlobalStats;
     /** Last update timestamp */
@@ -6606,12 +6608,12 @@ interface ClientUtterance {
     /** Detection confidence (0-1) */
     readonly confidence: number;
     /** Keywords/patterns that triggered detection */
-    readonly evidenceSpans: Array<{
+    readonly evidenceSpans: {
         readonly start: number;
         readonly end: number;
         readonly text: string;
         readonly pattern: string;
-    }>;
+    }[];
     /** Link to triggering topic */
     readonly targetBehavior?: string;
 }
@@ -6801,10 +6803,10 @@ interface IMotivationalState {
     /**
      * Historical trend of CT ratio
      */
-    readonly ratioTrend: Array<{
+    readonly ratioTrend: {
         readonly date: Date;
         readonly ratio: number;
-    }>;
+    }[];
     /**
      * Current ambivalence state
      */
@@ -6860,11 +6862,11 @@ interface IMotivationalStateFactory {
     /**
      * Create from conversation analysis
      */
-    fromConversation(messages: Array<{
+    fromConversation(messages: {
         text: string;
         timestamp: Date;
         isUser: boolean;
-    }>, userId: string | number, previousState?: IMotivationalState): Promise<IMotivationalState>;
+    }[], userId: string | number, previousState?: IMotivationalState): Promise<IMotivationalState>;
     /**
      * Create from explicit assessment (readiness ruler)
      */
@@ -6997,11 +6999,11 @@ interface MIResponseContext {
     /** Last client utterance */
     readonly lastUtterance: ClientUtterance;
     /** Conversation history (last N exchanges) */
-    readonly recentExchanges: Array<{
+    readonly recentExchanges: {
         readonly clientText: string;
         readonly therapistResponse: string;
         readonly timestamp: Date;
-    }>;
+    }[];
     /** Current therapeutic strategy */
     readonly currentStrategy: MIStrategy;
     /** Session goal */
@@ -7055,11 +7057,11 @@ interface ReflectionTemplate {
     readonly patternRu: string;
     readonly complexity: 'simple' | 'complex';
     readonly target: 'change_talk' | 'sustain_talk' | 'ambivalence' | 'feeling' | 'meaning';
-    readonly examples: Array<{
+    readonly examples: {
         readonly input: string;
         readonly output: string;
         readonly outputRu: string;
-    }>;
+    }[];
 }
 /**
  * Summary template
@@ -7069,7 +7071,7 @@ interface SummaryTemplate {
     readonly type: SummaryType;
     readonly structure: string;
     readonly structureRu: string;
-    readonly includeSections: Array<'change_talk' | 'sustain_talk' | 'values' | 'goals' | 'strengths' | 'next_steps'>;
+    readonly includeSections: ('change_talk' | 'sustain_talk' | 'values' | 'goals' | 'strengths' | 'next_steps')[];
     readonly transitionPhrase?: string;
     readonly transitionPhraseRu?: string;
 }
@@ -7335,11 +7337,11 @@ declare class MotivationalStateBuilder implements IMotivationalStateBuilder {
 declare class MotivationalStateFactory implements IMotivationalStateFactory {
     private readonly engine;
     constructor(engine?: MotivationalEngine);
-    fromConversation(messages: Array<{
+    fromConversation(messages: {
         text: string;
         timestamp: Date;
         isUser: boolean;
-    }>, userId: string | number, previousState?: IMotivationalState): Promise<IMotivationalState>;
+    }[], userId: string | number, previousState?: IMotivationalState): Promise<IMotivationalState>;
     fromAssessment(userId: string | number, importance: number, confidence: number): IMotivationalState;
     createInitial(userId: string | number): IMotivationalState;
     updateWithUtterance(currentState: IMotivationalState, newUtterance: ClientUtterance): IMotivationalState;
@@ -8521,128 +8523,2137 @@ declare class VoiceInputAdapter implements IVoiceInputAdapter {
 declare function createVoiceInputAdapter(config?: Partial<IVoiceAdapterConfig>): IVoiceInputAdapter;
 
 /**
- * 🚨 MULTI-LAYER CRISIS DETECTION ENGINE
- * =======================================
- * Real-time Crisis Detection for Mental Health Safety
+ * CogniCore Error Codes
  *
- * Scientific Foundation (2025 Research):
- * - Multi-layer detection pattern (AI UX Design Guide, 2025)
- * - C-SSRS inspired severity levels (Columbia Protocol)
- * - Suicide Risk Lexicon methodology (ResearchGate, 2025)
- * - Russian language support (Springer, 2020)
+ * Categorized by layer following DDD principles:
+ * - DOMAIN_* : Business logic violations
+ * - APP_* : Application/Use case errors
+ * - INFRA_* : Infrastructure/Technical errors
+ * - VALIDATION_* : Input validation errors
  *
- * Architecture:
- * Layer 1: Raw text keyword scanning (IMMEDIATE, before any processing)
- * Layer 2: Pattern & context analysis (linguistic patterns)
- * Layer 3: State-based risk assessment (integration with StateVector)
+ * @see https://khalilstemmler.com/articles/enterprise-typescript-nodejs/functional-error-handling/
+ */
+declare enum ErrorCode {
+    /** Belief system errors */
+    DOMAIN_BELIEF_UPDATE_FAILED = "DOMAIN_BELIEF_UPDATE_FAILED",
+    DOMAIN_BELIEF_INVALID_OBSERVATION = "DOMAIN_BELIEF_INVALID_OBSERVATION",
+    DOMAIN_BELIEF_DIMENSION_NOT_FOUND = "DOMAIN_BELIEF_DIMENSION_NOT_FOUND",
+    /** Temporal prediction errors */
+    DOMAIN_TEMPORAL_NOT_INITIALIZED = "DOMAIN_TEMPORAL_NOT_INITIALIZED",
+    DOMAIN_TEMPORAL_PREDICTION_FAILED = "DOMAIN_TEMPORAL_PREDICTION_FAILED",
+    DOMAIN_TEMPORAL_INVALID_TRAJECTORY = "DOMAIN_TEMPORAL_INVALID_TRAJECTORY",
+    /** Crisis detection errors */
+    DOMAIN_CRISIS_DETECTION_FAILED = "DOMAIN_CRISIS_DETECTION_FAILED",
+    DOMAIN_CRISIS_INVALID_STATE = "DOMAIN_CRISIS_INVALID_STATE",
+    /** Intervention errors */
+    DOMAIN_INTERVENTION_NOT_FOUND = "DOMAIN_INTERVENTION_NOT_FOUND",
+    DOMAIN_INTERVENTION_SELECTION_FAILED = "DOMAIN_INTERVENTION_SELECTION_FAILED",
+    DOMAIN_INTERVENTION_NO_ELIGIBLE = "DOMAIN_INTERVENTION_NO_ELIGIBLE",
+    /** Metacognition errors */
+    DOMAIN_METACOGNITION_INVALID_ITEM = "DOMAIN_METACOGNITION_INVALID_ITEM",
+    DOMAIN_METACOGNITION_ANALYSIS_FAILED = "DOMAIN_METACOGNITION_ANALYSIS_FAILED",
+    /** Causal model errors */
+    DOMAIN_CAUSAL_NODE_NOT_FOUND = "DOMAIN_CAUSAL_NODE_NOT_FOUND",
+    DOMAIN_CAUSAL_INVALID_GRAPH = "DOMAIN_CAUSAL_INVALID_GRAPH",
+    /** Session management */
+    APP_SESSION_NOT_FOUND = "APP_SESSION_NOT_FOUND",
+    APP_SESSION_EXPIRED = "APP_SESSION_EXPIRED",
+    APP_SESSION_START_FAILED = "APP_SESSION_START_FAILED",
+    APP_SESSION_END_FAILED = "APP_SESSION_END_FAILED",
+    /** Message processing */
+    APP_MESSAGE_PROCESSING_FAILED = "APP_MESSAGE_PROCESSING_FAILED",
+    APP_MESSAGE_INVALID_FORMAT = "APP_MESSAGE_INVALID_FORMAT",
+    /** Pipeline errors */
+    APP_PIPELINE_STAGE_FAILED = "APP_PIPELINE_STAGE_FAILED",
+    APP_PIPELINE_TIMEOUT = "APP_PIPELINE_TIMEOUT",
+    /** Voice processing */
+    APP_VOICE_PROCESSING_FAILED = "APP_VOICE_PROCESSING_FAILED",
+    APP_VOICE_TRANSCRIPTION_FAILED = "APP_VOICE_TRANSCRIPTION_FAILED",
+    /** Data export/import */
+    APP_EXPORT_FAILED = "APP_EXPORT_FAILED",
+    APP_IMPORT_FAILED = "APP_IMPORT_FAILED",
+    APP_DELETE_FAILED = "APP_DELETE_FAILED",
+    /** Storage/Repository errors */
+    INFRA_STORAGE_READ_FAILED = "INFRA_STORAGE_READ_FAILED",
+    INFRA_STORAGE_WRITE_FAILED = "INFRA_STORAGE_WRITE_FAILED",
+    INFRA_STORAGE_CONNECTION_FAILED = "INFRA_STORAGE_CONNECTION_FAILED",
+    /** External service errors */
+    INFRA_EXTERNAL_SERVICE_UNAVAILABLE = "INFRA_EXTERNAL_SERVICE_UNAVAILABLE",
+    INFRA_EXTERNAL_SERVICE_TIMEOUT = "INFRA_EXTERNAL_SERVICE_TIMEOUT",
+    INFRA_EXTERNAL_SERVICE_ERROR = "INFRA_EXTERNAL_SERVICE_ERROR",
+    /** NLP/AI service errors */
+    INFRA_NLP_SERVICE_FAILED = "INFRA_NLP_SERVICE_FAILED",
+    INFRA_AI_MODEL_NOT_LOADED = "INFRA_AI_MODEL_NOT_LOADED",
+    VALIDATION_REQUIRED_FIELD = "VALIDATION_REQUIRED_FIELD",
+    VALIDATION_INVALID_FORMAT = "VALIDATION_INVALID_FORMAT",
+    VALIDATION_OUT_OF_RANGE = "VALIDATION_OUT_OF_RANGE",
+    VALIDATION_INVALID_TYPE = "VALIDATION_INVALID_TYPE",
+    VALIDATION_EMPTY_ARRAY = "VALIDATION_EMPTY_ARRAY",
+    VALIDATION_INVALID_ID = "VALIDATION_INVALID_ID",
+    UNKNOWN_ERROR = "UNKNOWN_ERROR",
+    INTERNAL_ERROR = "INTERNAL_ERROR",
+    NOT_IMPLEMENTED = "NOT_IMPLEMENTED"
+}
+/**
+ * Error severity levels for logging and alerting
+ */
+declare enum ErrorSeverity {
+    /** Informational - no action needed */
+    LOW = "low",
+    /** Warning - should be investigated */
+    MEDIUM = "medium",
+    /** Error - requires attention */
+    HIGH = "high",
+    /** Critical - immediate action required */
+    CRITICAL = "critical"
+}
+/**
+ * Error category for classification
+ */
+declare enum ErrorCategory {
+    /** Business logic violations */
+    DOMAIN = "domain",
+    /** Application/use case failures */
+    APPLICATION = "application",
+    /** Infrastructure/technical issues */
+    INFRASTRUCTURE = "infrastructure",
+    /** Input validation failures */
+    VALIDATION = "validation",
+    /** Unknown/unclassified errors */
+    UNKNOWN = "unknown"
+}
+/**
+ * Mapping of error codes to their categories
+ */
+declare function getErrorCategory(code: ErrorCode): ErrorCategory;
+/**
+ * Mapping of error codes to default severity
+ */
+declare function getDefaultSeverity(code: ErrorCode): ErrorSeverity;
+
+/**
+ * Error context for structured logging
+ */
+interface ErrorContext {
+    /** Unique correlation ID for tracing */
+    correlationId?: string;
+    /** User ID if available */
+    userId?: string;
+    /** Session ID if available */
+    sessionId?: string;
+    /** Component/module where error occurred */
+    component?: string;
+    /** Operation that failed */
+    operation?: string;
+    /** Additional metadata */
+    metadata?: Record<string, unknown>;
+}
+/**
+ * Serialized error format for API responses and logging
+ */
+interface SerializedError {
+    code: ErrorCode;
+    message: string;
+    category: ErrorCategory;
+    severity: ErrorSeverity;
+    timestamp: string;
+    context?: ErrorContext;
+    cause?: string;
+    stack?: string;
+}
+/**
+ * Base error class for all CogniCore errors
  *
- * © БФ "Другой путь", 2025
+ * Provides:
+ * - Structured error codes
+ * - Severity classification
+ * - Context for debugging
+ * - Serialization for logging/API responses
+ *
+ * @example
+ * ```typescript
+ * throw new CogniCoreError(
+ *   ErrorCode.DOMAIN_BELIEF_UPDATE_FAILED,
+ *   'Failed to update belief state',
+ *   { component: 'BeliefUpdateEngine', operation: 'updateCognitiveDimension' }
+ * );
+ * ```
  */
+declare class CogniCoreError extends Error {
+    readonly code: ErrorCode;
+    readonly category: ErrorCategory;
+    readonly severity: ErrorSeverity;
+    readonly context: ErrorContext;
+    readonly timestamp: Date;
+    readonly isOperational: boolean;
+    constructor(code: ErrorCode, message: string, context?: ErrorContext, options?: {
+        cause?: Error;
+        severity?: ErrorSeverity;
+        isOperational?: boolean;
+    });
+    /**
+     * Serialize error for logging or API response
+     */
+    toJSON(): SerializedError;
+    /**
+     * Create a safe version of error for client response (no sensitive data)
+     */
+    toClientResponse(): Pick<SerializedError, 'code' | 'message' | 'timestamp'>;
+    /**
+     * Create CogniCoreError from unknown error
+     */
+    static fromUnknown(error: unknown, defaultCode?: ErrorCode, context?: ErrorContext): CogniCoreError;
+    /**
+     * Check if error is a specific type
+     */
+    static isErrorCode(error: unknown, code: ErrorCode): boolean;
+    /**
+     * Check if error belongs to a category
+     */
+    static isCategory(error: unknown, category: ErrorCategory): boolean;
+}
+
 /**
- * Crisis severity levels (C-SSRS inspired)
+ * Domain Layer Errors
+ *
+ * These errors represent business logic violations and invariant failures.
+ * They are operational errors that should be handled gracefully.
  */
-type CrisisSeverity = 'none' | 'low' | 'moderate' | 'high' | 'critical';
+declare class BeliefUpdateError extends CogniCoreError {
+    constructor(message: string, context?: ErrorContext, cause?: Error);
+}
+declare class InvalidObservationError extends CogniCoreError {
+    readonly observationType: string;
+    constructor(observationType: string, context?: ErrorContext, cause?: Error);
+}
+declare class DimensionNotFoundError extends CogniCoreError {
+    readonly dimensionId: string;
+    constructor(dimensionId: string, context?: ErrorContext);
+}
+declare class TemporalNotInitializedError extends CogniCoreError {
+    readonly engineType: 'PLRNN' | 'KalmanFormer' | 'Hybrid';
+    constructor(engineType: 'PLRNN' | 'KalmanFormer' | 'Hybrid', context?: ErrorContext);
+}
+declare class PredictionError extends CogniCoreError {
+    constructor(message: string, context?: ErrorContext, cause?: Error);
+}
+declare class InvalidTrajectoryError extends CogniCoreError {
+    readonly reason: string;
+    constructor(reason: string, context?: ErrorContext);
+}
+declare class CrisisDetectionError extends CogniCoreError {
+    constructor(message: string, context?: ErrorContext, cause?: Error);
+}
+declare class InvalidCrisisStateError extends CogniCoreError {
+    readonly currentState: string;
+    readonly attemptedAction: string;
+    constructor(currentState: string, attemptedAction: string, context?: ErrorContext);
+}
+declare class InterventionNotFoundError extends CogniCoreError {
+    readonly interventionId: string;
+    constructor(interventionId: string, context?: ErrorContext);
+}
+declare class InterventionSelectionError extends CogniCoreError {
+    constructor(message: string, context?: ErrorContext, cause?: Error);
+}
+declare class NoEligibleInterventionsError extends CogniCoreError {
+    readonly reason: string;
+    constructor(reason: string, context?: ErrorContext);
+}
+declare class InvalidMetacognitionItemError extends CogniCoreError {
+    readonly itemId: string;
+    constructor(itemId: string, context?: ErrorContext);
+}
+declare class MetacognitionAnalysisError extends CogniCoreError {
+    constructor(message: string, context?: ErrorContext, cause?: Error);
+}
+declare class CausalNodeNotFoundError extends CogniCoreError {
+    readonly nodeId: string;
+    constructor(nodeId: string, context?: ErrorContext);
+}
+declare class InvalidCausalGraphError extends CogniCoreError {
+    readonly reason: string;
+    constructor(reason: string, context?: ErrorContext);
+}
+
 /**
- * Crisis type classification
+ * Application Layer Errors
+ *
+ * These errors represent use case failures and coordination issues.
+ * They occur when orchestrating domain operations.
  */
-type CrisisType = 'suicidal_ideation' | 'suicidal_intent' | 'self_harm' | 'acute_distress' | 'psychotic_features' | 'substance_crisis' | 'panic_attack' | 'unknown';
+declare class SessionNotFoundError extends CogniCoreError {
+    readonly sessionId: string;
+    constructor(sessionId: string, context?: ErrorContext);
+}
+declare class SessionExpiredError extends CogniCoreError {
+    readonly sessionId: string;
+    readonly expiredAt: Date;
+    constructor(sessionId: string, expiredAt: Date, context?: ErrorContext);
+}
+declare class SessionStartError extends CogniCoreError {
+    constructor(message: string, context?: ErrorContext, cause?: Error);
+}
+declare class SessionEndError extends CogniCoreError {
+    readonly sessionId: string;
+    constructor(sessionId: string, message: string, context?: ErrorContext, cause?: Error);
+}
+declare class MessageProcessingError extends CogniCoreError {
+    constructor(message: string, context?: ErrorContext, cause?: Error);
+}
+declare class InvalidMessageFormatError extends CogniCoreError {
+    readonly expectedFormat: string;
+    readonly received: string;
+    constructor(expectedFormat: string, received: string, context?: ErrorContext);
+}
+declare class PipelineStageError extends CogniCoreError {
+    readonly stageName: string;
+    constructor(stageName: string, message: string, context?: ErrorContext, cause?: Error);
+}
+declare class PipelineTimeoutError extends CogniCoreError {
+    readonly stageName: string;
+    readonly timeoutMs: number;
+    constructor(stageName: string, timeoutMs: number, context?: ErrorContext);
+}
+declare class VoiceProcessingError extends CogniCoreError {
+    constructor(message: string, context?: ErrorContext, cause?: Error);
+}
+declare class TranscriptionError extends CogniCoreError {
+    constructor(message: string, context?: ErrorContext, cause?: Error);
+}
+declare class DataExportError extends CogniCoreError {
+    readonly userId: string;
+    constructor(userId: string, message: string, context?: ErrorContext, cause?: Error);
+}
+declare class DataImportError extends CogniCoreError {
+    constructor(message: string, context?: ErrorContext, cause?: Error);
+}
+declare class DataDeleteError extends CogniCoreError {
+    readonly userId: string;
+    constructor(userId: string, message: string, context?: ErrorContext, cause?: Error);
+}
+
 /**
- * Detection layer result
+ * Infrastructure Layer Errors
+ *
+ * These errors represent technical/system-level failures.
+ * Storage, external services, and system resource issues.
  */
-interface LayerResult {
-    readonly triggered: boolean;
-    readonly confidence: number;
-    readonly indicators: string[];
-    readonly matchedPatterns: string[];
+declare class StorageReadError extends CogniCoreError {
+    readonly storageType: string;
+    constructor(storageType: string, message: string, context?: ErrorContext, cause?: Error);
+}
+declare class StorageWriteError extends CogniCoreError {
+    readonly storageType: string;
+    constructor(storageType: string, message: string, context?: ErrorContext, cause?: Error);
+}
+declare class StorageConnectionError extends CogniCoreError {
+    readonly storageType: string;
+    constructor(storageType: string, message: string, context?: ErrorContext, cause?: Error);
+}
+declare class ExternalServiceUnavailableError extends CogniCoreError {
+    readonly serviceName: string;
+    constructor(serviceName: string, context?: ErrorContext, cause?: Error);
+}
+declare class ExternalServiceTimeoutError extends CogniCoreError {
+    readonly serviceName: string;
+    readonly timeoutMs: number;
+    constructor(serviceName: string, timeoutMs: number, context?: ErrorContext);
+}
+declare class ExternalServiceError extends CogniCoreError {
+    readonly serviceName: string;
+    constructor(serviceName: string, message: string, context?: ErrorContext, cause?: Error);
+}
+declare class NLPServiceError extends CogniCoreError {
+    constructor(message: string, context?: ErrorContext, cause?: Error);
+}
+declare class AIModelNotLoadedError extends CogniCoreError {
+    readonly modelName: string;
+    constructor(modelName: string, context?: ErrorContext);
+}
+
+/**
+ * Validation Errors
+ *
+ * These errors represent input validation failures.
+ * They are operational errors with low severity.
+ */
+declare class RequiredFieldError extends CogniCoreError {
+    readonly fieldName: string;
+    constructor(fieldName: string, context?: ErrorContext);
+}
+declare class InvalidFormatError extends CogniCoreError {
+    readonly fieldName: string;
+    readonly expectedFormat: string;
+    constructor(fieldName: string, expectedFormat: string, context?: ErrorContext);
+}
+declare class OutOfRangeError extends CogniCoreError {
+    readonly fieldName: string;
+    readonly min: number;
+    readonly max: number;
+    readonly actual: number;
+    constructor(fieldName: string, min: number, max: number, actual: number, context?: ErrorContext);
+}
+declare class InvalidTypeError extends CogniCoreError {
+    readonly fieldName: string;
+    readonly expectedType: string;
+    readonly actualType: string;
+    constructor(fieldName: string, expectedType: string, actualType: string, context?: ErrorContext);
+}
+declare class EmptyArrayError extends CogniCoreError {
+    readonly fieldName: string;
+    constructor(fieldName: string, context?: ErrorContext);
+}
+declare class InvalidIdError extends CogniCoreError {
+    readonly idType: string;
+    readonly invalidValue: string;
+    constructor(idType: string, invalidValue: string, context?: ErrorContext);
+}
+
+/**
+ * Error handler callback type
+ */
+type ErrorCallback = (error: CogniCoreError) => void;
+/**
+ * Logger interface for dependency injection
+ */
+interface ErrorLogger {
+    debug(message: string, meta?: Record<string, unknown>): void;
+    info(message: string, meta?: Record<string, unknown>): void;
+    warn(message: string, meta?: Record<string, unknown>): void;
+    error(message: string, meta?: Record<string, unknown>): void;
 }
 /**
- * Complete crisis detection result
+ * Configuration for ErrorHandler
  */
-interface CrisisDetectionResult {
-    readonly isCrisis: boolean;
-    readonly severity: CrisisSeverity;
-    readonly crisisType: CrisisType;
-    readonly confidence: number;
-    readonly layer1RawText: LayerResult;
-    readonly layer2Pattern: LayerResult;
-    readonly layer3State: LayerResult;
-    readonly allIndicators: string[];
-    readonly primaryIndicator: string | null;
-    readonly recommendedAction: 'none' | 'monitor' | 'supportive_response' | 'crisis_protocol' | 'emergency_escalation';
-    readonly urgency: 'routine' | 'soon' | 'urgent' | 'immediate';
-    readonly detectedAt: Date;
-    readonly processingTimeMs: number;
+interface ErrorHandlerConfig {
+    /** Custom logger implementation */
+    logger?: ErrorLogger;
+    /** Whether to include stack traces in logs */
+    includeStackTrace?: boolean;
+    /** Callback for critical errors (e.g., send to alerting system) */
+    onCriticalError?: ErrorCallback;
+    /** Callback for all errors (e.g., send to error tracking service) */
+    onError?: ErrorCallback;
+    /** Environment (affects logging verbosity) */
+    environment?: 'development' | 'production' | 'test';
 }
 /**
- * Crisis detector configuration
+ * Centralized Error Handler
+ *
+ * Provides:
+ * - Consistent error handling across the application
+ * - Structured logging with severity levels
+ * - Error categorization and classification
+ * - Callbacks for alerting and monitoring integration
+ *
+ * @example
+ * ```typescript
+ * const handler = ErrorHandler.getInstance();
+ *
+ * try {
+ *   await someOperation();
+ * } catch (error) {
+ *   handler.handle(error, {
+ *     component: 'MyComponent',
+ *     operation: 'someOperation'
+ *   });
+ * }
+ * ```
  */
-interface CrisisDetectorConfig {
-    readonly enableLayer1: boolean;
-    readonly enableLayer2: boolean;
-    readonly enableLayer3: boolean;
-    readonly sensitivityLevel: 'low' | 'medium' | 'high';
-    readonly language: 'ru' | 'en' | 'auto';
+declare class ErrorHandler {
+    private static instance;
+    private config;
+    private errorCounts;
+    private constructor();
+    /**
+     * Get singleton instance
+     */
+    static getInstance(config?: ErrorHandlerConfig): ErrorHandler;
+    /**
+     * Reset instance (for testing)
+     */
+    static resetInstance(): void;
+    /**
+     * Update configuration
+     */
+    configure(config: Partial<ErrorHandlerConfig>): void;
+    /**
+     * Handle an error - the main entry point
+     *
+     * @param error - The error to handle (can be any type)
+     * @param context - Additional context for logging
+     * @param defaultCode - Default error code if error is not CogniCoreError
+     * @returns The normalized CogniCoreError
+     */
+    handle(error: unknown, context?: ErrorContext, defaultCode?: ErrorCode): CogniCoreError;
+    /**
+     * Handle error and return a safe response for API
+     */
+    handleForResponse(error: unknown, context?: ErrorContext, defaultCode?: ErrorCode): {
+        code: string;
+        message: string;
+        timestamp: string;
+    };
+    /**
+     * Wrap an async function with error handling
+     */
+    wrapAsync<T, Args extends unknown[]>(fn: (...args: Args) => Promise<T>, context?: ErrorContext, defaultCode?: ErrorCode): (...args: Args) => Promise<T>;
+    /**
+     * Wrap a sync function with error handling
+     */
+    wrapSync<T, Args extends unknown[]>(fn: (...args: Args) => T, context?: ErrorContext, defaultCode?: ErrorCode): (...args: Args) => T;
+    /**
+     * Log error based on severity
+     */
+    private logError;
+    /**
+     * Increment error count for tracking
+     */
+    private incrementErrorCount;
+    /**
+     * Get error statistics
+     */
+    getErrorStats(): {
+        total: number;
+        byCode: Record<string, number>;
+        byCategory: Record<string, number>;
+        bySeverity: Record<string, number>;
+    };
+    /**
+     * Reset error statistics
+     */
+    resetErrorStats(): void;
+    /**
+     * Check if error should crash the process (programmer error)
+     */
+    shouldCrash(error: CogniCoreError): boolean;
 }
 /**
- * State risk data for Layer 3
+ * Global error handler instance
  */
-interface StateRiskData {
-    readonly overallRiskLevel: number;
-    readonly suicidalIdeation: number;
-    readonly selfHarmRisk: number;
-    readonly emotionalValence: number;
-    readonly recentTrend: 'improving' | 'stable' | 'declining';
+declare const errorHandler: ErrorHandler;
+
+/**
+ * Global Error Handlers
+ *
+ * Sets up process-level error handling for:
+ * - Unhandled Promise rejections
+ * - Uncaught exceptions
+ *
+ * Best practice: These should be set up early in application bootstrap.
+ *
+ * @see https://nodejs.org/api/process.html#event-unhandledrejection
+ * @see https://nodejs.org/api/process.html#event-uncaughtexception
+ */
+interface GlobalErrorHandlerOptions {
+    /** Exit process on uncaught exception (recommended for production) */
+    exitOnUncaughtException?: boolean;
+    /** Exit process on unhandled rejection (recommended for production) */
+    exitOnUnhandledRejection?: boolean;
+    /** Grace period before exit (ms) to allow logging/cleanup */
+    exitGracePeriod?: number;
+    /** Custom handler for uncaught exceptions */
+    onUncaughtException?: (error: Error) => void;
+    /** Custom handler for unhandled rejections */
+    onUnhandledRejection?: (reason: unknown) => void;
 }
 /**
- * Default configuration
+ * Initialize global error handlers
+ *
+ * @example
+ * ```typescript
+ * // In your application entry point (index.ts or main.ts)
+ * import { initializeGlobalErrorHandlers } from './errors';
+ *
+ * initializeGlobalErrorHandlers({
+ *   exitOnUncaughtException: process.env.NODE_ENV === 'production',
+ *   exitOnUnhandledRejection: process.env.NODE_ENV === 'production',
+ * });
+ * ```
  */
-declare const DEFAULT_CRISIS_CONFIG: CrisisDetectorConfig;
+declare function initializeGlobalErrorHandlers(options?: GlobalErrorHandlerOptions): void;
 /**
- * Multi-layer Crisis Detector
+ * Check if global handlers are initialized
  */
-declare class CrisisDetector {
+declare function isGlobalErrorHandlersInitialized(): boolean;
+/**
+ * Reset initialization state (for testing only)
+ */
+declare function resetGlobalErrorHandlers(): void;
+
+/**
+ * 🔌 COGNITIVE CORE API - INTERFACES
+ * ===================================
+ * Phase 3.5: Integration & API Layer
+ *
+ * Architecture Patterns (2024-2025 Research):
+ * - Clean Architecture with Facade Pattern
+ * - Event-Driven Architecture (EDA) for loose coupling
+ * - CQRS for read/write separation
+ * - Domain Events for cross-aggregate communication
+ * - Event Sourcing for audit trails (HIPAA compliance)
+ *
+ * Scientific Foundation:
+ * - Cardinal Health EDA (Current 2024) - Event streaming for healthcare
+ * - reSolve/EvtStore patterns - CQRS + ES for Node.js
+ * - PostgreSQL stateful conversations (Medium 2024)
+ * - NestJS + EventStoreDB patterns (2024)
+ * - Khalil Stemmler DDD patterns for TypeScript
+ *
+ * БФ "Другой путь" | БАЙТ Cognitive Core v1.0
+ */
+
+/**
+ * Base domain event interface
+ * Following Khalil Stemmler's DDD patterns
+ */
+interface IDomainEvent {
+    /** Unique event ID */
+    readonly eventId: string;
+    /** Event type for routing */
+    readonly eventType: string;
+    /** Aggregate ID that generated this event */
+    readonly aggregateId: string;
+    /** Aggregate type */
+    readonly aggregateType: 'user_session' | 'cognitive_state' | 'intervention' | 'conversation';
+    /** Event timestamp */
+    readonly timestamp: Date;
+    /** Event version for schema evolution */
+    readonly version: number;
+    /** Event payload */
+    readonly payload: unknown;
+    /** Metadata (correlation ID, causation ID, etc.) */
+    readonly metadata: IEventMetadata;
+}
+/**
+ * Event metadata for tracing and correlation
+ */
+interface IEventMetadata {
+    /** Correlation ID for request tracing */
+    correlationId: string;
+    /** Causation ID - event that caused this event */
+    causationId?: string;
+    /** User ID if applicable */
+    userId?: string;
+    /** Session ID */
+    sessionId?: string;
+    /** Source system/component */
+    source: string;
+    /** Additional context */
+    context?: Record<string, unknown>;
+}
+/**
+ * Message received event
+ */
+interface IMessageReceivedEvent extends IDomainEvent {
+    eventType: 'MESSAGE_RECEIVED';
+    payload: {
+        messageId: string;
+        userId: string;
+        sessionId: string;
+        text: string;
+        timestamp: Date;
+        metadata?: {
+            replyToMessageId?: string;
+            hasMedia?: boolean;
+            language?: string;
+        };
+    };
+}
+/**
+ * State updated event
+ */
+interface IStateUpdatedEvent extends IDomainEvent {
+    eventType: 'STATE_UPDATED';
+    payload: {
+        userId: string;
+        previousState: IStateVector;
+        newState: IStateVector;
+        trigger: 'message' | 'observation' | 'decay' | 'intervention';
+        changes: IStateChange[];
+    };
+}
+/**
+ * State change details
+ */
+interface IStateChange {
+    dimension: 'emotional' | 'cognitive' | 'narrative' | 'risk' | 'resource';
+    field: string;
+    previousValue: unknown;
+    newValue: unknown;
+    changeType: 'increase' | 'decrease' | 'transition';
+    magnitude: number;
+}
+/**
+ * Intervention outcome recorded event
+ */
+interface IInterventionOutcomeEvent extends IDomainEvent {
+    eventType: 'INTERVENTION_OUTCOME';
+    payload: {
+        userId: string;
+        interventionId: string;
+        outcome: IInterventionOutcome;
+        rewardSignal: number;
+    };
+}
+/**
+ * Crisis detected event
+ */
+interface ICrisisDetectedEvent extends IDomainEvent {
+    eventType: 'CRISIS_DETECTED';
+    payload: {
+        userId: string;
+        sessionId: string;
+        riskLevel: number;
+        triggerIndicators: string[];
+        recommendedAction: 'immediate_response' | 'escalate' | 'monitor';
+        crisisType: 'self_harm' | 'suicidal_ideation' | 'acute_distress' | 'panic';
+    };
+}
+/**
+ * Vulnerability window detected event
+ */
+interface VulnerabilityWindowEvent extends IDomainEvent {
+    eventType: 'VULNERABILITY_WINDOW_DETECTED';
+    payload: {
+        userId: string;
+        window: VulnerabilityWindow;
+        recommendedInterventionTypes: string[];
+    };
+}
+/**
+ * Event handler function type
+ */
+type EventHandler<T extends IDomainEvent = IDomainEvent> = (event: T) => Promise<void>;
+/**
+ * Event subscription
+ */
+interface IEventSubscription {
+    /** Subscription ID */
+    id: string;
+    /** Event type subscribed to */
+    eventType: string;
+    /** Handler function */
+    handler: EventHandler;
+    /** Unsubscribe function */
+    unsubscribe: () => void;
+}
+/**
+ * Event bus for domain event distribution
+ * Implements Observer pattern for loose coupling
+ */
+interface IEventBus {
+    /**
+     * Publish domain event
+     * @param event - Event to publish
+     */
+    publish<T extends IDomainEvent>(event: T): Promise<void>;
+    /**
+     * Subscribe to event type
+     * @param eventType - Type of event to subscribe to
+     * @param handler - Handler function
+     * @returns Subscription for unsubscribing
+     */
+    subscribe<T extends IDomainEvent>(eventType: string, handler: EventHandler<T>): IEventSubscription;
+    /**
+     * Subscribe to multiple event types
+     * @param eventTypes - Types of events to subscribe to
+     * @param handler - Handler function
+     * @returns Array of subscriptions
+     */
+    subscribeMany(eventTypes: string[], handler: EventHandler): IEventSubscription[];
+    /**
+     * Unsubscribe by subscription ID
+     * @param subscriptionId - ID of subscription to remove
+     */
+    unsubscribe(subscriptionId: string): void;
+    /**
+     * Clear all subscriptions
+     */
+    clearAll(): void;
+}
+
+/**
+ * EVENTS MODULE - INTERFACES
+ * ===========================
+ * Event-Driven Architecture for CogniCore Engine
+ *
+ * Research Foundation (2025-2026):
+ * - Event Sourcing patterns (Oskar Dudycz, Event-Driven.io)
+ * - DDD Domain Events (Khalil Stemmler, Microsoft patterns)
+ * - HIPAA Audit Controls (45 C.F.R. § 164.312(b))
+ * - GDPR Event Logging (Article 30, EHDS 2025/327)
+ * - Type-safe EventEmitter (@types/node July 2024)
+ *
+ * Compliance:
+ * - HIPAA: 6 years audit log retention
+ * - GDPR: Crypto-shredding ready for right to erasure
+ * - EU AI Act: Explainability audit trail
+ *
+ * @module events/IEvents
+ */
+
+/**
+ * Event store configuration
+ */
+interface IEventStoreConfig {
+    /** Storage backend type */
+    backend: 'memory' | 'postgresql';
+    /** Connection string for PostgreSQL */
+    connectionString?: string;
+    /** Retention period in days (HIPAA: 2190 = 6 years) */
+    retentionDays: number;
+    /** Enable encryption for HIPAA/GDPR compliance */
+    enableEncryption: boolean;
+    /** Encryption key ID (for crypto-shredding) */
+    encryptionKeyId?: string;
+    /** Snapshot threshold (create snapshot after N events) */
+    snapshotThreshold: number;
+    /** Enable compression for archived events */
+    enableCompression: boolean;
+    /** Maximum events per query */
+    maxEventsPerQuery: number;
+}
+/**
+ * Stored event with metadata
+ */
+interface IStoredEvent<T extends IDomainEvent = IDomainEvent> {
+    /** Unique storage ID */
+    readonly id: string;
+    /** Sequence number within aggregate */
+    readonly sequenceNumber: number;
+    /** Global sequence number */
+    readonly globalSequence: number;
+    /** Event data */
+    readonly event: T;
+    /** Storage timestamp */
+    readonly storedAt: Date;
+    /** Encryption key ID if encrypted */
+    readonly encryptionKeyId?: string;
+    /** Checksum for integrity verification */
+    readonly checksum: string;
+}
+/**
+ * Event query options
+ */
+interface IEventQueryOptions {
+    /** Filter by aggregate ID */
+    aggregateId?: string;
+    /** Filter by aggregate type */
+    aggregateType?: string;
+    /** Filter by event types */
+    eventTypes?: string[];
+    /** Filter by user ID */
+    userId?: string;
+    /** Start timestamp */
+    fromTimestamp?: Date;
+    /** End timestamp */
+    toTimestamp?: Date;
+    /** Start sequence number */
+    fromSequence?: number;
+    /** Limit results */
+    limit?: number;
+    /** Offset for pagination */
+    offset?: number;
+    /** Sort order */
+    order?: 'asc' | 'desc';
+}
+/**
+ * Aggregate snapshot for performance optimization
+ */
+interface IAggregateSnapshot<TState = unknown> {
+    /** Aggregate ID */
+    aggregateId: string;
+    /** Aggregate type */
+    aggregateType: string;
+    /** Snapshot version (last event sequence number) */
+    version: number;
+    /** Serialized state */
+    state: TState;
+    /** Snapshot timestamp */
+    createdAt: Date;
+    /** Checksum for integrity */
+    checksum: string;
+}
+/**
+ * Event store interface
+ * Implements Event Sourcing pattern with HIPAA/GDPR compliance
+ */
+interface IEventStore {
+    /**
+     * Append event to store
+     * @param event - Domain event to store
+     * @returns Stored event with metadata
+     */
+    append(event: IDomainEvent): Promise<IStoredEvent>;
+    /**
+     * Append multiple events atomically
+     * @param events - Events to store
+     * @returns Stored events with metadata
+     */
+    appendBatch(events: IDomainEvent[]): Promise<IStoredEvent[]>;
+    /**
+     * Get events by aggregate ID
+     * @param aggregateId - Aggregate identifier
+     * @param fromVersion - Start from version (for replay after snapshot)
+     * @returns Array of stored events
+     */
+    getEvents(aggregateId: string, fromVersion?: number): Promise<IStoredEvent[]>;
+    /**
+     * Query events with filters
+     * @param options - Query options
+     * @returns Array of stored events
+     */
+    queryEvents(options: IEventQueryOptions): Promise<IStoredEvent[]>;
+    /**
+     * Get events by type
+     * @param eventType - Event type to query
+     * @param options - Additional options
+     * @returns Array of stored events
+     */
+    getEventsByType(eventType: string, options?: Partial<IEventQueryOptions>): Promise<IStoredEvent[]>;
+    /**
+     * Create snapshot for aggregate
+     * @param aggregateId - Aggregate identifier
+     * @param aggregateType - Aggregate type
+     * @param state - Current state to snapshot
+     * @param version - Current version
+     */
+    createSnapshot<TState>(aggregateId: string, aggregateType: string, state: TState, version: number): Promise<IAggregateSnapshot<TState>>;
+    /**
+     * Get latest snapshot for aggregate
+     * @param aggregateId - Aggregate identifier
+     * @returns Latest snapshot or null
+     */
+    getSnapshot<TState>(aggregateId: string): Promise<IAggregateSnapshot<TState> | null>;
+    /**
+     * Get event count for aggregate
+     * @param aggregateId - Aggregate identifier
+     * @returns Number of events
+     */
+    getEventCount(aggregateId: string): Promise<number>;
+    /**
+     * Get global event count
+     * @returns Total number of events in store
+     */
+    getTotalEventCount(): Promise<number>;
+    /**
+     * Delete events for GDPR compliance (crypto-shredding)
+     * Note: Events are not physically deleted, encryption keys are destroyed
+     * @param aggregateId - Aggregate identifier
+     * @returns Number of affected events
+     */
+    cryptoShred(aggregateId: string): Promise<number>;
+    /**
+     * Archive old events (compress and move to cold storage)
+     * @param beforeDate - Archive events before this date
+     * @returns Number of archived events
+     */
+    archiveEvents(beforeDate: Date): Promise<number>;
+    /**
+     * Verify event integrity
+     * @param eventId - Event storage ID
+     * @returns True if checksum valid
+     */
+    verifyIntegrity(eventId: string): Promise<boolean>;
+}
+/**
+ * Pipeline behavior context
+ */
+interface IPipelineContext {
+    /** Correlation ID for tracing */
+    correlationId: string;
+    /** Start timestamp */
+    startedAt: Date;
+    /** Current user ID if available */
+    userId?: string;
+    /** Current session ID if available */
+    sessionId?: string;
+    /** Additional context data */
+    data: Map<string, unknown>;
+    /** Metrics collection */
+    metrics: {
+        /** Processing duration in ms */
+        durationMs?: number;
+        /** Handler execution count */
+        handlerCount?: number;
+        /** Retry count if applicable */
+        retryCount?: number;
+    };
+}
+/**
+ * Pipeline behavior interface (middleware pattern)
+ * Inspired by MediatR pipeline behaviors
+ */
+interface IPipelineBehavior {
+    /** Behavior name for logging */
+    readonly name: string;
+    /** Behavior priority (lower = earlier) */
+    readonly priority: number;
+    /**
+     * Handle event in pipeline
+     * @param event - Domain event
+     * @param context - Pipeline context
+     * @param next - Next behavior in pipeline
+     * @returns Promise that resolves when handling complete
+     */
+    handle(event: IDomainEvent, context: IPipelineContext, next: () => Promise<void>): Promise<void>;
+}
+/**
+ * Event handler registration
+ */
+interface IEventHandlerRegistration {
+    /** Handler name */
+    name: string;
+    /** Event types this handler processes */
+    eventTypes: string[];
+    /** Handler priority (lower = earlier) */
+    priority: number;
+    /** Whether handler is async (fire-and-forget) */
+    async: boolean;
+    /** Retry configuration */
+    retry?: {
+        maxAttempts: number;
+        delayMs: number;
+        backoffMultiplier: number;
+    };
+}
+/**
+ * Event handler result
+ */
+interface IEventHandlerResult {
+    /** Handler name */
+    handlerName: string;
+    /** Success status */
+    success: boolean;
+    /** Error if failed */
+    error?: Error;
+    /** Execution duration in ms */
+    durationMs: number;
+    /** Whether handler was skipped */
+    skipped: boolean;
+    /** Skip reason if skipped */
+    skipReason?: string;
+}
+/**
+ * Event dispatch result
+ */
+interface IEventDispatchResult {
+    /** Event ID */
+    eventId: string;
+    /** Event type */
+    eventType: string;
+    /** Total handlers invoked */
+    handlersInvoked: number;
+    /** Successful handlers */
+    handlersSucceeded: number;
+    /** Failed handlers */
+    handlersFailed: number;
+    /** Individual handler results */
+    handlerResults: IEventHandlerResult[];
+    /** Total dispatch duration in ms */
+    totalDurationMs: number;
+    /** Whether event was stored */
+    stored: boolean;
+    /** Storage ID if stored */
+    storageId?: string;
+}
+/**
+ * Audit log entry
+ */
+interface IAuditLogEntry {
+    /** Unique audit ID */
+    id: string;
+    /** Timestamp */
+    timestamp: Date;
+    /** Event type */
+    eventType: string;
+    /** Event ID */
+    eventId: string;
+    /** User ID */
+    userId?: string;
+    /** Session ID */
+    sessionId?: string;
+    /** IP address (hashed for privacy) */
+    ipAddressHash?: string;
+    /** Action performed */
+    action: 'publish' | 'subscribe' | 'handle' | 'store' | 'query' | 'delete';
+    /** Resource accessed */
+    resource: string;
+    /** Outcome */
+    outcome: 'success' | 'failure' | 'partial';
+    /** Additional details */
+    details?: Record<string, unknown>;
+    /** Correlation ID for tracing */
+    correlationId: string;
+}
+/**
+ * Audit log query options
+ */
+interface IAuditLogQueryOptions {
+    /** Filter by user ID */
+    userId?: string;
+    /** Filter by event type */
+    eventType?: string;
+    /** Filter by action */
+    action?: IAuditLogEntry['action'];
+    /** Filter by outcome */
+    outcome?: IAuditLogEntry['outcome'];
+    /** Start timestamp */
+    fromTimestamp?: Date;
+    /** End timestamp */
+    toTimestamp?: Date;
+    /** Limit results */
+    limit?: number;
+    /** Offset for pagination */
+    offset?: number;
+}
+/**
+ * Audit logger interface
+ */
+interface IAuditLogger {
+    /**
+     * Log audit entry
+     * @param entry - Audit log entry
+     */
+    log(entry: Omit<IAuditLogEntry, 'id' | 'timestamp'>): Promise<void>;
+    /**
+     * Query audit logs
+     * @param options - Query options
+     * @returns Array of audit log entries
+     */
+    query(options: IAuditLogQueryOptions): Promise<IAuditLogEntry[]>;
+    /**
+     * Get audit log count
+     * @param options - Filter options
+     * @returns Number of matching entries
+     */
+    count(options?: Partial<IAuditLogQueryOptions>): Promise<number>;
+    /**
+     * Export audit logs for compliance reporting
+     * @param options - Export options
+     * @returns Serialized audit log data
+     */
+    export(options: IAuditLogQueryOptions): Promise<string>;
+}
+/**
+ * Event bus configuration
+ */
+interface IEventBusConfig {
+    /** Enable event persistence */
+    enablePersistence: boolean;
+    /** Event store configuration */
+    eventStore?: IEventStoreConfig;
+    /** Enable audit logging */
+    enableAuditLog: boolean;
+    /** Pipeline behaviors */
+    behaviors: IPipelineBehavior[];
+    /** Default retry configuration */
+    defaultRetry: {
+        maxAttempts: number;
+        delayMs: number;
+        backoffMultiplier: number;
+    };
+    /** Maximum concurrent handlers */
+    maxConcurrentHandlers: number;
+    /** Handler timeout in ms */
+    handlerTimeoutMs: number;
+    /** Enable dead letter queue */
+    enableDeadLetterQueue: boolean;
+    /** Dead letter queue handler */
+    deadLetterHandler?: (event: IDomainEvent, error: Error) => Promise<void>;
+}
+/**
+ * Create default event metadata
+ */
+declare function createEventMetadata(source: string, options?: Partial<IEventMetadata>): IEventMetadata;
+/**
+ * Create pipeline context
+ */
+declare function createPipelineContext(correlationId: string, userId?: string, sessionId?: string): IPipelineContext;
+/**
+ * Default event bus configuration
+ */
+declare const DEFAULT_EVENT_BUS_CONFIG: IEventBusConfig;
+/**
+ * Default event store configuration (HIPAA compliant)
+ */
+declare const DEFAULT_EVENT_STORE_CONFIG: IEventStoreConfig;
+
+/**
+ * EVENT BUS IMPLEMENTATION
+ * =========================
+ * Type-safe Event Bus with Pipeline Behaviors for CogniCore Engine
+ *
+ * Architecture Patterns:
+ * - Observer Pattern (event distribution)
+ * - Mediator Pattern (decoupling)
+ * - Pipeline Pattern (middleware)
+ * - MediatR-inspired behaviors
+ *
+ * Research Foundation (2025-2026):
+ * - TypeScript type-safe EventEmitter patterns
+ * - MediatR Pipeline Behaviors (.NET patterns adapted)
+ * - Healthcare EDA patterns (Philips, Epic Systems)
+ * - HIPAA-compliant event handling
+ *
+ * @module events/EventBus
+ */
+
+/**
+ * CogniCore Event Bus
+ *
+ * Features:
+ * - Type-safe event publishing and subscribing
+ * - Pipeline behaviors (middleware pattern)
+ * - Optional event persistence
+ * - HIPAA-compliant audit logging
+ * - Dead letter queue for failed events
+ * - Retry with exponential backoff
+ *
+ * @example
+ * ```typescript
+ * const eventBus = new CogniCoreEventBus();
+ *
+ * // Subscribe to events
+ * const sub = eventBus.subscribe('STATE_UPDATED', async (event) => {
+ *   console.log('State updated:', event);
+ * });
+ *
+ * // Publish event
+ * await eventBus.publish(stateUpdatedEvent);
+ *
+ * // Unsubscribe
+ * sub.unsubscribe();
+ * ```
+ */
+declare class CogniCoreEventBus implements IEventBus {
     private readonly config;
-    constructor(config?: Partial<CrisisDetectorConfig>);
+    private readonly handlers;
+    private readonly behaviors;
+    private eventStore?;
+    private auditLogger?;
+    private readonly deadLetterQueue;
+    private isInitialized;
+    constructor(config?: Partial<IEventBusConfig>);
     /**
-     * Main detection method - analyzes text for crisis indicators
-     * This should be called BEFORE any cognitive analysis
+     * Initialize event bus with optional event store and audit logger
      */
-    detect(rawText: string, stateRiskData?: StateRiskData): CrisisDetectionResult;
+    initialize(eventStore?: IEventStore, auditLogger?: IAuditLogger): Promise<void>;
     /**
-     * Quick check - returns true if ANY crisis indicator found
-     * Use for immediate bypass decisions
+     * Check if event bus is initialized
      */
-    quickCheck(rawText: string): boolean;
-    private runLayer1RawTextScan;
-    private getKeywordSets;
-    private calculateLayer1Confidence;
-    private runLayer2PatternAnalysis;
-    private calculateLayer2Confidence;
-    private runLayer3StateAnalysis;
-    private calculateLayer3Confidence;
-    private checkProtectiveFactors;
-    private aggregateResults;
-    private calculateCombinedConfidence;
-    private determineSeverity;
-    private determineCrisisType;
-    private determineResponse;
-    private findPrimaryIndicator;
-    private normalizeText;
-    private detectLanguage;
-    private emptyLayerResult;
+    get initialized(): boolean;
     /**
-     * Get crisis resources for user
+     * Publish domain event
+     *
+     * @param event - Event to publish
      */
-    getCrisisResources(language?: 'ru' | 'en'): string[];
+    publish<T extends IDomainEvent>(event: T): Promise<void>;
+    /**
+     * Publish multiple events atomically
+     */
+    publishBatch(events: IDomainEvent[]): Promise<void>;
+    /**
+     * Subscribe to event type
+     *
+     * @param eventType - Type of event to subscribe to
+     * @param handler - Handler function
+     * @returns Subscription for unsubscribing
+     */
+    subscribe<T extends IDomainEvent>(eventType: string, handler: EventHandler<T>): IEventSubscription;
+    /**
+     * Subscribe to multiple event types
+     */
+    subscribeMany(eventTypes: string[], handler: EventHandler): IEventSubscription[];
+    /**
+     * Subscribe to all events (wildcard)
+     */
+    subscribeAll(handler: EventHandler): IEventSubscription;
+    /**
+     * Unsubscribe by subscription ID
+     */
+    unsubscribe(subscriptionId: string): void;
+    /**
+     * Clear all subscriptions
+     */
+    clearAll(): void;
+    /**
+     * Get subscription count
+     */
+    getSubscriptionCount(eventType?: string): number;
+    /**
+     * Add pipeline behavior
+     */
+    addBehavior(behavior: IPipelineBehavior): void;
+    /**
+     * Remove pipeline behavior by name
+     */
+    removeBehavior(behaviorName: string): void;
+    /**
+     * Get all pipeline behaviors
+     */
+    getBehaviors(): readonly IPipelineBehavior[];
+    /**
+     * Get dead letter queue
+     */
+    getDeadLetterQueue(): ReadonlyArray<{
+        event: IDomainEvent;
+        error: Error;
+        timestamp: Date;
+    }>;
+    /**
+     * Clear dead letter queue
+     */
+    clearDeadLetterQueue(): void;
+    /**
+     * Retry dead letter events
+     */
+    retryDeadLetterQueue(): Promise<{
+        succeeded: number;
+        failed: number;
+    }>;
+    /**
+     * Execute event through pipeline behaviors
+     */
+    private executePipeline;
+    /**
+     * Dispatch event to handlers
+     */
+    private dispatchToHandlers;
+    /**
+     * Execute single handler with retry
+     */
+    private executeHandler;
+    /**
+     * Handle event processing failure
+     */
+    private handleFailure;
+    /**
+     * Create timeout promise
+     */
+    private timeout;
+    /**
+     * Sleep for specified duration
+     */
+    private sleep;
 }
 /**
- * Create crisis detector with optional configuration
+ * Create event bus with default configuration
  */
-declare function createCrisisDetector(config?: Partial<CrisisDetectorConfig>): CrisisDetector;
+declare function createEventBus(config?: Partial<IEventBusConfig>): CogniCoreEventBus;
 /**
- * Create default crisis detector instance
+ * Create event bus and initialize with stores
  */
-declare const defaultCrisisDetector: CrisisDetector;
+declare function createInitializedEventBus(config?: Partial<IEventBusConfig>, eventStore?: IEventStore, auditLogger?: IAuditLogger): Promise<CogniCoreEventBus>;
+
+/**
+ * In-Memory Event Store
+ *
+ * Features:
+ * - Full IEventStore interface implementation
+ * - HIPAA-compliant audit trail
+ * - Snapshotting for aggregate performance
+ * - Crypto-shredding ready (marks events as shredded)
+ * - Suitable for development and testing
+ *
+ * Note: For production, use PostgreSQLEventStore or external event store
+ */
+declare class InMemoryEventStore implements IEventStore {
+    private readonly events;
+    private readonly eventIndex;
+    private readonly snapshots;
+    private readonly shreddedAggregates;
+    private readonly config;
+    private globalSequence;
+    constructor(config?: Partial<IEventStoreConfig>);
+    /**
+     * Append event to store
+     */
+    append(event: IDomainEvent): Promise<IStoredEvent>;
+    /**
+     * Append multiple events atomically
+     */
+    appendBatch(events: IDomainEvent[]): Promise<IStoredEvent[]>;
+    /**
+     * Get events by aggregate ID
+     */
+    getEvents(aggregateId: string, fromVersion?: number): Promise<IStoredEvent[]>;
+    /**
+     * Query events with filters
+     */
+    queryEvents(options: IEventQueryOptions): Promise<IStoredEvent[]>;
+    /**
+     * Get events by type
+     */
+    getEventsByType(eventType: string, options?: Partial<IEventQueryOptions>): Promise<IStoredEvent[]>;
+    /**
+     * Create snapshot for aggregate
+     */
+    createSnapshot<TState>(aggregateId: string, aggregateType: string, state: TState, version: number): Promise<IAggregateSnapshot<TState>>;
+    /**
+     * Get latest snapshot for aggregate
+     */
+    getSnapshot<TState>(aggregateId: string): Promise<IAggregateSnapshot<TState> | null>;
+    /**
+     * Get event count for aggregate
+     */
+    getEventCount(aggregateId: string): Promise<number>;
+    /**
+     * Get global event count
+     */
+    getTotalEventCount(): Promise<number>;
+    /**
+     * Crypto-shred aggregate (GDPR compliance)
+     *
+     * Note: In a real implementation with encryption, this would
+     * destroy the encryption keys, making events unreadable.
+     * In this in-memory version, we mark the aggregate as shredded.
+     */
+    cryptoShred(aggregateId: string): Promise<number>;
+    /**
+     * Archive old events
+     *
+     * Note: In production, this would move events to cold storage.
+     * In this in-memory version, we just return the count.
+     */
+    archiveEvents(beforeDate: Date): Promise<number>;
+    /**
+     * Verify event integrity
+     */
+    verifyIntegrity(eventId: string): Promise<boolean>;
+    /**
+     * Get all aggregate IDs
+     */
+    getAllAggregateIds(): string[];
+    /**
+     * Get event by ID
+     */
+    getEventById(eventId: string): IStoredEvent | null;
+    /**
+     * Clear all data (for testing)
+     */
+    clear(): void;
+    /**
+     * Get statistics
+     */
+    getStatistics(): {
+        totalEvents: number;
+        totalAggregates: number;
+        totalSnapshots: number;
+        shreddedAggregates: number;
+    };
+    /**
+     * Calculate checksum for integrity verification
+     */
+    private calculateChecksum;
+}
+/**
+ * In-Memory Audit Logger
+ *
+ * HIPAA-compliant audit logging for event operations
+ */
+declare class InMemoryAuditLogger {
+    private readonly entries;
+    private readonly retentionDays;
+    constructor(retentionDays?: number);
+    /**
+     * Log audit entry
+     */
+    log(entry: Omit<IAuditLogEntry, 'id' | 'timestamp'>): Promise<void>;
+    /**
+     * Query audit logs
+     */
+    query(options: IAuditLogQueryOptions): Promise<IAuditLogEntry[]>;
+    /**
+     * Get audit log count
+     */
+    count(options?: Partial<IAuditLogQueryOptions>): Promise<number>;
+    /**
+     * Export audit logs for compliance reporting
+     */
+    export(options: IAuditLogQueryOptions): Promise<string>;
+    /**
+     * Clear old entries based on retention policy
+     */
+    cleanup(): Promise<number>;
+    /**
+     * Clear all entries (for testing)
+     */
+    clear(): void;
+    /**
+     * Get total entry count
+     */
+    getEntryCount(): number;
+}
+/**
+ * Create In-Memory Event Store
+ */
+declare function createInMemoryEventStore(config?: Partial<IEventStoreConfig>): InMemoryEventStore;
+/**
+ * Create In-Memory Audit Logger
+ */
+declare function createInMemoryAuditLogger(retentionDays?: number): InMemoryAuditLogger;
+
+/**
+ * PIPELINE BEHAVIORS
+ * ===================
+ * MediatR-inspired middleware for Event Bus
+ *
+ * Research Foundation (2025-2026):
+ * - MediatR Pipeline Behaviors (.NET patterns)
+ * - Middleware pattern for cross-cutting concerns
+ * - HIPAA audit logging requirements
+ *
+ * @module events/behaviors
+ */
+
+/**
+ * Logging Pipeline Behavior
+ *
+ * Logs all events for debugging and audit trail
+ * Priority: 10 (early in pipeline)
+ */
+declare class LoggingBehavior implements IPipelineBehavior {
+    readonly name = "LoggingBehavior";
+    readonly priority = 10;
+    private readonly logger;
+    constructor(logger?: {
+        debug: (message: string, data?: unknown) => void;
+        info: (message: string, data?: unknown) => void;
+        warn: (message: string, data?: unknown) => void;
+        error: (message: string, data?: unknown) => void;
+    });
+    handle(event: IDomainEvent, context: IPipelineContext, next: () => Promise<void>): Promise<void>;
+}
+/**
+ * Event validator function type
+ */
+type EventValidator = (event: IDomainEvent) => {
+    valid: boolean;
+    errors: string[];
+};
+/**
+ * Validation Pipeline Behavior
+ *
+ * Validates events before processing
+ * Priority: 20 (after logging, before processing)
+ */
+declare class ValidationBehavior implements IPipelineBehavior {
+    readonly name = "ValidationBehavior";
+    readonly priority = 20;
+    private readonly validators;
+    private readonly globalValidators;
+    constructor();
+    /**
+     * Add validator for specific event type
+     */
+    addValidator(eventType: string, validator: EventValidator): void;
+    /**
+     * Add global validator for all events
+     */
+    addGlobalValidator(validator: EventValidator): void;
+    handle(event: IDomainEvent, _context: IPipelineContext, next: () => Promise<void>): Promise<void>;
+    private validateRequiredFields;
+    private validateMetadata;
+}
+/**
+ * Metrics collector interface
+ */
+interface IMetricsCollector {
+    incrementCounter(name: string, tags?: Record<string, string>): void;
+    recordHistogram(name: string, value: number, tags?: Record<string, string>): void;
+    recordGauge(name: string, value: number, tags?: Record<string, string>): void;
+}
+/**
+ * Metrics Pipeline Behavior
+ *
+ * Collects metrics for monitoring and alerting
+ * Priority: 15 (after logging, before validation)
+ */
+declare class MetricsBehavior implements IPipelineBehavior {
+    readonly name = "MetricsBehavior";
+    readonly priority = 15;
+    private readonly collector;
+    constructor(collector?: IMetricsCollector);
+    handle(event: IDomainEvent, _context: IPipelineContext, next: () => Promise<void>): Promise<void>;
+    private createDefaultCollector;
+}
+/**
+ * Audit Pipeline Behavior
+ *
+ * Creates HIPAA-compliant audit trail
+ * Priority: 5 (first in pipeline)
+ */
+declare class AuditBehavior implements IPipelineBehavior {
+    readonly name = "AuditBehavior";
+    readonly priority = 5;
+    private readonly auditLogger;
+    constructor(auditLogger: IAuditLogger);
+    handle(event: IDomainEvent, context: IPipelineContext, next: () => Promise<void>): Promise<void>;
+}
+/**
+ * Retry Pipeline Behavior
+ *
+ * Retries failed event processing with exponential backoff
+ * Priority: 90 (late in pipeline, wraps handler execution)
+ */
+declare class RetryBehavior implements IPipelineBehavior {
+    readonly name = "RetryBehavior";
+    readonly priority = 90;
+    private readonly maxAttempts;
+    private readonly delayMs;
+    private readonly backoffMultiplier;
+    private readonly retryableErrors;
+    constructor(options?: {
+        maxAttempts?: number;
+        delayMs?: number;
+        backoffMultiplier?: number;
+        retryableErrors?: string[];
+    });
+    handle(_event: IDomainEvent, context: IPipelineContext, next: () => Promise<void>): Promise<void>;
+    private isRetryable;
+    private sleep;
+}
+/**
+ * Throttling Pipeline Behavior
+ *
+ * Rate limits event publishing to prevent overload
+ * Priority: 25 (after validation)
+ */
+declare class ThrottlingBehavior implements IPipelineBehavior {
+    readonly name = "ThrottlingBehavior";
+    readonly priority = 25;
+    private readonly maxEventsPerSecond;
+    private readonly windowMs;
+    private eventCounts;
+    constructor(maxEventsPerSecond?: number);
+    handle(event: IDomainEvent, _context: IPipelineContext, next: () => Promise<void>): Promise<void>;
+}
+/**
+ * Crisis Alert Pipeline Behavior
+ *
+ * Special handling for crisis-related events
+ * Priority: 1 (highest priority, first in pipeline)
+ */
+declare class CrisisAlertBehavior implements IPipelineBehavior {
+    readonly name = "CrisisAlertBehavior";
+    readonly priority = 1;
+    private readonly alertHandler;
+    private readonly crisisEventTypes;
+    constructor(alertHandler: (event: IDomainEvent) => Promise<void>, crisisEventTypes?: string[]);
+    handle(event: IDomainEvent, context: IPipelineContext, next: () => Promise<void>): Promise<void>;
+}
+/**
+ * Create default pipeline behaviors
+ */
+declare function createDefaultBehaviors(auditLogger?: IAuditLogger, metricsCollector?: IMetricsCollector): IPipelineBehavior[];
+/**
+ * Create crisis-aware pipeline behaviors
+ */
+declare function createCrisisAwareBehaviors(alertHandler: (event: IDomainEvent) => Promise<void>, auditLogger?: IAuditLogger): IPipelineBehavior[];
+
+/**
+ * EVENT HANDLERS
+ * ================
+ * Domain Event Handlers for CogniCore Engine
+ *
+ * Architecture Patterns:
+ * - Observer Pattern for event handling
+ * - Strategy Pattern for handler selection
+ * - DDD Event Handlers (Khalil Stemmler patterns)
+ *
+ * Research Foundation (2025-2026):
+ * - Real-time crisis detection (93.5% accuracy)
+ * - HIPAA event logging requirements
+ * - Healthcare EDA patterns
+ *
+ * @module events/handlers
+ */
+
+/**
+ * Base class for event handlers
+ *
+ * Provides common functionality:
+ * - Registration info
+ * - Error handling
+ * - Logging
+ */
+declare abstract class BaseEventHandler<T extends IDomainEvent = IDomainEvent> {
+    abstract readonly name: string;
+    abstract readonly eventTypes: string[];
+    abstract readonly priority: number;
+    readonly async: boolean;
+    /**
+     * Handle event
+     * @param event - Domain event to handle
+     */
+    abstract handle(event: T): Promise<void>;
+    /**
+     * Get registration info
+     */
+    getRegistration(): IEventHandlerRegistration;
+    /**
+     * Check if this handler handles the event type
+     */
+    handles(eventType: string): boolean;
+    /**
+     * Register with event bus
+     */
+    register(eventBus: IEventBus): void;
+}
+/**
+ * Crisis notification callback
+ */
+interface ICrisisNotificationCallback {
+    /** Notify about crisis (Telegram, SMS, email, etc.) */
+    notify(event: ICrisisDetectedEvent): Promise<void>;
+    /** Escalate to human supervisor */
+    escalate(event: ICrisisDetectedEvent): Promise<void>;
+    /** Log crisis for compliance */
+    log(event: ICrisisDetectedEvent): Promise<void>;
+}
+/**
+ * Crisis Event Handler
+ *
+ * Handles crisis detection events with immediate response:
+ * - Sends notifications to users
+ * - Escalates to human supervisors
+ * - Logs for HIPAA compliance
+ *
+ * Priority: 1 (highest - crisis events are critical)
+ */
+declare class CrisisEventHandler extends BaseEventHandler<ICrisisDetectedEvent> {
+    readonly name = "CrisisEventHandler";
+    readonly eventTypes: string[];
+    readonly priority = 1;
+    readonly async = false;
+    private readonly callback;
+    private readonly escalationThreshold;
+    constructor(callback: ICrisisNotificationCallback, escalationThreshold?: number);
+    handle(event: ICrisisDetectedEvent): Promise<void>;
+}
+/**
+ * State change callback
+ */
+interface IStateChangeCallback {
+    /** Called when state significantly changes */
+    onSignificantChange(event: IStateUpdatedEvent, changeScore: number): Promise<void>;
+    /** Called when state improves */
+    onImprovement(event: IStateUpdatedEvent): Promise<void>;
+    /** Called when state deteriorates */
+    onDeterioration(event: IStateUpdatedEvent): Promise<void>;
+}
+/**
+ * State Change Event Handler
+ *
+ * Monitors state changes and triggers appropriate actions:
+ * - Detects significant changes
+ * - Identifies improvements vs deteriorations
+ * - Triggers follow-up actions
+ *
+ * Priority: 10
+ */
+declare class StateChangeEventHandler extends BaseEventHandler<IStateUpdatedEvent> {
+    readonly name = "StateChangeEventHandler";
+    readonly eventTypes: string[];
+    readonly priority = 10;
+    readonly async = true;
+    private readonly callback;
+    private readonly significantChangeThreshold;
+    constructor(callback: IStateChangeCallback, significantChangeThreshold?: number);
+    handle(event: IStateUpdatedEvent): Promise<void>;
+    /**
+     * Determine if increase in dimension/field is positive
+     */
+    private isPositiveDimension;
+}
+/**
+ * Intervention learning callback
+ */
+interface IInterventionLearningCallback {
+    /** Update intervention model based on outcome */
+    updateModel(event: IInterventionOutcomeEvent): Promise<void>;
+    /** Log outcome for analysis */
+    logOutcome(event: IInterventionOutcomeEvent): Promise<void>;
+}
+/**
+ * Intervention Outcome Event Handler
+ *
+ * Processes intervention outcomes for Thompson Sampling learning:
+ * - Updates bandit arms
+ * - Logs for analysis
+ *
+ * Priority: 20
+ */
+declare class InterventionOutcomeHandler extends BaseEventHandler<IInterventionOutcomeEvent> {
+    readonly name = "InterventionOutcomeHandler";
+    readonly eventTypes: string[];
+    readonly priority = 20;
+    readonly async = true;
+    private readonly callback;
+    constructor(callback: IInterventionLearningCallback);
+    handle(event: IInterventionOutcomeEvent): Promise<void>;
+}
+/**
+ * Proactive intervention callback
+ */
+interface IProactiveInterventionCallback {
+    /** Schedule proactive intervention */
+    scheduleIntervention(userId: string, windowStart: Date, windowEnd: Date, recommendedTypes: string[]): Promise<void>;
+    /** Send preemptive notification */
+    notifyUser(userId: string, message: string): Promise<void>;
+}
+/**
+ * Vulnerability Window Event Handler
+ *
+ * Handles predicted vulnerability windows:
+ * - Schedules proactive interventions
+ * - Sends preemptive notifications
+ *
+ * Priority: 15
+ */
+declare class VulnerabilityWindowHandler extends BaseEventHandler<VulnerabilityWindowEvent> {
+    readonly name = "VulnerabilityWindowHandler";
+    readonly eventTypes: string[];
+    readonly priority = 15;
+    readonly async = true;
+    private readonly callback;
+    private readonly minConfidenceThreshold;
+    constructor(callback: IProactiveInterventionCallback, minConfidenceThreshold?: number);
+    handle(event: VulnerabilityWindowEvent): Promise<void>;
+}
+/**
+ * Analytics callback
+ */
+interface IAnalyticsCallback {
+    /** Track message received */
+    trackMessage(event: IMessageReceivedEvent): Promise<void>;
+    /** Update session analytics */
+    updateSessionAnalytics(userId: string, sessionId: string): Promise<void>;
+}
+/**
+ * Message Analytics Event Handler
+ *
+ * Tracks messages for analytics:
+ * - Message counts
+ * - Session activity
+ * - Usage patterns
+ *
+ * Priority: 50 (low priority, analytics)
+ */
+declare class MessageAnalyticsHandler extends BaseEventHandler<IMessageReceivedEvent> {
+    readonly name = "MessageAnalyticsHandler";
+    readonly eventTypes: string[];
+    readonly priority = 50;
+    readonly async = true;
+    private readonly callback;
+    constructor(callback: IAnalyticsCallback);
+    handle(event: IMessageReceivedEvent): Promise<void>;
+}
+/**
+ * Composite Event Handler
+ *
+ * Combines multiple handlers for same event type
+ */
+declare class CompositeEventHandler extends BaseEventHandler {
+    readonly name: string;
+    readonly eventTypes: string[];
+    readonly priority: number;
+    private readonly handlers;
+    constructor(name: string, eventTypes: string[], handlers: BaseEventHandler[], priority?: number);
+    handle(event: IDomainEvent): Promise<void>;
+}
+/**
+ * Event Handler Registry
+ *
+ * Manages registration and lookup of event handlers
+ */
+declare class EventHandlerRegistry {
+    private readonly handlers;
+    private readonly handlersByName;
+    constructor();
+    /**
+     * Register handler
+     */
+    register(handler: BaseEventHandler): void;
+    /**
+     * Unregister handler
+     */
+    unregister(handlerName: string): void;
+    /**
+     * Get handlers for event type
+     */
+    getHandlers(eventType: string): BaseEventHandler[];
+    /**
+     * Get handler by name
+     */
+    getHandler(name: string): BaseEventHandler | undefined;
+    /**
+     * Get all registered handlers
+     */
+    getAllHandlers(): BaseEventHandler[];
+    /**
+     * Register all handlers with event bus
+     */
+    registerWithEventBus(eventBus: IEventBus): void;
+    /**
+     * Clear all handlers
+     */
+    clear(): void;
+}
+/**
+ * Create default event handler registry with standard handlers
+ */
+declare function createDefaultHandlerRegistry(): EventHandlerRegistry;
+/**
+ * Create crisis-focused handler registry
+ */
+declare function createCrisisHandlerRegistry(crisisCallback: ICrisisNotificationCallback, stateChangeCallback?: IStateChangeCallback): EventHandlerRegistry;
+
+/**
+ * EVENTS MODULE
+ * ==============
+ * Event-Driven Architecture for CogniCore Engine
+ *
+ * Features:
+ * - Type-safe EventBus with pipeline behaviors
+ * - HIPAA-compliant Event Store (6 years retention)
+ * - GDPR-ready crypto-shredding support
+ * - Crisis-aware event handling
+ * - MediatR-inspired middleware pattern
+ *
+ * Architecture Patterns:
+ * - Event Sourcing (append-only, immutable)
+ * - CQRS (Command Query Responsibility Segregation)
+ * - Observer Pattern (event distribution)
+ * - Mediator Pattern (decoupling)
+ * - Pipeline Pattern (middleware)
+ *
+ * Research Foundation (2025-2026):
+ * - Healthcare EDA (Philips, Epic Systems patterns)
+ * - Event Sourcing (Oskar Dudycz, Event-Driven.io)
+ * - DDD Domain Events (Khalil Stemmler, Microsoft)
+ * - HIPAA 45 C.F.R. § 164.312(b) audit controls
+ * - GDPR Article 30, EHDS 2025/327
+ *
+ * Sources (HIGH confidence):
+ * - https://event-driven.io/en/type_script_node_js_event_sourcing/
+ * - https://khalilstemmler.com/articles/typescript-domain-driven-design/chain-business-logic-domain-events/
+ * - https://www.kiteworks.com/hipaa-compliance/hipaa-audit-log-requirements/
+ * - https://pmc.ncbi.nlm.nih.gov/articles/PMC11433454/ (AI Crisis Detection)
+ *
+ * @module events
+ */
+
+/**
+ * Configuration for creating a complete event system
+ */
+interface IEventSystemConfig {
+    /** Event bus configuration */
+    eventBusConfig?: Partial<IEventBusConfig>;
+    /** Event store configuration */
+    eventStoreConfig?: Partial<IEventStoreConfig>;
+    /** Enable persistence (default: true) */
+    enablePersistence?: boolean;
+    /** Enable audit logging (default: true) */
+    enableAuditLog?: boolean;
+    /** Crisis notification callback (optional) */
+    crisisCallback?: ICrisisNotificationCallback;
+    /** Custom logger (optional) */
+    logger?: {
+        debug: (message: string, data?: unknown) => void;
+        info: (message: string, data?: unknown) => void;
+        warn: (message: string, data?: unknown) => void;
+        error: (message: string, data?: unknown) => void;
+    };
+}
+/**
+ * Complete event system with all components
+ */
+interface IEventSystem {
+    /** Event bus for publishing/subscribing */
+    eventBus: CogniCoreEventBus;
+    /** Event store for persistence */
+    eventStore: InMemoryEventStore;
+    /** Audit logger for HIPAA compliance */
+    auditLogger: InMemoryAuditLogger;
+    /** Handler registry */
+    handlerRegistry: EventHandlerRegistry;
+    /** Shutdown function */
+    shutdown: () => Promise<void>;
+}
+/**
+ * Create complete event system
+ *
+ * Convenience factory that sets up:
+ * - EventBus with pipeline behaviors
+ * - In-memory EventStore (PostgreSQL-ready)
+ * - HIPAA-compliant AuditLogger
+ * - Handler registry
+ *
+ * @example
+ * ```typescript
+ * const eventSystem = await createEventSystem({
+ *   crisisCallback: {
+ *     notify: async (event) => { ... },
+ *     escalate: async (event) => { ... },
+ *     log: async (event) => { ... },
+ *   },
+ * });
+ *
+ * // Subscribe to events
+ * eventSystem.eventBus.subscribe('STATE_UPDATED', async (event) => {
+ *   console.log('State updated:', event);
+ * });
+ *
+ * // Publish event
+ * await eventSystem.eventBus.publish(stateUpdatedEvent);
+ *
+ * // Shutdown
+ * await eventSystem.shutdown();
+ * ```
+ */
+declare function createEventSystem(config?: IEventSystemConfig): Promise<IEventSystem>;
+/**
+ * Create minimal event system (no persistence, no audit)
+ *
+ * Useful for testing or simple use cases
+ */
+declare function createMinimalEventSystem(): {
+    eventBus: CogniCoreEventBus;
+    shutdown: () => void;
+};
+
+/**
+ * SecureRandom - Cryptographically Secure Random Number Generation
+ *
+ * Replaces Math.random() with crypto-based alternatives to address OWASP A04:2025
+ * CWE-338 (Use of Cryptographically Weak Pseudo-Random Number Generator)
+ *
+ * @see https://owasp.org/Top10/A04_2025-Cryptographic_Failures/
+ * @see https://nodejs.org/api/crypto.html
+ */
+/**
+ * Generates a cryptographically secure unique identifier.
+ * Uses crypto.randomUUID() which is RFC 4122 v4 compliant.
+ *
+ * @param prefix - Optional prefix for the ID
+ * @returns A secure unique identifier string
+ *
+ * @example
+ * generateSecureId() // "550e8400-e29b-41d4-a716-446655440000"
+ * generateSecureId('session') // "session_550e8400-e29b-41d4-a716-446655440000"
+ */
+declare function generateSecureId(prefix?: string): string;
+/**
+ * Generates a short secure ID using timestamp and random hex.
+ * Useful for IDs that need to be human-readable but still secure.
+ *
+ * @param prefix - Optional prefix for the ID
+ * @returns A shorter secure identifier string
+ *
+ * @example
+ * generateShortSecureId('belief') // "belief_1705123456789_a1b2c3d4e5"
+ */
+declare function generateShortSecureId(prefix?: string): string;
+/**
+ * Cryptographically secure replacement for Math.random().
+ * Returns a value in [0, 1) range with uniform distribution.
+ *
+ * Uses 32-bit random value from crypto.randomBytes() normalized to [0, 1).
+ *
+ * @returns A cryptographically secure random number in [0, 1)
+ *
+ * @example
+ * secureRandom() // 0.7342891...
+ */
+declare function secureRandom(): number;
+/**
+ * Generates a cryptographically secure random integer in [min, max] range (inclusive).
+ * Uses Node.js crypto.randomInt() which is designed for this purpose.
+ *
+ * @param min - Minimum value (inclusive)
+ * @param max - Maximum value (inclusive)
+ * @returns A cryptographically secure random integer
+ *
+ * @example
+ * secureRandomInt(0, 10) // Returns integer from 0 to 10 inclusive
+ * secureRandomInt(1, 6) // Simulates a die roll
+ */
+declare function secureRandomInt(min: number, max: number): number;
+/**
+ * Generates a pair of independent Gaussian (normal) random numbers
+ * using the Box-Muller transform with cryptographically secure random inputs.
+ *
+ * @param mean - The mean of the distribution (default: 0)
+ * @param stdDev - The standard deviation (default: 1)
+ * @returns An array of two independent Gaussian random numbers
+ *
+ * @example
+ * boxMullerSecure() // [0.234, -1.567] - standard normal
+ * boxMullerSecure(100, 15) // [98.2, 112.3] - IQ-like distribution
+ */
+declare function boxMullerSecure(mean?: number, stdDev?: number): [number, number];
+/**
+ * Generates a single Gaussian (normal) random number.
+ * Convenience wrapper around boxMullerSecure.
+ *
+ * @param mean - The mean of the distribution (default: 0)
+ * @param stdDev - The standard deviation (default: 1)
+ * @returns A Gaussian random number
+ */
+declare function gaussianSecure(mean?: number, stdDev?: number): number;
+/**
+ * Samples from a Beta distribution using secure random numbers.
+ * Uses the relationship between Gamma and Beta distributions.
+ *
+ * @param alpha - Shape parameter alpha (> 0)
+ * @param beta - Shape parameter beta (> 0)
+ * @returns A random sample from Beta(alpha, beta)
+ */
+declare function betaSampleSecure(alpha: number, beta: number): number;
+/**
+ * Samples from a Gamma distribution using secure random numbers.
+ * Uses Marsaglia and Tsang's method for shape >= 1.
+ *
+ * @param shape - Shape parameter (k or alpha) > 0
+ * @param scale - Scale parameter (theta) > 0
+ * @returns A random sample from Gamma(shape, scale)
+ */
+declare function gammaSampleSecure(shape: number, scale: number): number;
+/**
+ * Performs Fisher-Yates shuffle using cryptographically secure random.
+ * Mutates the array in place.
+ *
+ * @param array - The array to shuffle (mutated in place)
+ * @returns The shuffled array (same reference)
+ */
+declare function shuffleSecure<T>(array: T[]): T[];
+/**
+ * Selects a random element from an array using secure random.
+ *
+ * @param array - The array to select from
+ * @returns A randomly selected element
+ * @throws Error if array is empty
+ */
+declare function randomElementSecure<T>(array: readonly T[]): T;
+/**
+ * Returns true with the given probability, using secure random.
+ *
+ * @param probability - The probability of returning true [0, 1]
+ * @returns true with the given probability
+ */
+declare function randomBooleanSecure(probability: number): boolean;
+/**
+ * Selects an index based on weighted probabilities using secure random.
+ *
+ * @param weights - Array of weights (must be non-negative)
+ * @returns The selected index
+ * @throws Error if all weights are zero or array is empty
+ */
+declare function weightedRandomIndexSecure(weights: readonly number[]): number;
 
 /**
  * @cognicore/engine
@@ -8673,4 +10684,4 @@ type SupportedLanguage = 'en' | 'ru';
  */
 type DomainVertical = 'addiction' | 'sleep' | 'pain' | 'anxiety' | 'depression' | 'custom';
 
-export { type ABCDChain, AFFIRMATION_TEMPLATES, type AffirmationTemplate, type AgeGroup$1 as AgeGroup, type AmbivalenceState, type AmbivalenceType, type AttentionalBias, type BeliefState, BeliefStateAdapter, type BeliefUpdate, type BeliefUpdateResult, CHANGE_TALK_PATTERNS, COGNICORE_VERSION, type ChangeStage, type ChangeTaskSubtype, type ClientLanguageCategory, type ClientUtterance, type CognitiveDistortion, type CognitiveDistortionType, type CognitiveLoad, type CognitiveTriad, type ComponentStatus, type CopingStrategy, type CopingStrategyType, type CoreBeliefPattern, type CrisisDetectionResult, CrisisDetector, type CrisisDetectorConfig, type CrisisSeverity, type CrisisType, DEFAULT_CRISIS_CONFIG, DEFAULT_EMOTION_VAD, DEFAULT_KALMANFORMER_CONFIG, DEFAULT_PLRNN_CONFIG, DEFAULT_VOICE_CONFIG, DIMENSION_INDEX, DIMENSION_MAPPING, DISCORD_PATTERNS, DISCORD_RESPONSE_STRATEGIES, DISTORTION_INTERVENTIONS, DISTORTION_PATTERNS, type DarnCatProfile, type DetectedDistortion, type DimensionBelief, type DiscordEvent, type DiscordIndicators, type DiscordType, type DomainVertical, EMOTION_THERAPY_MAPPING, type EmotionPattern, type EmotionTrend, type EmotionType$1 as EmotionType, type EnergyLevel, ExplainabilityService, type ExplanationAudience, type ExplanationLevel, type ExplanationType, type IAcousticFeatures, type IAttentionWeights, type IBeliefUpdateEngine, type ICausalEdge, type ICausalGraph, type ICausalNetwork, type ICausalNode, type ICognitiveDistortionDetector, type ICognitiveState, type ICognitiveStateBuilder, type ICognitiveStateFactory, type IConstitutionalPrinciple, type IContextualFeatures, type ICounterfactualExplanation, type ICrisisDetectionResult, type IDecisionPoint, type IDeepCognitiveMirror, type IDigitalTwinService, type IDigitalTwinState, type IEarlyWarningSignal, type IEmotionalState$1 as IEmotionalState, type IEmotionalStateBuilder, type IEmotionalStateFactory, type IEscalationDecision, type IExplainabilityService, type IExplanationRequest, type IExplanationResponse, type IFeatureAttribution, type IFullBeliefState, type IGlobalFeatureImportance, type IHumanEscalationRequest, type IHybridPrediction, type IIncomingMessage, type IIntervention$1 as IIntervention, type IInterventionOptimizer, type IInterventionOutcome, type IInterventionSelection, type IInterventionSimulation, type IInterventionTarget, type IKalmanFormerConfig, type IKalmanFormerEngine, type IKalmanFormerPrediction, type IKalmanFormerState, type IKalmanFormerTrainingSample, type IKalmanFormerWeights, type IMessageAnalysis, type IMetacognitiveState, type IModelCard, type IMotivationalInterviewingEngine, type IMotivationalState, type IMotivationalStateBuilder, type IMotivationalStateFactory, type IMultimodalFusion, INDEX_THRESHOLDS, type INarrativeExplanation, type INarrativeState, type INarrativeStateBuilder, type ICausalEdge$1 as IPLRNNCausalEdge, type ICausalNode$1 as IPLRNNCausalNode, type IPLRNNConfig, type IPLRNNEngine, type IPLRNNPrediction, type IPLRNNState, type IPLRNNTrainingResult, type IPLRNNTrainingSample, type IPLRNNWeights, type IPipelineResult, type IProsodyFeatures, type IResourceState, type IResourceStateBuilder, type IRiskState, type IRiskStateBuilder, type ISHAPExplanation, type ISafetyContext, type ISafetyInvariant, type ISafetyValidationResult, type IScenario, type IScenarioResult, type IStateTrajectory, type IStateVector, type IStateVectorBuilder, type IStateVectorFactory, type IStateVectorRepository, type IStateVectorService, type ITemporalEchoEngine, type ITextAnalysis, type ITippingPoint, type ITwinStateVariable, type IUserExplanation, type IUserFactor, type IUserInterventionProfile, type IVADMapper, type IVoiceAdapterConfig, type IVoiceEmotionEstimate, type IVoiceInputAdapter, type IVoiceProcessingResult, type InterventionCategory, type InterventionIntensity, KalmanFormerEngine, type KalmanFormerEngineFactory, type LanguageBalance, type LayerResult, type MIFidelityReport, type MIGenerationConstraints, type MIResponse, type MIResponseContext, type MIStrategy, type MITIBehaviorCode, type MITIBehaviorCounts, type MITIGlobalScores, type MITISummaryScores, MITI_THRESHOLDS, type MessageIntent, type Metacognition, MotivationalEngine, MotivationalStateBuilder, MotivationalStateFactory, type NarrativeChapter, type NarrativeMoment, type NarrativeRole, type NarrativeTheme, type OARSTechnique, OPEN_QUESTION_TEMPLATES, type Observation, type ObservationSource, type ObservationType, type OpenQuestionTemplate, type PERMADimensions, PLRNNEngine, type PLRNNEngineFactory, type AgeGroup as PipelineAgeGroup, type ProtectiveFactor, REFLECTION_TEMPLATES, type ReadinessRuler, type ReflectionTemplate, type ReflectionType, type RegulationEffectiveness, type Resilience, type RiskFactor, type RiskLevel$2 as RiskLevel, type RiskTrajectory, STRATEGY_RECOMMENDATIONS, SUMMARY_TEMPLATES, SUSTAIN_TALK_PATTERNS, type SafetyLevel, type SafetyPlan, type RiskLevel$1 as SafetyRiskLevel, type ScoredEmotion, type SocialResources, type SocraticQuestion, type StageTransition, type StateBasedRecommendation, type StateQuality, type StateRiskData, type StateSummary, type StateTransition, type SummaryTemplate, type SummaryType, type SupportedLanguage, type SustainTalkSubtype, type TemporalPrediction, type TextAnalysisResult, type TherapeuticInsight, type ThinkingStyle, type VADDimensions, VoiceInputAdapter, type VoiceInputAdapterFactory, type VulnerabilityWindow, WELLBEING_WEIGHTS, beliefStateToKalmanFormerState, beliefStateToObservation, beliefStateToPLRNNState, beliefStateToUncertainty, createBeliefStateAdapter, createCrisisDetector, createExplainabilityService, createKalmanFormerEngine, createPLRNNEngine, createVoiceInputAdapter, defaultCrisisDetector, getComponentStatus, kalmanFormerStateToBeliefUpdate, mergeHybridPredictions, plrnnStateToBeliefUpdate };
+export { type ABCDChain, AFFIRMATION_TEMPLATES, AIModelNotLoadedError, type AffirmationTemplate, type AgeGroup$1 as AgeGroup, type AmbivalenceState, type AmbivalenceType, type AttentionalBias, AuditBehavior, BaseEventHandler, type BeliefState, BeliefStateAdapter, type BeliefUpdate, BeliefUpdateError, type BeliefUpdateResult, CHANGE_TALK_PATTERNS, COGNICORE_VERSION, CausalNodeNotFoundError, type ChangeStage, type ChangeTaskSubtype, type ClientLanguageCategory, type ClientUtterance, CogniCoreError, CogniCoreEventBus, type CognitiveDistortion, type CognitiveDistortionType, type CognitiveLoad, type CognitiveTriad, type ComponentStatus, CompositeEventHandler, type CopingStrategy, type CopingStrategyType, type CoreBeliefPattern, CrisisAlertBehavior, CrisisDetectionError, CrisisEventHandler, DEFAULT_EMOTION_VAD, DEFAULT_EVENT_BUS_CONFIG, DEFAULT_EVENT_STORE_CONFIG, DEFAULT_KALMANFORMER_CONFIG, DEFAULT_PLRNN_CONFIG, DEFAULT_VOICE_CONFIG, DIMENSION_INDEX, DIMENSION_MAPPING, DISCORD_PATTERNS, DISCORD_RESPONSE_STRATEGIES, DISTORTION_INTERVENTIONS, DISTORTION_PATTERNS, type DarnCatProfile, DataDeleteError, DataExportError, DataImportError, type DetectedDistortion, type DimensionBelief, DimensionNotFoundError, type DiscordEvent, type DiscordIndicators, type DiscordType, type DomainVertical, EMOTION_THERAPY_MAPPING, type EmotionPattern, type EmotionTrend, type EmotionType$1 as EmotionType, EmptyArrayError, type EnergyLevel, type ErrorCallback, ErrorCategory, ErrorCode, type ErrorContext, ErrorHandler, type ErrorHandlerConfig, type ErrorLogger, ErrorSeverity, EventHandlerRegistry, type EventValidator, ExplainabilityService, type ExplanationAudience, type ExplanationLevel, type ExplanationType, ExternalServiceError, ExternalServiceTimeoutError, ExternalServiceUnavailableError, type GlobalErrorHandlerOptions, type IAcousticFeatures, type IAggregateSnapshot, type IAnalyticsCallback, type IAttentionWeights, type IAuditLogEntry, type IAuditLogQueryOptions, type IAuditLogger, type IBeliefUpdateEngine, type ICausalEdge, type ICausalGraph, type ICausalNetwork, type ICausalNode, type ICognitiveDistortionDetector, type ICognitiveState, type ICognitiveStateBuilder, type ICognitiveStateFactory, type IConstitutionalPrinciple, type IContextualFeatures, type ICounterfactualExplanation, type ICrisisDetectionResult, type ICrisisNotificationCallback, type IDecisionPoint, type IDeepCognitiveMirror, type IDigitalTwinService, type IDigitalTwinState, type IEarlyWarningSignal, type IEmotionalState$1 as IEmotionalState, type IEmotionalStateBuilder, type IEmotionalStateFactory, type IEscalationDecision, type IEventBusConfig, type IEventDispatchResult, type IEventHandlerRegistration, type IEventHandlerResult, type IEventQueryOptions, type IEventStore, type IEventStoreConfig, type IEventSystem, type IEventSystemConfig, type IExplainabilityService, type IExplanationRequest, type IExplanationResponse, type IFeatureAttribution, type IFullBeliefState, type IGlobalFeatureImportance, type IHumanEscalationRequest, type IHybridPrediction, type IIncomingMessage, type IIntervention$1 as IIntervention, type IInterventionLearningCallback, type IInterventionOptimizer, type IInterventionOutcome, type IInterventionSelection, type IInterventionSimulation, type IInterventionTarget, type IKalmanFormerConfig, type IKalmanFormerEngine, type IKalmanFormerPrediction, type IKalmanFormerState, type IKalmanFormerTrainingSample, type IKalmanFormerWeights, type IMessageAnalysis, type IMetacognitiveState, type IMetricsCollector, type IModelCard, type IMotivationalInterviewingEngine, type IMotivationalState, type IMotivationalStateBuilder, type IMotivationalStateFactory, type IMultimodalFusion, INDEX_THRESHOLDS, type INarrativeExplanation, type INarrativeState, type INarrativeStateBuilder, type ICausalEdge$1 as IPLRNNCausalEdge, type ICausalNode$1 as IPLRNNCausalNode, type IPLRNNConfig, type IPLRNNEngine, type IPLRNNPrediction, type IPLRNNState, type IPLRNNTrainingResult, type IPLRNNTrainingSample, type IPLRNNWeights, type IPipelineBehavior, type IPipelineContext, type IPipelineResult, type IProactiveInterventionCallback, type IProsodyFeatures, type IResourceState, type IResourceStateBuilder, type IRiskState, type IRiskStateBuilder, type ISHAPExplanation, type ISafetyContext, type ISafetyInvariant, type ISafetyValidationResult, type IScenario, type IScenarioResult, type IStateChangeCallback, type IStateTrajectory, type IStateVector, type IStateVectorBuilder, type IStateVectorFactory, type IStateVectorRepository, type IStateVectorService, type IStoredEvent, type ITemporalEchoEngine, type ITextAnalysis, type ITippingPoint, type ITwinStateVariable, type IUserExplanation, type IUserFactor, type IUserInterventionProfile, type IVADMapper, type IVoiceAdapterConfig, type IVoiceEmotionEstimate, type IVoiceInputAdapter, type IVoiceProcessingResult, InMemoryAuditLogger, InMemoryEventStore, type InterventionCategory, type InterventionIntensity, InterventionNotFoundError, InterventionOutcomeHandler, InterventionSelectionError, InvalidCausalGraphError, InvalidCrisisStateError, InvalidFormatError, InvalidIdError, InvalidMessageFormatError, InvalidMetacognitionItemError, InvalidObservationError, InvalidTrajectoryError, InvalidTypeError, KalmanFormerEngine, type KalmanFormerEngineFactory, type LanguageBalance, LoggingBehavior, type MIFidelityReport, type MIGenerationConstraints, type MIResponse, type MIResponseContext, type MIStrategy, type MITIBehaviorCode, type MITIBehaviorCounts, type MITIGlobalScores, type MITISummaryScores, MITI_THRESHOLDS, MessageAnalyticsHandler, type MessageIntent, MessageProcessingError, type Metacognition, MetacognitionAnalysisError, MetricsBehavior, MotivationalEngine, MotivationalStateBuilder, MotivationalStateFactory, NLPServiceError, type NarrativeChapter, type NarrativeMoment, type NarrativeRole, type NarrativeTheme, NoEligibleInterventionsError, type OARSTechnique, OPEN_QUESTION_TEMPLATES, type Observation, type ObservationSource, type ObservationType, type OpenQuestionTemplate, OutOfRangeError, type PERMADimensions, PLRNNEngine, type PLRNNEngineFactory, type AgeGroup as PipelineAgeGroup, PipelineStageError, PipelineTimeoutError, PredictionError, type ProtectiveFactor, REFLECTION_TEMPLATES, type ReadinessRuler, type ReflectionTemplate, type ReflectionType, type RegulationEffectiveness, RequiredFieldError, type Resilience, RetryBehavior, type RiskFactor, type RiskLevel$2 as RiskLevel, type RiskTrajectory, STRATEGY_RECOMMENDATIONS, SUMMARY_TEMPLATES, SUSTAIN_TALK_PATTERNS, type SafetyLevel, type SafetyPlan, type RiskLevel$1 as SafetyRiskLevel, type ScoredEmotion, type SerializedError, SessionEndError, SessionExpiredError, SessionNotFoundError, SessionStartError, type SocialResources, type SocraticQuestion, type StageTransition, type StateBasedRecommendation, StateChangeEventHandler, type StateQuality, type StateSummary, type StateTransition, StorageConnectionError, StorageReadError, StorageWriteError, type SummaryTemplate, type SummaryType, type SupportedLanguage, type SustainTalkSubtype, TemporalNotInitializedError, type TemporalPrediction, type TextAnalysisResult, type TherapeuticInsight, type ThinkingStyle, ThrottlingBehavior, TranscriptionError, type VADDimensions, ValidationBehavior, VoiceInputAdapter, type VoiceInputAdapterFactory, VoiceProcessingError, type VulnerabilityWindow, VulnerabilityWindowHandler, WELLBEING_WEIGHTS, beliefStateToKalmanFormerState, beliefStateToObservation, beliefStateToPLRNNState, beliefStateToUncertainty, betaSampleSecure, boxMullerSecure, createBeliefStateAdapter, createCrisisAwareBehaviors, createCrisisHandlerRegistry, createDefaultBehaviors, createDefaultHandlerRegistry, createEventBus, createEventMetadata, createEventSystem, createExplainabilityService, createInMemoryAuditLogger, createInMemoryEventStore, createInitializedEventBus, createKalmanFormerEngine, createMinimalEventSystem, createPLRNNEngine, createPipelineContext, createVoiceInputAdapter, errorHandler, gammaSampleSecure, gaussianSecure, generateSecureId, generateShortSecureId, getComponentStatus, getDefaultSeverity, getErrorCategory, initializeGlobalErrorHandlers, isGlobalErrorHandlersInitialized, kalmanFormerStateToBeliefUpdate, mergeHybridPredictions, plrnnStateToBeliefUpdate, randomBooleanSecure, randomElementSecure, resetGlobalErrorHandlers, secureRandom, secureRandomInt, shuffleSecure, weightedRandomIndexSecure };
