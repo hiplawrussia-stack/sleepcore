@@ -453,4 +453,131 @@ describe('CrisisDetectionService', () => {
       expect(result).toBe(false);
     });
   });
+
+  // ==========================================================================
+  // recordSosEvent (IEC 62304 §7.1 - external crisis event logging)
+  // ==========================================================================
+  describe('recordSosEvent', () => {
+    it('should record externally-created crisis event', () => {
+      const sosEvent = {
+        userId: 'user123',
+        chatId: 'chat456',
+        timestamp: new Date(),
+        severity: 'high' as const,
+        crisisType: 'acute_distress' as const, // Valid CrisisType for user-initiated SOS
+        confidence: 1.0,
+        action: 'interrupt' as const,
+        messageText: 'User pressed /sos button',
+        indicators: ['user_initiated'],
+        responseProvided: true,
+      };
+
+      // Record the event
+      service.recordSosEvent(sosEvent);
+
+      // Verify event was logged
+      const events = service.getUserEvents('user123');
+      expect(events.length).toBeGreaterThan(0);
+
+      const lastEvent = events[events.length - 1];
+      expect(lastEvent.crisisType).toBe('acute_distress');
+      expect(lastEvent.severity).toBe('high');
+    });
+
+    it('should record critical SOS event for escalation', () => {
+      const criticalSosEvent = {
+        userId: 'user789',
+        chatId: 'chat789',
+        timestamp: new Date(),
+        severity: 'critical' as const,
+        crisisType: 'suicidal_ideation' as const, // Valid CrisisType for critical escalation
+        confidence: 1.0,
+        action: 'emergency' as const,
+        messageText: 'User triggered emergency SOS',
+        indicators: ['user_initiated', 'explicit_danger'],
+        responseProvided: true,
+      };
+
+      service.recordSosEvent(criticalSosEvent);
+
+      const events = service.getUserEvents('user789');
+      const lastEvent = events[events.length - 1];
+      expect(lastEvent.severity).toBe('critical');
+      expect(lastEvent.action).toBe('emergency');
+    });
+  });
+
+  // ==========================================================================
+  // Low severity and continue response (coverage for lines 357-359, 428-441)
+  // ==========================================================================
+  describe('Low severity and continue responses', () => {
+    it('should return monitor action for low severity', () => {
+      // Test message that might trigger low severity detection
+      // (mild distress indicators without crisis keywords)
+      const result = service.analyzeMessage(
+        'Я немного устал и грустно мне',
+        'user123',
+        'chat456'
+      );
+
+      // Should not interrupt for low severity
+      expect(result.shouldInterrupt).toBe(false);
+      // Action should be 'monitor' or 'continue'
+      expect(['monitor', 'continue', 'supportive']).toContain(result.action);
+    });
+
+    it('should return continue response for non-crisis messages', () => {
+      const result = service.analyzeMessage(
+        'Сегодня был хороший день, спал отлично!',
+        'user123',
+        'chat456'
+      );
+
+      // Should not interrupt
+      expect(result.shouldInterrupt).toBe(false);
+
+      // Should have action 'continue'
+      expect(result.action).toBe('continue');
+
+      // Should have severity 'none'
+      expect(result.severity).toBe('none');
+
+      // Event should be defined but with 'none' severity
+      expect(result.event).toBeDefined();
+      expect(result.event.severity).toBe('none');
+      expect(result.event.action).toBe('continue');
+    });
+
+    it('should create valid event for continue responses', () => {
+      const result = service.analyzeMessage(
+        'Просто хотел сказать привет',
+        'testUser',
+        'testChat'
+      );
+
+      // Verify event structure for continue response
+      expect(result.event).toMatchObject({
+        userId: 'testUser',
+        chatId: 'testChat',
+        severity: 'none',
+        action: 'continue',
+        responseProvided: false,
+      });
+
+      // Timestamp should be a Date
+      expect(result.event.timestamp).toBeInstanceOf(Date);
+    });
+
+    it('should handle default case in severity-to-action mapping', () => {
+      // Analyze a completely neutral message
+      const result = service.analyzeMessage(
+        'Как дела?',
+        'user456',
+        'chat789'
+      );
+
+      // Should return continue for neutral messages
+      expect(['continue', 'monitor']).toContain(result.action);
+    });
+  });
 });

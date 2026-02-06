@@ -340,23 +340,25 @@ export class CrisisDetectionService {
    */
   private determineAction(result: CrisisDetectionResult): CrisisAction {
     if (!result.isCrisis) {
+      // Non-crisis: low severity gets monitoring, others continue
       if (result.severity === 'low') {
         return 'monitor';
       }
       return 'continue';
     }
 
+    // Crisis detected: map severity to action
+    // Note: CrisisDetector (line 578) sets isCrisis=false when severity='low' or 'none',
+    // so those cases are handled above. Only moderate/high/critical reach here.
     switch (result.severity) {
       case 'critical':
         return 'emergency';
       case 'high':
         return 'interrupt';
       case 'moderate':
-        return 'supportive';
-      case 'low':
-        return 'monitor';
       default:
-        return 'continue';
+        // Moderate severity or any unexpected value → supportive response
+        return 'supportive';
     }
   }
 
@@ -414,37 +416,6 @@ export class CrisisDetectionService {
       messageText: this.sanitizeText(text),
       indicators: result.allIndicators,
       responseProvided: action !== 'continue',
-    };
-  }
-
-  /**
-   * Create continue response (no crisis detected)
-   */
-  private createContinueResponse(
-    userId: string,
-    chatId: string,
-    _text: string
-  ): ICrisisResponse {
-    const event: ICrisisEvent = {
-      userId,
-      chatId,
-      timestamp: new Date(),
-      severity: 'none',
-      crisisType: 'unknown',
-      confidence: 0,
-      action: 'continue',
-      messageText: '',
-      indicators: [],
-      responseProvided: false,
-    };
-
-    return {
-      shouldInterrupt: false,
-      action: 'continue',
-      message: '',
-      resources: [],
-      severity: 'none',
-      event,
     };
   }
 
