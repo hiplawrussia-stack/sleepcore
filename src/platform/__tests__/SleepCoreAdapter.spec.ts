@@ -549,3 +549,356 @@ describe('createSleepCoreAdapter', () => {
     expect(adapter).toBeInstanceOf(SleepCoreAdapter);
   });
 });
+
+// ============================================================================
+// EXPLANATION FORMATTING TESTS
+// ============================================================================
+
+describe('formatExplanationForDisplay', () => {
+  let adapter: SleepCoreAdapter;
+
+  beforeEach(() => {
+    adapter = createSleepCoreAdapter();
+  });
+
+  /**
+   * Create mock explanation for testing
+   */
+  function createMockExplanation(overrides: Partial<{
+    keyFactors: Array<{ name: string; nameRu: string; value: string; impact: 'helps' | 'hurts' | 'neutral'; emoji: string; explanation: string; explanationRu: string }>;
+    actionableAdvice: string[];
+    actionableAdviceRu: string[];
+    whatWouldChange: string[];
+    whatWouldChangeRu: string[];
+  }> = {}) {
+    return {
+      summary: 'We recommend sleep restriction therapy',
+      summaryRu: 'Мы рекомендуем терапию ограничения сна',
+      reasoning: 'Your sleep efficiency is below 85%',
+      reasoningRu: 'Ваша эффективность сна ниже 85%',
+      keyFactors: overrides.keyFactors ?? [
+        {
+          name: 'Sleep Efficiency',
+          nameRu: 'Эффективность сна',
+          value: '75%',
+          impact: 'hurts' as const,
+          emoji: '📉',
+          explanation: 'Low efficiency indicates fragmented sleep',
+          explanationRu: 'Низкая эффективность указывает на фрагментированный сон',
+        },
+      ],
+      confidence: {
+        level: 'high' as const,
+        emoji: '🎯',
+        description: 'High confidence based on 7 days of data',
+        descriptionRu: 'Высокая уверенность на основе 7 дней данных',
+      },
+      actionableAdvice: overrides.actionableAdvice ?? ['Restrict bed time to 6 hours'],
+      actionableAdviceRu: overrides.actionableAdviceRu ?? ['Ограничьте время в постели до 6 часов'],
+      whatWouldChange: overrides.whatWouldChange,
+      whatWouldChangeRu: overrides.whatWouldChangeRu,
+      limitations: ['Based on self-reported data'],
+      limitationsRu: ['На основе самоотчётных данных'],
+      disclaimer: 'This is educational, not medical advice',
+      disclaimerRu: 'Это образовательная информация, не медицинский совет',
+    };
+  }
+
+  it('should format explanation in Russian by default', () => {
+    const explanation = createMockExplanation();
+    const result = adapter.formatExplanationForDisplay(explanation);
+
+    expect(result).toContain('📋 Мы рекомендуем терапию ограничения сна');
+    expect(result).toContain('💡 Ваша эффективность сна ниже 85%');
+    expect(result).toContain('📊 Ключевые факторы:');
+    expect(result).toContain('📉 Эффективность сна: 75% ⚠️');
+    expect(result).toContain('🎯 Уверенность:');
+    expect(result).toContain('Ограничьте время в постели до 6 часов');
+    expect(result).toContain('Это образовательная информация, не медицинский совет');
+  });
+
+  it('should format explanation in English when specified', () => {
+    const explanation = createMockExplanation();
+    const result = adapter.formatExplanationForDisplay(explanation, 'en');
+
+    expect(result).toContain('📋 We recommend sleep restriction therapy');
+    expect(result).toContain('💡 Your sleep efficiency is below 85%');
+    expect(result).toContain('📊 Key Factors:');
+    expect(result).toContain('📉 Sleep Efficiency: 75% ⚠️');
+    expect(result).toContain('Confidence:');
+    expect(result).toContain('Restrict bed time to 6 hours');
+    expect(result).toContain('This is educational, not medical advice');
+  });
+
+  it('should show different impact emojis', () => {
+    const explanation = createMockExplanation({
+      keyFactors: [
+        {
+          name: 'Consistent wake time',
+          nameRu: 'Постоянное время подъёма',
+          value: 'Yes',
+          impact: 'helps',
+          emoji: '✅',
+          explanation: 'Good habit',
+          explanationRu: 'Хорошая привычка',
+        },
+        {
+          name: 'Caffeine after 2 PM',
+          nameRu: 'Кофеин после 14:00',
+          value: 'Yes',
+          impact: 'hurts',
+          emoji: '☕',
+          explanation: 'May affect sleep',
+          explanationRu: 'Может влиять на сон',
+        },
+        {
+          name: 'Exercise',
+          nameRu: 'Физическая активность',
+          value: 'Moderate',
+          impact: 'neutral',
+          emoji: '🏃',
+          explanation: 'Current level is fine',
+          explanationRu: 'Текущий уровень нормальный',
+        },
+      ],
+    });
+
+    const result = adapter.formatExplanationForDisplay(explanation);
+
+    expect(result).toContain('✅'); // helps
+    expect(result).toContain('⚠️'); // hurts
+    expect(result).toContain('➡️'); // neutral
+  });
+
+  it('should include what would change section when provided', () => {
+    const explanation = createMockExplanation({
+      whatWouldChange: ['Improving sleep efficiency above 85%'],
+      whatWouldChangeRu: ['Улучшение эффективности сна выше 85%'],
+    });
+
+    const result = adapter.formatExplanationForDisplay(explanation);
+
+    expect(result).toContain('🔄 Что изменило бы рекомендацию:');
+    expect(result).toContain('Улучшение эффективности сна выше 85%');
+  });
+
+  it('should include what would change in English', () => {
+    const explanation = createMockExplanation({
+      whatWouldChange: ['Improving sleep efficiency above 85%'],
+      whatWouldChangeRu: ['Улучшение эффективности сна выше 85%'],
+    });
+
+    const result = adapter.formatExplanationForDisplay(explanation, 'en');
+
+    expect(result).toContain('🔄 What would change the recommendation:');
+    expect(result).toContain('Improving sleep efficiency above 85%');
+  });
+
+  it('should handle empty key factors', () => {
+    const explanation = createMockExplanation({ keyFactors: [] });
+    const result = adapter.formatExplanationForDisplay(explanation);
+
+    expect(result).not.toContain('📊 Ключевые факторы:');
+    expect(result).toContain('📋'); // Summary should still be there
+  });
+
+  it('should handle empty actionable advice', () => {
+    const explanation = createMockExplanation({
+      actionableAdvice: [],
+      actionableAdviceRu: [],
+    });
+    const result = adapter.formatExplanationForDisplay(explanation);
+
+    expect(result).not.toContain('🎯 Что делать:');
+  });
+
+  it('should handle undefined whatWouldChange', () => {
+    const explanation = createMockExplanation({
+      whatWouldChange: undefined,
+      whatWouldChangeRu: undefined,
+    });
+    const result = adapter.formatExplanationForDisplay(explanation);
+
+    expect(result).not.toContain('🔄');
+  });
+
+  it('should handle empty whatWouldChange array', () => {
+    const explanation = createMockExplanation({
+      whatWouldChange: [],
+      whatWouldChangeRu: [],
+    });
+    const result = adapter.formatExplanationForDisplay(explanation);
+
+    expect(result).not.toContain('🔄 Что изменило бы рекомендацию:');
+  });
+});
+
+// ============================================================================
+// MOTIVATIONAL RESPONSE FORMATTING TESTS
+// ============================================================================
+
+describe('formatMotivationalResponseForDisplay', () => {
+  let adapter: SleepCoreAdapter;
+
+  beforeEach(() => {
+    adapter = createSleepCoreAdapter();
+  });
+
+  function createMockMotivationalResponse(overrides: Partial<{
+    personalizationNote: string;
+    personalizationNoteRu: string;
+    followUpSuggestions: string[];
+    followUpSuggestionsRu: string[];
+  }> = {}) {
+    return {
+      text: 'I hear that following the sleep schedule has been challenging.',
+      textRu: 'Я слышу, что следование режиму сна было сложным.',
+      technique: 'reflection' as const,
+      strategy: 'explore_ambivalence' as const,
+      expectedImpact: 'explore' as const,
+      confidence: 0.8,
+      followUpSuggestions: overrides.followUpSuggestions ?? ['Ask about specific challenges'],
+      followUpSuggestionsRu: overrides.followUpSuggestionsRu ?? ['Спросить о конкретных трудностях'],
+      personalizationNote: overrides.personalizationNote,
+      personalizationNoteRu: overrides.personalizationNoteRu,
+    };
+  }
+
+  it('should format response in Russian by default', () => {
+    const response = createMockMotivationalResponse();
+    const result = adapter.formatMotivationalResponseForDisplay(response);
+
+    expect(result).toContain('💬 Я слышу, что следование режиму сна было сложным.');
+    expect(result).toContain('📋 Возможные следующие шаги:');
+    expect(result).toContain('• Спросить о конкретных трудностях');
+  });
+
+  it('should format response in English when specified', () => {
+    const response = createMockMotivationalResponse();
+    const result = adapter.formatMotivationalResponseForDisplay(response, 'en');
+
+    expect(result).toContain('💬 I hear that following the sleep schedule has been challenging.');
+    expect(result).toContain('📋 Possible next steps:');
+    expect(result).toContain('• Ask about specific challenges');
+  });
+
+  it('should include personalization note when provided', () => {
+    const response = createMockMotivationalResponse({
+      personalizationNote: 'Based on your recent progress',
+      personalizationNoteRu: 'На основе вашего недавнего прогресса',
+    });
+
+    const resultRu = adapter.formatMotivationalResponseForDisplay(response, 'ru');
+    expect(resultRu).toContain('💡 _На основе вашего недавнего прогресса_');
+
+    const resultEn = adapter.formatMotivationalResponseForDisplay(response, 'en');
+    expect(resultEn).toContain('💡 _Based on your recent progress_');
+  });
+
+  it('should handle empty follow-up suggestions', () => {
+    const response = createMockMotivationalResponse({
+      followUpSuggestions: [],
+      followUpSuggestionsRu: [],
+    });
+    const result = adapter.formatMotivationalResponseForDisplay(response);
+
+    expect(result).not.toContain('📋 Возможные следующие шаги:');
+  });
+
+  it('should handle missing personalization note', () => {
+    const response = createMockMotivationalResponse({
+      personalizationNote: undefined,
+      personalizationNoteRu: undefined,
+    });
+    const result = adapter.formatMotivationalResponseForDisplay(response);
+
+    expect(result).not.toContain('💡 _');
+  });
+});
+
+// ============================================================================
+// LOCAL STATS RECORDING TESTS
+// ============================================================================
+
+describe('recordOutcome with local stats', () => {
+  let adapter: SleepCoreAdapter;
+  const userId = 'local-stats-user';
+
+  beforeEach(() => {
+    adapter = createSleepCoreAdapter({ debug: true });
+  });
+
+  it('should update local stats on positive outcome', async () => {
+    const sleepState = createMockSleepState();
+
+    // First select an intervention to initialize stats
+    const selection = await adapter.selectIntervention(sleepState, userId);
+
+    // Record successful outcome
+    const improvedState = createMockSleepState({
+      metrics: { sleepEfficiency: 90 } as Partial<ISleepMetrics> as ISleepMetrics,
+      insomnia: { isiScore: 10 } as Partial<IInsomniaSeverity> as IInsomniaSeverity,
+    });
+
+    await adapter.recordOutcome(selection.action, sleepState, improvedState, userId);
+
+    const stats = await adapter.getInterventionStats(userId);
+    expect(stats.size).toBeGreaterThan(0);
+  });
+
+  it('should update local stats on negative outcome', async () => {
+    const sleepState = createMockSleepState();
+
+    // First select an intervention
+    const selection = await adapter.selectIntervention(sleepState, userId);
+
+    // Record negative outcome
+    const worsenedState = createMockSleepState({
+      metrics: { sleepEfficiency: 60 } as Partial<ISleepMetrics> as ISleepMetrics,
+      insomnia: { isiScore: 22 } as Partial<IInsomniaSeverity> as IInsomniaSeverity,
+    });
+
+    await adapter.recordOutcome(selection.action, sleepState, worsenedState, userId);
+
+    const stats = await adapter.getInterventionStats(userId);
+    expect(stats.size).toBeGreaterThan(0);
+  });
+
+  it('should log debug output when debug mode enabled', async () => {
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    const sleepState = createMockSleepState();
+    const selection = await adapter.selectIntervention(sleepState, userId);
+
+    await adapter.recordOutcome(selection.action, sleepState, sleepState, userId);
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[SleepCoreAdapter] Recorded outcome for')
+    );
+
+    consoleSpy.mockRestore();
+  });
+
+  it('should accumulate stats over multiple interventions', async () => {
+    const sleepState = createMockSleepState();
+
+    // Run multiple selection + outcome cycles
+    for (let i = 0; i < 5; i++) {
+      const selection = await adapter.selectIntervention(sleepState, userId);
+      const improvedState = createMockSleepState({
+        metrics: { sleepEfficiency: 75 + i * 2 } as Partial<ISleepMetrics> as ISleepMetrics,
+      });
+      await adapter.recordOutcome(selection.action, sleepState, improvedState, userId);
+    }
+
+    const stats = await adapter.getInterventionStats(userId);
+    expect(stats.size).toBeGreaterThan(0);
+
+    // Check that at least one action has multiple attempts
+    let totalAttempts = 0;
+    for (const actionStats of stats.values()) {
+      totalAttempts += actionStats.attempts;
+    }
+    expect(totalAttempts).toBeGreaterThanOrEqual(5);
+  });
+});
