@@ -47,10 +47,12 @@ export type AuditAction =
 export type AuditEntityType =
   | 'user'
   | 'sleep_diary'
+  | 'voice_diary'
   | 'assessment'
   | 'therapy_session'
   | 'treatment_plan'
   | 'consent'
+  | 'gamification'
   | 'export_request'
   | 'system';
 

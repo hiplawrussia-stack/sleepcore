@@ -917,6 +917,31 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
     const [command, action] = data.split(':');
     const sleepCoreCtx = extendContext(ctx, api);
 
+    // =========================================================================
+    // SAFETY: Crisis State Monitoring for Callbacks (Phase 1.4)
+    // Even without text input, track users with active crisis state
+    // Research: SAMHSA 2025 - maintain awareness without blocking
+    // =========================================================================
+    try {
+      const userId = ctx.from?.id.toString() || '';
+      const recentEvents = crisisDetectionService.getUserEvents(userId);
+
+      // Check for HIGH/CRITICAL severity in last hour
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const activeCrisis = recentEvents.find(
+        e => (e.severity === 'high' || e.severity === 'critical') && e.timestamp >= oneHourAgo
+      );
+
+      if (activeCrisis) {
+        // Audit log: user with active crisis is navigating via callbacks
+        console.log(`[CRISIS] User ${userId} with active crisis (severity=${activeCrisis.severity}) using callback: ${command}:${action}`);
+        // IMPORTANT: Don't block - per SAMHSA research, blocking increases distress
+      }
+    } catch (crisisError) {
+      // Crisis monitoring should NEVER block callback processing
+      console.error('[CRISIS] State monitoring error (non-fatal):', crisisError);
+    }
+
     // Sprint 3: Record command click for adaptive keyboard
     if (['menu', 'quest', 'badge', 'sonya', 'diary', 'relax', 'mindful', 'progress'].includes(command)) {
       adaptiveKeyboardService.recordCommandClick(sleepCoreCtx.userId, command).catch(() => {});
@@ -1129,8 +1154,16 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
                       deletedAt: null,
                     };
 
-                    await therapySessionRepository.insert(therapySession);
+                    const savedSession = await therapySessionRepository.insert(therapySession);
                     console.log(`[Database] Initial therapy session created for user ${sleepCoreCtx.userId}`);
+                    // ICH E6(R3) Audit: Log therapy session creation
+                    if (auditService && savedSession?.id) {
+                      await auditService.logCreate('therapy_session', savedSession.id, {
+                        sessionType: 'cbti',
+                        week: 0,
+                        component: 'onboarding',
+                      }, { userId: ctx.session.dbUserId });
+                    }
                   } catch (error) {
                     console.error('[Database] Failed to create therapy session:', error);
                   }
@@ -2030,6 +2063,7 @@ function setupMessages(bot: Bot<MyContext>, api: SleepCoreAPI): void {
 interface SetupVoiceHandlersOptions {
   gamificationRepository?: GamificationRepository;
   voiceDiaryRepository?: VoiceDiaryRepository;
+  auditService?: AuditService;
 }
 
 /**
@@ -2037,7 +2071,7 @@ interface SetupVoiceHandlersOptions {
  * Research: Fabla App shows "speech carries information we don't always consciously recognize"
  */
 function setupVoiceHandlers(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupVoiceHandlersOptions = {}): void {
-  const { gamificationRepository, voiceDiaryRepository } = options;
+  const { gamificationRepository, voiceDiaryRepository, auditService } = options;
   // Check if Whisper API is configured
   const openaiApiKey = process.env.OPENAI_API_KEY;
 
@@ -2120,7 +2154,7 @@ function setupVoiceHandlers(bot: Bot<MyContext>, api: SleepCoreAPI, options: Set
         // Research (2025): ePRO requires item-level timestamps and audit trails
         if (voiceDiaryRepository && ctx.session.dbUserId) {
           try {
-            await voiceDiaryRepository.insert({
+            const savedVoiceEntry = await voiceDiaryRepository.insert({
               userId: ctx.session.dbUserId,
               transcriptionText: result.entry.text,
               transcriptionConfidence: result.entry.transcriptionConfidence,
@@ -2134,6 +2168,13 @@ function setupVoiceHandlers(bot: Bot<MyContext>, api: SleepCoreAPI, options: Set
               transcribedAt: new Date(),
             });
             console.log(`[Voice] Entry persisted for user ${ctx.session.dbUserId}`);
+            // ICH E6(R3) Audit: Log voice diary entry (PHI data)
+            if (auditService && savedVoiceEntry?.id) {
+              await auditService.logCreate('voice_diary', savedVoiceEntry.id, {
+                emotion: result.entry.emotion,
+                voiceDuration: result.entry.voiceDuration,
+              }, { userId: ctx.session.dbUserId });
+            }
           } catch (err) {
             console.error('[Voice] Persistence failed:', err);
             // Don't fail the user interaction - voice was processed successfully
@@ -2148,6 +2189,14 @@ function setupVoiceHandlers(bot: Bot<MyContext>, api: SleepCoreAPI, options: Set
             const xpResult = await gamificationRepository.addXP(ctx.session.dbUserId, 15, 'sleep_diary');
             if (xpResult.leveledUp) {
               console.log(`[Gamification] User ${ctx.session.dbUserId} leveled up to ${xpResult.newLevel} via voice diary!`);
+            }
+            // Audit: Log gamification XP award
+            if (auditService) {
+              await auditService.logUpdate('gamification', ctx.session.dbUserId, {
+                xpAwarded: 15,
+                source: 'voice_diary',
+                leveledUp: xpResult.leveledUp,
+              }, { userId: ctx.session.dbUserId });
             }
           } catch (err) {
             console.error('[Gamification] Voice XP persistence failed:', err);
@@ -2776,7 +2825,7 @@ async function main(): Promise<void> {
   setupCommands(bot, api, { userRepository, auditService });
   setupCallbacks(bot, api, { userRepository, sleepDiaryRepository, assessmentRepository, therapySessionRepository, gamificationRepository, auditService });
   setupMessages(bot, api);
-  setupVoiceHandlers(bot, api, { gamificationRepository, voiceDiaryRepository }); // Sprint 3: Voice diary + persistence
+  setupVoiceHandlers(bot, api, { gamificationRepository, voiceDiaryRepository, auditService }); // Sprint 3: Voice diary + persistence + audit
   setupErrors(bot);
 
   // Start notification and scheduling services
