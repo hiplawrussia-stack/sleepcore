@@ -27,6 +27,7 @@
  */
 
 import type { ISleepState, ISleepCognitions } from '../../sleep/interfaces/ISleepState';
+import type { ServiceStateRepository } from '../../infrastructure/database/repositories/ServiceStateRepository';
 
 // ============================================================================
 // TYPES AND INTERFACES
@@ -154,9 +155,51 @@ const BELIEF_TO_DOMAIN: Record<TrackedBelief, BeliefDomain> = {
 export class CognitiveProgressReportService {
   private readonly config: ICognitiveProgressConfig;
   private readonly snapshots: Map<string, IBeliefSnapshot[]> = new Map();
+  private stateRepo?: ServiceStateRepository;
+  private static readonly SERVICE_NAME = 'cognitive_progress';
 
   constructor(config: Partial<ICognitiveProgressConfig> = {}) {
     this.config = { ...DEFAULT_COGNITIVE_PROGRESS_CONFIG, ...config };
+  }
+
+  /**
+   * Set repository for persistence (write-through + hydration)
+   */
+  async setRepository(repo: ServiceStateRepository): Promise<void> {
+    this.stateRepo = repo;
+    await this.hydrateFromDB();
+  }
+
+  /**
+   * Hydrate in-memory Map from database
+   */
+  private async hydrateFromDB(): Promise<void> {
+    if (!this.stateRepo) return;
+    try {
+      const allStates = await this.stateRepo.getAllForService(CognitiveProgressReportService.SERVICE_NAME);
+      for (const { userId, state } of allStates) {
+        const snapshots = state as IBeliefSnapshot[];
+        if (Array.isArray(snapshots)) {
+          this.snapshots.set(userId, snapshots);
+        }
+      }
+      console.log(`[CognitiveProgress] Hydrated ${allStates.length} user snapshot histories from DB`);
+    } catch (err) {
+      console.error('[CognitiveProgress] DB hydration failed:', err);
+    }
+  }
+
+  /**
+   * Persist user snapshots to database (write-through)
+   */
+  private async persistToDB(userId: string): Promise<void> {
+    if (!this.stateRepo) return;
+    try {
+      const history = this.snapshots.get(userId) ?? [];
+      await this.stateRepo.set(userId, CognitiveProgressReportService.SERVICE_NAME, history);
+    } catch (err) {
+      console.error(`[CognitiveProgress] Failed to persist for ${userId}:`, err);
+    }
   }
 
   /**
@@ -195,6 +238,9 @@ export class CognitiveProgressReportService {
     const history = this.snapshots.get(userId) ?? [];
     history.push(snapshot);
     this.snapshots.set(userId, history);
+
+    // Write-through to database
+    void this.persistToDB(userId);
 
     return snapshot;
   }

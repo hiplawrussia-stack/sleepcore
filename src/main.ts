@@ -99,6 +99,8 @@ import {
   attService,
   mcq30AssessmentService,
   voiceBiomarkerService,
+  arousalAssessmentService,
+  cognitiveProgressReportService,
   type IStreakData,
   type IMoodHistory,
   type MoodLevel,
@@ -2794,6 +2796,10 @@ async function main(): Promise<void> {
     await attService.setRepository(mctRepo, serviceStateRepo);
     await mcq30AssessmentService.setRepository(mcq30Repo);
     await voiceBiomarkerService.setRepository(serviceStateRepo);
+
+    // MEDIUM: Arousal and cognitive progress tracking (Wave 2 services)
+    await arousalAssessmentService.setRepository(serviceStateRepo);
+    await cognitiveProgressReportService.setRepository(serviceStateRepo);
 
     console.log('[DB] All service repositories wired — data persistence enabled');
   }

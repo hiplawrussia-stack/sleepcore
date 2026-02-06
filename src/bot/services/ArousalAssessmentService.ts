@@ -28,6 +28,7 @@
  */
 
 import type { ISleepState } from '../../sleep/interfaces/ISleepState';
+import type { ServiceStateRepository } from '../../infrastructure/database/repositories/ServiceStateRepository';
 
 // ============================================================================
 // TYPES AND INTERFACES
@@ -191,9 +192,56 @@ export const AROUSAL_ITEMS: IArousalItem[] = [
 export class ArousalAssessmentService {
   private readonly config: IArousalAssessmentConfig;
   private readonly assessments: Map<string, IArousalResult[]> = new Map();
+  private stateRepo?: ServiceStateRepository;
+  private static readonly SERVICE_NAME = 'arousal_assessment';
 
   constructor(config: Partial<IArousalAssessmentConfig> = {}) {
     this.config = { ...DEFAULT_AROUSAL_CONFIG, ...config };
+  }
+
+  /**
+   * Set repository for persistence (write-through + hydration)
+   * Called by main.ts during service initialization
+   */
+  async setRepository(repo: ServiceStateRepository): Promise<void> {
+    this.stateRepo = repo;
+    await this.hydrateFromDB();
+  }
+
+  /**
+   * Hydrate in-memory Map from database
+   */
+  private async hydrateFromDB(): Promise<void> {
+    if (!this.stateRepo) return;
+    try {
+      const allStates = await this.stateRepo.getAllForService(ArousalAssessmentService.SERVICE_NAME);
+      for (const { userId, state } of allStates) {
+        const assessments = state as IArousalResult[];
+        if (Array.isArray(assessments)) {
+          // Restore Date objects from JSON strings
+          this.assessments.set(userId, assessments.map(a => ({
+            ...a,
+            timestamp: new Date(a.timestamp),
+          })));
+        }
+      }
+      console.log(`[ArousalAssessment] Hydrated ${allStates.length} user assessment histories from DB`);
+    } catch (err) {
+      console.error('[ArousalAssessment] DB hydration failed:', err);
+    }
+  }
+
+  /**
+   * Persist user assessments to database (write-through)
+   */
+  private async persistTooDB(userId: string): Promise<void> {
+    if (!this.stateRepo) return;
+    try {
+      const history = this.assessments.get(userId) ?? [];
+      await this.stateRepo.set(userId, ArousalAssessmentService.SERVICE_NAME, history);
+    } catch (err) {
+      console.error(`[ArousalAssessment] Failed to persist for ${userId}:`, err);
+    }
   }
 
   /**
@@ -302,6 +350,9 @@ export class ArousalAssessmentService {
     // Store result
     history.push(result);
     this.assessments.set(userId, history);
+
+    // Write-through to database
+    void this.persistTooDB(userId);
 
     return result;
   }

@@ -437,5 +437,31 @@ export type {
   IMCTCSDData,
 } from './MetacognitiveEngineService';
 
+// ==================== Arousal Assessment (Wave 2) ====================
+export {
+  ArousalAssessmentService,
+  arousalAssessmentService,
+  createArousalAssessmentService,
+} from './ArousalAssessmentService';
+
+export type {
+  ArousalSubscale,
+  ArousalSeverity,
+  IArousalResult,
+} from './ArousalAssessmentService';
+
+// ==================== Cognitive Progress Report (Wave 2) ====================
+export {
+  CognitiveProgressReportService,
+  cognitiveProgressReportService,
+  createCognitiveProgressReportService,
+} from './CognitiveProgressReportService';
+
+export type {
+  BeliefDomain,
+  IBeliefSnapshot,
+  ICognitiveProgressReport,
+} from './CognitiveProgressReportService';
+
 // ==================== Modules Re-export ====================
 export * from '../../modules';
