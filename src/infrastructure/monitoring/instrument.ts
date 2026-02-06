@@ -314,4 +314,12 @@ if (IS_SENTRY_ENABLED) {
 // EXPORTS
 // ============================================================================
 
-export { Sentry, IS_SENTRY_ENABLED, scrubSensitiveData };
+export {
+  Sentry,
+  IS_SENTRY_ENABLED,
+  scrubSensitiveData,
+  beforeSendHook,
+  beforeSendSpanHook,
+  SENSITIVE_FIELDS,
+  SENSITIVE_PATTERNS,
+};

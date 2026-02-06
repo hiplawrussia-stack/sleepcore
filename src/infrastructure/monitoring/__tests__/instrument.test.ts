@@ -18,7 +18,14 @@
  * @packageDocumentation
  */
 
-import { scrubSensitiveData } from '../instrument';
+import {
+  scrubSensitiveData,
+  beforeSendHook,
+  beforeSendSpanHook,
+  SENSITIVE_FIELDS,
+  SENSITIVE_PATTERNS,
+} from '../instrument';
+import type * as Sentry from '@sentry/node';
 
 describe('Sentry Instrumentation', () => {
   describe('scrubSensitiveData', () => {
@@ -469,6 +476,475 @@ describe('Sentry Instrumentation', () => {
         // Date objects are converted to empty objects by the iteration
         expect(result.message).toBe('test');
         expect(result.createdAt).toBeDefined();
+      });
+    });
+  });
+
+  describe('beforeSendHook', () => {
+    const originalEnv = process.env.NODE_ENV;
+
+    // Helper to create mock ErrorEvent (Sentry.ErrorEvent requires type: undefined)
+    function createMockEvent(overrides: Record<string, unknown> = {}): Sentry.ErrorEvent {
+      return {
+        event_id: 'test-123',
+        timestamp: Date.now() / 1000,
+        type: undefined,
+        ...overrides,
+      } as Sentry.ErrorEvent;
+    }
+
+    afterEach(() => {
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    describe('test environment handling', () => {
+      it('should return null in test environment', () => {
+        process.env.NODE_ENV = 'test';
+
+        const event = createMockEvent();
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).toBeNull();
+      });
+    });
+
+    describe('production environment scrubbing', () => {
+      beforeEach(() => {
+        process.env.NODE_ENV = 'production';
+      });
+
+      it('should scrub user data', () => {
+        const event = createMockEvent({
+          user: {
+            id: 'user-123',
+            email: 'user@test.com',
+            username: 'testuser',
+            ip_address: '192.168.1.1',
+          },
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.user).toEqual({
+          id: '[USER_ID]',
+        });
+      });
+
+      it('should handle missing user id', () => {
+        const event = createMockEvent({
+          user: {
+            email: 'user@test.com',
+          },
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.user).toEqual({
+          id: undefined,
+        });
+      });
+
+      it('should scrub request headers', () => {
+        const event = createMockEvent({
+          request: {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: 'Bearer secret-token',
+              'X-Custom-Header': 'Email: user@test.com',
+            },
+          },
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.request!.headers!['Content-Type']).toBe('application/json');
+        expect(result!.request!.headers!['Authorization']).toBe('[REDACTED]');
+        expect(result!.request!.headers!['X-Custom-Header']).toBe('Email: [SCRUBBED]');
+      });
+
+      it('should scrub request data', () => {
+        const event = createMockEvent({
+          request: {
+            data: {
+              message: 'Hello',
+              password: 'secret123',
+              email: 'user@test.com',
+            },
+          },
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        const data = result!.request!.data as Record<string, unknown>;
+        expect(data.message).toBe('Hello');
+        expect(data.password).toBe('[REDACTED]');
+        expect(data.email).toBe('[REDACTED]');
+      });
+
+      it('should scrub query string', () => {
+        const event = createMockEvent({
+          request: {
+            query_string: 'user_id=123&token=abc',
+          },
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.request!.query_string).toBe('[SCRUBBED]');
+      });
+
+      it('should scrub cookies', () => {
+        const event = createMockEvent({
+          request: {
+            cookies: { session: 'abc123', auth: 'xyz789' },
+          },
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.request!.cookies).toEqual({ scrubbed: '[SCRUBBED]' });
+      });
+
+      it('should scrub breadcrumbs', () => {
+        const event = createMockEvent({
+          breadcrumbs: [
+            {
+              category: 'http',
+              message: 'Request to user@test.com',
+              data: {
+                url: '/api/users',
+                password: 'secret',
+              },
+            },
+            {
+              category: 'console',
+              message: 'Log entry',
+            },
+          ],
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.breadcrumbs).toHaveLength(2);
+        expect(result!.breadcrumbs![0].message).toBe('Request to [SCRUBBED]');
+        const data = result!.breadcrumbs![0].data as Record<string, unknown>;
+        expect(data.url).toBe('/api/users');
+        expect(data.password).toBe('[REDACTED]');
+      });
+
+      it('should handle breadcrumbs without data or message', () => {
+        const event = createMockEvent({
+          breadcrumbs: [
+            {
+              category: 'navigation',
+              timestamp: Date.now() / 1000,
+            },
+          ],
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.breadcrumbs![0].data).toBeUndefined();
+        expect(result!.breadcrumbs![0].message).toBeUndefined();
+      });
+
+      it('should scrub extra context', () => {
+        const event = createMockEvent({
+          extra: {
+            userId: 'user-123',
+            email: 'user@test.com',
+            sessionData: 'safe value',
+          },
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.extra!.userId).toBe('[REDACTED]');
+        expect(result!.extra!.email).toBe('[REDACTED]');
+        expect(result!.extra!.sessionData).toBe('[REDACTED]');
+      });
+
+      it('should scrub tags', () => {
+        const event = createMockEvent({
+          tags: {
+            environment: 'production',
+            userId: 'user-123',
+            version: '1.0.0',
+          },
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.tags!.environment).toBe('production');
+        expect(result!.tags!.userId).toBe('[REDACTED]');
+        expect(result!.tags!.version).toBe('1.0.0');
+      });
+
+      it('should scrub exception values', () => {
+        const event = createMockEvent({
+          exception: {
+            values: [
+              {
+                type: 'Error',
+                value: 'Failed for user user@test.com with id 1234567890',
+                stacktrace: {
+                  frames: [
+                    {
+                      filename: 'app.js',
+                      lineno: 10,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.exception!.values![0].value).toBe(
+          'Failed for user [SCRUBBED] with id [SCRUBBED]'
+        );
+        expect(result!.exception!.values![0].type).toBe('Error');
+      });
+
+      it('should handle exception without value', () => {
+        const event = createMockEvent({
+          exception: {
+            values: [
+              {
+                type: 'TypeError',
+              },
+            ],
+          },
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.exception!.values![0].value).toBeUndefined();
+        expect(result!.exception!.values![0].type).toBe('TypeError');
+      });
+
+      it('should return event when no sensitive data present', () => {
+        const event = createMockEvent({
+          message: 'Simple error message',
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.event_id).toBe('test-123');
+        expect(result!.message).toBe('Simple error message');
+      });
+
+      it('should handle event with no optional fields', () => {
+        const event = createMockEvent();
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result).toEqual(event);
+      });
+    });
+
+    describe('development environment', () => {
+      it('should process events in development', () => {
+        process.env.NODE_ENV = 'development';
+
+        const event = createMockEvent({
+          user: {
+            id: 'dev-user',
+            email: 'dev@test.com',
+          },
+        });
+
+        const result = beforeSendHook(event, {} as Sentry.EventHint);
+
+        expect(result).not.toBeNull();
+        expect(result!.user!.id).toBe('[USER_ID]');
+      });
+    });
+  });
+
+  describe('beforeSendSpanHook', () => {
+    it('should parameterize user IDs in span descriptions', () => {
+      const span = {
+        description: 'GET /api/users/1234567890/profile',
+        op: 'http.client',
+      };
+
+      const result = beforeSendSpanHook(span as any);
+
+      expect(result.description).toBe('GET /api/users/:userId/profile');
+    });
+
+    it('should handle multiple user IDs in description', () => {
+      const span = {
+        description: 'Copy from /users/1234567890/ to /users/9876543210/',
+        op: 'db.query',
+      };
+
+      const result = beforeSendSpanHook(span as any);
+
+      expect(result.description).toBe('Copy from /users/:userId/ to /users/:userId/');
+    });
+
+    it('should not modify spans without user IDs', () => {
+      const span = {
+        description: 'GET /api/health',
+        op: 'http.client',
+      };
+
+      const result = beforeSendSpanHook(span as any);
+
+      expect(result.description).toBe('GET /api/health');
+    });
+
+    it('should handle spans without description', () => {
+      const span = {
+        op: 'db.query',
+      };
+
+      const result = beforeSendSpanHook(span as any);
+
+      expect(result.description).toBeUndefined();
+    });
+
+    it('should return the span object', () => {
+      const span = {
+        description: 'GET /api/test',
+        op: 'http.client',
+        status: 'ok',
+      };
+
+      const result = beforeSendSpanHook(span as any);
+
+      expect(result).toBe(span);
+      expect(result.op).toBe('http.client');
+      expect(result.status).toBe('ok');
+    });
+
+    it('should only match IDs between slashes', () => {
+      const span = {
+        description: 'ID: 1234567890 is not in path',
+        op: 'custom',
+      };
+
+      const result = beforeSendSpanHook(span as any);
+
+      // Should not match because ID is not between slashes
+      expect(result.description).toBe('ID: 1234567890 is not in path');
+    });
+
+    it('should handle 7-digit user IDs', () => {
+      const span = {
+        description: 'GET /users/1234567/data',
+        op: 'http.client',
+      };
+
+      const result = beforeSendSpanHook(span as any);
+
+      expect(result.description).toBe('GET /users/:userId/data');
+    });
+
+    it('should handle 12-digit user IDs', () => {
+      const span = {
+        description: 'GET /users/123456789012/data',
+        op: 'http.client',
+      };
+
+      const result = beforeSendSpanHook(span as any);
+
+      expect(result.description).toBe('GET /users/:userId/data');
+    });
+  });
+
+  describe('configuration constants', () => {
+    describe('SENSITIVE_FIELDS', () => {
+      it('should include authentication fields', () => {
+        expect(SENSITIVE_FIELDS).toContain('password');
+        expect(SENSITIVE_FIELDS).toContain('token');
+        expect(SENSITIVE_FIELDS).toContain('apiKey');
+        expect(SENSITIVE_FIELDS).toContain('api_key');
+        expect(SENSITIVE_FIELDS).toContain('secret');
+        expect(SENSITIVE_FIELDS).toContain('authorization');
+        expect(SENSITIVE_FIELDS).toContain('bearer');
+        expect(SENSITIVE_FIELDS).toContain('jwt');
+        expect(SENSITIVE_FIELDS).toContain('session');
+        expect(SENSITIVE_FIELDS).toContain('cookie');
+        expect(SENSITIVE_FIELDS).toContain('csrf');
+      });
+
+      it('should include healthcare PHI fields (HIPAA)', () => {
+        expect(SENSITIVE_FIELDS).toContain('ssn');
+        expect(SENSITIVE_FIELDS).toContain('social_security');
+        expect(SENSITIVE_FIELDS).toContain('medical_record');
+        expect(SENSITIVE_FIELDS).toContain('diagnosis');
+        expect(SENSITIVE_FIELDS).toContain('prescription');
+        expect(SENSITIVE_FIELDS).toContain('insurance');
+        expect(SENSITIVE_FIELDS).toContain('health_condition');
+        expect(SENSITIVE_FIELDS).toContain('isi_score');
+        expect(SENSITIVE_FIELDS).toContain('sleep_data');
+        expect(SENSITIVE_FIELDS).toContain('therapy_notes');
+      });
+
+      it('should include PII fields', () => {
+        expect(SENSITIVE_FIELDS).toContain('email');
+        expect(SENSITIVE_FIELDS).toContain('phone');
+        expect(SENSITIVE_FIELDS).toContain('address');
+        expect(SENSITIVE_FIELDS).toContain('birth_date');
+        expect(SENSITIVE_FIELDS).toContain('date_of_birth');
+        expect(SENSITIVE_FIELDS).toContain('dob');
+        expect(SENSITIVE_FIELDS).toContain('first_name');
+        expect(SENSITIVE_FIELDS).toContain('last_name');
+        expect(SENSITIVE_FIELDS).toContain('full_name');
+        expect(SENSITIVE_FIELDS).toContain('telegram_id');
+        expect(SENSITIVE_FIELDS).toContain('external_id');
+        expect(SENSITIVE_FIELDS).toContain('user_id');
+        expect(SENSITIVE_FIELDS).toContain('userId');
+        expect(SENSITIVE_FIELDS).toContain('dbUserId');
+      });
+    });
+
+    describe('SENSITIVE_PATTERNS', () => {
+      it('should have 4 pattern types', () => {
+        expect(SENSITIVE_PATTERNS).toHaveLength(4);
+      });
+
+      it('should match email addresses', () => {
+        const emailPattern = SENSITIVE_PATTERNS[0];
+        expect('test@example.com').toMatch(emailPattern);
+        expect('user.name+tag@company.co.uk').toMatch(emailPattern);
+      });
+
+      it('should match phone numbers', () => {
+        const phonePattern = SENSITIVE_PATTERNS[1];
+        expect('+7-999-123-4567').toMatch(phonePattern);
+        expect('(495) 123-4567').toMatch(phonePattern);
+      });
+
+      it('should match Telegram IDs', () => {
+        const telegramPattern = SENSITIVE_PATTERNS[2];
+        expect('1234567').toMatch(telegramPattern);
+        expect('123456789012').toMatch(telegramPattern);
+      });
+
+      it('should match credit card numbers', () => {
+        const ccPattern = SENSITIVE_PATTERNS[3];
+        expect('1234-5678-9012-3456').toMatch(ccPattern);
+        expect('1234 5678 9012 3456').toMatch(ccPattern);
       });
     });
   });
