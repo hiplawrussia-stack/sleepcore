@@ -406,6 +406,129 @@ describe('ISIRussian Assessment', () => {
       expect(report).toContain('Исходный балл: 20');
       expect(report).toContain('Текущий балл: 10');
     });
+
+    // ========================================================================
+    // BRANCH COVERAGE: Line 541 - isClinical false branch
+    // ========================================================================
+    it('should show "Нет" for isClinical when score <= 7', () => {
+      const response = createISIResponse({ total: 5 });
+      const report = ISIAssessment.generateReport(response);
+
+      expect(report).toContain('Клиническая значимость: Нет');
+    });
+
+    it('should show "Да" for isClinical when score >= 8', () => {
+      const response = createISIResponse({ total: 15 });
+      const report = ISIAssessment.generateReport(response);
+
+      expect(report).toContain('Клиническая значимость: Да');
+    });
+
+    // ========================================================================
+    // BRANCH COVERAGE: Lines 564-567 - Treatment dynamics branches
+    // ========================================================================
+    it('should show improvement (negative change) in treatment dynamics', () => {
+      const response = createISIResponse({ total: 10 });
+      const report = ISIAssessment.generateReport(response, 20);
+
+      expect(report).toContain('Изменение: -10 баллов');
+      expect(report).toContain('Ответ на лечение: Да');
+    });
+
+    it('should show worsening (positive change) in treatment dynamics', () => {
+      const response = createISIResponse({ total: 20 });
+      const report = ISIAssessment.generateReport(response, 15);
+
+      expect(report).toContain('Изменение: +5 баллов');
+      expect(report).toContain('Ответ на лечение: Нет');
+    });
+
+    it('should show no change in treatment dynamics', () => {
+      const response = createISIResponse({ total: 15 });
+      const report = ISIAssessment.generateReport(response, 15);
+
+      expect(report).toContain('Изменение: +0 баллов');
+    });
+
+    it('should show remission status when score <= 7', () => {
+      const response = createISIResponse({ total: 5 });
+      const report = ISIAssessment.generateReport(response, 18);
+
+      expect(report).toContain('Ремиссия: Да (≤7 баллов)');
+    });
+
+    it('should show no remission when score > 7', () => {
+      const response = createISIResponse({ total: 12 });
+      const report = ISIAssessment.generateReport(response, 20);
+
+      expect(report).toContain('Ремиссия: Нет');
+    });
+
+    // ========================================================================
+    // BRANCH COVERAGE: Line 577 - responseQuality branches
+    // ========================================================================
+    it('should show "Требует проверки" for suspect response quality', () => {
+      // All same non-zero responses = suspect
+      const suspectResponse: IISIResponse = {
+        userId: 'test-user',
+        date: new Date().toISOString().split('T')[0],
+        q1_fallingAsleep: 3,
+        q2_stayingAsleep: 3,
+        q3_earlyWaking: 3,
+        q4_satisfaction: 3,
+        q5_interference: 3,
+        q6_noticeability: 3,
+        q7_distress: 3,
+      };
+
+      const report = ISIAssessment.generateReport(suspectResponse);
+
+      expect(report).toContain('Статус: Требует проверки');
+    });
+
+    it('should show "Валидный" for valid response quality', () => {
+      const response = createISIResponse({ total: 16 });
+      const report = ISIAssessment.generateReport(response);
+
+      expect(report).toContain('Статус: Валидный');
+    });
+  });
+
+  // ==========================================================================
+  // BRANCH COVERAGE: getPercentileRank - Line 520 (75th percentile)
+  // ==========================================================================
+  describe('Percentile Rank', () => {
+    // ISI_RUSSIAN_NORMS.percentiles: {10: 10, 25: 14, 50: 18, 75: 22, 90: 25}
+
+    it('should return 10th percentile for score <= 10', () => {
+      expect(ISIAssessment.getPercentileRank(5)).toBe(10);
+      expect(ISIAssessment.getPercentileRank(10)).toBe(10);
+    });
+
+    it('should return 25th percentile for score 11-14', () => {
+      expect(ISIAssessment.getPercentileRank(11)).toBe(25);
+      expect(ISIAssessment.getPercentileRank(14)).toBe(25);
+    });
+
+    it('should return 50th percentile for score 15-18', () => {
+      expect(ISIAssessment.getPercentileRank(15)).toBe(50);
+      expect(ISIAssessment.getPercentileRank(18)).toBe(50);
+    });
+
+    it('should return 75th percentile for score 19-22', () => {
+      expect(ISIAssessment.getPercentileRank(19)).toBe(75);
+      expect(ISIAssessment.getPercentileRank(22)).toBe(75);
+    });
+
+    it('should return 90th percentile for score 23-25', () => {
+      expect(ISIAssessment.getPercentileRank(23)).toBe(90);
+      expect(ISIAssessment.getPercentileRank(25)).toBe(90);
+    });
+
+    it('should return 95th percentile for score > 25', () => {
+      expect(ISIAssessment.getPercentileRank(26)).toBe(95);
+      expect(ISIAssessment.getPercentileRank(28)).toBe(95);
+    });
   });
 });
 
