@@ -205,6 +205,141 @@ describe('SleepCoreAPI', () => {
         expect(() => api.endSession('non-existent')).not.toThrow();
       });
     });
+
+    describe('getSleepStates()', () => {
+      it('should return all states without days parameter', async () => {
+        api.startSession('user-states');
+        api.initializeTreatment('user-states', createBaselineData('user-states', 7));
+
+        // Add 5 check-ins
+        for (let i = 0; i < 5; i++) {
+          await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-states' }));
+        }
+
+        const states = api.getSleepStates('user-states');
+        expect(states.length).toBe(5);
+      });
+
+      it('should return limited states with days parameter', async () => {
+        api.startSession('user-states-limited');
+        api.initializeTreatment('user-states-limited', createBaselineData('user-states-limited', 7));
+
+        // Add 5 check-ins
+        for (let i = 0; i < 5; i++) {
+          await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-states-limited' }));
+        }
+
+        const states = api.getSleepStates('user-states-limited', 3);
+        expect(states.length).toBe(3);
+      });
+
+      it('should return empty array for non-existent user', () => {
+        const states = api.getSleepStates('non-existent-user');
+        expect(states).toEqual([]);
+      });
+
+      it('should handle days parameter larger than available states', async () => {
+        api.startSession('user-few-states');
+        api.initializeTreatment('user-few-states', createBaselineData('user-few-states', 7));
+        await api.processDailyCheckIn(createDailyCheckIn({ userId: 'user-few-states' }));
+
+        const states = api.getSleepStates('user-few-states', 100);
+        expect(states.length).toBe(1); // Returns all available
+      });
+    });
+  });
+
+  describe('ISI Assessment', () => {
+    describe('recordISIAssessment()', () => {
+      it('should record ISI assessment for existing session', () => {
+        api.startSession('user-isi');
+
+        const result = api.recordISIAssessment('user-isi', 15, 'moderate', [2, 2, 2, 2, 2, 2, 3]);
+
+        expect(result.recorded).toBe(true);
+        expect(result.requiresSpecialistReferral).toBe(false);
+
+        const session = api.getSession('user-isi');
+        expect(session?.baselineISI).toBeDefined();
+        expect(session?.baselineISI?.score).toBe(15);
+        expect(session?.baselineISI?.severity).toBe('moderate');
+      });
+
+      it('should return false for non-existent session', () => {
+        const result = api.recordISIAssessment('non-existent', 18, 'moderate', [2, 3, 2, 3, 2, 3, 3]);
+
+        expect(result.recorded).toBe(false);
+        expect(result.requiresSpecialistReferral).toBe(false);
+      });
+
+      it('should require specialist referral for ISI >= 22 (severe)', () => {
+        api.startSession('user-severe');
+        const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const result = api.recordISIAssessment('user-severe', 22, 'severe', [3, 3, 3, 3, 3, 3, 4]);
+
+        expect(result.recorded).toBe(true);
+        expect(result.requiresSpecialistReferral).toBe(true);
+
+        expect(consoleSpy).toHaveBeenCalledWith(
+          expect.stringContaining('ISI >= 22')
+        );
+        expect(consoleSpy).toHaveBeenCalledWith(
+          expect.stringContaining('SEVERE INSOMNIA')
+        );
+        consoleSpy.mockRestore();
+      });
+
+      it('should flag referral even without session for severe scores', () => {
+        const result = api.recordISIAssessment('no-session', 24, 'severe', [3, 4, 3, 4, 3, 3, 4]);
+
+        expect(result.recorded).toBe(false);
+        expect(result.requiresSpecialistReferral).toBe(true);
+      });
+
+      it('should handle edge case ISI score of 21 (no referral)', () => {
+        api.startSession('user-edge');
+        const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const result = api.recordISIAssessment('user-edge', 21, 'moderate', [3, 3, 3, 3, 3, 3, 3]);
+
+        expect(result.requiresSpecialistReferral).toBe(false);
+        expect(consoleSpy).not.toHaveBeenCalled();
+        consoleSpy.mockRestore();
+      });
+
+      it('should handle minimum ISI score of 0', () => {
+        api.startSession('user-min-isi');
+
+        const result = api.recordISIAssessment('user-min-isi', 0, 'none', [0, 0, 0, 0, 0, 0, 0]);
+
+        expect(result.recorded).toBe(true);
+        expect(result.requiresSpecialistReferral).toBe(false);
+      });
+
+      it('should handle maximum ISI score of 28', () => {
+        api.startSession('user-max-isi');
+        const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const result = api.recordISIAssessment('user-max-isi', 28, 'severe', [4, 4, 4, 4, 4, 4, 4]);
+
+        expect(result.recorded).toBe(true);
+        expect(result.requiresSpecialistReferral).toBe(true);
+        expect(consoleSpy).toHaveBeenCalled();
+        consoleSpy.mockRestore();
+      });
+
+      it('should store complete ISI data in session', () => {
+        api.startSession('user-full-isi');
+        const answers = [2, 3, 2, 2, 3, 2, 3];
+
+        api.recordISIAssessment('user-full-isi', 17, 'moderate', answers);
+
+        const session = api.getSession('user-full-isi');
+        expect(session?.baselineISI?.answers).toEqual(answers);
+        expect(session?.baselineISI?.date).toBeInstanceOf(Date);
+      });
+    });
   });
 
   describe('Sleep Diary', () => {
