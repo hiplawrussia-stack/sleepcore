@@ -20,7 +20,12 @@
  * @packageDocumentation
  */
 
-import { PHIEncryptionManager, type IPHIEncryptionStatus } from '../PHIEncryptionManager';
+import {
+  PHIEncryptionManager,
+  getPHIEncryptionManager,
+  PHI_FIELD_DEFINITIONS,
+  type IPHIEncryptionStatus
+} from '../PHIEncryptionManager';
 
 describe('PHIEncryptionManager', () => {
   // Test key (64 hex chars = 256 bits)
@@ -502,6 +507,166 @@ Notes: Woke up twice during the night.`;
 
       expect(manager.isEncryptionEnabled()).toBe(false);
       expect(manager.encryptField('test')).toBe('test');
+    });
+  });
+
+  // ==========================================================================
+  // hashForLookup() - Lines 257-265
+  // ==========================================================================
+
+  describe('hashForLookup', () => {
+    it('should hash value when encryption is enabled', () => {
+      process.env.ENCRYPTION_MASTER_KEY = TEST_KEY;
+      const manager = PHIEncryptionManager.getInstance();
+
+      const hash = manager.hashForLookup('test@example.com');
+
+      expect(hash).toBeDefined();
+      expect(typeof hash).toBe('string');
+      expect(hash.length).toBeGreaterThan(0);
+      // Hash should be deterministic
+      const hash2 = manager.hashForLookup('test@example.com');
+      expect(hash).toBe(hash2);
+    });
+
+    it('should produce different hashes for different values', () => {
+      process.env.ENCRYPTION_MASTER_KEY = TEST_KEY;
+      const manager = PHIEncryptionManager.getInstance();
+
+      const hash1 = manager.hashForLookup('user1@example.com');
+      const hash2 = manager.hashForLookup('user2@example.com');
+
+      expect(hash1).not.toBe(hash2);
+    });
+
+    it('should normalize to lowercase before hashing', () => {
+      process.env.ENCRYPTION_MASTER_KEY = TEST_KEY;
+      const manager = PHIEncryptionManager.getInstance();
+
+      const hashLower = manager.hashForLookup('test@example.com');
+      const hashUpper = manager.hashForLookup('TEST@EXAMPLE.COM');
+
+      expect(hashLower).toBe(hashUpper);
+    });
+
+    it('should use simple SHA256 when encryption service not available', () => {
+      // No encryption key = graceful degradation
+      const manager = PHIEncryptionManager.getInstance();
+
+      expect(manager.isEncryptionEnabled()).toBe(false);
+
+      const hash = manager.hashForLookup('test@example.com');
+
+      expect(hash).toBeDefined();
+      expect(typeof hash).toBe('string');
+      // SHA256 produces 64 hex characters
+      expect(hash.length).toBe(64);
+      expect(hash).toMatch(/^[a-f0-9]+$/);
+    });
+
+    it('should produce consistent fallback hash without encryption', () => {
+      const manager = PHIEncryptionManager.getInstance();
+
+      const hash1 = manager.hashForLookup('test@example.com');
+      const hash2 = manager.hashForLookup('test@example.com');
+
+      expect(hash1).toBe(hash2);
+    });
+  });
+
+  // ==========================================================================
+  // getEncryptionService() - Lines 270-272
+  // ==========================================================================
+
+  describe('getEncryptionService', () => {
+    it('should return EncryptionService when encryption is enabled', () => {
+      process.env.ENCRYPTION_MASTER_KEY = TEST_KEY;
+      const manager = PHIEncryptionManager.getInstance();
+
+      const service = manager.getEncryptionService();
+
+      expect(service).not.toBeNull();
+      expect(service).toBeDefined();
+    });
+
+    it('should return null when encryption is disabled', () => {
+      const manager = PHIEncryptionManager.getInstance();
+
+      const service = manager.getEncryptionService();
+
+      expect(service).toBeNull();
+    });
+  });
+
+  // ==========================================================================
+  // getPHIEncryptionManager() factory - Line 279
+  // ==========================================================================
+
+  describe('getPHIEncryptionManager factory function', () => {
+    it('should return singleton instance', () => {
+      process.env.ENCRYPTION_MASTER_KEY = TEST_KEY;
+
+      const manager1 = getPHIEncryptionManager();
+      const manager2 = getPHIEncryptionManager();
+
+      expect(manager1).toBe(manager2);
+      expect(manager1).toBe(PHIEncryptionManager.getInstance());
+    });
+
+    it('should work without encryption key', () => {
+      const manager = getPHIEncryptionManager();
+
+      expect(manager).toBeDefined();
+      expect(manager.isEncryptionEnabled()).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // PHI_FIELD_DEFINITIONS export
+  // ==========================================================================
+
+  describe('PHI_FIELD_DEFINITIONS', () => {
+    it('should define user PHI fields', () => {
+      expect(PHI_FIELD_DEFINITIONS.user.encryptedFields).toContain('first_name');
+      expect(PHI_FIELD_DEFINITIONS.user.encryptedFields).toContain('last_name');
+    });
+
+    it('should define sleepDiary PHI fields', () => {
+      expect(PHI_FIELD_DEFINITIONS.sleepDiary.encryptedFields).toContain('notes');
+    });
+
+    it('should define therapySession PHI fields', () => {
+      expect(PHI_FIELD_DEFINITIONS.therapySession.encryptedFields).toContain('notes');
+      expect(PHI_FIELD_DEFINITIONS.therapySession.encryptedFields).toContain('recommendations_json');
+    });
+
+    it('should have empty encrypted fields for assessment scores', () => {
+      // Assessment numeric scores are not PHI
+      expect(PHI_FIELD_DEFINITIONS.assessment.encryptedFields).toHaveLength(0);
+    });
+  });
+
+  // ==========================================================================
+  // Constructor error handling - Lines 65-66
+  // ==========================================================================
+
+  describe('constructor error handling', () => {
+    it('should disable encryption when EncryptionService throws', () => {
+      // Use an invalid key format that will cause EncryptionService to throw
+      // EncryptionService expects 64 hex characters for 256-bit key
+      process.env.ENCRYPTION_MASTER_KEY = 'invalid-key-too-short';
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      const manager = PHIEncryptionManager.getInstance();
+
+      expect(manager.isEncryptionEnabled()).toBe(false);
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[PHIEncryptionManager] Failed to initialize:'),
+        expect.any(Error)
+      );
+
+      consoleSpy.mockRestore();
     });
   });
 });
