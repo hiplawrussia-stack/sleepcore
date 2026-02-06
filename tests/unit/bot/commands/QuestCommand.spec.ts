@@ -14,48 +14,8 @@ import {
   assertCallbackData,
 } from './testHelpers';
 
-// Mock the GamificationContext module
-jest.mock('../../../../src/bot/services/GamificationContext', () => ({
-  getGamificationEngine: jest.fn(() => Promise.resolve({
-    getActiveQuests: jest.fn(() => Promise.resolve([
-      {
-        quest: { id: 'diary_7', title: 'Дневник сна', description: 'Веди дневник 7 дней', icon: '📝', category: 'diary', difficulty: 'easy', targetMetric: 'diary_entries', targetValue: 7, durationDays: 7, reward: { xp: 50 } },
-        progress: 40,
-        currentValue: 3,
-        targetValue: 7,
-        daysRemaining: 4,
-        startedAt: new Date(),
-        expiresAt: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000),
-      },
-    ])),
-    getAvailableQuests: jest.fn(() => Promise.resolve([
-      { id: 'relax_5', title: 'Релаксация', description: 'Проведи 5 сеансов релаксации', icon: '🧘', category: 'relaxation', difficulty: 'easy', targetMetric: 'relax_sessions', targetValue: 5, durationDays: 7, reward: { xp: 40 } },
-    ])),
-    startQuest: jest.fn(() => Promise.resolve({ questId: 'relax_5', userId: 123, startedAt: new Date() })),
-    getCompletedQuestCount: jest.fn(() => Promise.resolve(2)),
-    getPlayerProfile: jest.fn(() => Promise.resolve({
-      userId: 123,
-      totalXp: 100,
-      level: 2,
-      xpToNextLevel: 150,
-      levelProgress: 40,
-      engagementLevel: 'active',
-      totalDaysActive: 5,
-      streaks: [{ type: 'sleep_diary', currentCount: 3, longestCount: 5 }],
-      longestStreak: 5,
-      activeQuests: [],
-      completedQuestCount: 2,
-      badges: [],
-      badgeCount: 1,
-      totalBadgeXp: 10,
-      sonyaStage: { id: 'owlet', name: 'Совёнок', emoji: '🦉', description: '', requiredDays: 0, abilities: [] },
-      sonyaEmoji: '🦉',
-      sonyaName: 'Соня',
-      compassionModeEnabled: true,
-      softResetEnabled: true,
-    })),
-  })),
-}));
+// Note: GamificationContext mock removed - command now uses ctx.sleepCore.* facade methods
+// which are mocked through testHelpers.createMockSleepCoreAPI()
 
 describe('QuestCommand', () => {
   let command: QuestCommand;

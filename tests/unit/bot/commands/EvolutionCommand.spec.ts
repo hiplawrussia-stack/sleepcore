@@ -14,55 +14,8 @@ import {
   assertCallbackData,
 } from './testHelpers';
 
-// Mock the GamificationContext module
-jest.mock('../../../../src/bot/services/GamificationContext', () => ({
-  getGamificationEngine: jest.fn(() => Promise.resolve({
-    getPlayerProfile: jest.fn(() => Promise.resolve({
-      userId: 123,
-      totalXp: 100,
-      level: 2,
-      xpToNextLevel: 150,
-      levelProgress: 40,
-      engagementLevel: 'active',
-      totalDaysActive: 5,
-      streaks: [{ type: 'sleep_diary', currentCount: 3, longestCount: 5 }],
-      longestStreak: 5,
-      activeQuests: [],
-      completedQuestCount: 2,
-      badges: [],
-      badgeCount: 1,
-      totalBadgeXp: 10,
-      sonyaStage: {
-        id: 'owlet',
-        name: 'Совёнок',
-        emoji: '🦉',
-        description: 'Маленький совёнок, только начинающий свой путь',
-        requiredDays: 0,
-        abilities: ['Базовые советы по сну'],
-      },
-      sonyaEmoji: '🦉',
-      sonyaName: 'Соня',
-      compassionModeEnabled: true,
-      softResetEnabled: true,
-    })),
-    recordAction: jest.fn(() => Promise.resolve({
-      xpEarned: 25,
-      totalXp: 125,
-      level: 2,
-      leveledUp: false,
-      completedQuests: [],
-      awardedBadges: [],
-      streakUpdates: [],
-      celebrations: [],
-      timestamp: new Date(),
-    })),
-    checkEvolution: jest.fn(() => Promise.resolve({
-      evolved: false,
-      currentStage: { id: 'owlet', name: 'Совёнок', emoji: '🦉', description: '', requiredDays: 0, abilities: [] },
-      previousStage: null,
-    })),
-  })),
-}));
+// Note: GamificationContext mock removed - command now uses ctx.sleepCore.* facade methods
+// which are mocked through testHelpers.createMockSleepCoreAPI()
 
 describe('EvolutionCommand', () => {
   let command: EvolutionCommand;

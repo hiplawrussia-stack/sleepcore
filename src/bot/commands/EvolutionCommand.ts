@@ -21,7 +21,6 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import { getGamificationEngine } from '../services/GamificationContext';
 import { EVOLUTION_STAGES, type SonyaStageId } from '../../modules/evolution';
 
 /**
@@ -107,10 +106,9 @@ export class EvolutionCommand implements IConversationCommand {
    * Show Sonya's current status
    */
   private async showSonyaStatus(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const engine = await getGamificationEngine();
     const userId = parseInt(ctx.userId, 10);
 
-    const profile = await engine.getPlayerProfile(userId);
+    const profile = await ctx.sleepCore.getPlayerProfile(userId);
     const currentStage = profile.sonyaStage;
 
     if (!currentStage) {
@@ -193,10 +191,9 @@ ${formatter.tip(`${currentStage.abilities.length} способностей до�
    * Show evolution history
    */
   private async showEvolutionHistory(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const engine = await getGamificationEngine();
     const userId = parseInt(ctx.userId, 10);
 
-    const profile = await engine.getPlayerProfile(userId);
+    const profile = await ctx.sleepCore.getPlayerProfile(userId);
 
     // Determine unlocked stages based on days active
     const unlockedStages = EVOLUTION_STAGES.filter(
@@ -246,10 +243,9 @@ ${sonya.emoji} _Мы прошли этот путь вместе!_
    * Show current abilities
    */
   private async showAbilities(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const engine = await getGamificationEngine();
     const userId = parseInt(ctx.userId, 10);
 
-    const profile = await engine.getPlayerProfile(userId);
+    const profile = await ctx.sleepCore.getPlayerProfile(userId);
     const currentStage = profile.sonyaStage;
 
     if (!currentStage) {
@@ -303,10 +299,9 @@ ${lockedAbilities.length > 5 ? `\n_...и ещё ${lockedAbilities.length - 5}_` 
    * Show next stage requirements
    */
   private async showNextStage(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const engine = await getGamificationEngine();
     const userId = parseInt(ctx.userId, 10);
 
-    const profile = await engine.getPlayerProfile(userId);
+    const profile = await ctx.sleepCore.getPlayerProfile(userId);
     const currentStage = profile.sonyaStage;
 
     if (!currentStage) {
@@ -378,13 +373,12 @@ ${formatter.tip(progress >= 80 ? 'Почти готово!' : 'Продолжа�
    * Interact with Sonya
    */
   private async interactWithSonya(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const engine = await getGamificationEngine();
     const userId = parseInt(ctx.userId, 10);
 
     // Record action which may trigger evolution check
-    const result = await engine.recordAction(userId, 'daily_check_in');
+    const result = await ctx.sleepCore.recordGamificationAction(userId, 'daily_check_in');
 
-    const profile = await engine.getPlayerProfile(userId);
+    const profile = await ctx.sleepCore.getPlayerProfile(userId);
     const currentStage = profile.sonyaStage;
 
     if (!currentStage) {

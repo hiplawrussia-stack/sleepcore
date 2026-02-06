@@ -19,7 +19,6 @@ import type {
   IInlineButton,
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
-import { getGamificationEngine } from '../services/GamificationContext';
 
 /**
  * /profile Command Implementation
@@ -110,10 +109,9 @@ export class ProfileCommand implements IConversationCommand {
    */
   private async showProfileOverview(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const engine = await getGamificationEngine();
       const userId = parseInt(ctx.userId, 10);
 
-      const profile = await engine.getPlayerProfile(userId);
+      const profile = await ctx.sleepCore.getPlayerProfile(userId);
 
       // Build profile card
       const levelProgress = formatter.progressBar(profile.levelProgress, 10);
@@ -190,11 +188,10 @@ ${formatter.tip('Выбери раздел для подробностей')}
    */
   private async showXPDetails(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const engine = await getGamificationEngine();
       const userId = parseInt(ctx.userId, 10);
 
-      const xpStatus = await engine.getXPStatus(userId);
-      const profile = await engine.getPlayerProfile(userId);
+      const xpStatus = await ctx.sleepCore.getXPStatus(userId);
+      const profile = await ctx.sleepCore.getPlayerProfile(userId);
 
       // Calculate level thresholds
       const currentLevelXP = this.getLevelXP(xpStatus.level);
@@ -248,11 +245,10 @@ ${formatter.divider()}
    */
   private async showStreaks(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const engine = await getGamificationEngine();
       const userId = parseInt(ctx.userId, 10);
 
-      const streaks = await engine.getStreaks(userId);
-      const settings = await engine.getSettings(userId);
+      const streaks = await ctx.sleepCore.getStreaks(userId);
+      const settings = await ctx.sleepCore.getGamificationSettings(userId);
 
       let streaksText = '';
 
@@ -316,10 +312,9 @@ ${formatter.tip('Заходи каждый день чтобы поддержи�
    */
   private async showSettings(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const engine = await getGamificationEngine();
       const userId = parseInt(ctx.userId, 10);
 
-      const settings = await engine.getSettings(userId);
+      const settings = await ctx.sleepCore.getGamificationSettings(userId);
 
       const message = `
 ⚙️ *Настройки геймификации*
@@ -372,15 +367,14 @@ ${formatter.tip('Настройки влияют на сохранение пр�
    */
   private async toggleCompassionMode(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const engine = await getGamificationEngine();
       const userId = parseInt(ctx.userId, 10);
 
-      const settings = await engine.getSettings(userId);
-      await engine.updateSettings(userId, {
+      const settings = await ctx.sleepCore.getGamificationSettings(userId);
+      await ctx.sleepCore.updateGamificationSettings(userId, {
         compassionEnabled: !settings.compassionEnabled,
       });
 
-      const newSettings = await engine.getSettings(userId);
+      const newSettings = await ctx.sleepCore.getGamificationSettings(userId);
 
       return {
         success: true,
@@ -399,15 +393,14 @@ ${formatter.tip('Настройки влияют на сохранение пр�
    */
   private async toggleSoftReset(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const engine = await getGamificationEngine();
       const userId = parseInt(ctx.userId, 10);
 
-      const settings = await engine.getSettings(userId);
-      await engine.updateSettings(userId, {
+      const settings = await ctx.sleepCore.getGamificationSettings(userId);
+      await ctx.sleepCore.updateGamificationSettings(userId, {
         softResetEnabled: !settings.softResetEnabled,
       });
 
-      const newSettings = await engine.getSettings(userId);
+      const newSettings = await ctx.sleepCore.getGamificationSettings(userId);
 
       return {
         success: true,
@@ -426,10 +419,9 @@ ${formatter.tip('Настройки влияют на сохранение пр�
    */
   private async doDailyCheckIn(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const engine = await getGamificationEngine();
       const userId = parseInt(ctx.userId, 10);
 
-      const result = await engine.recordDailyCheckIn(userId);
+      const result = await ctx.sleepCore.recordDailyCheckIn(userId);
 
       let celebrationText = '';
       if (result.leveledUp) {

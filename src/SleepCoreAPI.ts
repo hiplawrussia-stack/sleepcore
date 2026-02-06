@@ -107,6 +107,19 @@ import { arousalAssessmentService } from './bot/services/ArousalAssessmentServic
 import { crisisDetectionService } from './bot/services/CrisisDetectionService';
 import { crisisEscalationService } from './bot/services/CrisisEscalationService';
 
+// Wave 4: Gamification facade routing (P2-1 fix)
+import { getGamificationEngine } from './bot/services/GamificationContext';
+import type {
+  IGamificationEngine,
+  IGamificationResult,
+  IPlayerProfile,
+  IActiveQuestInfo,
+  IStreakInfo,
+  GamificationAction,
+} from './modules/gamification/IGamificationEngine';
+import type { IActiveQuest, IQuest } from './modules/quests/QuestService';
+import type { IUserBadge, IBadge } from './modules/quests/BadgeService';
+
 /**
  * SleepCore user session
  */
@@ -2361,6 +2374,203 @@ export class SleepCoreAPI {
       source: 'diary',
     };
   }
+
+  // ===========================================================================
+  // GAMIFICATION FACADE (P2-1 fix: Route through SleepCoreAPI instead of direct access)
+  // ===========================================================================
+
+  /**
+   * Get gamification engine instance (lazy initialized)
+   * @internal Used by facade methods below
+   */
+  private async getGamification(): Promise<IGamificationEngine> {
+    return getGamificationEngine();
+  }
+
+  /**
+   * Get player's complete gamification profile
+   * Includes XP, level, badges, quests, streaks, evolution state
+   *
+   * @param userId - User ID (numeric)
+   * @returns Complete player profile
+   */
+  async getPlayerProfile(userId: number): Promise<IPlayerProfile> {
+    const engine = await this.getGamification();
+    return engine.getPlayerProfile(userId);
+  }
+
+  /**
+   * Record a gamification action and process effects
+   * Main entry point for awarding XP, checking quests, badges, evolution
+   *
+   * @param userId - User ID (numeric)
+   * @param action - Action type (diary_entry, voice_diary, etc.)
+   * @param metadata - Additional action metadata
+   * @returns Unified gamification result with all effects
+   */
+  async recordGamificationAction(
+    userId: number,
+    action: GamificationAction,
+    metadata?: Record<string, unknown>
+  ): Promise<IGamificationResult> {
+    const engine = await this.getGamification();
+    return engine.recordAction(userId, action, metadata);
+  }
+
+  /**
+   * Record daily check-in for streak maintenance
+   *
+   * @param userId - User ID (numeric)
+   * @returns Gamification result with streak updates
+   */
+  async recordDailyCheckIn(userId: number): Promise<IGamificationResult> {
+    const engine = await this.getGamification();
+    return engine.recordDailyCheckIn(userId);
+  }
+
+  /**
+   * Get user's earned badges
+   *
+   * @param userId - User ID (numeric)
+   * @returns Array of user badges with award dates
+   */
+  async getUserBadges(userId: number): Promise<IUserBadge[]> {
+    const engine = await this.getGamification();
+    return engine.getUserBadges(userId);
+  }
+
+  /**
+   * Get all available badges in the system
+   *
+   * @returns Array of all badge definitions
+   */
+  async getAllBadges(): Promise<IBadge[]> {
+    const engine = await this.getGamification();
+    return engine.getAllBadges();
+  }
+
+  /**
+   * Check if user has a specific badge
+   *
+   * @param userId - User ID (numeric)
+   * @param badgeId - Badge ID to check
+   * @returns True if user has the badge
+   */
+  async hasBadge(userId: number, badgeId: string): Promise<boolean> {
+    const engine = await this.getGamification();
+    return engine.hasBadge(userId, badgeId);
+  }
+
+  /**
+   * Get user's active quests
+   *
+   * @param userId - User ID (numeric)
+   * @returns Array of active quest info with progress
+   */
+  async getActiveQuests(userId: number): Promise<IActiveQuestInfo[]> {
+    const engine = await this.getGamification();
+    return engine.getActiveQuests(userId);
+  }
+
+  /**
+   * Start a quest for user
+   *
+   * @param userId - User ID (numeric)
+   * @param questId - Quest ID to start
+   * @returns Active quest or null if quest not found/already active
+   */
+  async startQuest(userId: number, questId: string): Promise<IActiveQuest | null> {
+    const engine = await this.getGamification();
+    return engine.startQuest(userId, questId);
+  }
+
+  /**
+   * Get available quests for user (not started, prerequisites met)
+   *
+   * @param userId - User ID (numeric)
+   * @returns Array of available quests
+   */
+  async getAvailableQuests(userId: number): Promise<IQuest[]> {
+    const engine = await this.getGamification();
+    return engine.getAvailableQuests(userId);
+  }
+
+  /**
+   * Get count of completed quests for user
+   *
+   * @param userId - User ID (numeric)
+   * @returns Number of completed quests
+   */
+  async getCompletedQuestCount(userId: number): Promise<number> {
+    const engine = await this.getGamification();
+    return engine.getCompletedQuestCount(userId);
+  }
+
+  /**
+   * Get user's XP and level status
+   *
+   * @param userId - User ID (numeric)
+   * @returns XP status with level progress
+   */
+  async getXPStatus(userId: number): Promise<{
+    totalXp: number;
+    level: number;
+    xpToNextLevel: number;
+    levelProgress: number;
+  }> {
+    const engine = await this.getGamification();
+    return engine.getXPStatus(userId);
+  }
+
+  /**
+   * Get user's streak information
+   *
+   * @param userId - User ID (numeric)
+   * @returns Array of streak info
+   */
+  async getStreaks(userId: number): Promise<IStreakInfo[]> {
+    const engine = await this.getGamification();
+    return engine.getStreaks(userId);
+  }
+
+  /**
+   * Get user's gamification settings
+   *
+   * @param userId - User ID (numeric)
+   * @returns Settings including compassion mode, soft reset
+   */
+  async getGamificationSettings(userId: number): Promise<{
+    compassionEnabled: boolean;
+    softResetEnabled: boolean;
+    softLimitMinutes: number;
+    dailyLimitMinutes: number;
+  }> {
+    const engine = await this.getGamification();
+    return engine.getSettings(userId);
+  }
+
+  /**
+   * Update user's gamification settings
+   *
+   * @param userId - User ID (numeric)
+   * @param settings - Settings to update
+   */
+  async updateGamificationSettings(
+    userId: number,
+    settings: Partial<{
+      compassionEnabled: boolean;
+      softResetEnabled: boolean;
+      softLimitMinutes: number;
+      dailyLimitMinutes: number;
+    }>
+  ): Promise<void> {
+    const engine = await this.getGamification();
+    return engine.updateSettings(userId, settings);
+  }
+
+  // ===========================================================================
+  // PRIVATE HELPERS
+  // ===========================================================================
 
   private qualityToNumber(quality: string): number {
     const map: Record<string, number> = {

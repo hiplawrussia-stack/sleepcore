@@ -21,7 +21,7 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import { getGamificationEngine } from '../services/GamificationContext';
+// P2-1 fix: Gamification now routed through SleepCoreAPI facade
 import type { IBadge, BadgeCategory, BadgeRarity } from '../../modules/quests';
 
 /**
@@ -110,13 +110,12 @@ export class BadgeCommand implements IConversationCommand {
    * Show badge collection (main view)
    */
   private async showBadgeCollection(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const engine = await getGamificationEngine();
     const userId = parseInt(ctx.userId, 10);
 
-    const userBadges = await engine.getUserBadges(userId);
-    const allBadges = engine.getAllBadges();
+    const userBadges = await ctx.sleepCore.getUserBadges(userId);
+    const allBadges = await ctx.sleepCore.getAllBadges();
     const totalVisible = allBadges.filter((b) => !b.hidden).length;
-    const profile = await engine.getPlayerProfile(userId);
+    const profile = await ctx.sleepCore.getPlayerProfile(userId);
     const newBadges = userBadges.filter((ub) => ub.isNew);
 
     // Group user badges by category
@@ -212,11 +211,10 @@ ${formatter.tip('Выбери категорию для подробностей
    * Show new badges
    */
   private async showNewBadges(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const engine = await getGamificationEngine();
     const userId = parseInt(ctx.userId, 10);
 
-    const userBadges = await engine.getUserBadges(userId);
-    const allBadges = engine.getAllBadges();
+    const userBadges = await ctx.sleepCore.getUserBadges(userId);
+    const allBadges = await ctx.sleepCore.getAllBadges();
     const newBadges = userBadges.filter((ub) => ub.isNew);
 
     if (newBadges.length === 0) {
@@ -263,12 +261,11 @@ ${badgesText}
    * Show badges by category
    */
   private async showCategory(ctx: ISleepCoreContext, category: BadgeCategory): Promise<ICommandResult> {
-    const engine = await getGamificationEngine();
     const userId = parseInt(ctx.userId, 10);
 
-    const allBadges = engine.getAllBadges();
+    const allBadges = await ctx.sleepCore.getAllBadges();
     const allInCategory = allBadges.filter((b) => b.category === category && !b.hidden);
-    const userBadges = await engine.getUserBadges(userId);
+    const userBadges = await ctx.sleepCore.getUserBadges(userId);
     const earnedIds = new Set(userBadges.map((ub) => ub.badgeId));
 
     const categoryNames: Record<BadgeCategory, string> = {
@@ -325,11 +322,10 @@ ${formatter.tip('Нажми на бейдж для подробностей')}
    * Show all badges
    */
   private async showAllBadges(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const engine = await getGamificationEngine();
     const userId = parseInt(ctx.userId, 10);
 
-    const allBadges = engine.getAllBadges().filter((b) => !b.hidden);
-    const userBadges = await engine.getUserBadges(userId);
+    const allBadges = (await ctx.sleepCore.getAllBadges()).filter((b) => !b.hidden);
+    const userBadges = await ctx.sleepCore.getUserBadges(userId);
     const earnedIds = new Set(userBadges.map((ub) => ub.badgeId));
 
     // Group by rarity
@@ -404,12 +400,11 @@ ${badgesText}
    * Show badge progress
    */
   private async showProgress(ctx: ISleepCoreContext): Promise<ICommandResult> {
-    const engine = await getGamificationEngine();
     const userId = parseInt(ctx.userId, 10);
 
-    const profile = await engine.getPlayerProfile(userId);
-    const allBadges = engine.getAllBadges();
-    const userBadges = await engine.getUserBadges(userId);
+    const profile = await ctx.sleepCore.getPlayerProfile(userId);
+    const allBadges = await ctx.sleepCore.getAllBadges();
+    const userBadges = await ctx.sleepCore.getUserBadges(userId);
     const earnedIds = new Set(userBadges.map((ub) => ub.badgeId));
 
     // Find badges not yet earned and calculate progress
@@ -502,10 +497,9 @@ ${formatter.tip('Продолжай — ты близко к цели!')}
    * Show badge details
    */
   private async showBadgeDetails(ctx: ISleepCoreContext, badgeId: string): Promise<ICommandResult> {
-    const engine = await getGamificationEngine();
     const userId = parseInt(ctx.userId, 10);
 
-    const allBadges = engine.getAllBadges();
+    const allBadges = await ctx.sleepCore.getAllBadges();
     const badge = allBadges.find((b) => b.id === badgeId);
 
     if (!badge) {
@@ -515,14 +509,14 @@ ${formatter.tip('Продолжай — ты близко к цели!')}
       };
     }
 
-    const hasBadge = await engine.hasBadge(userId, badgeId);
+    const hasBadge = await ctx.sleepCore.hasBadge(userId, badgeId);
     const rarityLabel = this.getRarityLabel(badge.rarity);
     const categoryLabel = this.getCategoryLabel(badge.category);
 
     // Get progress if not earned
     let progressText = '';
     if (!hasBadge && badge.criteria) {
-      const profile = await engine.getPlayerProfile(userId);
+      const profile = await ctx.sleepCore.getPlayerProfile(userId);
       const criteria = badge.criteria;
       let current = 0;
       const target = criteria.value || 1;

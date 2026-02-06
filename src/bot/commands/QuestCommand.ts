@@ -20,7 +20,6 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import { getGamificationEngine } from '../services/GamificationContext';
 import type { IActiveQuestInfo } from '../../modules/gamification';
 import { questService } from '../../modules/quests'; // Keep for quest definitions
 
@@ -116,16 +115,15 @@ export class QuestCommand implements IConversationCommand {
    */
   private async showQuestHub(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const engine = await getGamificationEngine();
       const userId = parseInt(ctx.userId, 10);
 
-      const activeQuests = await engine.getActiveQuests(userId);
-      const availableQuests = await engine.getAvailableQuests(userId);
-      const completedCount = await engine.getCompletedQuestCount(userId);
+      const activeQuests = await ctx.sleepCore.getActiveQuests(userId);
+      const availableQuests = await ctx.sleepCore.getAvailableQuests(userId);
+      const completedCount = await ctx.sleepCore.getCompletedQuestCount(userId);
       const totalQuests = questService.getAllQuests().length;
 
       // Get total XP from profile
-      const profile = await engine.getPlayerProfile(userId);
+      const profile = await ctx.sleepCore.getPlayerProfile(userId);
       const totalXP = profile.totalXp;
 
       const message = `
@@ -175,9 +173,8 @@ ${formatter.tip('Выбери раздел для подробностей')}
    */
   private async showActiveQuests(ctx: ISleepCoreContext): Promise<ICommandResult> {
     try {
-      const engine = await getGamificationEngine();
       const userId = parseInt(ctx.userId, 10);
-      const activeQuests = await engine.getActiveQuests(userId);
+      const activeQuests = await ctx.sleepCore.getActiveQuests(userId);
 
       if (activeQuests.length === 0) {
         const message = `
@@ -433,9 +430,8 @@ ${progressText ? `\n${progressText}` : ''}
    */
   private async startQuest(ctx: ISleepCoreContext, questId: string): Promise<ICommandResult> {
     try {
-      const engine = await getGamificationEngine();
       const userId = parseInt(ctx.userId, 10);
-      const result = await engine.startQuest(userId, questId);
+      const result = await ctx.sleepCore.startQuest(userId, questId);
 
       if (!result) {
         return {
@@ -476,12 +472,21 @@ ${formatter.tip('Прогресс обновляется автоматичес�
 
   /**
    * Abandon a quest
+   *
+   * January 2026: Now uses questService.abandonQuest() for proper state management
    */
   private async abandonQuest(ctx: ISleepCoreContext, questId: string): Promise<ICommandResult> {
     const quest = questService.getQuest(questId);
 
-    // Note: QuestService doesn't have abandonQuest method, this is a placeholder
-    // In production, you'd implement this in QuestService
+    // Call the actual abandon method
+    const abandoned = questService.abandonQuest(ctx.userId, questId);
+
+    if (!abandoned) {
+      return {
+        success: false,
+        error: 'Квест не найден или уже завершён',
+      };
+    }
 
     const message = `
 ${formatter.warning('Квест отменён')}
