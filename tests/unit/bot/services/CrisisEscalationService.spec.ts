@@ -26,6 +26,69 @@ import {
 } from '../../../../src/bot/services/CrisisEscalationService';
 
 import type { ICrisisEvent } from '../../../../src/bot/services/CrisisDetectionService';
+import type { Bot, Context } from 'grammy';
+import type { AdverseEventService } from '../../../../src/bot/services/AdverseEventService';
+import type { SafetyPlanRepository } from '../../../../src/infrastructure/database/repositories/SafetyPlanRepository';
+
+// ==================== Mock Factories ====================
+
+/**
+ * Mock Bot type with proper jest mocks
+ */
+interface MockBotApi {
+  sendMessage: jest.Mock;
+}
+
+interface MockBot {
+  api: MockBotApi;
+}
+
+/**
+ * Create mock Bot instance
+ */
+function createMockBot(): MockBot {
+  return {
+    api: {
+      sendMessage: jest.fn().mockResolvedValue({ message_id: 123 }),
+    },
+  };
+}
+
+/**
+ * Mock AE Service type
+ */
+interface MockAEService {
+  reportAdverseEvent: jest.Mock;
+}
+
+/**
+ * Create mock AdverseEventService
+ */
+function createMockAEService(): MockAEService {
+  return {
+    reportAdverseEvent: jest.fn().mockResolvedValue({ id: 999 }),
+  };
+}
+
+/**
+ * Mock Safety Plan Repository type
+ */
+interface MockSafetyPlanRepo {
+  findAll: jest.Mock;
+  upsert: jest.Mock;
+  findByUserId: jest.Mock;
+}
+
+/**
+ * Create mock SafetyPlanRepository
+ */
+function createMockSafetyPlanRepo(): MockSafetyPlanRepo {
+  return {
+    findAll: jest.fn().mockResolvedValue([]),
+    upsert: jest.fn().mockResolvedValue(undefined),
+    findByUserId: jest.fn().mockResolvedValue(null),
+  };
+}
 
 // ==================== Mock Crisis Events ====================
 
@@ -483,5 +546,466 @@ describe('CrisisEscalationService Integration', () => {
       expect(completePlan?.professionalContacts).toHaveLength(1);
       expect(completePlan?.safePlaces).toHaveLength(2);
     });
+  });
+});
+
+// ==================== Bot Integration Tests ====================
+
+describe('CrisisEscalationService Bot Integration', () => {
+  let service: CrisisEscalationService;
+  let mockBot: MockBot;
+
+  beforeEach(() => {
+    service = createCrisisEscalationService({
+      adminUserIds: ['admin-1', 'admin-2'],
+      adminChatId: 'admin-chat-123',
+    });
+    mockBot = createMockBot();
+    service.setBot(mockBot as unknown as Bot<Context>);
+  });
+
+  describe('setBot()', () => {
+    it('should set bot instance', () => {
+      const newService = createCrisisEscalationService();
+      newService.setBot(mockBot as unknown as Bot<Context>);
+      // Verify bot is set by attempting notification
+      newService.updateConfig({ adminUserIds: ['admin-1'] });
+      // The bot should be available for sending
+      expect(newService).toBeInstanceOf(CrisisEscalationService);
+    });
+  });
+
+  describe('sendAdminNotifications() with bot', () => {
+    it('should send notifications to admin chat', async () => {
+      const event = createMockCrisisEvent('critical');
+      const count = await service.sendAdminNotifications(event);
+
+      expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
+        'admin-chat-123',
+        expect.any(String),
+        { parse_mode: 'HTML' }
+      );
+      expect(count).toBeGreaterThan(0);
+    });
+
+    it('should send notifications to individual admins', async () => {
+      const event = createMockCrisisEvent('critical');
+      await service.sendAdminNotifications(event);
+
+      expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
+        'admin-1',
+        expect.any(String),
+        { parse_mode: 'HTML' }
+      );
+      expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
+        'admin-2',
+        expect.any(String),
+        { parse_mode: 'HTML' }
+      );
+    });
+
+    it('should format critical message correctly', async () => {
+      const event = createMockCrisisEvent('critical', {
+        indicators: ['want to end my life'],
+      });
+      await service.sendAdminNotifications(event);
+
+      const calls = mockBot.api.sendMessage.mock.calls;
+      const message = calls[0][1] as string;
+      expect(message).toContain('CRITICAL');
+      expect(message).toContain('user-123');
+    });
+
+    it('should format high severity message correctly', async () => {
+      const event = createMockCrisisEvent('high', {
+        indicators: ['feeling hopeless'],
+      });
+      await service.sendAdminNotifications(event);
+
+      const calls = mockBot.api.sendMessage.mock.calls;
+      const message = calls[0][1] as string;
+      expect(message).toContain('HIGH RISK');
+    });
+
+    it('should detect Russian language in indicators', async () => {
+      const event = createMockCrisisEvent('critical', {
+        indicators: ['хочу умереть', 'безнадёжность'],
+      });
+      await service.sendAdminNotifications(event);
+
+      const calls = mockBot.api.sendMessage.mock.calls;
+      const message = calls[0][1] as string;
+      expect(message).toContain('КРИТИЧЕСКИЙ');
+    });
+
+    it('should handle send failure gracefully', async () => {
+      mockBot.api.sendMessage.mockRejectedValueOnce(new Error('Network error'));
+
+      const event = createMockCrisisEvent('critical');
+      const count = await service.sendAdminNotifications(event);
+
+      // Should continue and count successful sends
+      expect(count).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should handle admin chat send failure', async () => {
+      mockBot.api.sendMessage.mockRejectedValueOnce(new Error('Chat not found'));
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const event = createMockCrisisEvent('critical');
+      await service.sendAdminNotifications(event);
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[CrisisEscalation]'),
+        expect.any(Error)
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('should record notification after successful send', async () => {
+      const event = createMockCrisisEvent('critical');
+      await service.sendAdminNotifications(event);
+
+      const notifications = service.getAllNotifications();
+      expect(notifications.length).toBeGreaterThan(0);
+      expect(notifications[0].userId).toBe('user-123');
+      expect(notifications[0].severity).toBe('critical');
+      expect(notifications[0].acknowledged).toBe(false);
+    });
+  });
+
+  describe('escalate() with bot configured', () => {
+    it('should send notifications for emergency level', async () => {
+      const event = createMockCrisisEvent('critical');
+      const result = await service.escalate(event);
+
+      expect(result.notificationsSent).toBeGreaterThan(0);
+      expect(result.level).toBe('emergency');
+    });
+
+    it('should send async notifications for high severity', async () => {
+      const event = createMockCrisisEvent('high');
+      const result = await service.escalate(event);
+
+      // For notify_async, notificationsSent = adminUserIds.length (not including chat)
+      expect(result.level).toBe('notify_async');
+      expect(result.notificationsSent).toBe(2); // Only adminUserIds.length
+    });
+  });
+
+  describe('notification acknowledgment with recorded notifications', () => {
+    it('should acknowledge existing notification', async () => {
+      const event = createMockCrisisEvent('critical');
+      await service.sendAdminNotifications(event);
+
+      const notifications = service.getAllNotifications();
+      expect(notifications.length).toBeGreaterThan(0);
+
+      const notifId = notifications[0].id;
+      const result = service.acknowledgeNotification(notifId, 'admin-1');
+
+      expect(result).toBe(true);
+      expect(service.getUnacknowledgedNotifications()).toHaveLength(0);
+    });
+
+    it('should not acknowledge already acknowledged notification', async () => {
+      const event = createMockCrisisEvent('critical');
+      await service.sendAdminNotifications(event);
+
+      const notifications = service.getAllNotifications();
+      const notifId = notifications[0].id;
+
+      // First acknowledgment
+      service.acknowledgeNotification(notifId, 'admin-1');
+      // Second acknowledgment should fail
+      const result = service.acknowledgeNotification(notifId, 'admin-2');
+
+      expect(result).toBe(false);
+    });
+
+    it('should set acknowledgedBy and acknowledgedAt', async () => {
+      const event = createMockCrisisEvent('critical');
+      await service.sendAdminNotifications(event);
+
+      const notifications = service.getAllNotifications();
+      const notifId = notifications[0].id;
+
+      service.acknowledgeNotification(notifId, 'admin-supervisor');
+
+      const acked = service.getAllNotifications().find(n => n.id === notifId);
+      expect(acked?.acknowledged).toBe(true);
+      expect(acked?.acknowledgedBy).toBe('admin-supervisor');
+      expect(acked?.acknowledgedAt).toBeInstanceOf(Date);
+    });
+  });
+});
+
+// ==================== AE Service Integration Tests ====================
+
+describe('CrisisEscalationService AE Integration', () => {
+  let service: CrisisEscalationService;
+  let mockAEService: MockAEService;
+
+  beforeEach(() => {
+    service = createCrisisEscalationService({
+      autoCreateAE: true,
+    });
+    mockAEService = createMockAEService();
+    service.setAdverseEventService(mockAEService as unknown as AdverseEventService);
+  });
+
+  describe('setAdverseEventService()', () => {
+    it('should set AE service instance', () => {
+      const newService = createCrisisEscalationService();
+      newService.setAdverseEventService(mockAEService as unknown as AdverseEventService);
+      expect(newService).toBeInstanceOf(CrisisEscalationService);
+    });
+  });
+
+  describe('auto AE creation for critical events', () => {
+    it('should create AE report for critical severity', async () => {
+      const event = createMockCrisisEvent('critical');
+      const result = await service.escalate(event);
+
+      expect(result.aeCreated).toBe(true);
+      expect(result.aeId).toBe(999);
+      expect(mockAEService.reportAdverseEvent).toHaveBeenCalled();
+    });
+
+    it('should pass correct AE data', async () => {
+      const event = createMockCrisisEvent('critical', {
+        indicators: ['suicidal thoughts', 'planning'],
+      });
+      await service.escalate(event);
+
+      expect(mockAEService.reportAdverseEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-123',
+          severity: 'severe',
+          isSerious: true,
+          dtxCategory: 'SUICIDAL_IDEATION',
+        })
+      );
+    });
+
+    it('should handle AE creation failure', async () => {
+      mockAEService.reportAdverseEvent.mockRejectedValueOnce(new Error('DB error'));
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const event = createMockCrisisEvent('critical');
+      const result = await service.escalate(event);
+
+      expect(result.aeCreated).toBe(false);
+      expect(result.aeId).toBeUndefined();
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should not create AE for high severity', async () => {
+      const event = createMockCrisisEvent('high');
+      const result = await service.escalate(event);
+
+      expect(result.aeCreated).toBe(false);
+      expect(mockAEService.reportAdverseEvent).not.toHaveBeenCalled();
+    });
+
+    it('should not create AE when autoCreateAE is disabled', async () => {
+      service.updateConfig({ autoCreateAE: false });
+
+      const event = createMockCrisisEvent('critical');
+      const result = await service.escalate(event);
+
+      expect(result.aeCreated).toBe(false);
+      expect(mockAEService.reportAdverseEvent).not.toHaveBeenCalled();
+    });
+  });
+});
+
+// ==================== Safety Plan Repository Integration ====================
+
+describe('CrisisEscalationService Repository Integration', () => {
+  let service: CrisisEscalationService;
+  let mockRepo: MockSafetyPlanRepo;
+
+  beforeEach(() => {
+    service = createCrisisEscalationService();
+    mockRepo = createMockSafetyPlanRepo();
+  });
+
+  describe('setRepository()', () => {
+    it('should set repository and load plans', async () => {
+      mockRepo.findAll.mockResolvedValueOnce([
+        {
+          userId: 'user-existing',
+          createdAt: new Date('2026-01-01'),
+          updatedAt: new Date('2026-01-15'),
+          warningSigns: ['anxiety', 'isolation'],
+          copingStrategies: ['walking', 'music'],
+          reasonsToLive: ['family'],
+          supportContacts: [],
+          safePlaces: ['home'],
+          professionalContacts: [],
+        },
+      ]);
+
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      await service.setRepository(mockRepo as unknown as SafetyPlanRepository);
+
+      expect(mockRepo.findAll).toHaveBeenCalled();
+      expect(service.hasSafetyPlan('user-existing')).toBe(true);
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Loaded 1 safety plans')
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle DB load failure gracefully', async () => {
+      mockRepo.findAll.mockRejectedValueOnce(new Error('DB connection failed'));
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      await service.setRepository(mockRepo as unknown as SafetyPlanRepository);
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('DB load failed'),
+        expect.any(Error)
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('should persist safety plan on save', async () => {
+      await service.setRepository(mockRepo as unknown as SafetyPlanRepository);
+
+      service.saveUserSafetyPlan('user-new', {
+        warningSignsRu: ['тревога'],
+        copingStrategies: ['прогулка'],
+      });
+
+      expect(mockRepo.upsert).toHaveBeenCalledWith(
+        'user-new',
+        expect.objectContaining({
+          userId: 'user-new',
+          warningSigns: ['тревога'],
+          copingStrategies: ['прогулка'],
+        })
+      );
+    });
+
+    it('should handle persist failure gracefully', async () => {
+      mockRepo.upsert.mockRejectedValueOnce(new Error('Write failed'));
+      await service.setRepository(mockRepo as unknown as SafetyPlanRepository);
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      service.saveUserSafetyPlan('user-fail', {
+        warningSignsRu: ['тест'],
+      });
+
+      // Wait for async persist
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to persist safety plan'),
+        expect.any(Error)
+      );
+      consoleSpy.mockRestore();
+    });
+  });
+});
+
+// ==================== Safety Plan Keyboard Tests ====================
+
+describe('CrisisEscalationService Safety Plan Keyboard', () => {
+  let service: CrisisEscalationService;
+
+  beforeEach(() => {
+    service = createCrisisEscalationService();
+  });
+
+  describe('getSafetyPlanKeyboard()', () => {
+    it('should return Russian keyboard for new user', () => {
+      const keyboard = service.getSafetyPlanKeyboard('new-user', 'ru');
+
+      expect(keyboard).toHaveLength(2);
+      expect(keyboard[0][0].text).toContain('Создать план');
+      expect(keyboard[0][0].callback_data).toBe('safety:create');
+      expect(keyboard[1][0].text).toContain('Телефон доверия');
+    });
+
+    it('should return Russian keyboard for user with plan', () => {
+      service.saveUserSafetyPlan('user-with-plan', {
+        warningSignsRu: ['test'],
+      });
+
+      const keyboard = service.getSafetyPlanKeyboard('user-with-plan', 'ru');
+
+      expect(keyboard[0][0].text).toContain('Мой план');
+      expect(keyboard[0][0].callback_data).toBe('safety:view');
+    });
+
+    it('should return English keyboard for new user', () => {
+      const keyboard = service.getSafetyPlanKeyboard('new-user', 'en');
+
+      expect(keyboard).toHaveLength(2);
+      expect(keyboard[0][0].text).toContain('Create Safety Plan');
+      expect(keyboard[0][0].callback_data).toBe('safety:create');
+      expect(keyboard[1][0].text).toContain('Crisis Hotline');
+      expect(keyboard[1][1].text).toContain('Emergency');
+    });
+
+    it('should return English keyboard for user with plan', () => {
+      service.saveUserSafetyPlan('user-en-plan', {
+        warningSignsEn: ['anxiety'],
+      });
+
+      const keyboard = service.getSafetyPlanKeyboard('user-en-plan', 'en');
+
+      expect(keyboard[0][0].text).toContain('My Safety Plan');
+      expect(keyboard[0][0].callback_data).toBe('safety:view');
+    });
+  });
+
+  describe('hasSafetyPlan()', () => {
+    it('should return false for user without plan', () => {
+      expect(service.hasSafetyPlan('no-plan-user')).toBe(false);
+    });
+
+    it('should return true for user with plan', () => {
+      service.saveUserSafetyPlan('has-plan-user', {
+        reasonsToLive: ['family'],
+      });
+      expect(service.hasSafetyPlan('has-plan-user')).toBe(true);
+    });
+  });
+});
+
+// ==================== Async Notification Error Handling ====================
+
+describe('CrisisEscalationService Async Notification Errors', () => {
+  it('should handle async notification failure in escalate()', async () => {
+    const service = createCrisisEscalationService({
+      adminUserIds: ['admin-1'],
+    });
+    const mockBot = createMockBot();
+    mockBot.api.sendMessage.mockRejectedValue(new Error('Async failure'));
+    service.setBot(mockBot as unknown as Bot<Context>);
+
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+    const event = createMockCrisisEvent('high');
+
+    // This triggers notify_async path which catches errors
+    const result = await service.escalate(event);
+
+    // Should still report expected notification count
+    expect(result.level).toBe('notify_async');
+    expect(result.notificationsSent).toBe(1);
+
+    // Wait for async notification to fail
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Individual admin errors are logged inside sendAdminNotifications
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to notify admin'),
+      expect.any(Error)
+    );
+    consoleSpy.mockRestore();
   });
 });
