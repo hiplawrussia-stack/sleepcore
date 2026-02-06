@@ -935,6 +935,11 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
       if (activeCrisis) {
         // Audit log: user with active crisis is navigating via callbacks
         console.log(`[CRISIS] User ${userId} with active crisis (severity=${activeCrisis.severity}) using callback: ${command}:${action}`);
+
+        // P0-1 FIX: Escalate to admins - crisis detection ALWAYS triggers escalation (IEC 62304 §7.1)
+        // Research: SAMHSA 2025 - maintain awareness AND ensure professional oversight
+        await crisisEscalationService.escalate(activeCrisis);
+
         // IMPORTANT: Don't block - per SAMHSA research, blocking increases distress
       }
     } catch (crisisError) {
