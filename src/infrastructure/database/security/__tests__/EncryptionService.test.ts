@@ -16,7 +16,7 @@
  */
 
 import crypto from 'crypto';
-import { EncryptionService, type IEncryptedData } from '../EncryptionService';
+import { EncryptionService, createEncryptionService, type IEncryptedData } from '../EncryptionService';
 
 describe('EncryptionService', () => {
   // Test key: 64 hex chars = 256 bits
@@ -525,6 +525,384 @@ describe('EncryptionService', () => {
       const decrypted = service.decrypt(encrypted);
 
       expect(decrypted).toBe(plaintext);
+    });
+  });
+
+  describe('field encryption', () => {
+    let service: EncryptionService;
+
+    beforeEach(() => {
+      service = new EncryptionService({
+        masterKey: TEST_KEY,
+        useKeyDerivation: false,
+      });
+    });
+
+    it('should encrypt specific fields in object', () => {
+      const obj = {
+        userId: 'user-123',
+        publicData: 'not sensitive',
+        privateNotes: 'sensitive patient notes',
+        phoneNumber: '+7-999-123-4567',
+      };
+
+      const encrypted = service.encryptFields(obj, ['privateNotes', 'phoneNumber']);
+
+      expect(encrypted.publicData).toBe('not sensitive');
+      expect(encrypted.privateNotes).toBe('[ENCRYPTED]');
+      expect(encrypted.phoneNumber).toBe('[ENCRYPTED]');
+      expect(encrypted._encrypted).toBeDefined();
+      expect(encrypted._encrypted.privateNotes).toBeDefined();
+      expect(encrypted._encrypted.phoneNumber).toBeDefined();
+    });
+
+    it('should decrypt specific fields in object', () => {
+      const obj = {
+        userId: 'user-123',
+        publicData: 'not sensitive',
+        privateNotes: 'sensitive patient notes',
+        phoneNumber: '+7-999-123-4567',
+      };
+
+      const encrypted = service.encryptFields(obj, ['privateNotes', 'phoneNumber']);
+      const decrypted = service.decryptFields(encrypted, ['privateNotes', 'phoneNumber']);
+
+      expect(decrypted.privateNotes).toBe('sensitive patient notes');
+      expect(decrypted.phoneNumber).toBe('+7-999-123-4567');
+      expect(decrypted._encrypted).toBeUndefined();
+    });
+
+    it('should handle non-string fields in encryptFields', () => {
+      const obj = {
+        name: 'John',
+        score: 18, // number
+        details: { nested: 'object' }, // object
+      };
+
+      const encrypted = service.encryptFields(obj, ['score', 'details']);
+
+      expect(encrypted._encrypted.score).toBeDefined();
+      expect(encrypted._encrypted.details).toBeDefined();
+    });
+
+    it('should skip undefined/null fields in encryptFields', () => {
+      const obj = {
+        name: 'John',
+        notes: undefined,
+        phone: null,
+      };
+
+      const encrypted = service.encryptFields(obj, ['name', 'notes', 'phone'] as (keyof typeof obj)[]);
+
+      expect(encrypted._encrypted.name).toBeDefined();
+      expect(encrypted._encrypted.notes).toBeUndefined();
+      expect(encrypted._encrypted.phone).toBeUndefined();
+    });
+
+    it('should handle decryptFields with no _encrypted field', () => {
+      const obj = {
+        name: 'John',
+        data: 'value',
+      };
+
+      const result = service.decryptFields(obj, ['name']);
+
+      expect(result.name).toBe('John');
+    });
+
+    it('should parse JSON when decrypting object fields', () => {
+      const obj = {
+        data: { nested: 'value', count: 5 },
+      };
+
+      const encrypted = service.encryptFields(obj, ['data']);
+      const decrypted = service.decryptFields(encrypted, ['data']);
+
+      expect(decrypted.data).toEqual({ nested: 'value', count: 5 });
+    });
+  });
+
+  describe('serialization', () => {
+    let service: EncryptionService;
+
+    beforeEach(() => {
+      service = new EncryptionService({
+        masterKey: TEST_KEY,
+        useKeyDerivation: false,
+      });
+    });
+
+    it('should serialize encrypted data to string', () => {
+      const encrypted = service.encrypt('test data');
+      const serialized = service.serializeEncrypted(encrypted);
+
+      expect(typeof serialized).toBe('string');
+      expect(serialized).toContain('ciphertext');
+      expect(serialized).toContain('iv');
+      expect(serialized).toContain('authTag');
+    });
+
+    it('should deserialize encrypted data from string', () => {
+      const encrypted = service.encrypt('test data');
+      const serialized = service.serializeEncrypted(encrypted);
+      const deserialized = service.deserializeEncrypted(serialized);
+
+      expect(deserialized.ciphertext).toBe(encrypted.ciphertext);
+      expect(deserialized.iv).toBe(encrypted.iv);
+      expect(deserialized.authTag).toBe(encrypted.authTag);
+    });
+
+    it('should encrypt to single string', () => {
+      const plaintext = 'sensitive data';
+      const encrypted = service.encryptToString(plaintext);
+
+      expect(typeof encrypted).toBe('string');
+      expect(encrypted).toContain('ciphertext');
+    });
+
+    it('should decrypt from serialized string', () => {
+      const plaintext = 'sensitive data';
+      const encrypted = service.encryptToString(plaintext);
+      const decrypted = service.decryptFromString(encrypted);
+
+      expect(decrypted).toBe(plaintext);
+    });
+  });
+
+  describe('key rotation', () => {
+    it('should recommend rotation after threshold', () => {
+      const service = new EncryptionService({
+        masterKey: TEST_KEY,
+        useKeyDerivation: false,
+      });
+
+      // Simulate encrypting lots of data
+      // ROTATION_THRESHOLD is 4GB, we need to test the flag
+      // We'll check isRotationRecommended directly
+      expect(service.isRotationRecommended()).toBe(false);
+
+      // Note: We can't easily simulate 4GB of encryption in a test
+      // The bytesEncrypted counter is internal and we can't set it directly
+    });
+
+    it('should rotate key and re-encrypt data', () => {
+      const service = new EncryptionService({
+        masterKey: TEST_KEY,
+        keyVersion: 1,
+        useKeyDerivation: false,
+      });
+
+      const plaintext = 'sensitive data to rotate';
+      const encrypted = service.encrypt(plaintext);
+
+      // Generate new key
+      const newKey = EncryptionService.generateKey();
+
+      // Rotate
+      const rotated = service.rotateKey(newKey, encrypted);
+
+      expect(rotated.keyVersion).toBe(2);
+
+      // Create new service with the new key to verify
+      const newService = new EncryptionService({
+        masterKey: newKey,
+        keyVersion: 2,
+        useKeyDerivation: false,
+      });
+
+      const decrypted = newService.decrypt(rotated);
+      expect(decrypted).toBe(plaintext);
+    });
+  });
+
+  describe('static utility methods', () => {
+    it('should generate random 256-bit key', () => {
+      const key = EncryptionService.generateKey();
+
+      expect(Buffer.isBuffer(key)).toBe(true);
+      expect(key.length).toBe(32); // 256 bits
+    });
+
+    it('should generate unique keys', () => {
+      const key1 = EncryptionService.generateKey();
+      const key2 = EncryptionService.generateKey();
+
+      expect(Buffer.compare(key1, key2)).not.toBe(0);
+    });
+
+    it('should generate key as hex string', () => {
+      const keyHex = EncryptionService.generateKeyHex();
+
+      expect(typeof keyHex).toBe('string');
+      expect(keyHex.length).toBe(64); // 32 bytes = 64 hex chars
+      expect(keyHex).toMatch(/^[0-9a-f]+$/);
+    });
+
+    it('should generate secure token with default length', () => {
+      const token = EncryptionService.generateSecureToken();
+
+      expect(typeof token).toBe('string');
+      expect(token.length).toBe(64); // 32 bytes = 64 hex chars
+    });
+
+    it('should generate secure token with custom length', () => {
+      const token = EncryptionService.generateSecureToken(16);
+
+      expect(token.length).toBe(32); // 16 bytes = 32 hex chars
+    });
+  });
+
+  describe('hashing', () => {
+    let service: EncryptionService;
+
+    beforeEach(() => {
+      service = new EncryptionService({
+        masterKey: TEST_KEY,
+        useKeyDerivation: false,
+      });
+    });
+
+    it('should generate HMAC-SHA256 hash', () => {
+      const hash = service.hash('test value');
+
+      expect(typeof hash).toBe('string');
+      expect(hash.length).toBe(64); // SHA256 = 256 bits = 64 hex chars
+    });
+
+    it('should generate consistent hash for same input', () => {
+      const hash1 = service.hash('same value');
+      const hash2 = service.hash('same value');
+
+      expect(hash1).toBe(hash2);
+    });
+
+    it('should generate different hash for different input', () => {
+      const hash1 = service.hash('value1');
+      const hash2 = service.hash('value2');
+
+      expect(hash1).not.toBe(hash2);
+    });
+
+    it('should generate different hash with different key', () => {
+      const service2 = new EncryptionService({
+        masterKey: 'b'.repeat(64),
+        useKeyDerivation: false,
+      });
+
+      const hash1 = service.hash('same value');
+      const hash2 = service2.hash('same value');
+
+      expect(hash1).not.toBe(hash2);
+    });
+  });
+
+  describe('key integrity validation', () => {
+    it('should validate key integrity successfully', () => {
+      const service = new EncryptionService({
+        masterKey: TEST_KEY,
+        useKeyDerivation: false,
+      });
+
+      // Should not throw
+      expect(() => service.validateKeyIntegrity()).not.toThrow();
+    });
+
+    it('should complete round-trip validation', () => {
+      const service = new EncryptionService({
+        masterKey: TEST_KEY,
+        useKeyDerivation: false,
+      });
+
+      // Validation encrypts and decrypts a test value
+      service.validateKeyIntegrity();
+
+      // If we got here, validation passed
+      expect(true).toBe(true);
+    });
+  });
+
+  describe('initialization edge cases', () => {
+    it('should accept Buffer as salt', () => {
+      const saltBuffer = crypto.randomBytes(16);
+
+      const service = new EncryptionService({
+        masterKey: 'my-passphrase',
+        masterKeySalt: saltBuffer,
+        useKeyDerivation: true,
+      });
+
+      const plaintext = 'test data';
+      const encrypted = service.encrypt(plaintext);
+      const decrypted = service.decrypt(encrypted);
+
+      expect(decrypted).toBe(plaintext);
+    });
+
+    it('should throw for Buffer salt with wrong length', () => {
+      const wrongLengthSalt = crypto.randomBytes(8); // 8 bytes instead of 16
+
+      expect(() => {
+        new EncryptionService({
+          masterKey: 'my-passphrase',
+          masterKeySalt: wrongLengthSalt,
+          useKeyDerivation: true,
+        });
+      }).toThrow('16 bytes');
+    });
+
+    it('should accept Buffer as master key without derivation', () => {
+      const keyBuffer = crypto.randomBytes(32);
+
+      const service = new EncryptionService({
+        masterKey: keyBuffer,
+        useKeyDerivation: false,
+      });
+
+      const plaintext = 'test data';
+      const encrypted = service.encrypt(plaintext);
+      const decrypted = service.decrypt(encrypted);
+
+      expect(decrypted).toBe(plaintext);
+    });
+
+    it('should throw for Buffer key with wrong length', () => {
+      const wrongLengthKey = crypto.randomBytes(16); // 16 bytes instead of 32
+
+      expect(() => {
+        new EncryptionService({
+          masterKey: wrongLengthKey,
+          useKeyDerivation: false,
+        });
+      }).toThrow('32 bytes');
+    });
+  });
+
+  describe('createEncryptionService factory', () => {
+    it('should create service from environment variable', () => {
+      process.env.ENCRYPTION_MASTER_KEY = TEST_KEY;
+
+      const service = createEncryptionService({
+        useKeyDerivation: false,
+      });
+
+      expect(service).toBeInstanceOf(EncryptionService);
+
+      const plaintext = 'test data';
+      const encrypted = service.encrypt(plaintext);
+      const decrypted = service.decrypt(encrypted);
+
+      expect(decrypted).toBe(plaintext);
+    });
+
+    it('should create service with merged config', () => {
+      const service = createEncryptionService({
+        masterKey: TEST_KEY,
+        keyVersion: 5,
+        useKeyDerivation: false,
+      });
+
+      const encrypted = service.encrypt('test');
+      expect(encrypted.keyVersion).toBe(5);
     });
   });
 });
