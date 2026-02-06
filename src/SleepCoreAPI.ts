@@ -27,6 +27,11 @@ import {
   type ISleepInterventionExplanation,
   type IFullBeliefState,
 } from './platform/SleepCoreAdapter';
+// CogniCore Engine integration (POMDP belief state + Thompson Sampling optimization)
+import {
+  createBeliefUpdateEngine,
+  createInterventionOptimizer,
+} from '@cognicore/engine';
 import type { SleepAction } from './platform/SleepCorePOMDP';
 import { ThirdWaveCoordinator } from './third-wave/engines/ThirdWaveCoordinator';
 import type {
@@ -395,7 +400,17 @@ export class SleepCoreAPI {
     // Disable CBTIEngine's internal adapter — SleepCoreAPI manages its own adapter
     // to avoid dual belief-state divergence (P1 fix: Thompson Sampling consistency)
     this.cbtiEngine = new CBTIEngine({ useCogniCore: false });
-    this.adapter = createSleepCoreAdapter({ language: 'ru' });
+
+    // Initialize CogniCore Engine components for POMDP belief management
+    // and Thompson Sampling intervention optimization
+    const beliefEngine = createBeliefUpdateEngine();
+    const interventionOptimizer = createInterventionOptimizer();
+
+    this.adapter = createSleepCoreAdapter(
+      { language: 'ru' },
+      beliefEngine,
+      interventionOptimizer
+    );
     this.thirdWave = new ThirdWaveCoordinator();
 
     // NEW: Initialize Circadian & Cultural Adaptation Engines

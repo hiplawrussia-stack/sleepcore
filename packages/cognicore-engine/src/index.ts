@@ -146,6 +146,12 @@ export type {
   IFullBeliefState,
 } from './belief/IBeliefUpdate';
 
+// BeliefUpdateEngine implementation (Phase 1 integration)
+export {
+  BeliefUpdateEngine,
+  createBeliefUpdateEngine,
+} from './belief/BeliefUpdateEngine';
+
 // Phase 1 Integration: BeliefStateAdapter
 // Bridges BeliefUpdateEngine with PLRNN/KalmanFormer nonlinear engines
 export {
@@ -201,6 +207,12 @@ export type {
   InterventionIntensity,
   IUserInterventionProfile,
 } from './intervention/IInterventionOptimizer';
+
+// InterventionOptimizer implementation (Thompson Sampling + MAB)
+export {
+  InterventionOptimizer,
+  createInterventionOptimizer,
+} from './intervention/InterventionOptimizer';
 
 // =============================================================================
 // SAFETY ENVELOPE
