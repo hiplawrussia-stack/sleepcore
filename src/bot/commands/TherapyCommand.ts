@@ -39,7 +39,11 @@ import type { ICBTIIntervention, CBTIComponent } from '../../cbt-i/interfaces/IC
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
 import type { arousalAssessmentService } from '../services/ArousalAssessmentService';
-import { getThirdWaveTherapies } from '../../modules/content/clinical/ClinicalContent';
+import {
+  getThirdWaveTherapies,
+  CBTI_COMPONENT_NAMES,
+  CBTI_COMPONENT_ICONS,
+} from '../../modules/content/clinical/ClinicalContent';
 
 /**
  * Therapy session cores (6-week structure)
@@ -1224,25 +1228,9 @@ ${sonya.tip('Регулярное выполнение заданий — клю
       const intervention = await ctx.sleepCore.getNextIntervention(ctx.userId);
       if (!intervention) return null;
 
-      const componentNames: Record<string, string> = {
-        sleep_restriction: 'Ограничение сна',
-        stimulus_control: 'Контроль стимулов',
-        cognitive_restructuring: 'Когнитивная работа',
-        sleep_hygiene: 'Гигиена сна',
-        relaxation: 'Релаксация',
-      };
-
-      const componentIcons: Record<string, string> = {
-        sleep_restriction: '🛏',
-        stimulus_control: '🚪',
-        cognitive_restructuring: '🧠',
-        sleep_hygiene: '🌙',
-        relaxation: '🧘',
-      };
-
       const component = intervention.component;
-      const icon = componentIcons[component] || '📋';
-      const name = componentNames[component] || component;
+      const icon = CBTI_COMPONENT_ICONS[component as keyof typeof CBTI_COMPONENT_ICONS] || '📋';
+      const name = CBTI_COMPONENT_NAMES[component as keyof typeof CBTI_COMPONENT_NAMES] || component;
 
       // Check if recommendation is relevant to current core
       const relevantCores = COMPONENT_TO_CORE_MAP[component] || [];
@@ -1273,16 +1261,9 @@ ${sonya.tip('Регулярное выполнение заданий — клю
     data: Record<string, unknown>
   ): Promise<ICommandResult> {
     const intervention = data.adaptiveIntervention as ICBTIIntervention | undefined;
-    const componentNames: Record<string, string> = {
-      sleep_restriction: 'Ограничение сна',
-      stimulus_control: 'Контроль стимулов',
-      cognitive_restructuring: 'Когнитивная работа',
-      sleep_hygiene: 'Гигиена сна',
-      relaxation: 'Релаксация',
-    };
 
     const name = intervention
-      ? componentNames[intervention.component] || intervention.component
+      ? CBTI_COMPONENT_NAMES[intervention.component as keyof typeof CBTI_COMPONENT_NAMES] || intervention.component
       : 'рекомендацию';
 
     const message = `
@@ -2570,21 +2551,17 @@ ${sonya.tip('КПТ-И — «золотой стандарт» лечения х
     const components = ctx.sleepCore.getMostEffectiveCBTIComponents();
     const allEvidence = ctx.sleepCore.getCBTIComponentEvidence();
 
-    // Component name mapping (Russian)
-    const componentNames: Record<string, string> = {
+    // Component name mapping - extend centralized names with evidence-specific entries
+    const evidenceComponentNames: Record<string, string> = {
+      ...CBTI_COMPONENT_NAMES,
       multicomponent_cbti: 'Мультикомпонентная КПТ-И',
-      sleep_restriction: 'Ограничение сна (SRT)',
-      stimulus_control: 'Контроль стимулов (SCT)',
-      cognitive_restructuring: 'Когнитивная реструктуризация',
-      relaxation: 'Релаксация',
-      sleep_hygiene: 'Гигиена сна',
     };
 
     // Build ranked list
     const componentLines = components
       .slice(0, 6)
       .map((c, i) => {
-        const name = componentNames[c.component] || c.component;
+        const name = evidenceComponentNames[c.component] || c.component;
         const qualityIcon = c.quality === 'high' ? '🟢' : c.quality === 'moderate' ? '🟡' : '🔵';
         const effectBar = this.renderEffectBar(c.effectSize);
         return `${i + 1}. *${name}*
@@ -3161,18 +3138,14 @@ ${sonya.tip('Рекомендация учитывает ваш хронотип
         return null;
       }
 
-      // Component name mapping
-      const componentNames: Record<string, string> = {
+      // Component name mapping - extend centralized names with evidence-specific entries
+      const evidenceComponentNames: Record<string, string> = {
+        ...CBTI_COMPONENT_NAMES,
         multicomponent_cbti: 'Мультикомпонентная КПТ-И',
-        sleep_restriction: 'Ограничение сна',
-        stimulus_control: 'Контроль стимулов',
-        cognitive_restructuring: 'Когнитивная реструктуризация',
-        relaxation: 'Релаксация',
-        sleep_hygiene: 'Гигиена сна',
       };
 
       const topComponents = components.slice(0, 4).map((c) => {
-        const name = componentNames[c.component] || c.component;
+        const name = evidenceComponentNames[c.component] || c.component;
         return `• *${name}*: d = ${c.effectSize.toFixed(2)} (${c.nStudies} исследований)`;
       }).join('\n');
 

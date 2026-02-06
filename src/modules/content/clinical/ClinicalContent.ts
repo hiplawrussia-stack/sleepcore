@@ -287,6 +287,72 @@ export function isTherapyContraindicated(
 }
 
 // =============================================================================
+// CBT-I COMPONENT DISPLAY NAMES & ICONS
+// =============================================================================
+
+/**
+ * Centralized CBT-I component display names (Russian)
+ * Used across TodayCommand, TherapyCommand, and other therapy-related commands
+ * Source: European Insomnia Guideline 2023
+ */
+export const CBTI_COMPONENT_NAMES: Readonly<Record<CBTIComponent, string>> = {
+  sleep_restriction: 'Ограничение сна',
+  stimulus_control: 'Контроль стимулов',
+  cognitive_restructuring: 'Когнитивная работа',
+  sleep_hygiene: 'Гигиена сна',
+  relaxation: 'Релаксация',
+} as const;
+
+/**
+ * CBT-I component icons for consistent UI display
+ */
+export const CBTI_COMPONENT_ICONS: Readonly<Record<CBTIComponent, string>> = {
+  sleep_restriction: '🛏',
+  stimulus_control: '🚪',
+  cognitive_restructuring: '🧠',
+  sleep_hygiene: '🌙',
+  relaxation: '🧘',
+} as const;
+
+/**
+ * Selection reasons explaining why each CBT-I component was chosen
+ * Used in TodayCommand for AI recommendation explanations
+ * Source: Furukawa 2024 JAMA NMA, European Insomnia Guideline 2023
+ */
+export const CBTI_COMPONENT_SELECTION_REASONS: Readonly<Record<CBTIComponent, string>> = {
+  sleep_restriction: `
+🎯 *Ограничение сна* выбрано потому что:
+• Эффективность сна ниже 85%
+• Это самый эффективный компонент CBT-I (Grade A)
+• Помогает сконцентрировать сон и повысить его глубину
+  `.trim(),
+  stimulus_control: `
+🎯 *Контроль стимулов* выбран потому что:
+• Есть признаки условного возбуждения в постели
+• Кровать должна ассоциироваться только со сном
+• Это второй по эффективности компонент CBT-I
+  `.trim(),
+  cognitive_restructuring: `
+🎯 *Когнитивная работа* выбрана потому что:
+• Обнаружены дисфункциональные убеждения о сне
+• Тревога и катастрофизация мешают засыпанию
+• Работа с мыслями улучшает качество сна
+  `.trim(),
+  sleep_hygiene: `
+🎯 *Гигиена сна* выбрана потому что:
+• Есть возможности для улучшения среды сна
+• Базовые привычки влияют на качество сна
+• Это фундамент для других техник
+  `.trim(),
+  relaxation: `
+🎯 *Релаксация* выбрана потому что:
+• Обнаружено повышенное возбуждение перед сном
+• Техники расслабления снижают время засыпания
+• Помогает переключиться в режим отдыха
+  `.trim(),
+} as const;
+
+// =============================================================================
 // GENERAL CLINICAL MESSAGES
 // =============================================================================
 
@@ -313,6 +379,9 @@ export const CLINICAL_FALLBACK_MESSAGES = {
 
 export default {
   CBTI_COMPONENT_HELP,
+  CBTI_COMPONENT_NAMES,
+  CBTI_COMPONENT_ICONS,
+  CBTI_COMPONENT_SELECTION_REASONS,
   THIRD_WAVE_THERAPIES,
   CLINICAL_FALLBACK_MESSAGES,
   getCBTIComponentHelp,

@@ -27,7 +27,12 @@ import type {
   ISleepEarlyWarning,
 } from '../services/SleepPredictionService';
 import type { IProactiveInsight } from '../services/ProactiveIntelligenceService';
-import { getCBTIComponentHelp } from '../../modules/content/clinical/ClinicalContent';
+import {
+  getCBTIComponentHelp,
+  CBTI_COMPONENT_NAMES,
+  CBTI_COMPONENT_ICONS,
+  CBTI_COMPONENT_SELECTION_REASONS,
+} from '../../modules/content/clinical/ClinicalContent';
 
 /**
  * /today Command Implementation
@@ -120,30 +125,15 @@ ${formatter.tip('Чем больше данных, тем точнее реко�
       readonly personalizationScore: number;
     }
   ): Promise<ICommandResult> {
-    const componentIcons: Record<string, string> = {
-      sleep_restriction: '🛏',
-      stimulus_control: '🚪',
-      cognitive_restructuring: '🧠',
-      sleep_hygiene: '🌙',
-      relaxation: '🧘',
-    };
-
-    const componentNames: Record<string, string> = {
-      sleep_restriction: 'Ограничение сна',
-      stimulus_control: 'Контроль стимулов',
-      cognitive_restructuring: 'Когнитивная работа',
-      sleep_hygiene: 'Гигиена сна',
-      relaxation: 'Релаксация',
-    };
-
+    // Use centralized content from ClinicalContent.ts (CLAUDE.md §13.4)
     const timingLabels: Record<string, string> = {
       immediate: '⚡ Сейчас',
       tonight: '🌙 Сегодня вечером',
       this_week: '📅 На этой неделе',
     };
 
-    const icon = componentIcons[intervention.component] || '📋';
-    const name = componentNames[intervention.component] || intervention.component;
+    const icon = CBTI_COMPONENT_ICONS[intervention.component as keyof typeof CBTI_COMPONENT_ICONS] || '📋';
+    const name = CBTI_COMPONENT_NAMES[intervention.component as keyof typeof CBTI_COMPONENT_NAMES] || intervention.component;
     const timing = timingLabels[intervention.timing] || intervention.timing;
     const priorityStars = '⭐'.repeat(intervention.priority);
 
@@ -502,43 +492,10 @@ ${sonya.tip('Алгоритм учитывает твои данные за по
   ): Promise<string> {
     const lines: string[] = [];
 
-    // Component-specific reasoning
-    const componentReasons: Record<string, string> = {
-      sleep_restriction: `
-🎯 *Ограничение сна* выбрано потому что:
-• Эффективность сна ниже 85%
-• Это самый эффективный компонент CBT-I (Grade A)
-• Помогает сконцентрировать сон и повысить его глубину
-      `.trim(),
-      stimulus_control: `
-🎯 *Контроль стимулов* выбран потому что:
-• Есть признаки условного возбуждения в постели
-• Кровать должна ассоциироваться только со сном
-• Это второй по эффективности компонент CBT-I
-      `.trim(),
-      cognitive_restructuring: `
-🎯 *Когнитивная работа* выбрана потому что:
-• Обнаружены дисфункциональные убеждения о сне
-• Тревога и катастрофизация мешают засыпанию
-• Работа с мыслями улучшает качество сна
-      `.trim(),
-      sleep_hygiene: `
-🎯 *Гигиена сна* выбрана потому что:
-• Есть возможности для улучшения среды сна
-• Базовые привычки влияют на качество сна
-• Это фундамент для других техник
-      `.trim(),
-      relaxation: `
-🎯 *Релаксация* выбрана потому что:
-• Обнаружено повышенное возбуждение перед сном
-• Техники расслабления снижают время засыпания
-• Помогает переключиться в режим отдыха
-      `.trim(),
-    };
-
-    // Get reason for current component
+    // Component-specific reasoning from centralized ClinicalContent (CLAUDE.md §13.4)
     const component = intervention?.component || 'sleep_restriction';
-    const reason = componentReasons[component] || componentReasons.sleep_restriction;
+    const reason = CBTI_COMPONENT_SELECTION_REASONS[component as keyof typeof CBTI_COMPONENT_SELECTION_REASONS]
+      || CBTI_COMPONENT_SELECTION_REASONS.sleep_restriction;
     lines.push(reason);
 
     // Add confidence note
