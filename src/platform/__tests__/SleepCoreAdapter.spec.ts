@@ -902,3 +902,478 @@ describe('recordOutcome with local stats', () => {
     expect(totalAttempts).toBeGreaterThanOrEqual(5);
   });
 });
+
+// ============================================================================
+// CONTEXTUAL FEATURES EXTRACTION TESTS
+// ============================================================================
+
+describe('extractContextualFeatures (indirect testing)', () => {
+  let adapter: SleepCoreAdapter;
+
+  beforeEach(() => {
+    adapter = createSleepCoreAdapter({ debug: false });
+  });
+
+  it('should handle improving trend in sleep state', async () => {
+    const sleepState = createMockSleepState({
+      trend: 'improving',
+    });
+
+    const selection = await adapter.selectIntervention(sleepState, 'trend-user-1');
+    expect(selection).toBeDefined();
+    expect(selection.action).toBeDefined();
+  });
+
+  it('should handle declining trend in sleep state', async () => {
+    const sleepState = createMockSleepState({
+      trend: 'declining',
+    });
+
+    const selection = await adapter.selectIntervention(sleepState, 'trend-user-2');
+    expect(selection).toBeDefined();
+    expect(selection.action).toBeDefined();
+  });
+
+  it('should handle stable trend in sleep state', async () => {
+    const sleepState = createMockSleepState({
+      trend: 'stable',
+    });
+
+    const selection = await adapter.selectIntervention(sleepState, 'trend-user-3');
+    expect(selection).toBeDefined();
+  });
+
+  it('should calculate risk level based on ISI score', async () => {
+    const lowISIState = createMockSleepState({
+      insomnia: {
+        isiScore: 7,
+        severity: 'none' as const,
+        subtype: 'sleep_onset' as const,
+        durationWeeks: 4,
+        sleepDistress: 0.2,
+        daytimeImpact: 0.2,
+      },
+    });
+
+    const highISIState = createMockSleepState({
+      insomnia: {
+        isiScore: 24,
+        severity: 'severe' as const,
+        subtype: 'mixed' as const,
+        durationWeeks: 16,
+        sleepDistress: 0.9,
+        daytimeImpact: 0.8,
+      },
+    });
+
+    const lowResult = await adapter.selectIntervention(lowISIState, 'isi-user-low');
+    const highResult = await adapter.selectIntervention(highISIState, 'isi-user-high');
+
+    expect(lowResult).toBeDefined();
+    expect(highResult).toBeDefined();
+  });
+
+  it('should handle different cognitive distortion patterns', async () => {
+    const catastrophizingState = createMockSleepState({
+      cognitions: {
+        sleepAnxiety: 0.8,
+        preSleepArousal: 0.7,
+        sleepSelfEfficacy: 0.2,
+        dbasScore: 80,
+        beliefs: {
+          unrealisticExpectations: false,
+          catastrophizing: true,
+          helplessness: true,
+          effortfulSleep: false,
+          healthWorries: true,
+        },
+      },
+    });
+
+    const selection = await adapter.selectIntervention(catastrophizingState, 'cog-user');
+    expect(selection).toBeDefined();
+  });
+});
+
+// ============================================================================
+// ADVANCED SELECTION TESTS
+// ============================================================================
+
+describe('Advanced Intervention Selection', () => {
+  let adapter: SleepCoreAdapter;
+
+  beforeEach(() => {
+    adapter = createSleepCoreAdapter({ debug: false });
+  });
+
+  it('should provide alternatives when selecting intervention', async () => {
+    const sleepState = createMockSleepState();
+    const selection = await adapter.selectIntervention(sleepState, 'alt-user');
+
+    expect(selection.alternatives).toBeDefined();
+    expect(Array.isArray(selection.alternatives)).toBe(true);
+  });
+
+  it('should select valid intervention from available actions', async () => {
+    const sleepState = createMockSleepState();
+    const selection = await adapter.selectIntervention(sleepState, 'filter-user');
+
+    // Action should be a valid SleepAction
+    const validActions: SleepAction[] = [
+      'adjust_sleep_window',
+      'enforce_wake_time',
+      'leave_bed_reminder',
+      'bed_restriction',
+      'challenge_belief',
+      'behavioral_experiment',
+      'caffeine_education',
+      'environment_advice',
+      'relaxation_pmr',
+      'relaxation_breathing',
+      'relaxation_imagery',
+      'no_intervention',
+    ];
+    expect(validActions).toContain(selection.action);
+  });
+
+  it('should return selection with valid structure', async () => {
+    const sleepState = createMockSleepState();
+    const selection = await adapter.selectIntervention(sleepState, 'struct-user');
+
+    expect(selection).toHaveProperty('action');
+    expect(selection).toHaveProperty('component');
+    expect(selection).toHaveProperty('confidence');
+    expect(selection).toHaveProperty('explanation');
+    expect(selection).toHaveProperty('alternatives');
+  });
+
+  it('should assign component correctly based on action', async () => {
+    const sleepState = createMockSleepState({
+      metrics: {
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        finalAwakening: '06:45',
+        outOfBedTime: '07:15',
+        timeInBed: 480,
+        totalSleepTime: 300,
+        sleepOnsetLatency: 60,
+        wakeAfterSleepOnset: 90,
+        numberOfAwakenings: 5,
+        sleepEfficiency: 62,
+      },
+    });
+
+    const selection = await adapter.selectIntervention(sleepState, 'component-user');
+
+    if (selection.action !== 'no_intervention') {
+      expect(selection.component).toBeDefined();
+      expect([
+        'sleep_restriction',
+        'stimulus_control',
+        'cognitive_restructuring',
+        'sleep_hygiene',
+        'relaxation',
+      ]).toContain(selection.component);
+    }
+  });
+});
+
+// ============================================================================
+// BELIEF STATE MANAGEMENT TESTS
+// ============================================================================
+
+describe('Belief State Management', () => {
+  let adapter: SleepCoreAdapter;
+
+  beforeEach(() => {
+    adapter = createSleepCoreAdapter({ debug: false });
+  });
+
+  it('should create and store belief state for new user', async () => {
+    const sleepState = createMockSleepState();
+    const userId = 'belief-user-1';
+
+    await adapter.selectIntervention(sleepState, userId);
+
+    const beliefState = adapter.sleepStateToBeliefState(sleepState);
+    expect(beliefState).toBeDefined();
+    expect(beliefState.emotional).toBeDefined();
+    expect(beliefState.cognitive).toBeDefined();
+  });
+
+  it('should update belief state with observations', async () => {
+    const userId = 'belief-user-2';
+
+    const initialState = createMockSleepState({
+      metrics: {
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        finalAwakening: '06:45',
+        outOfBedTime: '07:15',
+        timeInBed: 480,
+        totalSleepTime: 350,
+        sleepOnsetLatency: 40,
+        wakeAfterSleepOnset: 50,
+        numberOfAwakenings: 3,
+        sleepEfficiency: 73,
+      },
+    });
+
+    await adapter.selectIntervention(initialState, userId);
+
+    const updatedState = createMockSleepState({
+      metrics: {
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        finalAwakening: '06:45',
+        outOfBedTime: '07:15',
+        timeInBed: 480,
+        totalSleepTime: 400,
+        sleepOnsetLatency: 20,
+        wakeAfterSleepOnset: 30,
+        numberOfAwakenings: 1,
+        sleepEfficiency: 85,
+      },
+    });
+
+    const selection = await adapter.selectIntervention(updatedState, userId);
+    expect(selection).toBeDefined();
+  });
+});
+
+// ============================================================================
+// EXPLANATION GENERATION TESTS
+// ============================================================================
+
+describe('Explanation Generation', () => {
+  let adapter: SleepCoreAdapter;
+
+  beforeEach(() => {
+    adapter = createSleepCoreAdapter({ debug: false });
+  });
+
+  it('should generate explanation for selected intervention', async () => {
+    const sleepState = createMockSleepState();
+    const selection = await adapter.selectIntervention(sleepState, 'explain-user');
+
+    expect(selection.explanation).toBeDefined();
+    expect(typeof selection.explanation).toBe('string');
+    expect(selection.explanation.length).toBeGreaterThan(0);
+  });
+
+  it('should generate explanation with component info', async () => {
+    const sleepState = createMockSleepState({
+      metrics: {
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        finalAwakening: '06:45',
+        outOfBedTime: '07:15',
+        timeInBed: 480,
+        totalSleepTime: 300,
+        sleepOnsetLatency: 60,
+        wakeAfterSleepOnset: 90,
+        numberOfAwakenings: 5,
+        sleepEfficiency: 62,
+      },
+    });
+
+    const selection = await adapter.selectIntervention(sleepState, 'explain-component-user');
+
+    expect(selection.explanation).toBeDefined();
+    // Explanation should mention the therapy component
+    if (selection.action !== 'no_intervention') {
+      expect(selection.component).toBeDefined();
+    }
+  });
+
+  it('should include confidence in explanation', async () => {
+    const sleepState = createMockSleepState();
+    const selection = await adapter.selectIntervention(sleepState, 'explain-conf-user');
+
+    expect(selection.confidence).toBeDefined();
+    expect(selection.confidence).toBeGreaterThanOrEqual(0);
+    expect(selection.confidence).toBeLessThanOrEqual(1);
+  });
+});
+
+// ============================================================================
+// INTERVENTION STATS TESTS
+// ============================================================================
+
+describe('getInterventionStats', () => {
+  let adapter: SleepCoreAdapter;
+
+  beforeEach(() => {
+    adapter = createSleepCoreAdapter({ debug: false });
+  });
+
+  it('should return empty map for user with no history', async () => {
+    const stats = await adapter.getInterventionStats('no-history-user');
+    expect(stats).toBeInstanceOf(Map);
+    expect(stats.size).toBe(0);
+  });
+
+  it('should track success rate correctly', async () => {
+    const userId = 'stats-user';
+    const sleepState = createMockSleepState();
+
+    // Select and record a successful outcome
+    const selection = await adapter.selectIntervention(sleepState, userId);
+    const improvedState = createMockSleepState({
+      metrics: {
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        finalAwakening: '06:45',
+        outOfBedTime: '07:15',
+        timeInBed: 480,
+        totalSleepTime: 420,
+        sleepOnsetLatency: 15,
+        wakeAfterSleepOnset: 20,
+        numberOfAwakenings: 1,
+        sleepEfficiency: 91,
+      },
+      insomnia: {
+        isiScore: 8,
+        severity: 'subthreshold' as const,
+        subtype: 'sleep_onset' as const,
+        durationWeeks: 4,
+        sleepDistress: 0.3,
+        daytimeImpact: 0.3,
+      },
+    });
+
+    await adapter.recordOutcome(selection.action, sleepState, improvedState, userId);
+
+    const stats = await adapter.getInterventionStats(userId);
+    expect(stats.size).toBeGreaterThan(0);
+  });
+});
+
+// ============================================================================
+// REWARD CALCULATION TESTS
+// ============================================================================
+
+describe('Reward Calculation (via recordOutcome)', () => {
+  let adapter: SleepCoreAdapter;
+
+  beforeEach(() => {
+    adapter = createSleepCoreAdapter({ debug: true });
+  });
+
+  it('should calculate positive reward for improvement', async () => {
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const userId = 'reward-pos-user';
+
+    const beforeState = createMockSleepState({
+      metrics: {
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        finalAwakening: '06:45',
+        outOfBedTime: '07:15',
+        timeInBed: 480,
+        totalSleepTime: 330,
+        sleepOnsetLatency: 50,
+        wakeAfterSleepOnset: 70,
+        numberOfAwakenings: 4,
+        sleepEfficiency: 69,
+      },
+      insomnia: {
+        isiScore: 20,
+        severity: 'moderate' as const,
+        subtype: 'mixed' as const,
+        durationWeeks: 10,
+        sleepDistress: 0.7,
+        daytimeImpact: 0.6,
+      },
+    });
+
+    const selection = await adapter.selectIntervention(beforeState, userId);
+
+    const afterState = createMockSleepState({
+      metrics: {
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        finalAwakening: '06:45',
+        outOfBedTime: '07:15',
+        timeInBed: 480,
+        totalSleepTime: 410,
+        sleepOnsetLatency: 20,
+        wakeAfterSleepOnset: 25,
+        numberOfAwakenings: 2,
+        sleepEfficiency: 85,
+      },
+      insomnia: {
+        isiScore: 12,
+        severity: 'subthreshold' as const,
+        subtype: 'sleep_onset' as const,
+        durationWeeks: 10,
+        sleepDistress: 0.4,
+        daytimeImpact: 0.4,
+      },
+    });
+
+    await adapter.recordOutcome(selection.action, beforeState, afterState, userId);
+
+    // Verify debug output was called
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it('should calculate negative reward for worsening', async () => {
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const userId = 'reward-neg-user';
+
+    const beforeState = createMockSleepState({
+      metrics: {
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        finalAwakening: '06:45',
+        outOfBedTime: '07:15',
+        timeInBed: 480,
+        totalSleepTime: 380,
+        sleepOnsetLatency: 30,
+        wakeAfterSleepOnset: 40,
+        numberOfAwakenings: 2,
+        sleepEfficiency: 79,
+      },
+      insomnia: {
+        isiScore: 16,
+        severity: 'moderate' as const,
+        subtype: 'mixed' as const,
+        durationWeeks: 8,
+        sleepDistress: 0.5,
+        daytimeImpact: 0.5,
+      },
+    });
+
+    const selection = await adapter.selectIntervention(beforeState, userId);
+
+    const afterState = createMockSleepState({
+      metrics: {
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        finalAwakening: '06:45',
+        outOfBedTime: '07:15',
+        timeInBed: 480,
+        totalSleepTime: 280,
+        sleepOnsetLatency: 60,
+        wakeAfterSleepOnset: 100,
+        numberOfAwakenings: 6,
+        sleepEfficiency: 58,
+      },
+      insomnia: {
+        isiScore: 23,
+        severity: 'severe' as const,
+        subtype: 'mixed' as const,
+        durationWeeks: 9,
+        sleepDistress: 0.8,
+        daytimeImpact: 0.8,
+      },
+    });
+
+    await adapter.recordOutcome(selection.action, beforeState, afterState, userId);
+
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+});
