@@ -568,4 +568,315 @@ describe('DigitalTwinService', () => {
       );
     });
   });
+
+  // ==========================================================================
+  // Repository Integration
+  // ==========================================================================
+  describe('Repository Integration', () => {
+    let mockRepo: {
+      findAll: jest.Mock;
+      upsert: jest.Mock;
+    };
+
+    beforeEach(() => {
+      mockRepo = {
+        findAll: jest.fn(),
+        upsert: jest.fn().mockResolvedValue(undefined),
+      };
+    });
+
+    it('should load twins from database on setRepository', async () => {
+      mockRepo.findAll.mockResolvedValue([
+        {
+          userId: 'db_user_1',
+          twinCreatedAt: new Date(),
+          lastUpdatedAt: new Date(),
+          observationCount: 10,
+          stateQuality: 0.7,
+          isReady: true,
+          currentMetricsJson: JSON.stringify(createMetrics(80, 15, 20, 400)),
+          trend: 'stable',
+          riskLevel: 'low',
+        },
+        {
+          userId: 'db_user_2',
+          twinCreatedAt: new Date(),
+          lastUpdatedAt: new Date(),
+          observationCount: 5,
+          stateQuality: 0.5,
+          isReady: true,
+          currentMetricsJson: null,
+          trend: 'improving',
+          riskLevel: 'moderate',
+        },
+      ]);
+
+      const freshService = new DigitalTwinService();
+      await freshService.setRepository(mockRepo as any);
+
+      expect(mockRepo.findAll).toHaveBeenCalled();
+      expect(freshService.getTwin('db_user_1')).not.toBeNull();
+      expect(freshService.getTwin('db_user_2')).not.toBeNull();
+    });
+
+    it('should handle empty database', async () => {
+      mockRepo.findAll.mockResolvedValue([]);
+
+      const freshService = new DigitalTwinService();
+      await freshService.setRepository(mockRepo as any);
+
+      expect(mockRepo.findAll).toHaveBeenCalled();
+      expect(freshService.getStats().activeTwins).toBe(0);
+    });
+
+    it('should handle database load error gracefully', async () => {
+      mockRepo.findAll.mockRejectedValue(new Error('DB connection failed'));
+
+      const freshService = new DigitalTwinService();
+
+      // Should not throw
+      await expect(freshService.setRepository(mockRepo as any)).resolves.not.toThrow();
+    });
+
+    it('should persist twin to database on create', async () => {
+      mockRepo.findAll.mockResolvedValue([]);
+
+      const freshService = new DigitalTwinService();
+      await freshService.setRepository(mockRepo as any);
+      await freshService.createTwin(testUserId);
+
+      // Wait for async persist
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(mockRepo.upsert).toHaveBeenCalled();
+    });
+
+    it('should persist twin to database on update', async () => {
+      mockRepo.findAll.mockResolvedValue([]);
+
+      const freshService = new DigitalTwinService();
+      await freshService.setRepository(mockRepo as any);
+      await freshService.createTwin(testUserId);
+      mockRepo.upsert.mockClear();
+
+      await freshService.updateTwin(testUserId, createMetrics(85, 12, 15, 420), 0.8);
+
+      // Wait for async persist
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(mockRepo.upsert).toHaveBeenCalled();
+    });
+
+    it('should handle persistence error gracefully', async () => {
+      mockRepo.findAll.mockResolvedValue([]);
+      mockRepo.upsert.mockRejectedValue(new Error('Write failed'));
+
+      const freshService = new DigitalTwinService();
+      await freshService.setRepository(mockRepo as any);
+
+      // Should not throw
+      await expect(freshService.createTwin(testUserId)).resolves.not.toThrow();
+    });
+  });
+
+  // ==========================================================================
+  // Tipping Points - Advanced Cases
+  // ==========================================================================
+  describe('Tipping Points - Advanced Cases', () => {
+    it('should return empty array when prediction is null', async () => {
+      const { sleepPredictionService } = require('../SleepPredictionService');
+
+      sleepPredictionService.predict
+        .mockReturnValueOnce(mockPrediction) // For createTwin
+        .mockReturnValueOnce(null); // For detectTippingPoints
+
+      const freshService = new DigitalTwinService();
+      await freshService.createTwin(testUserId);
+      const tippingPoints = await freshService.detectTippingPoints(testUserId);
+
+      expect(tippingPoints).toEqual([]);
+    });
+
+    it('should detect deterioration from high-strength warnings', async () => {
+      const { sleepPredictionService } = require('../SleepPredictionService');
+
+      const warningPrediction = {
+        ...mockPrediction,
+        earlyWarnings: [
+          {
+            metric: 'sleepEfficiency',
+            severity: 'high' as const,
+            strength: 0.7,
+            estimatedDaysToCritical: 5,
+            recommendation: 'Increase adherence',
+            messageRu: 'Увеличьте приверженность',
+          },
+        ],
+      };
+      sleepPredictionService.predict.mockReturnValue(warningPrediction);
+
+      const freshService = new DigitalTwinService();
+      const tippingPoints = await freshService.detectTippingPoints(testUserId);
+
+      const deteriorationPoint = tippingPoints.find(tp => tp.type === 'deterioration');
+      expect(deteriorationPoint).toBeDefined();
+      expect(deteriorationPoint?.probability).toBe(0.7);
+      expect(deteriorationPoint?.estimatedDays).toBe(5);
+
+      // Restore default mock
+      sleepPredictionService.predict.mockReturnValue(mockPrediction);
+    });
+
+    it('should detect relapse risk from high variance', async () => {
+      const { sleepPredictionService } = require('../SleepPredictionService');
+
+      // Create 14+ days of history with high variance in recent 7 days
+      const stableHistory = Array.from({ length: 7 }, (_, i) => ({
+        userId: testUserId,
+        date: new Date(Date.now() - 86400000 * (14 - i)),
+        metrics: createMetrics(75, 20, 25, 380), // Stable SE
+        subjectiveQuality: 0.6,
+      }));
+
+      const volatileHistory = Array.from({ length: 7 }, (_, i) => ({
+        userId: testUserId,
+        date: new Date(Date.now() - 86400000 * (7 - i)),
+        metrics: createMetrics(50 + i * 10, 20, 25, 380), // High variance: 50, 60, 70, 80, 90, 100, 110
+        subjectiveQuality: 0.5,
+      }));
+
+      const fullHistory = [...stableHistory, ...volatileHistory];
+      sleepPredictionService.getHistory.mockReturnValue(fullHistory);
+
+      const freshService = new DigitalTwinService();
+      const tippingPoints = await freshService.detectTippingPoints(testUserId);
+
+      const relapsePoint = tippingPoints.find(tp => tp.type === 'relapse');
+      expect(relapsePoint).toBeDefined();
+      expect(relapsePoint?.severity).toMatch(/moderate|high/);
+
+      // Restore default mock
+      sleepPredictionService.getHistory.mockReturnValue(mockHistory);
+    });
+  });
+
+  // ==========================================================================
+  // State Quality Calculation
+  // ==========================================================================
+  describe('State Quality Calculation', () => {
+    it('should return quality 0.7 for 7-13 day history', async () => {
+      const { sleepPredictionService } = require('../SleepPredictionService');
+
+      // Create exactly 10 days of history
+      const history10Days = Array.from({ length: 10 }, (_, i) => ({
+        userId: testUserId,
+        date: new Date(Date.now() - 86400000 * (10 - i)),
+        metrics: createMetrics(75 + i, 20, 25, 380),
+        subjectiveQuality: 0.6,
+      }));
+
+      sleepPredictionService.getHistory.mockReturnValue(history10Days);
+
+      const freshService = new DigitalTwinService();
+      const twin = await freshService.createTwin(testUserId);
+
+      expect(twin.stateQuality).toBe(0.7);
+
+      sleepPredictionService.getHistory.mockReturnValue(mockHistory);
+    });
+
+    it('should return quality 0.85 for 14-29 day history', async () => {
+      const { sleepPredictionService } = require('../SleepPredictionService');
+
+      // Create exactly 20 days of history
+      const history20Days = Array.from({ length: 20 }, (_, i) => ({
+        userId: testUserId,
+        date: new Date(Date.now() - 86400000 * (20 - i)),
+        metrics: createMetrics(75 + (i % 10), 20, 25, 380),
+        subjectiveQuality: 0.6,
+      }));
+
+      sleepPredictionService.getHistory.mockReturnValue(history20Days);
+
+      const freshService = new DigitalTwinService();
+      const twin = await freshService.createTwin(testUserId);
+
+      expect(twin.stateQuality).toBe(0.85);
+
+      sleepPredictionService.getHistory.mockReturnValue(mockHistory);
+    });
+
+    it('should return quality 0.95 for 30+ day history', async () => {
+      const { sleepPredictionService } = require('../SleepPredictionService');
+
+      // Create exactly 35 days of history
+      const history35Days = Array.from({ length: 35 }, (_, i) => ({
+        userId: testUserId,
+        date: new Date(Date.now() - 86400000 * (35 - i)),
+        metrics: createMetrics(75 + (i % 10), 20, 25, 380),
+        subjectiveQuality: 0.6,
+      }));
+
+      sleepPredictionService.getHistory.mockReturnValue(history35Days);
+
+      const freshService = new DigitalTwinService();
+      const twin = await freshService.createTwin(testUserId);
+
+      expect(twin.stateQuality).toBe(0.95);
+
+      sleepPredictionService.getHistory.mockReturnValue(mockHistory);
+    });
+  });
+
+  // ==========================================================================
+  // Scenario Comparison - Edge Cases
+  // ==========================================================================
+  describe('Scenario Comparison - Edge Cases', () => {
+    it('should return null when all simulations fail', async () => {
+      const { sleepPredictionService } = require('../SleepPredictionService');
+
+      // Make getHistory return empty to cause simulation failures
+      sleepPredictionService.getHistory.mockReturnValue([]);
+
+      const scenarios: IScenario[] = [
+        {
+          name: 'Scenario A',
+          description: 'First scenario',
+          intervention: 'bed_restriction',
+          durationDays: 7,
+          adherenceLevel: 0.8,
+        },
+      ];
+
+      const comparison = await service.compareScenarios('new_user', scenarios);
+
+      expect(comparison).toBeNull();
+
+      sleepPredictionService.getHistory.mockReturnValue(mockHistory);
+    });
+  });
+
+  // ==========================================================================
+  // PLRNN Simulation Fallback
+  // ==========================================================================
+  describe('PLRNN Simulation Fallback', () => {
+    it('should use heuristic simulation when PLRNN returns result', async () => {
+      const { sleepPredictionService } = require('../SleepPredictionService');
+
+      // Mock PLRNN simulation to return a result
+      sleepPredictionService.simulateIntervention.mockReturnValue({
+        trajectory: [{ date: new Date(), predicted: 82 }],
+        confidence: 0.8,
+      });
+
+      await service.createTwin(testUserId);
+      const result = await service.simulateIntervention(testUserId, 'bed_restriction', 7);
+
+      // Should have boosted confidence from PLRNN success
+      expect(result).not.toBeNull();
+      expect(result?.confidence).toBeGreaterThanOrEqual(0.5);
+
+      sleepPredictionService.simulateIntervention.mockReturnValue(null);
+    });
+  });
 });
