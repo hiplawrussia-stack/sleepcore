@@ -537,5 +537,447 @@ describe('AdaptivePersonaService', () => {
       // Imperatives should be softened
       expect(result.adapted).toContain('можно');
     });
+
+    it('should not simplify message with exactly 3 sentences', async () => {
+      const threeLineMessage = 'Первое предложение. Второе предложение. Третье предложение.';
+
+      const result = await service.adaptTone(
+        testUserId,
+        threeLineMessage,
+        createEmotionalState({ stressLevel: 0.9 })
+      );
+
+      // 3 sentences should not be simplified
+      expect(result.adapted).toContain('Первое');
+      expect(result.adapted).toContain('Второе');
+      expect(result.adapted).toContain('Третье');
+    });
+  });
+
+  // ==========================================================================
+  // Repository Integration
+  // ==========================================================================
+  describe('Repository Integration', () => {
+    let mockRepo: {
+      getAllForService: jest.Mock;
+      set: jest.Mock;
+    };
+
+    beforeEach(() => {
+      mockRepo = {
+        getAllForService: jest.fn(),
+        set: jest.fn().mockResolvedValue(undefined),
+      };
+    });
+
+    it('should set repository and load data', async () => {
+      mockRepo.getAllForService.mockResolvedValue([]);
+
+      await service.setRepository(mockRepo as any);
+
+      expect(mockRepo.getAllForService).toHaveBeenCalledWith('comm_profile');
+      expect(mockRepo.getAllForService).toHaveBeenCalledWith('emotional_history');
+    });
+
+    it('should load profiles from database', async () => {
+      const storedProfile = {
+        userId: 'stored_user',
+        changeStage: 'action',
+        preferredStrategies: ['affirm'],
+        emotionalBaseline: {
+          primary: 'positive',
+          intensity: 0.7,
+          sentiment: 0.5,
+          stressLevel: 0.2,
+          engagement: 0.8,
+        },
+        preferences: {
+          formality: 'informal',
+          verbosity: 'moderate',
+          encouragementLevel: 'high',
+          humorTolerance: 0.6,
+        },
+        lastUpdated: '2026-01-15T10:00:00.000Z',
+      };
+
+      mockRepo.getAllForService
+        .mockResolvedValueOnce([{ userId: 'stored_user', state: storedProfile }])
+        .mockResolvedValueOnce([]);
+
+      await service.setRepository(mockRepo as any);
+
+      const profile = await service.getCommunicationProfile('stored_user');
+
+      expect(profile.changeStage).toBe('action');
+      expect(profile.emotionalBaseline.primary).toBe('positive');
+      expect(profile.lastUpdated).toBeInstanceOf(Date);
+    });
+
+    it('should load emotional history from database', async () => {
+      const storedHistory = {
+        history: [
+          { primary: 'tired', intensity: 0.6, sentiment: -0.2, stressLevel: 0.5, engagement: 0.4 },
+          { primary: 'hopeful', intensity: 0.5, sentiment: 0.3, stressLevel: 0.3, engagement: 0.6 },
+        ],
+      };
+
+      mockRepo.getAllForService
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ userId: 'history_user', state: storedHistory }]);
+
+      await service.setRepository(mockRepo as any);
+
+      // Add an emotional state to trigger baseline calculation
+      await service.updateEmotionalState('history_user', createEmotionalState({
+        primary: 'tired',
+        intensity: 0.7,
+      }));
+
+      const profile = await service.getCommunicationProfile('history_user');
+      // Profile baseline should reflect history
+      expect(profile.emotionalBaseline.primary).toBe('tired');
+    });
+
+    it('should handle database load errors gracefully', async () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      mockRepo.getAllForService.mockRejectedValue(new Error('DB connection failed'));
+
+      await service.setRepository(mockRepo as any);
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[AdaptivePersona] DB load failed:',
+        expect.any(Error)
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle empty history array in stored state', async () => {
+      mockRepo.getAllForService
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ userId: 'empty_history', state: {} }]);
+
+      await service.setRepository(mockRepo as any);
+
+      // Should not throw and should use empty history
+      const profile = await service.getCommunicationProfile('empty_history');
+      expect(profile).toBeDefined();
+    });
+
+    it('should persist profile when created', async () => {
+      await service.setRepository(mockRepo as any);
+
+      await service.getCommunicationProfile('new_user_persist');
+
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'new_user_persist',
+        'comm_profile',
+        expect.objectContaining({ userId: 'new_user_persist' })
+      );
+    });
+
+    it('should persist profile when change stage updated', async () => {
+      await service.setRepository(mockRepo as any);
+
+      await service.updateChangeStage('user_stage_update', 'action');
+
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'user_stage_update',
+        'comm_profile',
+        expect.objectContaining({ changeStage: 'action' })
+      );
+    });
+
+    it('should persist emotional history when updated', async () => {
+      await service.setRepository(mockRepo as any);
+
+      await service.updateEmotionalState('user_emotion_persist', createEmotionalState({
+        primary: 'anxious',
+        stressLevel: 0.8,
+      }));
+
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'user_emotion_persist',
+        'emotional_history',
+        expect.objectContaining({
+          history: expect.arrayContaining([
+            expect.objectContaining({ primary: 'anxious' }),
+          ]),
+        })
+      );
+    });
+
+    it('should handle persist error gracefully', async () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      mockRepo.set.mockRejectedValue(new Error('Write failed'));
+      await service.setRepository(mockRepo as any);
+
+      await service.updateChangeStage('persist_fail_user', 'preparation');
+
+      // Wait for async persist to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should not persist when repository not set', async () => {
+      // Fresh service without repository
+      const freshService = new AdaptivePersonaService();
+
+      await freshService.updateChangeStage('no_repo_user', 'action');
+
+      // No error should be thrown
+      const profile = await freshService.getCommunicationProfile('no_repo_user');
+      expect(profile.changeStage).toBe('action');
+    });
+
+    it('should skip null profiles in DB load', async () => {
+      mockRepo.getAllForService
+        .mockResolvedValueOnce([{ userId: 'null_profile', state: null }])
+        .mockResolvedValueOnce([]);
+
+      await service.setRepository(mockRepo as any);
+
+      // Should create new profile instead
+      const profile = await service.getCommunicationProfile('null_profile');
+      expect(profile.changeStage).toBe('contemplation'); // default
+    });
+  });
+
+  // ==========================================================================
+  // Belief State Integration
+  // ==========================================================================
+  describe('Belief State Integration', () => {
+    /**
+     * Create mock CogniCore belief state
+     */
+    function createBeliefState(overrides: {
+      arousal?: number;
+      valence?: number;
+      selfEfficacy?: number;
+      futureView?: number;
+    } = {}) {
+      return {
+        emotional: {
+          arousal: { posterior: { mean: overrides.arousal ?? 0.5 } },
+          valence: { posterior: { mean: overrides.valence ?? 0.5 } },
+        },
+        cognitive: {
+          selfView: { posterior: { mean: overrides.selfEfficacy ?? 0.5 } },
+          futureView: { posterior: { mean: overrides.futureView ?? 0.5 } },
+        },
+      };
+    }
+
+    describe('adaptTone with beliefState', () => {
+      it('should augment emotional state from belief posteriors', async () => {
+        const beliefState = createBeliefState({
+          arousal: 0.8,
+          valence: 0.2,
+          selfEfficacy: 0.4,
+        });
+
+        const result = await service.adaptTone(
+          testUserId,
+          'Сделай упражнение.',
+          undefined, // no explicit emotional state
+          beliefState as any
+        );
+
+        // High arousal + low valence should trigger anxiety detection
+        expect(result.toneAdjustments).toContain('added_reassurance');
+      });
+
+      it('should detect anxious state from high arousal and low valence', async () => {
+        const beliefState = createBeliefState({
+          arousal: 0.75,
+          valence: 0.25,
+        });
+
+        const result = await service.adaptTone(
+          testUserId,
+          'Начни практику.',
+          undefined,
+          beliefState as any
+        );
+
+        expect(result.toneAdjustments).toContain('added_reassurance');
+      });
+
+      it('should detect discouraged state from low self-efficacy and low valence', async () => {
+        const beliefState = createBeliefState({
+          arousal: 0.4,
+          valence: 0.35,
+          selfEfficacy: 0.25,
+        });
+
+        const result = await service.adaptTone(
+          testUserId,
+          'Продолжай работу.',
+          undefined,
+          beliefState as any
+        );
+
+        expect(result.toneAdjustments).toContain('added_empathy');
+      });
+
+      it('should increase stress from high arousal', async () => {
+        const beliefState = createBeliefState({
+          arousal: 0.85,
+          valence: 0.5,
+        });
+
+        // Long message that could be simplified
+        const longMessage = 'Первое предложение. Второе. Третье. Четвёртое. Пятое.';
+
+        const result = await service.adaptTone(
+          testUserId,
+          longMessage,
+          undefined,
+          beliefState as any
+        );
+
+        expect(result.toneAdjustments).toContain('simplified');
+      });
+
+      it('should decrease engagement from low self-efficacy', async () => {
+        const beliefState = createBeliefState({
+          selfEfficacy: 0.2,
+          valence: 0.6,
+        });
+
+        const result = await service.adaptTone(
+          testUserId,
+          'Продолжим.',
+          undefined,
+          beliefState as any
+        );
+
+        expect(result.toneAdjustments).toContain('added_motivation');
+      });
+
+      it('should use positive valence to improve sentiment', async () => {
+        const beliefState = createBeliefState({
+          valence: 0.8,
+          selfEfficacy: 0.7,
+        });
+
+        const result = await service.adaptTone(
+          testUserId,
+          'Хорошо!',
+          undefined,
+          beliefState as any
+        );
+
+        // Should not add empathy for positive state
+        expect(result.toneAdjustments).not.toContain('added_empathy');
+      });
+
+      it('should prefer explicit emotional state over belief state', async () => {
+        const beliefState = createBeliefState({
+          arousal: 0.9,
+          valence: 0.1, // Would suggest anxiety
+        });
+
+        const explicitState = createEmotionalState({
+          primary: 'positive',
+          stressLevel: 0.1,
+          engagement: 0.9,
+        });
+
+        const result = await service.adaptTone(
+          testUserId,
+          'Отлично!',
+          explicitState,
+          beliefState as any
+        );
+
+        // Explicit positive state should not trigger anxiety adjustments
+        expect(result.toneAdjustments).not.toContain('added_reassurance');
+      });
+    });
+
+    describe('selectMIStrategy with beliefState', () => {
+      it('should prioritize support for low self-efficacy', async () => {
+        const beliefState = createBeliefState({ selfEfficacy: 0.2 });
+
+        const strategies: MIStrategy[] = [];
+        for (let i = 0; i < 30; i++) {
+          const strategy = await service.selectMIStrategy(testUserId, {
+            beliefState: beliefState as any,
+          });
+          strategies.push(strategy);
+        }
+
+        // Support and affirm should be more common
+        const supportCount = strategies.filter(
+          s => s === 'support_self_efficacy' || s === 'affirm'
+        ).length;
+        expect(supportCount).toBeGreaterThan(5);
+      });
+
+      it('should prioritize empathy for high arousal', async () => {
+        const beliefState = createBeliefState({ arousal: 0.8 });
+
+        const strategies: MIStrategy[] = [];
+        for (let i = 0; i < 30; i++) {
+          const strategy = await service.selectMIStrategy(testUserId, {
+            beliefState: beliefState as any,
+          });
+          strategies.push(strategy);
+        }
+
+        // Empathy and roll_with_resistance should be more common
+        const empathyCount = strategies.filter(
+          s => s === 'express_empathy' || s === 'roll_with_resistance'
+        ).length;
+        expect(empathyCount).toBeGreaterThan(5);
+      });
+
+      it('should prioritize discrepancy for negative future view', async () => {
+        const beliefState = createBeliefState({ futureView: 0.2 });
+
+        const strategies: MIStrategy[] = [];
+        for (let i = 0; i < 30; i++) {
+          const strategy = await service.selectMIStrategy(testUserId, {
+            beliefState: beliefState as any,
+          });
+          strategies.push(strategy);
+        }
+
+        // Develop discrepancy and elicit change talk should appear
+        const discrepancyCount = strategies.filter(
+          s => s === 'develop_discrepancy' || s === 'elicit_change_talk'
+        ).length;
+        expect(discrepancyCount).toBeGreaterThan(3);
+      });
+
+      it('should combine belief state with context adjustments', async () => {
+        const beliefState = createBeliefState({
+          selfEfficacy: 0.2,
+          arousal: 0.75,
+        });
+
+        const strategies: MIStrategy[] = [];
+        for (let i = 0; i < 30; i++) {
+          const strategy = await service.selectMIStrategy(testUserId, {
+            beliefState: beliefState as any,
+            recentSustainTalk: 0.7,
+          });
+          strategies.push(strategy);
+        }
+
+        // Both empathy (from arousal) and support (from low efficacy) should be boosted
+        const combinedCount = strategies.filter(
+          s => s === 'express_empathy' ||
+               s === 'support_self_efficacy' ||
+               s === 'roll_with_resistance'
+        ).length;
+        expect(combinedCount).toBeGreaterThan(10);
+      });
+    });
   });
 });
