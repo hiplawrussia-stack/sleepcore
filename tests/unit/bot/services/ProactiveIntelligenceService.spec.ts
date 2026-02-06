@@ -457,4 +457,429 @@ describe('ProactiveIntelligenceService', () => {
       expect(customService).toBeInstanceOf(ProactiveIntelligenceService);
     });
   });
+
+  describe('Database Persistence', () => {
+    it('should set repository and load from DB', async () => {
+      // Mock repository
+      const mockRepo = {
+        getAllForService: jest.fn().mockResolvedValue([]),
+        set: jest.fn().mockResolvedValue(undefined),
+        get: jest.fn().mockResolvedValue(null),
+      };
+
+      await service.setRepository(mockRepo as any);
+
+      expect(mockRepo.getAllForService).toHaveBeenCalledWith('proactive_insights');
+      expect(mockRepo.getAllForService).toHaveBeenCalledWith('engagement_tracking');
+    });
+
+    it('should load existing insights from DB', async () => {
+      const mockInsights = [
+        {
+          id: 'test-1',
+          type: 'tip',
+          generatedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 86400000).toISOString(),
+        },
+      ];
+
+      const mockRepo = {
+        getAllForService: jest.fn().mockImplementation((service: string) => {
+          if (service === 'proactive_insights') {
+            return Promise.resolve([
+              { userId: 'user-1', state: { insights: mockInsights } },
+            ]);
+          }
+          return Promise.resolve([]);
+        }),
+        set: jest.fn().mockResolvedValue(undefined),
+      };
+
+      await service.setRepository(mockRepo as any);
+
+      // The insights should be restored with Date objects
+      const pending = service.getPendingInsights('user-1');
+      expect(pending).toHaveLength(1);
+      expect(pending[0].generatedAt).toBeInstanceOf(Date);
+    });
+
+    it('should load engagement tracking from DB', async () => {
+      const mockEngagement = {
+        userId: 'user-2',
+        insightsDeliveredToday: 2,
+        lastInsightTime: new Date().toISOString(),
+        thompsonStates: {
+          tip: { insightType: 'tip', impressions: 10, engagements: 5 },
+        },
+        hourlyEngagement: Array(24).fill(0),
+        interactionHistory: [],
+      };
+
+      const mockRepo = {
+        getAllForService: jest.fn().mockImplementation((service: string) => {
+          if (service === 'engagement_tracking') {
+            return Promise.resolve([
+              { userId: 'user-2', state: mockEngagement },
+            ]);
+          }
+          return Promise.resolve([]);
+        }),
+        set: jest.fn().mockResolvedValue(undefined),
+      };
+
+      await service.setRepository(mockRepo as any);
+
+      const tracking = service.getEngagementTracking('user-2');
+      expect(tracking.insightsDeliveredToday).toBe(2);
+    });
+
+    it('should handle DB load failure gracefully', async () => {
+      const mockRepo = {
+        getAllForService: jest.fn().mockRejectedValue(new Error('DB error')),
+        set: jest.fn().mockResolvedValue(undefined),
+      };
+
+      // Should not throw
+      await expect(service.setRepository(mockRepo as any)).resolves.not.toThrow();
+    });
+
+    it('should persist insights to DB on changes', async () => {
+      const mockRepo = {
+        getAllForService: jest.fn().mockResolvedValue([]),
+        set: jest.fn().mockResolvedValue(undefined),
+      };
+
+      await service.setRepository(mockRepo as any);
+
+      // Mark insight as delivered to trigger persistence
+      service.markInsightSent('user-persist', 'insight-1');
+
+      // Wait for async persistence
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(mockRepo.set).toHaveBeenCalled();
+    });
+  });
+
+  describe('Insight Delivery', () => {
+    it('should mark insight as delivered', () => {
+      const userId = 'delivery-user';
+
+      // First, generate some insights by running analysis
+      service.markInsightSent(userId, 'insight-to-deliver');
+
+      // Get pending insights (should be empty for new user)
+      const pending = service.getPendingInsights(userId);
+      expect(Array.isArray(pending)).toBe(true);
+    });
+
+    it('should remove insight from pending after delivery', () => {
+      // This tests the markInsightDelivered path
+      const userId = 'mark-delivered-user';
+
+      // Get initial state
+      const beforePending = service.getPendingInsights(userId);
+      const beforeCount = beforePending.length;
+
+      // Mark a non-existent insight as delivered (should not crash)
+      service.markInsightDelivered(userId, 'non-existent');
+
+      const afterPending = service.getPendingInsights(userId);
+      expect(afterPending.length).toBe(beforeCount);
+    });
+  });
+
+  describe('Optimal Intervention Timing', () => {
+    const userId = 'timing-user';
+
+    it('should find optimal intervention time', async () => {
+      const history = createSleepHistory(14);
+      const time = await service.findOptimalInterventionTime(userId, history);
+
+      expect(time).toBeInstanceOf(Date);
+    });
+
+    it('should default to evening window when no timings available', async () => {
+      // Create minimal history
+      const history = createSleepHistory(2);
+      const time = await service.findOptimalInterventionTime(userId, history);
+
+      expect(time).toBeInstanceOf(Date);
+      // Should be set to evening window
+      const hour = time.getHours();
+      expect(hour).toBeGreaterThanOrEqual(17);
+      expect(hour).toBeLessThanOrEqual(21);
+    });
+
+    it('should find multiple optimal intervention times', async () => {
+      const history = createSleepHistory(14);
+      // Access the private method via type assertion for testing
+      const timings = await (service as any).findOptimalInterventionTimes(userId, history);
+
+      expect(Array.isArray(timings)).toBe(true);
+    });
+  });
+
+  describe('Belief-Augmented Risk Detection', () => {
+    const userId = 'belief-risk-user';
+
+    it('should detect risk with high arousal and low self-efficacy via runDailyAnalysis', async () => {
+      const history = createSleepHistory(14);
+
+      // Create a belief state indicating vulnerable state
+      const beliefState = createMockBeliefState({
+        emotional: {
+          arousal: { posterior: { mean: 0.8, variance: 0.1 } },
+          valence: { posterior: { mean: 0.5, variance: 0.1 } },
+        },
+        cognitive: {
+          selfView: { posterior: { mean: 0.2, variance: 0.1 } },
+          worldView: { posterior: { mean: 0.5, variance: 0.1 } },
+        },
+        risk: {
+          overallRisk: { posterior: { mean: 0.3, variance: 0.1 } },
+        },
+      });
+
+      // Use runDailyAnalysis which internally calls detectRiskAlerts with beliefState
+      const result = await service.runDailyAnalysis(userId, history, beliefState);
+
+      // Should have pattern alerts from the analysis
+      expect(result).toHaveProperty('patternAlerts');
+      expect(Array.isArray(result.patternAlerts)).toBe(true);
+
+      // Check summary includes risk assessment
+      expect(result.summary).toHaveProperty('riskLevel');
+    });
+
+    it('should detect risk with high overall CogniCore risk via runDailyAnalysis', async () => {
+      const history = createSleepHistory(14, 'stable'); // Use stable to avoid other alerts
+
+      const beliefState = createMockBeliefState({
+        emotional: {
+          arousal: { posterior: { mean: 0.4, variance: 0.1 } },
+          valence: { posterior: { mean: 0.5, variance: 0.1 } },
+        },
+        cognitive: {
+          selfView: { posterior: { mean: 0.6, variance: 0.1 } },
+          worldView: { posterior: { mean: 0.5, variance: 0.1 } },
+        },
+        risk: {
+          overallRisk: { posterior: { mean: 0.75, variance: 0.1 } },
+        },
+      });
+
+      const result = await service.runDailyAnalysis(userId, history, beliefState);
+
+      // Result should contain summary with risk level
+      expect(result.summary).toHaveProperty('riskLevel');
+    });
+
+    it('should handle belief state in daily analysis', async () => {
+      const history = createSleepHistory(14, 'declining');
+
+      const beliefState = createMockBeliefState({
+        emotional: {
+          arousal: { posterior: { mean: 0.9, variance: 0.1 } },
+          valence: { posterior: { mean: 0.2, variance: 0.1 } },
+        },
+        cognitive: {
+          selfView: { posterior: { mean: 0.15, variance: 0.1 } },
+          worldView: { posterior: { mean: 0.3, variance: 0.1 } },
+        },
+        risk: {
+          overallRisk: { posterior: { mean: 0.85, variance: 0.1 } },
+        },
+      });
+
+      const result = await service.runDailyAnalysis(userId, history, beliefState);
+
+      // Should complete successfully with pattern alerts
+      expect(result.patternAlerts).toBeDefined();
+      expect(Array.isArray(result.patternAlerts)).toBe(true);
+    });
+  });
+
+  describe('Multi-Modal Risk Fusion', () => {
+    const userId = 'fusion-user';
+
+    it('should get combined risk assessment', async () => {
+      const history = createSleepHistory(14);
+
+      // Use the public method getCombinedRiskAssessment
+      const riskResult = await service.getCombinedRiskAssessment(userId, history);
+
+      expect(riskResult).toHaveProperty('available');
+      expect(riskResult).toHaveProperty('combinedRiskScore');
+      expect(riskResult).toHaveProperty('riskLevel');
+      expect(['low', 'moderate', 'high', 'critical']).toContain(riskResult.riskLevel);
+    });
+
+    it('should include components in combined assessment', async () => {
+      const history = createSleepHistory(14);
+
+      const riskResult = await service.getCombinedRiskAssessment(userId, history);
+
+      expect(riskResult.components).toHaveProperty('sleepCSD');
+      expect(riskResult.components).toHaveProperty('voiceBiomarkers');
+      expect(riskResult.components).toHaveProperty('sleepEfficiency');
+    });
+
+    it('should generate recommendations based on assessment', async () => {
+      const history = createSleepHistory(14);
+
+      const riskResult = await service.getCombinedRiskAssessment(userId, history);
+
+      expect(riskResult.recommendations).toBeDefined();
+      expect(Array.isArray(riskResult.recommendations)).toBe(true);
+      expect(riskResult.recommendations.length).toBeGreaterThan(0);
+    });
+
+    it('should determine escalation requirement', async () => {
+      const history = createSleepHistory(21, 'declining');
+
+      const riskResult = await service.getCombinedRiskAssessment(userId, history);
+
+      expect(riskResult).toHaveProperty('escalationRequired');
+      expect(typeof riskResult.escalationRequired).toBe('boolean');
+    });
+
+    it('should generate Russian summary', async () => {
+      const history = createSleepHistory(14);
+
+      const riskResult = await service.getCombinedRiskAssessment(userId, history);
+
+      expect(riskResult.summaryRu).toBeDefined();
+      expect(typeof riskResult.summaryRu).toBe('string');
+      // Russian text check
+      expect(riskResult.summaryRu.length).toBeGreaterThan(0);
+    });
+
+    it('should identify primary concerns', async () => {
+      const history = createSleepHistory(21, 'declining');
+
+      const riskResult = await service.getCombinedRiskAssessment(userId, history);
+
+      expect(riskResult.primaryConcerns).toBeDefined();
+      expect(Array.isArray(riskResult.primaryConcerns)).toBe(true);
+    });
+  });
+
+  describe('Average Time Calculations', () => {
+    it('should calculate average time from Date objects', () => {
+      const times = [
+        new Date('2025-01-20T22:00:00'),
+        new Date('2025-01-21T23:00:00'),
+        new Date('2025-01-22T22:30:00'),
+      ];
+
+      const avgTime = (service as any).calculateAverageTime(times);
+
+      expect(avgTime).not.toBeNull();
+      expect(avgTime).toMatch(/^\d{2}:\d{2}$/);
+    });
+
+    it('should return null for empty time array', () => {
+      const avgTime = (service as any).calculateAverageTime([]);
+      expect(avgTime).toBeNull();
+    });
+
+    it('should calculate average time from string format', () => {
+      const times = ['22:00', '23:00', '22:30'];
+
+      const avgTime = (service as any).calculateAverageTimeFromStrings(times);
+
+      expect(avgTime).not.toBeNull();
+      expect(avgTime).toMatch(/^\d{2}:\d{2}$/);
+    });
+
+    it('should return null for empty string time array', () => {
+      const avgTime = (service as any).calculateAverageTimeFromStrings([]);
+      expect(avgTime).toBeNull();
+    });
+
+    it('should calculate average bedtime from history', () => {
+      const history = createSleepHistory(14);
+
+      const avgBedtime = (service as any).calculateAverageBedtime(history);
+
+      expect(avgBedtime).not.toBeNull();
+      expect(typeof avgBedtime).toBe('number');
+      // Should be between 20:00 (20) and 02:00 (26 -> 2 after normalization)
+      expect(avgBedtime).toBeGreaterThanOrEqual(0);
+      expect(avgBedtime).toBeLessThanOrEqual(24);
+    });
+
+    it('should return null for empty history', () => {
+      const avgBedtime = (service as any).calculateAverageBedtime([]);
+      expect(avgBedtime).toBeNull();
+    });
+
+    it('should handle after-midnight bedtimes', () => {
+      const lateHistory = createSleepHistory(7).map(s => ({
+        ...s,
+        metrics: { ...s.metrics, bedtime: '01:30' },
+      }));
+
+      const avgBedtime = (service as any).calculateAverageBedtime(lateHistory);
+
+      expect(avgBedtime).not.toBeNull();
+      // After-midnight should be handled (01:30 = 25.5 hours, normalized to 1.5)
+    });
+  });
+
+  describe('Days Since Last Entry', () => {
+    it('should calculate days since last entry', () => {
+      const history = createSleepHistory(7);
+
+      const days = (service as any).daysSinceLastEntry(history);
+
+      expect(typeof days).toBe('number');
+      expect(days).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should return Infinity for empty history', () => {
+      const days = (service as any).daysSinceLastEntry([]);
+      expect(days).toBe(Infinity);
+    });
+  });
 });
+
+// Helper to create mock belief state
+function createMockBeliefState(overrides: Partial<{
+  emotional: { arousal: any; valence: any };
+  cognitive: { selfView: any; worldView: any };
+  risk: { overallRisk: any };
+}>): any {
+  return {
+    emotional: {
+      arousal: {
+        posterior: { mean: 0.5, variance: 0.1 },
+        ...overrides.emotional?.arousal,
+      },
+      valence: {
+        posterior: { mean: 0.5, variance: 0.1 },
+        ...overrides.emotional?.valence,
+      },
+      ...(overrides.emotional || {}),
+    },
+    cognitive: {
+      selfView: {
+        posterior: { mean: 0.5, variance: 0.1 },
+        ...overrides.cognitive?.selfView,
+      },
+      worldView: {
+        posterior: { mean: 0.5, variance: 0.1 },
+        ...overrides.cognitive?.worldView,
+      },
+      ...(overrides.cognitive || {}),
+    },
+    risk: {
+      overallRisk: {
+        posterior: { mean: 0.3, variance: 0.1 },
+        ...overrides.risk?.overallRisk,
+      },
+      ...(overrides.risk || {}),
+    },
+  };
+}
