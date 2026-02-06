@@ -27,6 +27,7 @@ import type {
   ISleepEarlyWarning,
 } from '../services/SleepPredictionService';
 import type { IProactiveInsight } from '../services/ProactiveIntelligenceService';
+import { getCBTIComponentHelp } from '../../modules/content/clinical/ClinicalContent';
 
 /**
  * /today Command Implementation
@@ -593,16 +594,9 @@ ${sonya.tip('Продолжай в том же духе! Каждое выпол
       component: string;
     } | undefined;
 
-    const componentHelp: Record<string, string> = {
-      sleep_restriction: 'Ограничение сна может быть сложным первые дни. Главное - не ложиться раньше расчётного времени.',
-      stimulus_control: 'Если не можете уснуть 20 минут - встаньте. Вернитесь когда почувствуете сонливость.',
-      cognitive_restructuring: 'Запишите тревожные мысли в дневник. Мы разберём их вместе.',
-      sleep_hygiene: 'Начните с одного изменения. Маленькие шаги ведут к большим результатам.',
-      relaxation: 'Попробуйте технику прямо сейчас. Я проведу вас через неё.',
-    };
-
+    // Use centralized clinical content (CLAUDE.md §13.4)
     const component = intervention?.component || 'sleep_restriction';
-    const help = componentHelp[component] || 'Я здесь, чтобы помочь. Опишите вашу ситуацию.';
+    const help = getCBTIComponentHelp(component);
 
     return {
       success: true,

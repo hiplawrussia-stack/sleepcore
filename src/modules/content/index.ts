@@ -49,3 +49,19 @@ export {
   ContentService,
   getContentService,
 } from './application/services/ContentService';
+
+// Clinical content (CLAUDE.md §13.4)
+export {
+  CBTI_COMPONENT_HELP,
+  THIRD_WAVE_THERAPIES,
+  CLINICAL_FALLBACK_MESSAGES,
+  getCBTIComponentHelp,
+  getCBTIComponentFullHelp,
+  getThirdWaveTherapies,
+  getThirdWaveTherapyInfo,
+  isTherapyContraindicated,
+  type CBTIComponent,
+  type ThirdWaveTherapyId,
+  type ICBTIComponentHelp,
+  type IThirdWaveTherapyInfo,
+} from './clinical/ClinicalContent';

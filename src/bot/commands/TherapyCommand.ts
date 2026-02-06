@@ -39,6 +39,7 @@ import type { ICBTIIntervention, CBTIComponent } from '../../cbt-i/interfaces/IC
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
 import type { arousalAssessmentService } from '../services/ArousalAssessmentService';
+import { getThirdWaveTherapies } from '../../modules/content/clinical/ClinicalContent';
 
 /**
  * Therapy session cores (6-week structure)
@@ -65,67 +66,8 @@ type TherapyCore =
  */
 type ThirdWaveTherapy = 'mbti' | 'acti' | 'mct';
 
-/**
- * Third-wave therapy session info
- */
-interface IThirdWaveSession {
-  readonly id: ThirdWaveTherapy;
-  readonly title: string;
-  readonly titleRu: string;
-  readonly description: string;
-  readonly sessions: number;
-  readonly icon: string;
-  readonly bestFor: string[];
-  readonly contraindications: string[];
-}
-
-/**
- * Third-wave therapy options
- */
-const THIRD_WAVE_SESSIONS: readonly IThirdWaveSession[] = [
-  {
-    id: 'mbti',
-    title: 'MBT-I (Mindfulness-Based Therapy)',
-    titleRu: 'Осознанность для сна (MBT-I)',
-    description: 'Терапия на основе осознанности, разработанная Jason Ong. Интегрирует медитацию с поведенческими техниками сна.',
-    sessions: 8,
-    icon: '🧘',
-    bestFor: [
-      'Когнитивное возбуждение (racing thoughts)',
-      'Соматическое напряжение',
-      'Усилие уснуть (trying too hard)',
-    ],
-    contraindications: ['Психоз', 'Тяжёлая депрессия', 'Острое ПТСР'],
-  },
-  {
-    id: 'acti',
-    title: 'ACT-I (Acceptance & Commitment Therapy)',
-    titleRu: 'Принятие и приверженность (ACT-I)',
-    description: 'Терапия принятия и приверженности для инсомнии. Фокус на психологической гибкости вместо контроля сна.',
-    sessions: 6,
-    icon: '🌿',
-    bestFor: [
-      'Избегающее поведение',
-      'Борьба с мыслями',
-      'Трудности с приверженностью CBT-I',
-    ],
-    contraindications: ['Острое суицидальное состояние'],
-  },
-  {
-    id: 'mct',
-    title: 'MCT (Metacognitive Therapy)',
-    titleRu: 'Метакогнитивная терапия (MCT)',
-    description: 'Терапия Adrian Wells, направленная на изменение отношения к мыслям. Включает откладывание беспокойства и тренировку внимания.',
-    sessions: 8,
-    icon: '🎯',
-    bestFor: [
-      'Хроническое беспокойство',
-      'Руминация о последствиях бессонницы',
-      'Метакогнитивные убеждения ("я должен контролировать мысли")',
-    ],
-    contraindications: ['Когнитивные нарушения', 'Психоз', 'Тяжёлая депрессия'],
-  },
-];
+// Third-wave therapy metadata now loaded from centralized clinical content
+// See: src/modules/content/clinical/ClinicalContent.ts (CLAUDE.md §13.4)
 
 /**
  * Therapy command steps
@@ -791,7 +733,7 @@ ${rec.rationaleRu}
       // Graceful degradation: skip arousal section
     }
 
-    const therapyOptions = THIRD_WAVE_SESSIONS.map((t) => {
+    const therapyOptions = getThirdWaveTherapies().map((t) => {
       const isRecommended = recommendation?.recommendedApproach === t.id;
       const recommendedMark = isRecommended ? ' ⭐' : '';
       return `${t.icon} *${t.titleRu}*${recommendedMark}
@@ -821,7 +763,7 @@ ${formatter.tip('Выберите терапию для подробной ин�
 
     const keyboard: IInlineButton[][] = [];
 
-    for (const therapy of THIRD_WAVE_SESSIONS) {
+    for (const therapy of getThirdWaveTherapies()) {
       const isRecommended = recommendation?.recommendedApproach === therapy.id;
       keyboard.push([{
         text: `${therapy.icon} ${therapy.titleRu}${isRecommended ? ' ⭐' : ''}`,
@@ -849,7 +791,7 @@ ${formatter.tip('Выберите терапию для подробной ин�
     therapyId: ThirdWaveTherapy,
     _data: Record<string, unknown>
   ): Promise<ICommandResult> {
-    const therapy = THIRD_WAVE_SESSIONS.find((t) => t.id === therapyId);
+    const therapy = getThirdWaveTherapies().find((t) => t.id === therapyId);
     if (!therapy) {
       return { success: false, error: 'Therapy not found' };
     }
@@ -909,7 +851,7 @@ ${formatter.tip('Нажмите "Начать", чтобы инициализи�
     therapyId: ThirdWaveTherapy,
     _data: Record<string, unknown>
   ): Promise<ICommandResult> {
-    const therapy = THIRD_WAVE_SESSIONS.find((t) => t.id === therapyId);
+    const therapy = getThirdWaveTherapies().find((t) => t.id === therapyId);
     if (!therapy) {
       return { success: false, error: 'Therapy not found' };
     }
