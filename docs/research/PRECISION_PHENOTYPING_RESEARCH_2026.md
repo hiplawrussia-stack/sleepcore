@@ -21,7 +21,8 @@ Personalization beyond chronotype represents the next frontier in digital therap
 - ✅ PhenotypingService integrated into SleepCoreAPI (Wave 5)
 - ✅ Phenotype → ThirdWaveCoordinator chain working
 - ✅ UI in /therapy displays phenotype-based recommendations
-- ⚠️ PAT runs in simulated mode (awaiting real wearable data)
+- ✅ **Wearable module implemented** (2026-02-07) — Backend ready for real data
+- ⚠️ PAT can receive real data, awaiting Android Companion App
 
 ---
 
@@ -277,9 +278,16 @@ interface IMicrobiomeProfile {
 - [x] Third-wave therapy selection based on phenotype
 - [x] `ThirdWaveCoordinator` routes non-responders
 
-### Phase 2: HRV Integration (Q2 2026)
+### Phase 2: HRV Integration (Q1-Q2 2026)
 
-- [ ] Wearable HRV data ingestion (Garmin, Fitbit, Apple Watch)
+- [x] **Wearable module backend** (2026-02-07)
+  - WearableIngestionService: validates and processes Health Connect data
+  - WearablePATIntegration: bridges wearable → PAT for phenotyping
+  - HRV feature extraction (RMSSD, trend, autonomic status)
+  - Sleep feature aggregation (TST, SE, WASO, SOL, stage distribution)
+  - 46 unit tests, comprehensive research documentation
+- [ ] Android Companion App (Kotlin, Health Connect SDK)
+- [ ] Background sync (WorkManager, every 15 min on Android 15+)
 - [ ] Daily readiness scoring
 - [ ] Dynamic SRT adjustment based on recovery
 
@@ -312,6 +320,8 @@ interface IMicrobiomeProfile {
 | `MBTIEngine` | `src/third-wave/MBTIEngine.ts` | Active |
 | `ACTIEngine` | `src/third-wave/ACTIEngine.ts` | Active |
 | `MCTEngine` | `src/third-wave/MCTEngine.ts` | Active |
+| `WearableIngestionService` | `src/wearable/WearableIngestionService.ts` | **NEW 2026-02-07** |
+| `WearablePATIntegration` | `src/wearable/WearablePATIntegration.ts` | **NEW 2026-02-07** |
 
 ### Phase 1 Implementation (Completed 2026-02-07)
 
@@ -324,16 +334,19 @@ interface IMicrobiomeProfile {
 
 **Current Limitations:**
 - PAT runs in simulated backend (no real ML model)
-- No UI for actigraphy data upload from wearables
+- ~~No UI for actigraphy data upload from wearables~~ → **Backend ready, needs Android Companion App**
 - Phenotype classification is probabilistic estimate
+- Android Companion App not yet built (Phase 2 next step)
 
 ### Required Extensions
 
-| Extension | Priority | Dependencies |
-|-----------|----------|--------------|
-| HRV integration layer | HIGH | Wearable API connections |
-| Genetic profile storage | MEDIUM | GDPR compliance audit |
-| Microbiome recommendations | LOW | External lab partnerships |
+| Extension | Priority | Dependencies | Status |
+|-----------|----------|--------------|--------|
+| HRV integration layer | HIGH | Wearable API connections | ✅ **Backend done** |
+| Android Companion App | HIGH | Health Connect SDK, Kotlin | ⏳ Next step |
+| Background sync service | MEDIUM | Android 15+ WorkManager | ⏳ With Android app |
+| Genetic profile storage | MEDIUM | GDPR compliance audit | Not started |
+| Microbiome recommendations | LOW | External lab partnerships | Not started |
 
 ---
 

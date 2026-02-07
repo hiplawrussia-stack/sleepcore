@@ -34,6 +34,7 @@ sleepcore/
 │   ├── assessment/             # ISI, MEQ, MCTQ инструменты
 │   ├── circadian/              # Хронотип и циркадные ритмы
 │   ├── sleep/                  # Модели состояния сна, PAT, фенотипирование
+│   ├── wearable/               # Health Connect интеграция (NEW 2026-02-07)
 │   ├── cultural-adaptations/   # TCM, Ayurveda интеграции
 │   ├── platform/               # POMDP, Thompson Sampling, CogniCore адаптер
 │   ├── modules/                # Геймификация, контент, голос, клавиатура
@@ -201,6 +202,7 @@ sleepcore/
 | **Платформа POMDP** | SleepCoreAdapter.ts | 99.1% | ГОТОВ |
 | **Культурные адаптации** | TCM + Ayurveda | Есть тесты | ГОТОВ |
 | **PAT/Фенотипирование** | PATAdapter + Phenotyping | 64 теста | ГОТОВ |
+| **Wearable Integration** | WearableIngestionService + WearablePATIntegration | 46 тестов | **ГОТОВ (NEW 2026-02-07)** |
 
 #### Бот и сервисы
 
@@ -286,6 +288,7 @@ CIRCADIAN (хронотип)                   ███████████
 POMDP + THOMPSON SAMPLING             ████████████████████  100%
 THIRD-WAVE (MBT-I, ACT-I, MCT)        ████████████████████  100%
 PAT FOUNDATION MODEL                   ████████████████████  100%
+WEARABLE BACKEND                       ████████████████████  100%
 CULTURAL ADAPTATIONS                   ████████████████████  100%
 DATABASE + MIGRATIONS                  ████████████████████  100%
 ENCRYPTION + SECURITY                  ████████████████████  100%
@@ -306,7 +309,7 @@ BOT SERVICES (тесты)                   █░░░░░░░░░░░
 | **Отдельные сервисы < 10%** | ВЫСОКАЯ | AdverseEventService (4.95%), CausalInsightsService (4.19%) |
 | **Команда → Движок интеграция** | ВЫСОКАЯ | Не верифицировано, что команды вызывают движки |
 | **Mobile App (iOS/Android)** | ВЫСОКАЯ | Не начато — нужно для push уведомлений и wearables |
-| **Wearable Integration** | ВЫСОКАЯ | Terra API не интегрирован |
+| **Wearable Integration** | СРЕДНЕ | ~~Terra API~~ → Health Connect backend готов, нужен Android app |
 | **Payment / Подписка** | ВЫСОКАЯ | Монетизация не реализована |
 | **LLM-терапевт** | СРЕДНЯЯ | Запланирован на 2027 |
 | **Рандомизация для RCT** | СРЕДНЯЯ | Модуль не создан |
@@ -401,7 +404,7 @@ BOT SERVICES (тесты)                   █░░░░░░░░░░░
 | P0 | Верификация Command → Engine интеграции | НЕ НАЧАТО |
 | P1 | Native Mobile App (iOS + Android) | НЕ НАЧАТО |
 | P1 | Push Notifications (вне Telegram) | НЕ НАЧАТО |
-| P1 | Wearable интеграция (Terra API: Oura, Fitbit, Apple Watch) | НЕ НАЧАТО |
+| P1 | Wearable интеграция (Health Connect: Samsung, etc.) | **BACKEND ГОТОВ** — нужен Android app |
 | P2 | Payment / Подписка | НЕ НАЧАТО |
 | P2 | Prescriber Dashboard | НЕ НАЧАТО |
 | P2 | A/B тестирование геймификации | НЕ НАЧАТО |
