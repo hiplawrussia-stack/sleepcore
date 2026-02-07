@@ -20,7 +20,6 @@
 import {
   PHIDataMigration,
   createPHIDataMigration,
-  type IPHIMigrationConfig,
   type IMigrationProgress,
 } from '../PHIDataMigration';
 import type { IDatabaseConnection, ITransaction } from '../../interfaces/IDatabaseConnection';

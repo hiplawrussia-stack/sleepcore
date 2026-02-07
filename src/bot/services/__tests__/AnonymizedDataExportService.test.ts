@@ -17,8 +17,6 @@ import {
   DEFAULT_EXPORT_CONFIG,
   type IExportConfig,
   type IAnonymizedParticipant,
-  type AnonymizationLevel,
-  type ExportFormat,
 } from '../AnonymizedDataExportService';
 
 // Create mock database connection

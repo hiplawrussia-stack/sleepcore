@@ -11,8 +11,6 @@
 import {
   StreakService,
   streakService,
-  type IStreakData,
-  type IStreakConfig,
 } from '../StreakService';
 
 describe('StreakService', () => {

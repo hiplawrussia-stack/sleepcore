@@ -16,7 +16,7 @@
  * @packageDocumentation
  */
 
-import { Bot, Context, GrammyError } from 'grammy';
+import { GrammyError } from 'grammy';
 import {
   SleepCoreTelegramAdapter,
   createSleepCoreAdapter,

@@ -21,7 +21,6 @@ import {
   AdaptiveKeyboardService,
   DEFAULT_COMMANDS,
   type IKeyboardCommand,
-  type IKeyboardLayout,
 } from '../AdaptiveKeyboardService';
 import { UserInteractionRepository, type IUserBehaviorContext } from '../UserInteractionRepository';
 import { RuleEngine, type IAdaptedCommand } from '../RuleEngine';

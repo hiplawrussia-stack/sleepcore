@@ -23,8 +23,7 @@
 import {
   PHIEncryptionManager,
   getPHIEncryptionManager,
-  PHI_FIELD_DEFINITIONS,
-  type IPHIEncryptionStatus
+  PHI_FIELD_DEFINITIONS
 } from '../PHIEncryptionManager';
 
 describe('PHIEncryptionManager', () => {

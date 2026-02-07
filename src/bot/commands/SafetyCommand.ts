@@ -21,7 +21,6 @@ import type {
 } from './interfaces/ICommand';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import type { ICrisisEvent } from '../services/CrisisDetectionService';
 import { sleepCore } from '../../SleepCoreAPI';
 
 /**

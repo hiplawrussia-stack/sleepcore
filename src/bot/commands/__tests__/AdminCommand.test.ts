@@ -21,7 +21,7 @@
  */
 
 import { AdminCommand, adminCommand } from '../AdminCommand';
-import type { ISleepCoreContext, ICommandResult } from '../interfaces/ICommand';
+import type { ISleepCoreContext } from '../interfaces/ICommand';
 
 // Mock dependencies
 jest.mock('../utils/MessageFormatter', () => ({

@@ -19,7 +19,7 @@
  * @packageDocumentation
  */
 
-import type { ISleepCoreContext, ICommandResult } from '../interfaces/ICommand';
+import type { ISleepCoreContext } from '../interfaces/ICommand';
 
 // Mock Content Service - use hoisted mocks
 const mockContentServiceMethods = {

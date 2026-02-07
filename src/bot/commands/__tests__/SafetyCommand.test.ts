@@ -19,8 +19,7 @@
  */
 
 import { SafetyCommand, safetyCommand } from '../SafetyCommand';
-import type { ISleepCoreContext, ICommandResult } from '../interfaces/ICommand';
-import type { ICrisisEvent } from '../../services/CrisisDetectionService';
+import type { ISleepCoreContext } from '../interfaces/ICommand';
 
 // Mock dependencies
 jest.mock('../../persona', () => ({

@@ -87,8 +87,6 @@ import {
   // Phase 1.4 Safety: Crisis Detection & Escalation
   crisisDetectionService,
   crisisEscalationService,
-  // Phase 6: Wire orphaned services
-  metacognitiveEngineService,
   adaptivePersonaService,
   proactiveIntelligenceService,
   // Phase 9: Service persistence singletons

@@ -25,7 +25,6 @@ import {
   createCrisisDetectionService,
   crisisDetectionService,
   DEFAULT_CRISIS_SERVICE_CONFIG,
-  type ICrisisDetectionServiceConfig,
 } from '../CrisisDetectionService';
 
 describe('CrisisDetectionService', () => {

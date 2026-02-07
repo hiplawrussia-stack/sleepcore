@@ -15,8 +15,6 @@ import {
   createAdminDashboardService,
   type UserRole,
   type AdminAction,
-  type IDashboardMetrics,
-  type IUserSummary,
 } from '../AdminDashboardService';
 
 // Mock AdverseEventService

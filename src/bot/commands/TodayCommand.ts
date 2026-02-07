@@ -26,7 +26,6 @@ import type {
   ISleepPrediction,
   ISleepEarlyWarning,
 } from '../services/SleepPredictionService';
-import type { IProactiveInsight } from '../services/ProactiveIntelligenceService';
 import {
   getCBTIComponentHelp,
   CBTI_COMPONENT_NAMES,

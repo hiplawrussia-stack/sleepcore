@@ -15,8 +15,6 @@ import {
   createRQAMetricsLogger,
   rqaMetricsLogger,
   DEFAULT_RQA_CONFIG,
-  type IRQAConfig,
-  type IRQAMetrics,
 } from '../RQAMetricsLogger';
 import type { ISleepHistoryEntry } from '../SleepPredictionService';
 

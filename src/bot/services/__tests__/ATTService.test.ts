@@ -15,7 +15,6 @@ import {
   createATTService,
   DEFAULT_ATT_CONFIG,
   type IATTConfig,
-  type IATTSessionRecord,
   type IATTProgress,
 } from '../ATTService';
 

@@ -17,8 +17,6 @@ import {
   proactiveIntelligenceService,
   DEFAULT_PROACTIVE_CONFIG,
   type IProactiveInsight,
-  type IProactiveIntelligenceConfig,
-  type IDailyAnalysis,
 } from '../ProactiveIntelligenceService';
 
 import type { ISleepState } from '../../../sleep/interfaces/ISleepState';

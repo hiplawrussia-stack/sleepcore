@@ -14,7 +14,6 @@ import {
   DigitalTwinService,
   createDigitalTwinService,
   digitalTwinService,
-  type IDigitalTwin,
   type IScenario,
 } from '../DigitalTwinService';
 

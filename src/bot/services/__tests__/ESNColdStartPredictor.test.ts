@@ -16,7 +16,6 @@ import {
   createESNColdStartPredictor,
   DEFAULT_ESN_CONFIG,
   type IESNConfig,
-  type IESNColdStartPrediction,
 } from '../ESNColdStartPredictor';
 
 import type { ISleepHistoryEntry } from '../SleepPredictionService';

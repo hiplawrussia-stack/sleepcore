@@ -20,7 +20,6 @@
 
 import { UserRepository } from '../UserRepository';
 import type { IDatabaseConnection } from '../../interfaces/IDatabaseConnection';
-import type { IUserEntity } from '../../interfaces/IRepository';
 
 // Mock PHIEncryptionManager
 jest.mock('../../security/PHIEncryptionManager', () => {

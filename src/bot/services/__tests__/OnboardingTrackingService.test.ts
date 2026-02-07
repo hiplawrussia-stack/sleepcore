@@ -12,7 +12,6 @@ import {
   OnboardingTrackingService,
   onboardingTracker,
   type OnboardingStep,
-  type IOnboardingProgress,
 } from '../OnboardingTrackingService';
 
 describe('OnboardingTrackingService', () => {

@@ -18,16 +18,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { JsonContentRepository, getContentRepository } from '../JsonContentRepository';
+import { JsonContentRepository } from '../JsonContentRepository';
 import {
   IContentItem,
-  ContentCategory,
-  ContentSubcategory,
-  AgeGroup,
-  DifficultyLevel,
-  EmotionalState,
 } from '../../../domain/entities/ContentItem';
-import { IContentQuery } from '../../../domain/interfaces/IContentRepository';
 
 // Mock fs module
 jest.mock('fs');

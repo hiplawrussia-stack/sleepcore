@@ -88,11 +88,9 @@ import {
 // Phase 6: Wire orphaned services
 import {
   metacognitiveEngineService,
-  type IMCTStatus,
 } from './bot/services/MetacognitiveEngineService';
 import {
   adaptivePersonaService,
-  type IAdaptedMessage,
 } from './bot/services/AdaptivePersonaService';
 import {
   proactiveIntelligenceService,

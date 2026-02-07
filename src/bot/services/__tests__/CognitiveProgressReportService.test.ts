@@ -22,11 +22,6 @@ import {
   createCognitiveProgressReportService,
   cognitiveProgressReportService,
   DEFAULT_COGNITIVE_PROGRESS_CONFIG,
-  type IBeliefSnapshot,
-  type ICognitiveProgressReport,
-  type BeliefDomain,
-  type TrackedBelief,
-  type BeliefChangeDirection,
 } from '../CognitiveProgressReportService';
 import type { ISleepState } from '../../../sleep/interfaces/ISleepState';
 

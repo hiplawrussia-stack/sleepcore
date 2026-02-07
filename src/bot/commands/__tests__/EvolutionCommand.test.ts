@@ -19,7 +19,7 @@
  */
 
 import { EvolutionCommand, evolutionCommand } from '../EvolutionCommand';
-import type { ISleepCoreContext, ICommandResult } from '../interfaces/ICommand';
+import type { ISleepCoreContext } from '../interfaces/ICommand';
 
 // Mock persona
 jest.mock('../../persona', () => ({

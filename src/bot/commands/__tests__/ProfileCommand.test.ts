@@ -19,7 +19,7 @@
  */
 
 import { ProfileCommand, profileCommand } from '../ProfileCommand';
-import type { ISleepCoreContext, ICommandResult } from '../interfaces/ICommand';
+import type { ISleepCoreContext } from '../interfaces/ICommand';
 
 // Mock formatter
 jest.mock('../utils/MessageFormatter', () => ({

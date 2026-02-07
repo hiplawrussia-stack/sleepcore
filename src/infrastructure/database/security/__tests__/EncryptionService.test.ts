@@ -16,7 +16,7 @@
  */
 
 import crypto from 'crypto';
-import { EncryptionService, createEncryptionService, type IEncryptedData } from '../EncryptionService';
+import { EncryptionService, createEncryptionService } from '../EncryptionService';
 
 describe('EncryptionService', () => {
   // Test key: 64 hex chars = 256 bits

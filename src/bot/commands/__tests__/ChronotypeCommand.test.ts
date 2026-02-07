@@ -13,7 +13,7 @@
  */
 
 import { ChronotypeCommand, chronotypeCommand } from '../ChronotypeCommand';
-import type { ISleepCoreContext, ICommandResult } from '../interfaces/ICommand';
+import type { ISleepCoreContext } from '../interfaces/ICommand';
 import type { ICircadianAssessment, IChronotherapyPlan } from '../../../circadian/CircadianAI';
 
 // Mock CircadianAI imports

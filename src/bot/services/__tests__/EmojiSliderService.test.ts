@@ -11,7 +11,6 @@
 import {
   EmojiSliderService,
   emojiSlider,
-  type IMoodHistory,
   type MoodLevel,
   type SleepQualityLevel,
 } from '../EmojiSliderService';

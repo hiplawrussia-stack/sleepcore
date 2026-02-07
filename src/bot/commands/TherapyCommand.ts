@@ -45,14 +45,12 @@ import {
 } from '../../cbt-i/constants';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
-import type { arousalAssessmentService } from '../services/ArousalAssessmentService';
 import {
   getThirdWaveTherapies,
   CBTI_COMPONENT_NAMES,
   CBTI_COMPONENT_ICONS,
   // Core session content (CLAUDE.md §13.4 - centralized clinical content)
   CORE_SESSIONS,
-  type ICoreSession,
   type TherapyCore,
   getCoreContent,
   getCoreExercise,

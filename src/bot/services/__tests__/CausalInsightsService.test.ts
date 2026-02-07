@@ -18,11 +18,6 @@ import {
   causalInsightsService,
   DEFAULT_CAUSAL_INSIGHTS_CONFIG,
   DOMAIN_KNOWLEDGE_EDGES,
-  type ICausalInsightsConfig,
-  type ICausalGraph,
-  type ICausalFactor,
-  type IPersonalizedInsight,
-  type IInterventionTarget,
 } from '../CausalInsightsService';
 
 import type { ISleepState } from '../../../sleep/interfaces/ISleepState';

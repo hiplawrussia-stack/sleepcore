@@ -40,8 +40,6 @@ import {
   SLEEP_DIMENSION_INDEX,
   type ISleepPredictionConfig,
   type ISleepHistoryEntry,
-  type ISleepPrediction,
-  type ISleepEarlyWarning,
 } from '../SleepPredictionService';
 
 import type { ISleepMetrics } from '../../../sleep/interfaces/ISleepState';

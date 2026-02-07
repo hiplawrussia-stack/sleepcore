@@ -21,7 +21,7 @@
  */
 
 import { InsightsCommand, insightsCommand } from '../InsightsCommand';
-import type { ISleepCoreContext, ICommandResult } from '../interfaces/ICommand';
+import type { ISleepCoreContext } from '../interfaces/ICommand';
 
 // Mock persona
 jest.mock('../../persona', () => ({

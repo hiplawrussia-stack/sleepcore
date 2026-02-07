@@ -23,7 +23,7 @@ const mockEvaluateAnswer = jest.fn();
 const mockGetRuleById = jest.fn();
 
 import { RecallCommand, recallCommand } from '../RecallCommand';
-import type { ISleepCoreContext, ICommandResult } from '../interfaces/ICommand';
+import type { ISleepCoreContext } from '../interfaces/ICommand';
 
 // Mock cognitive module
 jest.mock('../../../cognitive', () => ({

@@ -27,7 +27,6 @@ import {
   SafetyAlertRepository,
   type IAdverseEventEntity,
   type ISafetyAlertEntity,
-  type ReportStatus as DBReportStatus,
   createAdverseEventRepository,
   createSafetyAlertRepository,
 } from '../../infrastructure/database';

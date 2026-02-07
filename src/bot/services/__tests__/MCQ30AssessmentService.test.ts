@@ -25,7 +25,6 @@ import {
   MCQ30_RESPONSE_OPTIONS,
   MCQ30_SUBSCALES,
   type IMCQ30Response,
-  type IMCQ30Result,
   type MCQ30Subscale,
 } from '../MCQ30AssessmentService';
 

@@ -22,8 +22,6 @@ import {
   AROUSAL_ITEMS,
   AROUSAL_RESPONSE_OPTIONS,
   type IArousalResponse,
-  type IArousalResult,
-  type ArousalSubscale,
 } from '../ArousalAssessmentService';
 import type { ISleepState } from '../../../sleep/interfaces/ISleepState';
 

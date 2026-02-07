@@ -22,7 +22,7 @@ const mockGenerateVisualization = jest.fn();
 const mockGenerateProgressReport = jest.fn();
 
 import { RehearsalCommand, rehearsalCommand } from '../RehearsalCommand';
-import type { ISleepCoreContext, ICommandResult } from '../interfaces/ICommand';
+import type { ISleepCoreContext } from '../interfaces/ICommand';
 
 // Mock cognitive module
 jest.mock('../../../cognitive', () => ({

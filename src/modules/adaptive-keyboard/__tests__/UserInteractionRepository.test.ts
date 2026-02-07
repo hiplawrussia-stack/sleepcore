@@ -16,8 +16,7 @@
  * @packageDocumentation
  */
 
-import { UserInteractionRepository, type IUserInteraction, type IUserBehaviorContext } from '../UserInteractionRepository';
-import type { TimeOfDay } from '../../../bot/commands/registry';
+import { UserInteractionRepository } from '../UserInteractionRepository';
 
 describe('UserInteractionRepository', () => {
   let repo: UserInteractionRepository;

@@ -23,9 +23,7 @@ import {
   type IAdverseEventEntity,
   type AESeverity,
   type ReportStatus,
-  type IAdverseEventAuditEntry,
 } from '../AdverseEventRepository';
-import { BaseRepository } from '../BaseRepository';
 import type { IDatabaseConnection } from '../../interfaces/IDatabaseConnection';
 
 describe('AdverseEventRepository', () => {

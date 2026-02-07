@@ -22,7 +22,7 @@ const mockFormatStepsForTelegram = jest.fn();
 const mockRecordCompletion = jest.fn();
 
 import { MindfulCommand, mindfulCommand } from '../MindfulCommand';
-import type { ISleepCoreContext, ICommandResult } from '../interfaces/ICommand';
+import type { ISleepCoreContext } from '../interfaces/ICommand';
 
 // Mock content items
 const mockMindfulnessContent = [

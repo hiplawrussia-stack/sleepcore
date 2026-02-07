@@ -22,7 +22,7 @@ import {
   createContextAwareMenuService,
   type IJITAIContext,
 } from '../ContextAwareMenuService';
-import { CommandRegistry, type ICommandContext } from '../CommandRegistry';
+import { CommandRegistry } from '../CommandRegistry';
 
 // Mock dependencies
 jest.mock('../../../persona', () => ({

@@ -24,7 +24,6 @@ import type {
   ISleepPrediction,
   ISleepEarlyWarning,
 } from '../services/SleepPredictionService';
-import type { IPatternAlert } from '../services/ProactiveIntelligenceService';
 
 /**
  * /progress Command Implementation

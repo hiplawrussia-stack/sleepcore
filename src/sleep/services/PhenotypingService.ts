@@ -21,7 +21,6 @@ import {
   PATAdapter,
   createPATAdapter,
   type IPATConfig,
-  type PATModelVariant,
 } from './PATAdapter';
 
 import type {

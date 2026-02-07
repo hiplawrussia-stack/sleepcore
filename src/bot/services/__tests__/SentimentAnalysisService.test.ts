@@ -11,7 +11,6 @@
 import {
   SentimentAnalysisService,
   sentimentAnalysis,
-  type ISentimentResult,
   type IAnalysisContext,
 } from '../SentimentAnalysisService';
 
