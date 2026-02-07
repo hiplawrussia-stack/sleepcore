@@ -59,7 +59,7 @@
 | P3-1 | Gamification facade bypass | Badge, Quest, Evolution commands | Architecture | Document as intentional | **DONE** — Intentional exception (see ADR below) |
 | P3-2 | Cultural adaptation methods unwired | SleepCoreAPI (TCM, Ayurveda) | Roadmap features | Document as future | **DONE** — Documented as Phase 3 roadmap |
 | P3-3 | Audit retention no integration test | AuditService | Operational | Add integration test | **DONE** |
-| P3-4 | PHI erasure minimal tests | PHIDataMigration | Compliance | Add unit tests | Backlog |
+| P3-4 | PHI erasure minimal tests | PHIDataMigration, UserRepository | Compliance | Add unit tests | **DONE** (66 tests) |
 | P3-5 | Single caffeine hardcode | main.ts:1693 | Minor | Low priority fix | **ACCEPTABLE** — Future feature preview text |
 
 ---
@@ -110,11 +110,11 @@
 ### Test Distribution
 | Type | Count |
 |------|-------|
-| Unit Tests | ~7500 |
-| Integration Tests | 272 (+54 cognitive commands, +13 audit retention) |
+| Unit Tests | ~7566 |
+| Integration Tests | 272 (+54 cognitive commands, +13 audit retention, +66 PHI/GDPR) |
 | E2E Tests | 87 |
 | Smoke Tests | 25 |
-| **Total** | **8114** |
+| **Total** | **8180** |
 
 ### Safety-Critical Coverage
 | Module | Coverage |
@@ -254,7 +254,7 @@ Document as **Phase 3 roadmap features** per CLAUDE.md §5 (Cultural Adaptations
 9. [x] Document gamification bypass decision (P3-1) **DONE** — ADR-001
 10. [x] Document cultural adaptation roadmap (P3-2) **DONE** — ADR-002
 11. [x] Add audit retention integration test (P3-3) **DONE** — 13 tests covering 6-year retention, cleanup, HIPAA PHI logging
-12. [ ] Add PHI erasure unit tests (P3-4)
+12. [x] Add PHI erasure unit tests (P3-4) **DONE** — 66 tests (PHIDataMigration + UserRepository.anonymizeUser)
 
 ---
 
@@ -278,10 +278,9 @@ All safety-critical modules exceed 98% test coverage with verified invariants. T
 
 **All P1-HIGH and P2-MEDIUM issues resolved.**
 
-**Remaining P3-LOW (backlog):**
-- P3-4: PHI erasure unit tests
+**All P3-LOW items resolved.**
 
-**Recommendation:** Project is **READY FOR RELEASE**. Remaining P3 items are operational improvements that can be addressed post-release.
+**Recommendation:** Project is **READY FOR RELEASE**. All P0-P3 issues have been addressed.
 
 ---
 
@@ -290,4 +289,4 @@ All safety-critical modules exceed 98% test coverage with verified invariants. T
 *Auditor: Claude Code*
 *Standard: IEC 62304 Class IIa, ISO 14971, CLAUDE.md*
 *Total documents: 8 audit files + 2 ADRs*
-*Total findings: 3 P1-HIGH (3 done), 5 P2-MEDIUM (5 done), 5 P3-LOW (4 done, 1 backlog)*
+*Total findings: 3 P1-HIGH (3 done), 5 P2-MEDIUM (5 done), 5 P3-LOW (5 done)*
