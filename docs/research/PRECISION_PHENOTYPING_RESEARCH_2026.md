@@ -1,8 +1,9 @@
 # Precision Phenotyping Research Report
 
 **Date:** 2026-02-07
-**Status:** Research Complete, Implementation Planned
+**Status:** Phase 1 Implemented (SleepCoreAPI Integration)
 **Priority:** Phase 2 (Post-Launch Enhancement)
+**Last Updated:** 2026-02-07
 
 ---
 
@@ -15,6 +16,12 @@ Personalization beyond chronotype represents the next frontier in digital therap
 - PER3 VNTR polymorphism predicts SRT response variability
 - HRV patterns provide real-time autonomic nervous system feedback
 - Gut-brain axis modulation offers novel intervention targets
+
+**Implementation Status (2026-02-07):**
+- ✅ PhenotypingService integrated into SleepCoreAPI (Wave 5)
+- ✅ Phenotype → ThirdWaveCoordinator chain working
+- ✅ UI in /therapy displays phenotype-based recommendations
+- ⚠️ PAT runs in simulated mode (awaiting real wearable data)
 
 ---
 
@@ -296,12 +303,29 @@ interface IMicrobiomeProfile {
 
 | Component | Location | Status |
 |-----------|----------|--------|
-| `PhenotypingService` | `src/bot/services/PhenotypingService.ts` | Active |
+| `PhenotypingService` | `src/sleep/services/PhenotypingService.ts` | Active |
+| `PATAdapter` | `src/sleep/services/PATAdapter.ts` | Active (simulated backend) |
+| `SleepCoreAPI` (Wave 5) | `src/SleepCoreAPI.ts` | **Integrated 2026-02-07** |
 | `ThirdWaveCoordinator` | `src/third-wave/ThirdWaveCoordinator.ts` | Active |
+| `TherapyCommand` | `src/bot/commands/TherapyCommand.ts` | **Phenotype UI added** |
 | `CircadianAI` | `src/circadian/CircadianAI.ts` | Active (chronotype) |
 | `MBTIEngine` | `src/third-wave/MBTIEngine.ts` | Active |
 | `ACTIEngine` | `src/third-wave/ACTIEngine.ts` | Active |
 | `MCTEngine` | `src/third-wave/MCTEngine.ts` | Active |
+
+### Phase 1 Implementation (Completed 2026-02-07)
+
+| Task | Status | Details |
+|------|--------|---------|
+| Integrate PhenotypingService into SleepCoreAPI | ✅ Done | Wave 5 facade methods |
+| Connect Phenotype → ThirdWaveCoordinator | ✅ Done | `mapPhenotypeToTreatmentHints()` |
+| Add phenotype display in /therapy | ✅ Done | Third-wave menu section |
+| Integration tests | ✅ Done | 21 tests in `PhenotypeTherapyJourney.spec.ts` |
+
+**Current Limitations:**
+- PAT runs in simulated backend (no real ML model)
+- No UI for actigraphy data upload from wearables
+- Phenotype classification is probabilistic estimate
 
 ### Required Extensions
 
