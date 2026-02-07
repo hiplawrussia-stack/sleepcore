@@ -2000,6 +2000,38 @@ interface BeliefUpdateResult {
     }[];
 }
 /**
+ * Likelihood model - P(observation | state)
+ */
+interface LikelihoodModel {
+    readonly name: string;
+    /**
+     * Calculate likelihood of observation given hidden state
+     */
+    calculateLikelihood(observation: Observation, hypothesizedState: Partial<IStateVector>): number;
+    /**
+     * Get observation model parameters
+     */
+    getParameters(): {
+        readonly noiseLevel: number;
+        readonly biasCorrection: number;
+        readonly temporalSmoothing: number;
+    };
+}
+/**
+ * Transition model - P(state_t | state_{t-1})
+ */
+interface TransitionModel {
+    readonly name: string;
+    /**
+     * Calculate probability of transitioning from one state to another
+     */
+    transitionProbability(fromState: Partial<IStateVector>, toState: Partial<IStateVector>, timeDelta: number): number;
+    /**
+     * Sample next state given current state
+     */
+    sampleNextState(currentState: Partial<IStateVector>, timeDelta: number): Partial<IStateVector>;
+}
+/**
  * Belief Update Engine Interface
  */
 interface IBeliefUpdateEngine {
@@ -2068,6 +2100,193 @@ interface IBeliefUpdateEngine {
         variance: number;
     }[]>;
 }
+/**
+ * Configuration for Belief Update Engine
+ */
+interface BeliefEngineConfig {
+    /**
+     * Prior variance for new users
+     */
+    readonly defaultPriorVariance: number;
+    /**
+     * Minimum variance (prevent overconfidence)
+     */
+    readonly minVariance: number;
+    /**
+     * Decay rate per hour (increase in variance)
+     */
+    readonly beliefDecayRate: number;
+    /**
+     * Threshold for "significant" belief change
+     */
+    readonly significanceThreshold: number;
+    /**
+     * Reliability weights by observation type
+     */
+    readonly reliabilityWeights: Record<ObservationType, number>;
+    /**
+     * Enable Active Inference (minimize prediction error)
+     */
+    readonly useActiveInference: boolean;
+}
+
+/**
+ * 🧠 BAYESIAN BELIEF UPDATE ENGINE
+ * =================================
+ * POMDP-based Belief State Management Implementation
+ *
+ * Scientific Foundation (2024-2025 Research):
+ * - Active Inference / POMDP (Computational Psychiatry, 2025)
+ * - Bayesian Cognitive Modeling (Griffiths et al., 2024)
+ * - Kalman Filter for EMA mood dynamics (Applied Comp. Psychiatry, 2024)
+ * - Belief space planning (ANPL, 2025)
+ *
+ * Implementation Details:
+ * - Conjugate priors for efficient updates
+ * - Information-theoretic observation selection
+ * - Belief decay over time (epistemic uncertainty increase)
+ * - Active inference for prediction error minimization
+ *
+ * БФ "Другой путь" | БАЙТ Cognitive Core v1.0
+ */
+
+/**
+ * Belief Update Engine Implementation
+ * Core POMDP belief management system
+ */
+declare class BeliefUpdateEngine implements IBeliefUpdateEngine {
+    private readonly config;
+    private readonly likelihoodModel;
+    private readonly _transitionModel;
+    private readonly beliefHistory;
+    constructor(config?: Partial<BeliefEngineConfig>, likelihoodModel?: LikelihoodModel, transitionModel?: TransitionModel);
+    /**
+     * Get transition model (for advanced POMDP operations)
+     */
+    get transitionModel(): TransitionModel;
+    /**
+     * Initialize belief state for new user
+     * Uses population priors as starting point
+     */
+    initializeBelief(userId: string | number): IFullBeliefState;
+    /**
+     * Update belief with new observation
+     * Implements Bayesian posterior update: P(state|obs) ∝ P(obs|state) × P(state)
+     */
+    updateBelief(currentBelief: IFullBeliefState, observation: Observation): BeliefUpdateResult;
+    /**
+     * Batch update with multiple observations
+     */
+    batchUpdateBelief(currentBelief: IFullBeliefState, observations: Observation[]): BeliefUpdateResult;
+    /**
+     * Convert belief state to point estimate (StateVector)
+     * Uses posterior means as point estimates
+     */
+    beliefToStateVector(belief: IFullBeliefState): IStateVector;
+    /**
+     * Get uncertainty for specific dimension
+     */
+    getDimensionUncertainty(belief: IFullBeliefState, dimension: string): {
+        uncertainty: number;
+        sampleSizeNeeded: number;
+        suggestedObservationType: ObservationType;
+    };
+    /**
+     * Calculate expected information gain from potential observation
+     * Based on information-theoretic expected utility
+     */
+    calculateExpectedInfoGain(currentBelief: IFullBeliefState, potentialObservationType: ObservationType): number;
+    /**
+     * Get most informative next observation type
+     * Active inference: minimize expected prediction error
+     */
+    getMostInformativeObservation(currentBelief: IFullBeliefState): {
+        observationType: ObservationType;
+        expectedInfoGain: number;
+        targetDimension: string;
+        rationale: string;
+    };
+    /**
+     * Check for belief inconsistencies
+     * Detects contradictions between related dimensions
+     */
+    checkBeliefConsistency(belief: IFullBeliefState): {
+        isConsistent: boolean;
+        inconsistencies: {
+            dimension1: string;
+            dimension2: string;
+            conflictType: string;
+            resolution: string;
+        }[];
+    };
+    /**
+     * Decay beliefs over time (increase uncertainty)
+     * Epistemic uncertainty increases without new observations
+     */
+    applyBeliefDecay(belief: IFullBeliefState, hoursSinceLastUpdate: number): IFullBeliefState;
+    /**
+     * Get belief history for dimension
+     */
+    getBeliefHistory(userId: string | number, dimension: string, timeRange: {
+        start: Date;
+        end: Date;
+    }): Promise<{
+        timestamp: Date;
+        mean: number;
+        variance: number;
+    }[]>;
+    private storeBeliefHistory;
+    private updateEmotionalBeliefs;
+    private updateEmotionDistribution;
+    /**
+     * Update cognitive beliefs using Bayesian inference
+     *
+     * Scientific basis:
+     * - Beck's Cognitive Triad (Beck, 1967): selfView, worldView, futureView
+     * - Precision-weighted prediction errors (HGF framework, Weber et al., 2025)
+     * - Cognitive distortion detection (ACL EMNLP Survey 2025)
+     *
+     * Key principle: Higher precision observations cause larger belief updates,
+     * while uncertain observations cause smaller updates (predictive coding)
+     */
+    private updateCognitiveBeliefs;
+    private updateRiskBeliefs;
+    /**
+     * Update resource beliefs using Bayesian inference
+     *
+     * Scientific basis:
+     * - PERMA Model (Seligman, 2011): Positive emotion, Engagement, Relationships, Meaning, Accomplishment
+     * - Conservation of Resources Theory (Hobfoll, 1989, 2025): Resource depletion accelerates decline
+     * - Digital Resilience Interventions meta-analysis (npj Digital Medicine, 2024): SMD = 0.31
+     * - Precision-weighted prediction errors (HGF framework)
+     *
+     * Key principles:
+     * 1. Resource loss spirals: Low resources → faster depletion
+     * 2. Recovery is asymmetric: Building resources is slower than losing them
+     * 3. Social support acts as a buffer against resource depletion
+     */
+    private updateResourceBeliefs;
+    /**
+     * Calculate total information gain across all belief dimensions
+     *
+     * Information gain quantifies how much an observation reduces uncertainty.
+     * Each bit of gain corresponds to roughly halving the prior plausibility region.
+     *
+     * Formula: IG = Σ 0.5 × log(prior_variance / posterior_variance)
+     */
+    private calculateTotalInfoGain;
+    private calculateSurprise;
+    private calculateConsistency;
+    private findDimensionBelief;
+    private getDimensionsForObsType;
+    private getHighestUncertaintyDimension;
+    private calculateWellbeingFromBelief;
+    private deduplicateSignificantChanges;
+}
+/**
+ * Factory function for creating BeliefUpdateEngine
+ */
+declare function createBeliefUpdateEngine(config?: Partial<BeliefEngineConfig>): IBeliefUpdateEngine;
 
 /**
  * 🧠 PLRNN ENGINE INTERFACES
@@ -4534,6 +4753,291 @@ interface IInterventionOptimizer {
      */
     getConfig(): IOptimizerConfig;
 }
+/**
+ * Factory function signature for creating optimizer
+ */
+type CreateInterventionOptimizer = (config?: Partial<IOptimizerConfig>) => IInterventionOptimizer;
+
+/**
+ * 🎯 INTERVENTION OPTIMIZATION ENGINE - IMPLEMENTATION
+ * ====================================================
+ * Phase 3.4: Multi-Armed Bandit & Reinforcement Learning
+ * for Optimal Intervention Selection
+ *
+ * Scientific Foundation (2024-2025):
+ * - CAREForMe (MOBILESoft 2024) - Contextual MAB for mental health
+ * - DIAMANTE Trial (JMIR 2024) - RL for depression, 19% improvement
+ * - StayWell Trial (npj 2025) - CBT/DBT with RL, 25% depression reduction
+ * - IntelligentPooling - Thompson Sampling for mHealth
+ * - MRT Design (HeartSteps) - 210 randomizations per participant
+ * - JITAI Framework - Just-In-Time Adaptive Interventions
+ *
+ * Key Algorithms Implemented:
+ * - Thompson Sampling with Beta/Normal conjugate priors
+ * - Contextual Bandits with LinUCB-style updates
+ * - Reward Shaping for sparse healthcare outcomes
+ * - Exploration/Exploitation balance
+ *
+ * БФ "Другой путь" | БАЙТ Cognitive Core v1.0
+ */
+
+/**
+ * 🎯 Intervention Optimization Engine
+ *
+ * Implements Multi-Armed Bandit + Contextual Bandit + Reinforcement Learning
+ * for optimal intervention selection in mental health context
+ */
+declare class InterventionOptimizer implements IInterventionOptimizer {
+    private config;
+    private interventions;
+    private arms;
+    private userProfiles;
+    private decisionPoints;
+    private pendingOutcomes;
+    private globalStats;
+    private crisisIntervention;
+    constructor(config?: Partial<IOptimizerConfig>);
+    /**
+     * Initialize global statistics
+     */
+    private initializeGlobalStats;
+    /**
+     * Select optimal intervention for user
+     */
+    selectIntervention(userId: string, context: IContextualFeatures, availableInterventions: IIntervention$1[]): Promise<IInterventionSelection>;
+    /**
+     * Select intervention using configured strategy
+     */
+    private selectByStrategy;
+    /**
+     * Check if intervention should be delivered at decision point
+     */
+    shouldDeliver(userId: string, context: IContextualFeatures, decisionPointType: DecisionPointType): Promise<boolean>;
+    /**
+     * Get top-k intervention recommendations
+     */
+    getTopKRecommendations(userId: string, context: IContextualFeatures, k: number, availableInterventions: IIntervention$1[]): Promise<IInterventionSelection[]>;
+    /**
+     * Record outcome and update bandit
+     */
+    recordOutcome(outcome: IInterventionOutcome): Promise<void>;
+    /**
+     * Compute reward signal from outcomes
+     */
+    computeReward(outcomes: IInterventionOutcome[], context: IContextualFeatures): IRewardSignal;
+    /**
+     * Compute reward shaping components
+     */
+    private computeShapingComponents;
+    /**
+     * Calculate timing bonus
+     */
+    private calculateTimingBonus;
+    /**
+     * Calculate context match bonus
+     */
+    private calculateContextMatchBonus;
+    /**
+     * Compute shaping bonus from components
+     */
+    private computeShapingBonus;
+    /**
+     * Update bandit arm with reward
+     */
+    updateArm(interventionId: string, reward: IRewardSignal, context?: IContextualFeatures): Promise<void>;
+    /**
+     * Update contextual arm with feature weights
+     */
+    private updateContextualArm;
+    /**
+     * Convert context to feature vector
+     */
+    private contextToFeatureVector;
+    /**
+     * Dot product of feature weights and features
+     */
+    private dotProduct;
+    /**
+     * Batch update from multiple outcomes
+     */
+    batchUpdate(outcomes: IInterventionOutcome[]): Promise<void>;
+    /**
+     * Get or create user intervention profile
+     */
+    getUserProfile(userId: string): Promise<IUserInterventionProfile>;
+    /**
+     * Create default user profile
+     */
+    private createDefaultProfile;
+    /**
+     * Update user preferences
+     */
+    updateUserPreferences(userId: string, preferences: Partial<IUserInterventionProfile>): Promise<void>;
+    /**
+     * Record user explicit feedback
+     */
+    recordUserFeedback(userId: string, interventionId: string, feedback: 'positive' | 'neutral' | 'negative'): Promise<void>;
+    /**
+     * Update user profile after outcome
+     */
+    private updateUserProfileOnOutcome;
+    /**
+     * Calculate overall rate from category history
+     */
+    private calculateOverallRate;
+    /**
+     * Create default intervention stats
+     */
+    private createDefaultInterventionStats;
+    /**
+     * Create empty shaping components
+     */
+    private createEmptyShapingComponents;
+    /**
+     * Register new intervention
+     */
+    registerIntervention(intervention: IIntervention$1): Promise<void>;
+    /**
+     * Update intervention definition
+     */
+    updateIntervention(interventionId: string, updates: Partial<IIntervention$1>): Promise<void>;
+    /**
+     * Deactivate intervention
+     */
+    deactivateIntervention(interventionId: string): Promise<void>;
+    /**
+     * Get intervention by ID
+     */
+    getIntervention(interventionId: string): Promise<IIntervention$1 | null>;
+    /**
+     * Filter eligible interventions for context
+     */
+    filterEligibleInterventions(interventions: IIntervention$1[], context: IContextualFeatures, userProfile: IUserInterventionProfile): IIntervention$1[];
+    /**
+     * Get arm statistics
+     */
+    getArmStats(interventionId: string): Promise<IBanditArm | null>;
+    /**
+     * Get global optimizer statistics
+     */
+    getGlobalStats(): Promise<IGlobalStats>;
+    /**
+     * Get optimizer state for persistence
+     */
+    getState(): Promise<IOptimizerState>;
+    /**
+     * Load optimizer state
+     */
+    loadState(state: IOptimizerState): Promise<void>;
+    /**
+     * Sample from Thompson Sampling posterior
+     */
+    thompsonSample(arm: IBanditArm): number;
+    /**
+     * Calculate UCB value for arm
+     */
+    calculateUCB(arm: IBanditArm, totalPulls: number): number;
+    /**
+     * Get exploration probability
+     */
+    getExplorationProbability(): number;
+    /**
+     * Decay exploration rate
+     */
+    decayExploration(decayFactor: number): void;
+    /**
+     * Get crisis intervention
+     */
+    getCrisisIntervention(_context: IContextualFeatures): Promise<IIntervention$1>;
+    /**
+     * Check if context indicates crisis
+     */
+    isCrisisContext(context: IContextualFeatures): boolean;
+    /**
+     * Update optimizer configuration
+     */
+    updateConfig(config: Partial<IOptimizerConfig>): void;
+    /**
+     * Get current configuration
+     */
+    getConfig(): IOptimizerConfig;
+    /**
+     * Initialize bandit arm for intervention
+     */
+    private initializeArm;
+    /**
+     * Check if arm is contextual
+     */
+    private isContextualArm;
+    /**
+     * Calculate contextual bonus
+     */
+    private calculateContextualBonus;
+    /**
+     * Should explore vs exploit
+     */
+    private shouldExplore;
+    /**
+     * Get total pulls across all arms
+     */
+    private getTotalPulls;
+    /**
+     * Get mean reward for arm
+     */
+    private getArmMeanReward;
+    /**
+     * Calculate gradient preference for gradient bandit
+     */
+    private calculateGradientPreference;
+    /**
+     * Get average reward across all arms
+     */
+    private getAverageReward;
+    /**
+     * Get alternatives list
+     */
+    private getAlternatives;
+    /**
+     * Create alternatives from scores
+     */
+    private createAlternativesFromScores;
+    /**
+     * Calculate selection confidence
+     */
+    private calculateSelectionConfidence;
+    /**
+     * Create decision point
+     */
+    private createDecisionPoint;
+    /**
+     * Create crisis selection
+     */
+    private createCrisisSelection;
+    /**
+     * Create selection reasoning
+     */
+    private createSelectionReasoning;
+    /**
+     * Update global stats on selection
+     */
+    private updateGlobalStatsOnSelection;
+    /**
+     * Update global stats on outcome
+     */
+    private updateGlobalStatsOnOutcome;
+    /**
+     * Count today's interventions for user
+     */
+    private countTodayInterventions;
+    /**
+     * Count today's interventions for category
+     */
+    private countTodayInterventionsForCategory;
+}
+/**
+ * Factory function for creating InterventionOptimizer
+ */
+declare const createInterventionOptimizer: CreateInterventionOptimizer;
 
 /**
  * Safety Envelope Interfaces
@@ -10684,4 +11188,4 @@ type SupportedLanguage = 'en' | 'ru';
  */
 type DomainVertical = 'addiction' | 'sleep' | 'pain' | 'anxiety' | 'depression' | 'custom';
 
-export { type ABCDChain, AFFIRMATION_TEMPLATES, AIModelNotLoadedError, type AffirmationTemplate, type AgeGroup$1 as AgeGroup, type AmbivalenceState, type AmbivalenceType, type AttentionalBias, AuditBehavior, BaseEventHandler, type BeliefState, BeliefStateAdapter, type BeliefUpdate, BeliefUpdateError, type BeliefUpdateResult, CHANGE_TALK_PATTERNS, COGNICORE_VERSION, CausalNodeNotFoundError, type ChangeStage, type ChangeTaskSubtype, type ClientLanguageCategory, type ClientUtterance, CogniCoreError, CogniCoreEventBus, type CognitiveDistortion, type CognitiveDistortionType, type CognitiveLoad, type CognitiveTriad, type ComponentStatus, CompositeEventHandler, type CopingStrategy, type CopingStrategyType, type CoreBeliefPattern, CrisisAlertBehavior, CrisisDetectionError, CrisisEventHandler, DEFAULT_EMOTION_VAD, DEFAULT_EVENT_BUS_CONFIG, DEFAULT_EVENT_STORE_CONFIG, DEFAULT_KALMANFORMER_CONFIG, DEFAULT_PLRNN_CONFIG, DEFAULT_VOICE_CONFIG, DIMENSION_INDEX, DIMENSION_MAPPING, DISCORD_PATTERNS, DISCORD_RESPONSE_STRATEGIES, DISTORTION_INTERVENTIONS, DISTORTION_PATTERNS, type DarnCatProfile, DataDeleteError, DataExportError, DataImportError, type DetectedDistortion, type DimensionBelief, DimensionNotFoundError, type DiscordEvent, type DiscordIndicators, type DiscordType, type DomainVertical, EMOTION_THERAPY_MAPPING, type EmotionPattern, type EmotionTrend, type EmotionType$1 as EmotionType, EmptyArrayError, type EnergyLevel, type ErrorCallback, ErrorCategory, ErrorCode, type ErrorContext, ErrorHandler, type ErrorHandlerConfig, type ErrorLogger, ErrorSeverity, EventHandlerRegistry, type EventValidator, ExplainabilityService, type ExplanationAudience, type ExplanationLevel, type ExplanationType, ExternalServiceError, ExternalServiceTimeoutError, ExternalServiceUnavailableError, type GlobalErrorHandlerOptions, type IAcousticFeatures, type IAggregateSnapshot, type IAnalyticsCallback, type IAttentionWeights, type IAuditLogEntry, type IAuditLogQueryOptions, type IAuditLogger, type IBeliefUpdateEngine, type ICausalEdge, type ICausalGraph, type ICausalNetwork, type ICausalNode, type ICognitiveDistortionDetector, type ICognitiveState, type ICognitiveStateBuilder, type ICognitiveStateFactory, type IConstitutionalPrinciple, type IContextualFeatures, type ICounterfactualExplanation, type ICrisisDetectionResult, type ICrisisNotificationCallback, type IDecisionPoint, type IDeepCognitiveMirror, type IDigitalTwinService, type IDigitalTwinState, type IEarlyWarningSignal, type IEmotionalState$1 as IEmotionalState, type IEmotionalStateBuilder, type IEmotionalStateFactory, type IEscalationDecision, type IEventBusConfig, type IEventDispatchResult, type IEventHandlerRegistration, type IEventHandlerResult, type IEventQueryOptions, type IEventStore, type IEventStoreConfig, type IEventSystem, type IEventSystemConfig, type IExplainabilityService, type IExplanationRequest, type IExplanationResponse, type IFeatureAttribution, type IFullBeliefState, type IGlobalFeatureImportance, type IHumanEscalationRequest, type IHybridPrediction, type IIncomingMessage, type IIntervention$1 as IIntervention, type IInterventionLearningCallback, type IInterventionOptimizer, type IInterventionOutcome, type IInterventionSelection, type IInterventionSimulation, type IInterventionTarget, type IKalmanFormerConfig, type IKalmanFormerEngine, type IKalmanFormerPrediction, type IKalmanFormerState, type IKalmanFormerTrainingSample, type IKalmanFormerWeights, type IMessageAnalysis, type IMetacognitiveState, type IMetricsCollector, type IModelCard, type IMotivationalInterviewingEngine, type IMotivationalState, type IMotivationalStateBuilder, type IMotivationalStateFactory, type IMultimodalFusion, INDEX_THRESHOLDS, type INarrativeExplanation, type INarrativeState, type INarrativeStateBuilder, type ICausalEdge$1 as IPLRNNCausalEdge, type ICausalNode$1 as IPLRNNCausalNode, type IPLRNNConfig, type IPLRNNEngine, type IPLRNNPrediction, type IPLRNNState, type IPLRNNTrainingResult, type IPLRNNTrainingSample, type IPLRNNWeights, type IPipelineBehavior, type IPipelineContext, type IPipelineResult, type IProactiveInterventionCallback, type IProsodyFeatures, type IResourceState, type IResourceStateBuilder, type IRiskState, type IRiskStateBuilder, type ISHAPExplanation, type ISafetyContext, type ISafetyInvariant, type ISafetyValidationResult, type IScenario, type IScenarioResult, type IStateChangeCallback, type IStateTrajectory, type IStateVector, type IStateVectorBuilder, type IStateVectorFactory, type IStateVectorRepository, type IStateVectorService, type IStoredEvent, type ITemporalEchoEngine, type ITextAnalysis, type ITippingPoint, type ITwinStateVariable, type IUserExplanation, type IUserFactor, type IUserInterventionProfile, type IVADMapper, type IVoiceAdapterConfig, type IVoiceEmotionEstimate, type IVoiceInputAdapter, type IVoiceProcessingResult, InMemoryAuditLogger, InMemoryEventStore, type InterventionCategory, type InterventionIntensity, InterventionNotFoundError, InterventionOutcomeHandler, InterventionSelectionError, InvalidCausalGraphError, InvalidCrisisStateError, InvalidFormatError, InvalidIdError, InvalidMessageFormatError, InvalidMetacognitionItemError, InvalidObservationError, InvalidTrajectoryError, InvalidTypeError, KalmanFormerEngine, type KalmanFormerEngineFactory, type LanguageBalance, LoggingBehavior, type MIFidelityReport, type MIGenerationConstraints, type MIResponse, type MIResponseContext, type MIStrategy, type MITIBehaviorCode, type MITIBehaviorCounts, type MITIGlobalScores, type MITISummaryScores, MITI_THRESHOLDS, MessageAnalyticsHandler, type MessageIntent, MessageProcessingError, type Metacognition, MetacognitionAnalysisError, MetricsBehavior, MotivationalEngine, MotivationalStateBuilder, MotivationalStateFactory, NLPServiceError, type NarrativeChapter, type NarrativeMoment, type NarrativeRole, type NarrativeTheme, NoEligibleInterventionsError, type OARSTechnique, OPEN_QUESTION_TEMPLATES, type Observation, type ObservationSource, type ObservationType, type OpenQuestionTemplate, OutOfRangeError, type PERMADimensions, PLRNNEngine, type PLRNNEngineFactory, type AgeGroup as PipelineAgeGroup, PipelineStageError, PipelineTimeoutError, PredictionError, type ProtectiveFactor, REFLECTION_TEMPLATES, type ReadinessRuler, type ReflectionTemplate, type ReflectionType, type RegulationEffectiveness, RequiredFieldError, type Resilience, RetryBehavior, type RiskFactor, type RiskLevel$2 as RiskLevel, type RiskTrajectory, STRATEGY_RECOMMENDATIONS, SUMMARY_TEMPLATES, SUSTAIN_TALK_PATTERNS, type SafetyLevel, type SafetyPlan, type RiskLevel$1 as SafetyRiskLevel, type ScoredEmotion, type SerializedError, SessionEndError, SessionExpiredError, SessionNotFoundError, SessionStartError, type SocialResources, type SocraticQuestion, type StageTransition, type StateBasedRecommendation, StateChangeEventHandler, type StateQuality, type StateSummary, type StateTransition, StorageConnectionError, StorageReadError, StorageWriteError, type SummaryTemplate, type SummaryType, type SupportedLanguage, type SustainTalkSubtype, TemporalNotInitializedError, type TemporalPrediction, type TextAnalysisResult, type TherapeuticInsight, type ThinkingStyle, ThrottlingBehavior, TranscriptionError, type VADDimensions, ValidationBehavior, VoiceInputAdapter, type VoiceInputAdapterFactory, VoiceProcessingError, type VulnerabilityWindow, VulnerabilityWindowHandler, WELLBEING_WEIGHTS, beliefStateToKalmanFormerState, beliefStateToObservation, beliefStateToPLRNNState, beliefStateToUncertainty, betaSampleSecure, boxMullerSecure, createBeliefStateAdapter, createCrisisAwareBehaviors, createCrisisHandlerRegistry, createDefaultBehaviors, createDefaultHandlerRegistry, createEventBus, createEventMetadata, createEventSystem, createExplainabilityService, createInMemoryAuditLogger, createInMemoryEventStore, createInitializedEventBus, createKalmanFormerEngine, createMinimalEventSystem, createPLRNNEngine, createPipelineContext, createVoiceInputAdapter, errorHandler, gammaSampleSecure, gaussianSecure, generateSecureId, generateShortSecureId, getComponentStatus, getDefaultSeverity, getErrorCategory, initializeGlobalErrorHandlers, isGlobalErrorHandlersInitialized, kalmanFormerStateToBeliefUpdate, mergeHybridPredictions, plrnnStateToBeliefUpdate, randomBooleanSecure, randomElementSecure, resetGlobalErrorHandlers, secureRandom, secureRandomInt, shuffleSecure, weightedRandomIndexSecure };
+export { type ABCDChain, AFFIRMATION_TEMPLATES, AIModelNotLoadedError, type AffirmationTemplate, type AgeGroup$1 as AgeGroup, type AmbivalenceState, type AmbivalenceType, type AttentionalBias, AuditBehavior, BaseEventHandler, type BeliefState, BeliefStateAdapter, type BeliefUpdate, BeliefUpdateEngine, BeliefUpdateError, type BeliefUpdateResult, CHANGE_TALK_PATTERNS, COGNICORE_VERSION, CausalNodeNotFoundError, type ChangeStage, type ChangeTaskSubtype, type ClientLanguageCategory, type ClientUtterance, CogniCoreError, CogniCoreEventBus, type CognitiveDistortion, type CognitiveDistortionType, type CognitiveLoad, type CognitiveTriad, type ComponentStatus, CompositeEventHandler, type CopingStrategy, type CopingStrategyType, type CoreBeliefPattern, CrisisAlertBehavior, CrisisDetectionError, CrisisEventHandler, DEFAULT_EMOTION_VAD, DEFAULT_EVENT_BUS_CONFIG, DEFAULT_EVENT_STORE_CONFIG, DEFAULT_KALMANFORMER_CONFIG, DEFAULT_PLRNN_CONFIG, DEFAULT_VOICE_CONFIG, DIMENSION_INDEX, DIMENSION_MAPPING, DISCORD_PATTERNS, DISCORD_RESPONSE_STRATEGIES, DISTORTION_INTERVENTIONS, DISTORTION_PATTERNS, type DarnCatProfile, DataDeleteError, DataExportError, DataImportError, type DetectedDistortion, type DimensionBelief, DimensionNotFoundError, type DiscordEvent, type DiscordIndicators, type DiscordType, type DomainVertical, EMOTION_THERAPY_MAPPING, type EmotionPattern, type EmotionTrend, type EmotionType$1 as EmotionType, EmptyArrayError, type EnergyLevel, type ErrorCallback, ErrorCategory, ErrorCode, type ErrorContext, ErrorHandler, type ErrorHandlerConfig, type ErrorLogger, ErrorSeverity, EventHandlerRegistry, type EventValidator, ExplainabilityService, type ExplanationAudience, type ExplanationLevel, type ExplanationType, ExternalServiceError, ExternalServiceTimeoutError, ExternalServiceUnavailableError, type GlobalErrorHandlerOptions, type IAcousticFeatures, type IAggregateSnapshot, type IAnalyticsCallback, type IAttentionWeights, type IAuditLogEntry, type IAuditLogQueryOptions, type IAuditLogger, type IBeliefUpdateEngine, type ICausalEdge, type ICausalGraph, type ICausalNetwork, type ICausalNode, type ICognitiveDistortionDetector, type ICognitiveState, type ICognitiveStateBuilder, type ICognitiveStateFactory, type IConstitutionalPrinciple, type IContextualFeatures, type ICounterfactualExplanation, type ICrisisDetectionResult, type ICrisisNotificationCallback, type IDecisionPoint, type IDeepCognitiveMirror, type IDigitalTwinService, type IDigitalTwinState, type IEarlyWarningSignal, type IEmotionalState$1 as IEmotionalState, type IEmotionalStateBuilder, type IEmotionalStateFactory, type IEscalationDecision, type IEventBusConfig, type IEventDispatchResult, type IEventHandlerRegistration, type IEventHandlerResult, type IEventQueryOptions, type IEventStore, type IEventStoreConfig, type IEventSystem, type IEventSystemConfig, type IExplainabilityService, type IExplanationRequest, type IExplanationResponse, type IFeatureAttribution, type IFullBeliefState, type IGlobalFeatureImportance, type IHumanEscalationRequest, type IHybridPrediction, type IIncomingMessage, type IIntervention$1 as IIntervention, type IInterventionLearningCallback, type IInterventionOptimizer, type IInterventionOutcome, type IInterventionSelection, type IInterventionSimulation, type IInterventionTarget, type IKalmanFormerConfig, type IKalmanFormerEngine, type IKalmanFormerPrediction, type IKalmanFormerState, type IKalmanFormerTrainingSample, type IKalmanFormerWeights, type IMessageAnalysis, type IMetacognitiveState, type IMetricsCollector, type IModelCard, type IMotivationalInterviewingEngine, type IMotivationalState, type IMotivationalStateBuilder, type IMotivationalStateFactory, type IMultimodalFusion, INDEX_THRESHOLDS, type INarrativeExplanation, type INarrativeState, type INarrativeStateBuilder, type ICausalEdge$1 as IPLRNNCausalEdge, type ICausalNode$1 as IPLRNNCausalNode, type IPLRNNConfig, type IPLRNNEngine, type IPLRNNPrediction, type IPLRNNState, type IPLRNNTrainingResult, type IPLRNNTrainingSample, type IPLRNNWeights, type IPipelineBehavior, type IPipelineContext, type IPipelineResult, type IProactiveInterventionCallback, type IProsodyFeatures, type IResourceState, type IResourceStateBuilder, type IRiskState, type IRiskStateBuilder, type ISHAPExplanation, type ISafetyContext, type ISafetyInvariant, type ISafetyValidationResult, type IScenario, type IScenarioResult, type IStateChangeCallback, type IStateTrajectory, type IStateVector, type IStateVectorBuilder, type IStateVectorFactory, type IStateVectorRepository, type IStateVectorService, type IStoredEvent, type ITemporalEchoEngine, type ITextAnalysis, type ITippingPoint, type ITwinStateVariable, type IUserExplanation, type IUserFactor, type IUserInterventionProfile, type IVADMapper, type IVoiceAdapterConfig, type IVoiceEmotionEstimate, type IVoiceInputAdapter, type IVoiceProcessingResult, InMemoryAuditLogger, InMemoryEventStore, type InterventionCategory, type InterventionIntensity, InterventionNotFoundError, InterventionOptimizer, InterventionOutcomeHandler, InterventionSelectionError, InvalidCausalGraphError, InvalidCrisisStateError, InvalidFormatError, InvalidIdError, InvalidMessageFormatError, InvalidMetacognitionItemError, InvalidObservationError, InvalidTrajectoryError, InvalidTypeError, KalmanFormerEngine, type KalmanFormerEngineFactory, type LanguageBalance, LoggingBehavior, type MIFidelityReport, type MIGenerationConstraints, type MIResponse, type MIResponseContext, type MIStrategy, type MITIBehaviorCode, type MITIBehaviorCounts, type MITIGlobalScores, type MITISummaryScores, MITI_THRESHOLDS, MessageAnalyticsHandler, type MessageIntent, MessageProcessingError, type Metacognition, MetacognitionAnalysisError, MetricsBehavior, MotivationalEngine, MotivationalStateBuilder, MotivationalStateFactory, NLPServiceError, type NarrativeChapter, type NarrativeMoment, type NarrativeRole, type NarrativeTheme, NoEligibleInterventionsError, type OARSTechnique, OPEN_QUESTION_TEMPLATES, type Observation, type ObservationSource, type ObservationType, type OpenQuestionTemplate, OutOfRangeError, type PERMADimensions, PLRNNEngine, type PLRNNEngineFactory, type AgeGroup as PipelineAgeGroup, PipelineStageError, PipelineTimeoutError, PredictionError, type ProtectiveFactor, REFLECTION_TEMPLATES, type ReadinessRuler, type ReflectionTemplate, type ReflectionType, type RegulationEffectiveness, RequiredFieldError, type Resilience, RetryBehavior, type RiskFactor, type RiskLevel$2 as RiskLevel, type RiskTrajectory, STRATEGY_RECOMMENDATIONS, SUMMARY_TEMPLATES, SUSTAIN_TALK_PATTERNS, type SafetyLevel, type SafetyPlan, type RiskLevel$1 as SafetyRiskLevel, type ScoredEmotion, type SerializedError, SessionEndError, SessionExpiredError, SessionNotFoundError, SessionStartError, type SocialResources, type SocraticQuestion, type StageTransition, type StateBasedRecommendation, StateChangeEventHandler, type StateQuality, type StateSummary, type StateTransition, StorageConnectionError, StorageReadError, StorageWriteError, type SummaryTemplate, type SummaryType, type SupportedLanguage, type SustainTalkSubtype, TemporalNotInitializedError, type TemporalPrediction, type TextAnalysisResult, type TherapeuticInsight, type ThinkingStyle, ThrottlingBehavior, TranscriptionError, type VADDimensions, ValidationBehavior, VoiceInputAdapter, type VoiceInputAdapterFactory, VoiceProcessingError, type VulnerabilityWindow, VulnerabilityWindowHandler, WELLBEING_WEIGHTS, beliefStateToKalmanFormerState, beliefStateToObservation, beliefStateToPLRNNState, beliefStateToUncertainty, betaSampleSecure, boxMullerSecure, createBeliefStateAdapter, createBeliefUpdateEngine, createCrisisAwareBehaviors, createCrisisHandlerRegistry, createDefaultBehaviors, createDefaultHandlerRegistry, createEventBus, createEventMetadata, createEventSystem, createExplainabilityService, createInMemoryAuditLogger, createInMemoryEventStore, createInitializedEventBus, createInterventionOptimizer, createKalmanFormerEngine, createMinimalEventSystem, createPLRNNEngine, createPipelineContext, createVoiceInputAdapter, errorHandler, gammaSampleSecure, gaussianSecure, generateSecureId, generateShortSecureId, getComponentStatus, getDefaultSeverity, getErrorCategory, initializeGlobalErrorHandlers, isGlobalErrorHandlersInitialized, kalmanFormerStateToBeliefUpdate, mergeHybridPredictions, plrnnStateToBeliefUpdate, randomBooleanSecure, randomElementSecure, resetGlobalErrorHandlers, secureRandom, secureRandomInt, shuffleSecure, weightedRandomIndexSecure };

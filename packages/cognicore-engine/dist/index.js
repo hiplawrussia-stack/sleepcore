@@ -557,6 +557,67 @@ function getComponentStatus(score) {
   }
   return "critical";
 }
+
+// src/belief/IBeliefUpdate.ts
+var DEFAULT_BELIEF_CONFIG = {
+  defaultPriorVariance: 0.25,
+  minVariance: 0.01,
+  beliefDecayRate: 0.01,
+  // Variance increases by 1% per hour
+  significanceThreshold: 0.2,
+  reliabilityWeights: {
+    "self_report_emotion": 0.9,
+    "self_report_mood": 0.85,
+    "assessment": 0.95,
+    "text_message": 0.7,
+    "behavioral": 0.6,
+    "contextual": 0.5,
+    "sensor": 0.65,
+    "interaction": 0.55
+  },
+  useActiveInference: true
+};
+var POPULATION_EMOTION_PRIORS = {
+  neutral: 0.3,
+  calm: 0.1,
+  contentment: 0.08,
+  joy: 0.05,
+  sadness: 0.08,
+  anxiety: 0.07,
+  stress: 0.1,
+  frustration: 0.05,
+  boredom: 0.05,
+  // ... lower probability for others
+  anger: 0.02,
+  fear: 0.02,
+  surprise: 0.01,
+  disgust: 0.01,
+  trust: 0.01,
+  anticipation: 0.01,
+  love: 0.01,
+  guilt: 0.01,
+  shame: 0.01,
+  hope: 0.01,
+  confusion: 0.01,
+  loneliness: 0.01,
+  excitement: 0.01,
+  irritation: 0.01,
+  despair: 5e-3,
+  pride: 5e-3,
+  gratitude: 5e-3,
+  envy: 5e-3,
+  jealousy: 5e-3,
+  overwhelm: 5e-3,
+  numbness: 5e-3,
+  curiosity: 0.01,
+  awe: 5e-3,
+  // Crisis-related emotions (Phase 6.2)
+  hopelessness: 2e-3,
+  // Very low prior - crisis indicator
+  relief: 0.01,
+  apathy: 0.01,
+  resentment: 0.01
+};
 function generateSecureId(prefix) {
   const uuid = crypto$1.randomUUID();
   return prefix ? `${prefix}_${uuid}` : uuid;
@@ -651,6 +712,1439 @@ function weightedRandomIndexSecure(weights) {
     }
   }
   return weights.length - 1;
+}
+
+// src/belief/BeliefUpdateEngine.ts
+function generateId() {
+  return generateShortSecureId("belief");
+}
+var DefaultLikelihoodModel = class {
+  constructor(config) {
+    __publicField(this, "name", "DefaultLikelihoodModel");
+    __publicField(this, "noiseLevel");
+    __publicField(this, "biasCorrection");
+    __publicField(this, "temporalSmoothing");
+    this.noiseLevel = config?.noiseLevel ?? 0.2;
+    this.biasCorrection = config?.biasCorrection ?? 0.1;
+    this.temporalSmoothing = config?.temporalSmoothing ?? 0.3;
+  }
+  calculateLikelihood(observation, _hypothesizedState) {
+    let likelihood = observation.reliability;
+    const typeMultipliers = {
+      "self_report_emotion": 0.95,
+      "self_report_mood": 0.9,
+      "assessment": 0.98,
+      "text_message": 0.75,
+      "behavioral": 0.7,
+      "contextual": 0.6,
+      "sensor": 0.8,
+      "interaction": 0.65
+    };
+    likelihood *= typeMultipliers[observation.type] ?? 0.7;
+    const noise = (secureRandom() - 0.5) * this.noiseLevel;
+    likelihood = Math.max(0.01, Math.min(0.99, likelihood + noise));
+    return likelihood;
+  }
+  getParameters() {
+    return {
+      noiseLevel: this.noiseLevel,
+      biasCorrection: this.biasCorrection,
+      temporalSmoothing: this.temporalSmoothing
+    };
+  }
+};
+var DefaultTransitionModel = class {
+  constructor(config) {
+    __publicField(this, "name", "DefaultTransitionModel");
+    __publicField(this, "baseDriftRate");
+    __publicField(this, "meanReversionStrength");
+    this.baseDriftRate = config?.baseDriftRate ?? 0.1;
+    this.meanReversionStrength = config?.meanReversionStrength ?? 0.05;
+  }
+  transitionProbability(fromState, toState, timeDelta) {
+    let totalDistance = 0;
+    let dimensions = 0;
+    if (fromState.emotional && toState.emotional) {
+      const vadFrom = fromState.emotional.vad;
+      const vadTo = toState.emotional.vad;
+      totalDistance += Math.pow(vadFrom.valence - vadTo.valence, 2);
+      totalDistance += Math.pow(vadFrom.arousal - vadTo.arousal, 2);
+      totalDistance += Math.pow(vadFrom.dominance - vadTo.dominance, 2);
+      dimensions += 3;
+    }
+    if (fromState.risk && toState.risk) {
+      const riskMapping = {
+        "none": 0,
+        "low": 0.25,
+        "medium": 0.5,
+        "high": 0.75,
+        "critical": 1
+      };
+      const riskDiff = Math.abs(
+        riskMapping[fromState.risk.level] - riskMapping[toState.risk.level]
+      );
+      totalDistance += Math.pow(riskDiff, 2);
+      dimensions += 1;
+    }
+    if (dimensions === 0) {
+      return 0.5;
+    }
+    const avgDistance = Math.sqrt(totalDistance / dimensions);
+    const timeVariance = this.baseDriftRate * Math.sqrt(timeDelta);
+    const probability = Math.exp(-Math.pow(avgDistance, 2) / (2 * timeVariance * timeVariance));
+    return Math.max(0.01, Math.min(0.99, probability));
+  }
+  sampleNextState(currentState, timeDelta) {
+    const drift = this.baseDriftRate * Math.sqrt(timeDelta);
+    const reversion = this.meanReversionStrength * timeDelta;
+    if (currentState.emotional) {
+      const currentVAD = currentState.emotional.vad;
+      const newValence = currentVAD.valence * (1 - reversion) + (secureRandom() - 0.5) * drift;
+      const newArousal = currentVAD.arousal * (1 - reversion) + (secureRandom() - 0.5) * drift;
+      const newDominance = currentVAD.dominance * (1 - reversion) + 0.5 * reversion + (secureRandom() - 0.5) * drift;
+      return {
+        emotional: {
+          ...currentState.emotional,
+          vad: {
+            valence: Math.max(-1, Math.min(1, newValence)),
+            arousal: Math.max(-1, Math.min(1, newArousal)),
+            dominance: Math.max(0, Math.min(1, newDominance))
+          }
+        }
+      };
+    }
+    return {};
+  }
+};
+var BeliefUpdateEngine = class {
+  constructor(config, likelihoodModel, transitionModel) {
+    __publicField(this, "config");
+    __publicField(this, "likelihoodModel");
+    __publicField(this, "_transitionModel");
+    // History storage for belief tracking
+    __publicField(this, "beliefHistory", /* @__PURE__ */ new Map());
+    this.config = { ...DEFAULT_BELIEF_CONFIG, ...config };
+    this.likelihoodModel = likelihoodModel ?? new DefaultLikelihoodModel();
+    this._transitionModel = transitionModel ?? new DefaultTransitionModel();
+  }
+  /**
+   * Get transition model (for advanced POMDP operations)
+   */
+  get transitionModel() {
+    return this._transitionModel;
+  }
+  /**
+   * Initialize belief state for new user
+   * Uses population priors as starting point
+   */
+  initializeBelief(userId) {
+    const now = /* @__PURE__ */ new Date();
+    const defaultPrior = {
+      mean: 0.5,
+      variance: this.config.defaultPriorVariance,
+      sampleSize: 0,
+      lastUpdated: now
+    };
+    const defaultPosterior = {
+      mean: 0.5,
+      variance: this.config.defaultPriorVariance,
+      credibleInterval: {
+        lower: 0.5 - 1.96 * Math.sqrt(this.config.defaultPriorVariance),
+        upper: 0.5 + 1.96 * Math.sqrt(this.config.defaultPriorVariance)
+      },
+      updatedAt: now,
+      basedOnObservations: 0
+    };
+    const createDimensionBelief = (dimension, meanValue = 0.5) => ({
+      dimension,
+      prior: { ...defaultPrior, mean: meanValue },
+      posterior: { ...defaultPosterior, mean: meanValue },
+      beliefShift: 0,
+      informationGain: 0,
+      stability: 1
+    });
+    const emotionDistribution = /* @__PURE__ */ new Map();
+    for (const [emotion, prob] of Object.entries(POPULATION_EMOTION_PRIORS)) {
+      emotionDistribution.set(emotion, prob);
+    }
+    let entropy = 0;
+    for (const prob of emotionDistribution.values()) {
+      if (prob > 0) {
+        entropy -= prob * Math.log2(prob);
+      }
+    }
+    const belief = {
+      userId,
+      timestamp: now,
+      emotional: {
+        valence: createDimensionBelief("valence", 0),
+        arousal: createDimensionBelief("arousal", 0),
+        dominance: createDimensionBelief("dominance", 0.5),
+        primaryEmotion: {
+          distribution: emotionDistribution,
+          entropy
+        }
+      },
+      cognitive: {
+        selfView: createDimensionBelief("selfView", 0.5),
+        worldView: createDimensionBelief("worldView", 0.5),
+        futureView: createDimensionBelief("futureView", 0.5),
+        distortionPresence: /* @__PURE__ */ new Map([
+          ["catastrophizing", 0.1],
+          ["black_and_white", 0.1],
+          ["mind_reading", 0.1],
+          ["fortune_telling", 0.1],
+          ["emotional_reasoning", 0.1],
+          ["should_statements", 0.1],
+          ["labeling", 0.1],
+          ["personalization", 0.1],
+          ["magnification", 0.1],
+          ["minimization", 0.1],
+          ["mental_filter", 0.1],
+          ["disqualifying_positive", 0.1],
+          ["overgeneralization", 0.1]
+        ])
+      },
+      risk: {
+        overallRisk: createDimensionBelief("overallRisk", 0.1),
+        categoryRisks: /* @__PURE__ */ new Map([
+          ["self_harm", createDimensionBelief("self_harm", 0.05)],
+          ["substance", createDimensionBelief("substance", 0.1)],
+          ["isolation", createDimensionBelief("isolation", 0.1)],
+          ["crisis", createDimensionBelief("crisis", 0.05)]
+        ])
+      },
+      resources: {
+        energy: createDimensionBelief("energy", 0.5),
+        copingCapacity: createDimensionBelief("copingCapacity", 0.5),
+        socialSupport: createDimensionBelief("socialSupport", 0.5),
+        perma: {
+          positive: createDimensionBelief("positive", 0.5),
+          engagement: createDimensionBelief("engagement", 0.5),
+          relationships: createDimensionBelief("relationships", 0.5),
+          meaning: createDimensionBelief("meaning", 0.5),
+          accomplishment: createDimensionBelief("accomplishment", 0.5)
+        }
+      },
+      meta: {
+        overallConfidence: 0.3,
+        totalObservations: 0,
+        averageInformationGain: 0,
+        beliefConsistency: 1,
+        predictionAccuracy: 0.5
+      }
+    };
+    this.storeBeliefHistory(userId, belief);
+    return belief;
+  }
+  /**
+   * Update belief with new observation
+   * Implements Bayesian posterior update: P(state|obs) ∝ P(obs|state) × P(state)
+   */
+  updateBelief(currentBelief, observation) {
+    const now = /* @__PURE__ */ new Date();
+    const updatedDimensions = [];
+    const significantChanges = [];
+    const likelihood = this.likelihoodModel.calculateLikelihood(
+      observation,
+      {}
+      // We could pass hypothesized state here
+    );
+    const reliabilityWeight = this.config.reliabilityWeights[observation.type];
+    const effectiveWeight = likelihood * reliabilityWeight * observation.reliability;
+    const newEmotional = this.updateEmotionalBeliefs(
+      currentBelief.emotional,
+      observation,
+      effectiveWeight,
+      updatedDimensions,
+      significantChanges
+    );
+    const newCognitive = this.updateCognitiveBeliefs(
+      currentBelief.cognitive,
+      observation,
+      effectiveWeight,
+      updatedDimensions,
+      significantChanges
+    );
+    const newRisk = this.updateRiskBeliefs(
+      currentBelief.risk,
+      observation,
+      effectiveWeight,
+      updatedDimensions,
+      significantChanges
+    );
+    const newResources = this.updateResourceBeliefs(
+      currentBelief.resources,
+      observation,
+      effectiveWeight,
+      updatedDimensions,
+      significantChanges
+    );
+    const totalInformationGain = this.calculateTotalInfoGain(
+      currentBelief,
+      newEmotional,
+      newCognitive,
+      newRisk,
+      newResources
+    );
+    const surprise = this.calculateSurprise(currentBelief, observation);
+    const newMeta = {
+      overallConfidence: Math.min(
+        0.95,
+        currentBelief.meta.overallConfidence + totalInformationGain * 0.1
+      ),
+      totalObservations: currentBelief.meta.totalObservations + 1,
+      averageInformationGain: (currentBelief.meta.averageInformationGain * currentBelief.meta.totalObservations + totalInformationGain) / (currentBelief.meta.totalObservations + 1),
+      beliefConsistency: this.calculateConsistency(
+        newEmotional,
+        newCognitive,
+        newRisk,
+        newResources
+      ),
+      predictionAccuracy: currentBelief.meta.predictionAccuracy
+      // Updated elsewhere
+    };
+    const newBelief = {
+      userId: currentBelief.userId,
+      timestamp: now,
+      emotional: newEmotional,
+      cognitive: newCognitive,
+      risk: newRisk,
+      resources: newResources,
+      meta: newMeta
+    };
+    this.storeBeliefHistory(currentBelief.userId, newBelief);
+    return {
+      previousBelief: currentBelief,
+      newBelief,
+      observation,
+      updatedDimensions,
+      totalInformationGain,
+      surprise,
+      significantChanges
+    };
+  }
+  /**
+   * Batch update with multiple observations
+   */
+  batchUpdateBelief(currentBelief, observations) {
+    const sorted = [...observations].sort(
+      (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+    );
+    let belief = currentBelief;
+    let lastResult = null;
+    const allUpdatedDimensions = /* @__PURE__ */ new Set();
+    const allSignificantChanges = [];
+    let totalInfoGain = 0;
+    let totalSurprise = 0;
+    for (const obs of sorted) {
+      lastResult = this.updateBelief(belief, obs);
+      belief = lastResult.newBelief;
+      lastResult.updatedDimensions.forEach((d) => allUpdatedDimensions.add(d));
+      allSignificantChanges.push(...lastResult.significantChanges);
+      totalInfoGain += lastResult.totalInformationGain;
+      totalSurprise += lastResult.surprise;
+    }
+    const lastObservation = sorted[sorted.length - 1];
+    if (!lastObservation) {
+      throw new Error("No observations provided to batchUpdateBelief");
+    }
+    return {
+      previousBelief: currentBelief,
+      newBelief: belief,
+      observation: lastObservation,
+      updatedDimensions: Array.from(allUpdatedDimensions),
+      totalInformationGain: totalInfoGain,
+      surprise: totalSurprise / sorted.length,
+      significantChanges: this.deduplicateSignificantChanges(allSignificantChanges)
+    };
+  }
+  /**
+   * Convert belief state to point estimate (StateVector)
+   * Uses posterior means as point estimates
+   */
+  beliefToStateVector(belief) {
+    let maxEmotion = "neutral";
+    let maxProb = 0;
+    for (const [emotion, prob] of belief.emotional.primaryEmotion.distribution) {
+      if (prob > maxProb) {
+        maxProb = prob;
+        maxEmotion = emotion;
+      }
+    }
+    const riskValue = belief.risk.overallRisk.posterior.mean;
+    let riskLevel = "none";
+    if (riskValue >= 0.8) {
+      riskLevel = "critical";
+    } else if (riskValue >= 0.6) {
+      riskLevel = "high";
+    } else if (riskValue >= 0.4) {
+      riskLevel = "medium";
+    } else if (riskValue >= 0.2) {
+      riskLevel = "low";
+    }
+    return {
+      id: generateId(),
+      userId: belief.userId,
+      timestamp: belief.timestamp,
+      emotional: {
+        primary: {
+          emotion: maxEmotion,
+          confidence: maxProb,
+          intensity: Math.abs(belief.emotional.valence.posterior.mean)
+        },
+        secondary: [],
+        intensity: Math.abs(belief.emotional.valence.posterior.mean),
+        vad: {
+          valence: belief.emotional.valence.posterior.mean,
+          arousal: belief.emotional.arousal.posterior.mean,
+          dominance: belief.emotional.dominance.posterior.mean
+        },
+        trend: "stable",
+        volatility: 1 - belief.meta.beliefConsistency,
+        patterns: [],
+        effectiveStrategies: [],
+        timestamp: belief.timestamp,
+        confidence: belief.meta.overallConfidence,
+        source: "combined",
+        dataQuality: belief.meta.overallConfidence
+      },
+      cognitive: {
+        coreBeliefs: {
+          selfView: belief.cognitive.selfView.posterior.mean,
+          worldView: belief.cognitive.worldView.posterior.mean,
+          futureView: belief.cognitive.futureView.posterior.mean,
+          confidence: {
+            self: belief.meta.overallConfidence,
+            world: belief.meta.overallConfidence,
+            future: belief.meta.overallConfidence
+          }
+        },
+        activeDistortions: [],
+        distortionIntensity: 0,
+        beliefUncertainty: 1 - belief.meta.overallConfidence,
+        attentionalBias: "neutral",
+        thinkingStyle: {
+          analyticalVsIntuitive: 0.5,
+          abstractVsConcrete: 0.5,
+          locusOfControl: "balanced",
+          flexibility: 0.5
+        },
+        coreBeliefPatterns: [],
+        cognitiveLoad: {
+          current: 0.5,
+          factors: [],
+          availableResources: 0.5
+        },
+        metacognition: {
+          selfAwareness: 0.5,
+          defusion: 0.5,
+          changeBeliefs: 0.5,
+          metaWorry: 0.3
+        },
+        recentUpdates: [],
+        timestamp: belief.timestamp,
+        confidence: belief.meta.overallConfidence,
+        dataQuality: belief.meta.overallConfidence
+      },
+      narrative: {
+        stage: "contemplation",
+        daysInCurrentStage: 0,
+        stageHistory: [],
+        role: "explorer",
+        roleHistory: [],
+        progressPercent: 50,
+        breakthroughs: [],
+        setbacks: [],
+        momentum: {
+          direction: 0,
+          velocity: 0.5,
+          stability: 0.5,
+          accelerators: [],
+          barriers: []
+        },
+        chapters: [],
+        currentChapter: {
+          id: "initial",
+          title: "Beginning",
+          startDate: belief.timestamp,
+          dominantStage: "contemplation",
+          dominantRole: "explorer",
+          keyMoments: [],
+          overallTone: "neutral"
+        },
+        themes: [],
+        values: {
+          identified: [],
+          meaningSource: "mixed",
+          purposeClarity: 0.5
+        },
+        projections: [],
+        possibleTransitions: [],
+        timestamp: belief.timestamp,
+        confidence: belief.meta.overallConfidence,
+        dataQuality: belief.meta.overallConfidence
+      },
+      risk: {
+        level: riskLevel,
+        confidence: belief.meta.overallConfidence,
+        trajectory: "stable",
+        riskFactors: [],
+        protectiveFactors: [],
+        earlyWarnings: [],
+        categoryRisks: {},
+        safetyPlan: {
+          exists: false,
+          completeness: 0,
+          components: []
+        },
+        supportNetwork: {
+          size: 0,
+          quality: 0.5,
+          accessibility: 0.5,
+          diversity: 0.5,
+          primarySupports: []
+        },
+        lethalMeans: {
+          assessed: false,
+          accessToMeans: "unknown",
+          meansRestrictionDiscussed: false,
+          safetyStepsCompleted: []
+        },
+        crisisHistory: [],
+        effectiveInterventions: [],
+        predictions: [],
+        daysSinceLastCrisis: null,
+        stabilizationPhase: "stable",
+        timestamp: belief.timestamp,
+        dataQuality: belief.meta.overallConfidence,
+        assessmentMethod: "automated"
+      },
+      resources: {
+        perma: {
+          positiveEmotion: belief.resources.perma.positive.posterior.mean,
+          engagement: belief.resources.perma.engagement.posterior.mean,
+          relationships: belief.resources.perma.relationships.posterior.mean,
+          meaning: belief.resources.perma.meaning.posterior.mean,
+          accomplishment: belief.resources.perma.accomplishment.posterior.mean
+        },
+        permaScore: (belief.resources.perma.positive.posterior.mean + belief.resources.perma.engagement.posterior.mean + belief.resources.perma.relationships.posterior.mean + belief.resources.perma.meaning.posterior.mean + belief.resources.perma.accomplishment.posterior.mean) / 5,
+        copingStrategies: [],
+        effectiveStrategies: [],
+        energy: {
+          current: belief.resources.energy.posterior.mean,
+          baseline: 0.5,
+          trend: "stable",
+          factors: []
+        },
+        cognitiveCapacity: {
+          available: belief.resources.copingCapacity.posterior.mean,
+          currentLoad: 1 - belief.resources.copingCapacity.posterior.mean,
+          optimal: 1,
+          loadSources: []
+        },
+        selfEfficacy: {
+          general: belief.resources.copingCapacity.posterior.mean,
+          domains: {},
+          masteryExperiences: []
+        },
+        resilience: {
+          score: belief.resources.copingCapacity.posterior.mean,
+          components: {
+            adaptability: 0.5,
+            persistence: 0.5,
+            optimism: 0.5,
+            selfRegulation: 0.5,
+            socialSupport: belief.resources.socialSupport.posterior.mean
+          },
+          recoveryHistory: []
+        },
+        socialResources: {
+          network: {
+            size: 0,
+            qualityScore: belief.resources.socialSupport.posterior.mean,
+            diversityScore: 0.5,
+            accessibilityScore: 0.5
+          },
+          supportTypes: {
+            emotional: 0.5,
+            instrumental: 0.5,
+            informational: 0.5,
+            companionship: 0.5
+          },
+          keyRelationships: [],
+          isolationRisk: 1 - belief.resources.socialSupport.posterior.mean
+        },
+        timeResources: {
+          perceived: 0.5,
+          selfCareTime: "adequate",
+          pressure: 0.5,
+          balance: {
+            work_life: 0.5,
+            rest_activity: 0.5,
+            solitude_social: 0.5
+          }
+        },
+        hopeOptimism: {
+          hope: {
+            agency: 0.5,
+            pathways: 0.5,
+            overall: 0.5
+          },
+          optimism: {
+            generalExpectancy: 0.5,
+            explanatoryStyle: "mixed"
+          },
+          futureOrientation: {
+            clarity: 0.5,
+            motivation: 0.5,
+            confidence: belief.meta.overallConfidence
+          }
+        },
+        depletionWarnings: [],
+        strengths: [],
+        overallAvailability: belief.resources.energy.posterior.mean,
+        timestamp: belief.timestamp,
+        confidence: belief.meta.overallConfidence,
+        dataQuality: belief.meta.overallConfidence
+      },
+      belief: {
+        confidence: belief.meta.overallConfidence,
+        entropy: 1 - belief.meta.overallConfidence,
+        lastObservation: {
+          source: "inference",
+          timestamp: belief.timestamp,
+          informationGain: belief.meta.averageInformationGain
+        },
+        observationCount: belief.meta.totalObservations
+      },
+      quality: {
+        overall: belief.meta.overallConfidence,
+        components: {
+          emotional: belief.meta.overallConfidence,
+          cognitive: belief.meta.overallConfidence,
+          narrative: belief.meta.overallConfidence * 0.8,
+          risk: belief.meta.overallConfidence,
+          resources: belief.meta.overallConfidence
+        },
+        staleness: {
+          emotional: 0,
+          cognitive: 0,
+          narrative: 0,
+          risk: 0,
+          resources: 0
+        },
+        sufficient: belief.meta.totalObservations >= 3
+      },
+      recentTransitions: [],
+      predictions: [],
+      summary: {
+        brief: `Belief-based state estimate - confidence: ${(belief.meta.overallConfidence * 100).toFixed(0)}%`,
+        insights: [
+          `VAD: (${belief.emotional.valence.posterior.mean.toFixed(2)}, ${belief.emotional.arousal.posterior.mean.toFixed(2)}, ${belief.emotional.dominance.posterior.mean.toFixed(2)})`
+        ],
+        concerns: riskLevel !== "none" ? [`Risk level: ${riskLevel}`] : [],
+        positives: [],
+        focusAreas: [],
+        wellbeingScore: this.calculateWellbeingFromBelief(belief)
+      },
+      recommendations: [],
+      wellbeingIndex: this.calculateWellbeingFromBelief(belief),
+      stabilityIndex: belief.meta.beliefConsistency * 100,
+      resilienceIndex: belief.resources.copingCapacity.posterior.mean * 100,
+      interventionUrgency: riskValue * 100
+    };
+  }
+  /**
+   * Get uncertainty for specific dimension
+   */
+  getDimensionUncertainty(belief, dimension) {
+    const dimBelief = this.findDimensionBelief(belief, dimension);
+    if (!dimBelief) {
+      return {
+        uncertainty: 1,
+        sampleSizeNeeded: 10,
+        suggestedObservationType: "self_report_mood"
+      };
+    }
+    const uncertainty = dimBelief.posterior.variance;
+    const targetVariance = 0.05;
+    const currentVariance = uncertainty;
+    const samplesNeeded = Math.ceil(
+      (currentVariance - targetVariance) / (targetVariance * this.config.reliabilityWeights.self_report_emotion)
+    );
+    const typeByDimension = {
+      "valence": "self_report_emotion",
+      "arousal": "self_report_mood",
+      "dominance": "self_report_mood",
+      "selfView": "assessment",
+      "worldView": "text_message",
+      "futureView": "assessment",
+      "overallRisk": "assessment",
+      "energy": "self_report_mood",
+      "copingCapacity": "behavioral",
+      "socialSupport": "interaction"
+    };
+    return {
+      uncertainty,
+      sampleSizeNeeded: Math.max(1, samplesNeeded),
+      suggestedObservationType: typeByDimension[dimension] ?? "self_report_mood"
+    };
+  }
+  /**
+   * Calculate expected information gain from potential observation
+   * Based on information-theoretic expected utility
+   */
+  calculateExpectedInfoGain(currentBelief, potentialObservationType) {
+    const informedDimensions = this.getDimensionsForObsType(potentialObservationType);
+    let totalExpectedGain = 0;
+    for (const dim of informedDimensions) {
+      const dimBelief = this.findDimensionBelief(currentBelief, dim);
+      if (!dimBelief) {
+        continue;
+      }
+      const currentVariance = dimBelief.posterior.variance;
+      const obsReliability = this.config.reliabilityWeights[potentialObservationType];
+      const expectedNewVariance = currentVariance * (1 - obsReliability) + this.config.minVariance * obsReliability;
+      const infoGain = Math.log(currentVariance / expectedNewVariance);
+      totalExpectedGain += Math.max(0, infoGain);
+    }
+    return totalExpectedGain / informedDimensions.length;
+  }
+  /**
+   * Get most informative next observation type
+   * Active inference: minimize expected prediction error
+   */
+  getMostInformativeObservation(currentBelief) {
+    const observationTypes = [
+      "self_report_emotion",
+      "self_report_mood",
+      "assessment",
+      "text_message",
+      "behavioral",
+      "contextual",
+      "interaction"
+    ];
+    let bestType = "self_report_mood";
+    let bestGain = 0;
+    let bestDimension = "valence";
+    for (const obsType of observationTypes) {
+      const gain = this.calculateExpectedInfoGain(currentBelief, obsType);
+      if (gain > bestGain) {
+        bestGain = gain;
+        bestType = obsType;
+        bestDimension = this.getHighestUncertaintyDimension(currentBelief, obsType);
+      }
+    }
+    const rationales = {
+      "self_report_emotion": "Direct emotion report provides high-reliability emotional state update",
+      "self_report_mood": "Mood report captures overall valence and arousal state",
+      "assessment": "Formal assessment provides comprehensive state update",
+      "text_message": "Text analysis provides indirect emotional and cognitive insights",
+      "behavioral": "Behavioral patterns reveal energy and engagement levels",
+      "contextual": "Context helps calibrate predictions",
+      "sensor": "Passive sensing provides continuous low-burden data",
+      "interaction": "Interaction patterns reveal social support and engagement"
+    };
+    return {
+      observationType: bestType,
+      expectedInfoGain: bestGain,
+      targetDimension: bestDimension,
+      rationale: rationales[bestType]
+    };
+  }
+  /**
+   * Check for belief inconsistencies
+   * Detects contradictions between related dimensions
+   */
+  checkBeliefConsistency(belief) {
+    const inconsistencies = [];
+    if (belief.emotional.arousal.posterior.mean > 0.5 && belief.resources.energy.posterior.mean < 0.3) {
+      inconsistencies.push({
+        dimension1: "arousal",
+        dimension2: "energy",
+        conflictType: "high_arousal_low_energy",
+        resolution: "May indicate stress/anxiety state - verify with direct assessment"
+      });
+    }
+    if (belief.emotional.valence.posterior.mean > 0.5 && belief.risk.overallRisk.posterior.mean > 0.5) {
+      inconsistencies.push({
+        dimension1: "valence",
+        dimension2: "overallRisk",
+        conflictType: "positive_mood_high_risk",
+        resolution: "May indicate denial or manic state - investigate further"
+      });
+    }
+    if (belief.resources.copingCapacity.posterior.mean < 0.3 && belief.resources.socialSupport.posterior.mean < 0.3 && belief.risk.overallRisk.posterior.mean < 0.3) {
+      inconsistencies.push({
+        dimension1: "resources",
+        dimension2: "risk",
+        conflictType: "low_resources_low_risk",
+        resolution: "Risk may be underestimated - reassess protective factors"
+      });
+    }
+    const triadDiff = Math.abs(
+      belief.cognitive.selfView.posterior.mean - belief.cognitive.futureView.posterior.mean
+    );
+    if (triadDiff > 0.5) {
+      inconsistencies.push({
+        dimension1: "selfView",
+        dimension2: "futureView",
+        conflictType: "triad_imbalance",
+        resolution: "Large difference between self and future views - explore cognitive patterns"
+      });
+    }
+    return {
+      isConsistent: inconsistencies.length === 0,
+      inconsistencies
+    };
+  }
+  /**
+   * Decay beliefs over time (increase uncertainty)
+   * Epistemic uncertainty increases without new observations
+   */
+  applyBeliefDecay(belief, hoursSinceLastUpdate) {
+    const decayFactor = Math.pow(1 + this.config.beliefDecayRate, hoursSinceLastUpdate);
+    const decayDimension = (dim) => {
+      const newVariance = Math.min(
+        this.config.defaultPriorVariance,
+        dim.posterior.variance * decayFactor
+      );
+      return {
+        ...dim,
+        posterior: {
+          ...dim.posterior,
+          variance: newVariance,
+          credibleInterval: {
+            lower: dim.posterior.mean - 1.96 * Math.sqrt(newVariance),
+            upper: dim.posterior.mean + 1.96 * Math.sqrt(newVariance)
+          }
+        },
+        stability: dim.stability * (1 / decayFactor)
+      };
+    };
+    return {
+      ...belief,
+      timestamp: /* @__PURE__ */ new Date(),
+      emotional: {
+        valence: decayDimension(belief.emotional.valence),
+        arousal: decayDimension(belief.emotional.arousal),
+        dominance: decayDimension(belief.emotional.dominance),
+        primaryEmotion: belief.emotional.primaryEmotion
+        // Distribution decays toward uniform
+      },
+      cognitive: {
+        selfView: decayDimension(belief.cognitive.selfView),
+        worldView: decayDimension(belief.cognitive.worldView),
+        futureView: decayDimension(belief.cognitive.futureView),
+        distortionPresence: belief.cognitive.distortionPresence
+      },
+      risk: {
+        overallRisk: decayDimension(belief.risk.overallRisk),
+        categoryRisks: new Map(
+          Array.from(belief.risk.categoryRisks.entries()).map(
+            ([k, v]) => [k, decayDimension(v)]
+          )
+        )
+      },
+      resources: {
+        energy: decayDimension(belief.resources.energy),
+        copingCapacity: decayDimension(belief.resources.copingCapacity),
+        socialSupport: decayDimension(belief.resources.socialSupport),
+        perma: {
+          positive: decayDimension(belief.resources.perma.positive),
+          engagement: decayDimension(belief.resources.perma.engagement),
+          relationships: decayDimension(belief.resources.perma.relationships),
+          meaning: decayDimension(belief.resources.perma.meaning),
+          accomplishment: decayDimension(belief.resources.perma.accomplishment)
+        }
+      },
+      meta: {
+        ...belief.meta,
+        overallConfidence: belief.meta.overallConfidence * (1 / decayFactor)
+      }
+    };
+  }
+  /**
+   * Get belief history for dimension
+   */
+  async getBeliefHistory(userId, dimension, timeRange) {
+    const history = this.beliefHistory.get(userId) ?? [];
+    return history.filter(
+      (entry) => entry.timestamp >= timeRange.start && entry.timestamp <= timeRange.end
+    ).map((entry) => {
+      const dimBelief = this.findDimensionBelief(entry.belief, dimension);
+      return {
+        timestamp: entry.timestamp,
+        mean: dimBelief?.posterior.mean ?? 0.5,
+        variance: dimBelief?.posterior.variance ?? this.config.defaultPriorVariance
+      };
+    });
+  }
+  // ============ Private Helper Methods ============
+  storeBeliefHistory(userId, belief) {
+    if (!this.beliefHistory.has(userId)) {
+      this.beliefHistory.set(userId, []);
+    }
+    const history = this.beliefHistory.get(userId);
+    history.push({ timestamp: belief.timestamp, belief });
+    if (history.length > 1e3) {
+      history.shift();
+    }
+  }
+  updateEmotionalBeliefs(current, observation, weight, updatedDimensions, significantChanges) {
+    if (!observation.informsComponents.includes("emotional")) {
+      return current;
+    }
+    const obsData = observation.data;
+    const updateDim = (dim, observedValue) => {
+      if (observedValue === void 0) {
+        return dim;
+      }
+      const prior = dim.posterior;
+      const priorPrecision = 1 / prior.variance;
+      const obsPrecision = weight / this.config.defaultPriorVariance;
+      const posteriorPrecision = priorPrecision + obsPrecision;
+      const posteriorMean = (prior.mean * priorPrecision + observedValue * obsPrecision) / posteriorPrecision;
+      const posteriorVariance = Math.max(
+        this.config.minVariance,
+        1 / posteriorPrecision
+      );
+      const beliefShift = Math.abs(posteriorMean - prior.mean);
+      const informationGain = Math.log(prior.variance / posteriorVariance) / 2;
+      if (beliefShift > this.config.significanceThreshold) {
+        const changeType = posteriorMean > prior.mean ? "improvement" : "decline";
+        significantChanges.push({
+          dimension: dim.dimension,
+          changeType,
+          magnitude: beliefShift,
+          clinicalSignificance: beliefShift > 0.3
+        });
+      }
+      updatedDimensions.push(dim.dimension);
+      return {
+        dimension: dim.dimension,
+        prior: {
+          mean: prior.mean,
+          variance: prior.variance,
+          sampleSize: prior.basedOnObservations,
+          lastUpdated: prior.updatedAt
+        },
+        posterior: {
+          mean: posteriorMean,
+          variance: posteriorVariance,
+          credibleInterval: {
+            lower: posteriorMean - 1.96 * Math.sqrt(posteriorVariance),
+            upper: posteriorMean + 1.96 * Math.sqrt(posteriorVariance)
+          },
+          updatedAt: /* @__PURE__ */ new Date(),
+          basedOnObservations: prior.basedOnObservations + 1
+        },
+        beliefShift,
+        informationGain,
+        stability: 1 - beliefShift
+      };
+    };
+    return {
+      valence: updateDim(current.valence, obsData.valence),
+      arousal: updateDim(current.arousal, obsData.arousal),
+      dominance: updateDim(current.dominance, obsData.dominance),
+      primaryEmotion: this.updateEmotionDistribution(
+        current.primaryEmotion,
+        obsData.emotion,
+        weight
+      )
+    };
+  }
+  updateEmotionDistribution(current, observedEmotion, weight) {
+    if (!observedEmotion) {
+      return current;
+    }
+    const newDistribution = new Map(current.distribution);
+    for (const [emotion, prob] of newDistribution.entries()) {
+      if (emotion === observedEmotion) {
+        newDistribution.set(emotion, prob + weight * (1 - prob));
+      } else {
+        newDistribution.set(emotion, prob * (1 - weight));
+      }
+    }
+    const newTotal = Array.from(newDistribution.values()).reduce((a, b) => a + b, 0);
+    for (const [emotion, prob] of newDistribution.entries()) {
+      newDistribution.set(emotion, prob / newTotal);
+    }
+    let entropy = 0;
+    for (const prob of newDistribution.values()) {
+      if (prob > 0) {
+        entropy -= prob * Math.log2(prob);
+      }
+    }
+    return {
+      distribution: newDistribution,
+      entropy
+    };
+  }
+  /**
+   * Update cognitive beliefs using Bayesian inference
+   *
+   * Scientific basis:
+   * - Beck's Cognitive Triad (Beck, 1967): selfView, worldView, futureView
+   * - Precision-weighted prediction errors (HGF framework, Weber et al., 2025)
+   * - Cognitive distortion detection (ACL EMNLP Survey 2025)
+   *
+   * Key principle: Higher precision observations cause larger belief updates,
+   * while uncertain observations cause smaller updates (predictive coding)
+   */
+  updateCognitiveBeliefs(current, observation, weight, updatedDimensions, significantChanges) {
+    if (!observation.informsComponents.includes("cognitive")) {
+      return current;
+    }
+    const obsData = observation.data;
+    const updateDimension = (dim, observedValue, dimensionName) => {
+      if (observedValue === void 0) {
+        return dim;
+      }
+      const prior = dim.posterior;
+      const priorPrecision = 1 / prior.variance;
+      const obsPrecision = weight / this.config.defaultPriorVariance;
+      const posteriorPrecision = priorPrecision + obsPrecision;
+      const posteriorMean = (prior.mean * priorPrecision + observedValue * obsPrecision) / posteriorPrecision;
+      const posteriorVariance = Math.max(
+        this.config.minVariance,
+        1 / posteriorPrecision
+      );
+      const beliefShift = Math.abs(posteriorMean - prior.mean);
+      const informationGain = Math.log(prior.variance / posteriorVariance) / 2;
+      if (beliefShift > this.config.significanceThreshold) {
+        const changeType = posteriorMean > prior.mean ? "improvement" : "decline";
+        significantChanges.push({
+          dimension: dimensionName,
+          changeType,
+          magnitude: beliefShift,
+          // Clinical significance: >0.5 SD change or crossing clinical threshold
+          clinicalSignificance: beliefShift > 0.3 || prior.mean < 0.3 && posteriorMean >= 0.3 || // Crossing from negative to neutral
+          prior.mean >= 0.3 && posteriorMean < 0.3
+          // Crossing from neutral to negative
+        });
+      }
+      updatedDimensions.push(dimensionName);
+      return {
+        dimension: dimensionName,
+        prior: {
+          mean: prior.mean,
+          variance: prior.variance,
+          sampleSize: prior.basedOnObservations,
+          lastUpdated: prior.updatedAt
+        },
+        posterior: {
+          mean: posteriorMean,
+          variance: posteriorVariance,
+          credibleInterval: {
+            lower: posteriorMean - 1.96 * Math.sqrt(posteriorVariance),
+            upper: posteriorMean + 1.96 * Math.sqrt(posteriorVariance)
+          },
+          updatedAt: /* @__PURE__ */ new Date(),
+          basedOnObservations: prior.basedOnObservations + 1
+        },
+        beliefShift,
+        informationGain,
+        stability: 1 - beliefShift
+      };
+    };
+    const updateDistortionPresence = (currentDistortions, detectedDistortions2) => {
+      if (!detectedDistortions2 || detectedDistortions2.length === 0) {
+        return currentDistortions;
+      }
+      const newDistortions = new Map(currentDistortions);
+      const updateFactor = weight * 0.2;
+      for (const [distortion, prob] of newDistortions.entries()) {
+        if (detectedDistortions2.includes(distortion)) {
+          const newProb = prob + updateFactor * (1 - prob);
+          newDistortions.set(distortion, Math.min(0.95, newProb));
+        } else {
+          const newProb = prob * (1 - updateFactor * 0.1);
+          newDistortions.set(distortion, Math.max(0.01, newProb));
+        }
+      }
+      return newDistortions;
+    };
+    const selfViewObs = obsData.selfView;
+    const worldViewObs = obsData.worldView;
+    const futureViewObs = obsData.futureView;
+    const detectedDistortions = obsData.distortions;
+    const newSelfView = updateDimension(current.selfView, selfViewObs, "selfView");
+    const newWorldView = updateDimension(current.worldView, worldViewObs, "worldView");
+    const newFutureView = updateDimension(current.futureView, futureViewObs, "futureView");
+    const newDistortionPresence = updateDistortionPresence(
+      current.distortionPresence,
+      detectedDistortions
+    );
+    return {
+      selfView: newSelfView,
+      worldView: newWorldView,
+      futureView: newFutureView,
+      distortionPresence: newDistortionPresence
+    };
+  }
+  updateRiskBeliefs(current, observation, weight, updatedDimensions, significantChanges) {
+    if (!observation.informsComponents.includes("risk")) {
+      return current;
+    }
+    const obsData = observation.data;
+    if (obsData.riskLevel !== void 0) {
+      const riskMapping = {
+        "none": 0.1,
+        "low": 0.25,
+        "medium": 0.5,
+        "high": 0.75,
+        "critical": 0.95
+      };
+      const observedRisk = riskMapping[obsData.riskLevel] ?? 0.5;
+      const prior = current.overallRisk.posterior;
+      const priorPrecision = 1 / prior.variance;
+      const obsPrecision = weight / this.config.defaultPriorVariance;
+      const posteriorPrecision = priorPrecision + obsPrecision;
+      const posteriorMean = (prior.mean * priorPrecision + observedRisk * obsPrecision) / posteriorPrecision;
+      const posteriorVariance = Math.max(
+        this.config.minVariance,
+        1 / posteriorPrecision
+      );
+      const beliefShift = Math.abs(posteriorMean - prior.mean);
+      if (beliefShift > this.config.significanceThreshold) {
+        significantChanges.push({
+          dimension: "overallRisk",
+          changeType: posteriorMean > prior.mean ? "decline" : "improvement",
+          magnitude: beliefShift,
+          clinicalSignificance: posteriorMean > 0.6 || beliefShift > 0.3
+        });
+      }
+      updatedDimensions.push("overallRisk");
+      return {
+        ...current,
+        overallRisk: {
+          dimension: "overallRisk",
+          prior: {
+            mean: prior.mean,
+            variance: prior.variance,
+            sampleSize: prior.basedOnObservations,
+            lastUpdated: prior.updatedAt
+          },
+          posterior: {
+            mean: posteriorMean,
+            variance: posteriorVariance,
+            credibleInterval: {
+              lower: posteriorMean - 1.96 * Math.sqrt(posteriorVariance),
+              upper: posteriorMean + 1.96 * Math.sqrt(posteriorVariance)
+            },
+            updatedAt: /* @__PURE__ */ new Date(),
+            basedOnObservations: prior.basedOnObservations + 1
+          },
+          beliefShift,
+          informationGain: Math.log(prior.variance / posteriorVariance) / 2,
+          stability: 1 - beliefShift
+        }
+      };
+    }
+    return current;
+  }
+  /**
+   * Update resource beliefs using Bayesian inference
+   *
+   * Scientific basis:
+   * - PERMA Model (Seligman, 2011): Positive emotion, Engagement, Relationships, Meaning, Accomplishment
+   * - Conservation of Resources Theory (Hobfoll, 1989, 2025): Resource depletion accelerates decline
+   * - Digital Resilience Interventions meta-analysis (npj Digital Medicine, 2024): SMD = 0.31
+   * - Precision-weighted prediction errors (HGF framework)
+   *
+   * Key principles:
+   * 1. Resource loss spirals: Low resources → faster depletion
+   * 2. Recovery is asymmetric: Building resources is slower than losing them
+   * 3. Social support acts as a buffer against resource depletion
+   */
+  updateResourceBeliefs(current, observation, weight, updatedDimensions, significantChanges) {
+    if (!observation.informsComponents.includes("resources")) {
+      return current;
+    }
+    const obsData = observation.data;
+    const updateResourceDimension = (dim, observedValue, dimensionName, isProtective = false) => {
+      if (observedValue === void 0) {
+        return dim;
+      }
+      const prior = dim.posterior;
+      const priorPrecision = 1 / prior.variance;
+      const obsPrecision = weight / this.config.defaultPriorVariance;
+      const posteriorPrecision = priorPrecision + obsPrecision;
+      let posteriorMean = (prior.mean * priorPrecision + observedValue * obsPrecision) / posteriorPrecision;
+      const isLoss = observedValue < prior.mean;
+      if (isLoss && !isProtective) {
+        const lossAmplification = 1.5;
+        posteriorMean = prior.mean - (prior.mean - posteriorMean) * lossAmplification;
+        posteriorMean = Math.max(0, Math.min(1, posteriorMean));
+      }
+      const posteriorVariance = Math.max(
+        this.config.minVariance,
+        1 / posteriorPrecision
+      );
+      const beliefShift = Math.abs(posteriorMean - prior.mean);
+      const informationGain = Math.log(prior.variance / posteriorVariance) / 2;
+      if (beliefShift > this.config.significanceThreshold) {
+        const changeType = posteriorMean > prior.mean ? "improvement" : "decline";
+        significantChanges.push({
+          dimension: dimensionName,
+          changeType,
+          magnitude: beliefShift,
+          // Clinical significance for resources:
+          // - Depletion below 0.3 (low resources)
+          // - Recovery above 0.6 (adequate resources)
+          clinicalSignificance: beliefShift > 0.25 || prior.mean >= 0.3 && posteriorMean < 0.3 || // Resource depletion warning
+          prior.mean < 0.6 && posteriorMean >= 0.6
+          // Recovery milestone
+        });
+      }
+      updatedDimensions.push(dimensionName);
+      return {
+        dimension: dimensionName,
+        prior: {
+          mean: prior.mean,
+          variance: prior.variance,
+          sampleSize: prior.basedOnObservations,
+          lastUpdated: prior.updatedAt
+        },
+        posterior: {
+          mean: posteriorMean,
+          variance: posteriorVariance,
+          credibleInterval: {
+            lower: posteriorMean - 1.96 * Math.sqrt(posteriorVariance),
+            upper: posteriorMean + 1.96 * Math.sqrt(posteriorVariance)
+          },
+          updatedAt: /* @__PURE__ */ new Date(),
+          basedOnObservations: prior.basedOnObservations + 1
+        },
+        beliefShift,
+        informationGain,
+        stability: 1 - beliefShift
+      };
+    };
+    const energyObs = obsData.energy;
+    const copingObs = obsData.copingCapacity;
+    const socialSupportObs = obsData.socialSupport;
+    const positiveObs = obsData.positive ?? obsData.positiveEmotion;
+    const engagementObs = obsData.engagement;
+    const relationshipsObs = obsData.relationships;
+    const meaningObs = obsData.meaning;
+    const accomplishmentObs = obsData.accomplishment;
+    const newEnergy = updateResourceDimension(
+      current.energy,
+      energyObs,
+      "energy",
+      false
+      // Not protective - depletes easily
+    );
+    const newCopingCapacity = updateResourceDimension(
+      current.copingCapacity,
+      copingObs,
+      "copingCapacity",
+      false
+    );
+    const newSocialSupport = updateResourceDimension(
+      current.socialSupport,
+      socialSupportObs,
+      "socialSupport",
+      true
+      // Protective factor - more stable
+    );
+    const newPerma = {
+      positive: updateResourceDimension(
+        current.perma.positive,
+        positiveObs,
+        "positive",
+        false
+      ),
+      engagement: updateResourceDimension(
+        current.perma.engagement,
+        engagementObs,
+        "engagement",
+        true
+        // Engagement is relatively stable trait-like dimension
+      ),
+      relationships: updateResourceDimension(
+        current.perma.relationships,
+        relationshipsObs ?? socialSupportObs,
+        // Can use social support as proxy
+        "relationships",
+        true
+        // Relationships are protective
+      ),
+      meaning: updateResourceDimension(
+        current.perma.meaning,
+        meaningObs,
+        "meaning",
+        true
+        // Meaning is relatively stable
+      ),
+      accomplishment: updateResourceDimension(
+        current.perma.accomplishment,
+        accomplishmentObs,
+        "accomplishment",
+        false
+        // Accomplishment varies with recent achievements
+      )
+    };
+    return {
+      energy: newEnergy,
+      copingCapacity: newCopingCapacity,
+      socialSupport: newSocialSupport,
+      perma: newPerma
+    };
+  }
+  /**
+   * Calculate total information gain across all belief dimensions
+   *
+   * Information gain quantifies how much an observation reduces uncertainty.
+   * Each bit of gain corresponds to roughly halving the prior plausibility region.
+   *
+   * Formula: IG = Σ 0.5 × log(prior_variance / posterior_variance)
+   */
+  calculateTotalInfoGain(_oldBelief, newEmotional, newCognitive, newRisk, newResources) {
+    let totalGain = 0;
+    totalGain += newEmotional.valence.informationGain;
+    totalGain += newEmotional.arousal.informationGain;
+    totalGain += newEmotional.dominance.informationGain;
+    totalGain += newCognitive.selfView.informationGain;
+    totalGain += newCognitive.worldView.informationGain;
+    totalGain += newCognitive.futureView.informationGain;
+    totalGain += newRisk.overallRisk.informationGain;
+    totalGain += newResources.energy.informationGain;
+    totalGain += newResources.copingCapacity.informationGain;
+    totalGain += newResources.socialSupport.informationGain;
+    totalGain += newResources.perma.positive.informationGain;
+    totalGain += newResources.perma.engagement.informationGain;
+    totalGain += newResources.perma.relationships.informationGain;
+    totalGain += newResources.perma.meaning.informationGain;
+    totalGain += newResources.perma.accomplishment.informationGain;
+    return Math.max(0, totalGain);
+  }
+  calculateSurprise(belief, observation) {
+    const likelihood = this.likelihoodModel.calculateLikelihood(
+      observation,
+      this.beliefToStateVector(belief)
+    );
+    return -Math.log(likelihood + 1e-3);
+  }
+  calculateConsistency(emotional, _cognitive, risk, resources) {
+    let consistencyScore = 1;
+    const valenceRiskCorr = -emotional.valence.posterior.mean * risk.overallRisk.posterior.mean;
+    if (valenceRiskCorr < -0.3) {
+      consistencyScore -= 0.2;
+    }
+    const energyArousalDiff = Math.abs(
+      resources.energy.posterior.mean - (emotional.arousal.posterior.mean + 1) / 2
+    );
+    if (energyArousalDiff > 0.5) {
+      consistencyScore -= 0.1;
+    }
+    return Math.max(0, consistencyScore);
+  }
+  findDimensionBelief(belief, dimension) {
+    if (dimension === "valence") {
+      return belief.emotional.valence;
+    }
+    if (dimension === "arousal") {
+      return belief.emotional.arousal;
+    }
+    if (dimension === "dominance") {
+      return belief.emotional.dominance;
+    }
+    if (dimension === "selfView") {
+      return belief.cognitive.selfView;
+    }
+    if (dimension === "worldView") {
+      return belief.cognitive.worldView;
+    }
+    if (dimension === "futureView") {
+      return belief.cognitive.futureView;
+    }
+    if (dimension === "overallRisk") {
+      return belief.risk.overallRisk;
+    }
+    const riskCategory = belief.risk.categoryRisks.get(dimension);
+    if (riskCategory) {
+      return riskCategory;
+    }
+    if (dimension === "energy") {
+      return belief.resources.energy;
+    }
+    if (dimension === "copingCapacity") {
+      return belief.resources.copingCapacity;
+    }
+    if (dimension === "socialSupport") {
+      return belief.resources.socialSupport;
+    }
+    if (dimension === "positive") {
+      return belief.resources.perma.positive;
+    }
+    if (dimension === "engagement") {
+      return belief.resources.perma.engagement;
+    }
+    if (dimension === "relationships") {
+      return belief.resources.perma.relationships;
+    }
+    if (dimension === "meaning") {
+      return belief.resources.perma.meaning;
+    }
+    if (dimension === "accomplishment") {
+      return belief.resources.perma.accomplishment;
+    }
+    return null;
+  }
+  getDimensionsForObsType(obsType) {
+    const mapping = {
+      "self_report_emotion": ["valence", "arousal", "dominance"],
+      "self_report_mood": ["valence", "energy"],
+      "assessment": ["valence", "arousal", "selfView", "worldView", "futureView", "overallRisk"],
+      "text_message": ["valence", "selfView", "worldView"],
+      "behavioral": ["energy", "copingCapacity", "engagement"],
+      "contextual": ["valence", "arousal"],
+      "sensor": ["arousal", "energy"],
+      "interaction": ["socialSupport", "relationships"]
+    };
+    return mapping[obsType] ?? ["valence"];
+  }
+  getHighestUncertaintyDimension(belief, obsType) {
+    const dimensions = this.getDimensionsForObsType(obsType);
+    let maxUncertainty = 0;
+    let maxDim = dimensions[0];
+    for (const dim of dimensions) {
+      const dimBelief = this.findDimensionBelief(belief, dim);
+      if (dimBelief && dimBelief.posterior.variance > maxUncertainty) {
+        maxUncertainty = dimBelief.posterior.variance;
+        maxDim = dim;
+      }
+    }
+    return maxDim ?? "valence";
+  }
+  calculateWellbeingFromBelief(belief) {
+    const valence = (belief.emotional.valence.posterior.mean + 1) / 2;
+    const energy = belief.resources.energy.posterior.mean;
+    const coping = belief.resources.copingCapacity.posterior.mean;
+    const permaAvg = (belief.resources.perma.positive.posterior.mean + belief.resources.perma.engagement.posterior.mean + belief.resources.perma.relationships.posterior.mean + belief.resources.perma.meaning.posterior.mean + belief.resources.perma.accomplishment.posterior.mean) / 5;
+    const riskPenalty = belief.risk.overallRisk.posterior.mean;
+    const wellbeing = (valence * 0.3 + energy * 0.15 + coping * 0.15 + permaAvg * 0.25 + (1 - riskPenalty) * 0.15) * 100;
+    return Math.max(0, Math.min(100, wellbeing));
+  }
+  deduplicateSignificantChanges(changes) {
+    const seen = /* @__PURE__ */ new Set();
+    return changes.filter((change) => {
+      const key = `${change.dimension}_${change.changeType}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }
+};
+function createBeliefUpdateEngine(config) {
+  return new BeliefUpdateEngine(config);
 }
 
 // src/belief/BeliefStateAdapter.ts
@@ -932,6 +2426,1309 @@ var BeliefStateAdapter = class {
 function createBeliefStateAdapter(engines) {
   return new BeliefStateAdapter(engines);
 }
+
+// src/intervention/IInterventionOptimizer.ts
+var DEFAULT_OPTIMIZER_CONFIG = {
+  explorationStrategy: "thompson_sampling",
+  epsilon: 0.1,
+  temperature: 1,
+  ucbConstant: 2,
+  thompsonPriorStrength: 1,
+  minPullsPerArm: 5,
+  rewardDiscountFactor: 0.95,
+  delayedRewardWeight: 0.6,
+  immediateRewardWeight: 0.4,
+  enableRewardShaping: true,
+  rewardShapingWeights: {
+    engagementBonus: 0.2,
+    completionBonus: 0.3,
+    progressPotential: 0.15,
+    explorationBonus: 0.1,
+    noveltyBonus: 0.05,
+    diversityBonus: 0.1,
+    timingBonus: 0.05,
+    contextMatchBonus: 0.05
+  },
+  maxInterventionsPerDay: 10,
+  minInterventionIntervalSeconds: 3600,
+  // 1 hour
+  enableContextualBandit: true,
+  contextualRegularization: 1,
+  enableMRTRandomization: false,
+  mrtRandomizationProbability: 0.5,
+  enableCrisisOverride: true,
+  learningRate: 0.01,
+  batchSize: 32
+};
+var INTERVENTION_CATEGORIES = {
+  cognitive_restructuring: {
+    name: "Cognitive Restructuring",
+    description: "Challenge and reframe unhelpful thoughts",
+    evidenceBase: "CBT core technique, extensive RCT support"
+  },
+  behavioral_activation: {
+    name: "Behavioral Activation",
+    description: "Increase engagement in valued activities",
+    evidenceBase: "Strong evidence for depression (Dimidjian et al., 2006)"
+  },
+  mindfulness: {
+    name: "Mindfulness",
+    description: "Present-moment awareness without judgment",
+    evidenceBase: "MBCT prevents depression relapse (Segal et al., 2010)"
+  },
+  psychoeducation: {
+    name: "Psychoeducation",
+    description: "Information about mental health and coping",
+    evidenceBase: "Foundation of most evidence-based treatments"
+  },
+  social_support: {
+    name: "Social Support",
+    description: "Connection with others for emotional support",
+    evidenceBase: "Strong protective factor (Cohen & Wills, 1985)"
+  },
+  crisis_intervention: {
+    name: "Crisis Intervention",
+    description: "Immediate safety and stabilization",
+    evidenceBase: "Essential for acute risk management"
+  },
+  distress_tolerance: {
+    name: "Distress Tolerance",
+    description: "Skills to survive crisis without making things worse",
+    evidenceBase: "DBT core module (Linehan, 1993)"
+  },
+  emotion_regulation: {
+    name: "Emotion Regulation",
+    description: "Skills to understand and manage emotions",
+    evidenceBase: "DBT core module, transdiagnostic relevance"
+  },
+  interpersonal_effectiveness: {
+    name: "Interpersonal Effectiveness",
+    description: "Skills for healthy relationships",
+    evidenceBase: "DBT core module"
+  },
+  physical_wellness: {
+    name: "Physical Wellness",
+    description: "Exercise, sleep, and nutrition for mental health",
+    evidenceBase: "Exercise comparable to antidepressants (Blumenthal et al., 2007)"
+  },
+  goal_setting: {
+    name: "Goal Setting",
+    description: "Setting and working toward meaningful goals",
+    evidenceBase: "Motivational Interviewing, Self-Determination Theory"
+  },
+  self_compassion: {
+    name: "Self-Compassion",
+    description: "Kindness toward oneself in difficult moments",
+    evidenceBase: "Neff research, reduces depression and anxiety"
+  },
+  gratitude: {
+    name: "Gratitude",
+    description: "Appreciating positive aspects of life",
+    evidenceBase: "Positive psychology intervention (Emmons & McCullough, 2003)"
+  },
+  values_clarification: {
+    name: "Values Clarification",
+    description: "Identifying what matters most",
+    evidenceBase: "ACT core process (Hayes et al., 2006)"
+  },
+  acceptance: {
+    name: "Acceptance",
+    description: "Making room for difficult experiences",
+    evidenceBase: "ACT core process, alternative to avoidance"
+  },
+  exposure: {
+    name: "Exposure",
+    description: "Gradual approach to feared situations",
+    evidenceBase: "Gold standard for anxiety disorders"
+  },
+  problem_solving: {
+    name: "Problem Solving",
+    description: "Structured approach to solving problems",
+    evidenceBase: "PST effective for depression (Cuijpers et al., 2007)"
+  }
+};
+var TIME_OF_DAY_HOURS = {
+  early_morning: [5, 7],
+  morning: [7, 12],
+  midday: [12, 14],
+  afternoon: [14, 17],
+  evening: [17, 21],
+  night: [21, 24],
+  late_night: [0, 5]
+};
+
+// src/intervention/InterventionOptimizer.ts
+function generateId2() {
+  return generateShortSecureId();
+}
+function sampleBeta(alpha, beta) {
+  return betaSampleSecure(alpha, beta);
+}
+function sampleNormal(mean, stddev) {
+  return gaussianSecure(mean, stddev);
+}
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+function getCurrentTimeOfDay(hour) {
+  for (const [timeOfDay, [start, end]] of Object.entries(TIME_OF_DAY_HOURS)) {
+    if (start <= hour && hour < end) {
+      return timeOfDay;
+    }
+    if (timeOfDay === "late_night" && (hour >= 0 && hour < 5)) {
+      return "late_night";
+    }
+  }
+  return "night";
+}
+function softmax(values, temperature = 1) {
+  const maxVal = Math.max(...values);
+  const expValues = values.map((v) => Math.exp((v - maxVal) / temperature));
+  const sumExp = expValues.reduce((a, b) => a + b, 0);
+  return expValues.map((v) => v / sumExp);
+}
+function weightedRandomSelect(items, weights) {
+  if (items.length === 0) {
+    throw new Error("Cannot select from empty items array");
+  }
+  const index = weightedRandomIndexSecure(weights);
+  return items[index];
+}
+var InterventionOptimizer = class {
+  constructor(config = {}) {
+    __publicField(this, "config");
+    __publicField(this, "interventions");
+    __publicField(this, "arms");
+    __publicField(this, "userProfiles");
+    __publicField(this, "decisionPoints");
+    __publicField(this, "pendingOutcomes");
+    __publicField(this, "globalStats");
+    __publicField(this, "crisisIntervention");
+    this.config = { ...DEFAULT_OPTIMIZER_CONFIG, ...config };
+    this.interventions = /* @__PURE__ */ new Map();
+    this.arms = /* @__PURE__ */ new Map();
+    this.userProfiles = /* @__PURE__ */ new Map();
+    this.decisionPoints = [];
+    this.pendingOutcomes = [];
+    this.crisisIntervention = null;
+    this.globalStats = this.initializeGlobalStats();
+  }
+  /**
+   * Initialize global statistics
+   */
+  initializeGlobalStats() {
+    const categoryDistribution = {};
+    for (const category of Object.keys(INTERVENTION_CATEGORIES)) {
+      categoryDistribution[category] = 0;
+    }
+    const timeOfDayDistribution = {
+      early_morning: 0,
+      morning: 0,
+      midday: 0,
+      afternoon: 0,
+      evening: 0,
+      night: 0,
+      late_night: 0
+    };
+    return {
+      totalDecisionPoints: 0,
+      totalInterventionsDelivered: 0,
+      overallEngagementRate: 0,
+      overallOutcomeImprovement: 0,
+      explorationRatio: 0,
+      categoryDistribution,
+      timeOfDayDistribution,
+      rewardTrend: []
+    };
+  }
+  // ============================================================================
+  // CORE SELECTION
+  // ============================================================================
+  /**
+   * Select optimal intervention for user
+   */
+  async selectIntervention(userId, context, availableInterventions) {
+    const userProfile = await this.getUserProfile(userId);
+    if (this.config.enableCrisisOverride && this.isCrisisContext(context)) {
+      const crisisIntervention = await this.getCrisisIntervention(context);
+      return this.createCrisisSelection(crisisIntervention, context, userId);
+    }
+    const eligibleInterventions = this.filterEligibleInterventions(
+      availableInterventions,
+      context,
+      userProfile
+    );
+    if (eligibleInterventions.length === 0) {
+      throw new Error("No eligible interventions available for current context");
+    }
+    for (const intervention of eligibleInterventions) {
+      if (!this.arms.has(intervention.id)) {
+        this.initializeArm(intervention.id);
+      }
+    }
+    const shouldExplore = this.shouldExplore();
+    let selectedIntervention;
+    let expectedReward;
+    let probability;
+    let alternatives;
+    if (shouldExplore && this.config.explorationStrategy === "epsilon_greedy") {
+      const randomIndex = secureRandomInt(0, eligibleInterventions.length - 1);
+      selectedIntervention = eligibleInterventions[randomIndex];
+      expectedReward = this.getArmMeanReward(selectedIntervention.id);
+      probability = 1 / eligibleInterventions.length;
+      alternatives = this.getAlternatives(eligibleInterventions, selectedIntervention.id);
+    } else {
+      const selection = this.selectByStrategy(
+        eligibleInterventions,
+        context,
+        userProfile
+      );
+      selectedIntervention = selection.intervention;
+      expectedReward = selection.expectedReward;
+      probability = selection.probability;
+      alternatives = selection.alternatives;
+    }
+    const decisionPoint = this.createDecisionPoint(
+      userId,
+      context,
+      selectedIntervention,
+      probability,
+      shouldExplore
+    );
+    this.updateGlobalStatsOnSelection(selectedIntervention, context, shouldExplore);
+    const reasoning = this.createSelectionReasoning(
+      selectedIntervention,
+      context,
+      shouldExplore,
+      alternatives
+    );
+    return {
+      intervention: selectedIntervention,
+      confidence: this.calculateSelectionConfidence(selectedIntervention.id),
+      expectedReward,
+      probability,
+      isExploration: shouldExplore,
+      explorationStrategy: this.config.explorationStrategy,
+      alternatives,
+      reasoning,
+      decisionPoint
+    };
+  }
+  /**
+   * Select intervention using configured strategy
+   */
+  selectByStrategy(interventions, context, _userProfile) {
+    const scores = [];
+    for (const intervention of interventions) {
+      let score;
+      const arm = this.arms.get(intervention.id);
+      switch (this.config.explorationStrategy) {
+        case "thompson_sampling":
+          score = this.thompsonSample(arm);
+          break;
+        case "ucb":
+          score = this.calculateUCB(arm, this.getTotalPulls());
+          break;
+        case "boltzmann":
+          score = arm.meanReward;
+          break;
+        case "gradient_bandit":
+          score = this.calculateGradientPreference(arm);
+          break;
+        default:
+          score = arm.meanReward;
+      }
+      if (this.config.enableContextualBandit && this.isContextualArm(arm)) {
+        score += this.calculateContextualBonus(arm, context);
+      }
+      scores.push({ intervention, score });
+    }
+    scores.sort((a, b) => b.score - a.score);
+    if (this.config.explorationStrategy === "boltzmann") {
+      const scoreValues = scores.map((s) => s.score);
+      const probabilities = softmax(scoreValues, this.config.temperature);
+      const selected2 = weightedRandomSelect(scores, probabilities);
+      const selectedIndex = scores.indexOf(selected2);
+      return {
+        intervention: selected2.intervention,
+        expectedReward: selected2.score,
+        probability: probabilities[selectedIndex] ?? 0,
+        alternatives: this.createAlternativesFromScores(scores, selected2.intervention.id)
+      };
+    }
+    const selected = scores[0];
+    const totalScore = scores.reduce((sum, s) => sum + Math.max(0, s.score), 0);
+    const probability = totalScore > 0 ? Math.max(0, selected.score) / totalScore : 1;
+    return {
+      intervention: selected.intervention,
+      expectedReward: selected.score,
+      probability,
+      alternatives: this.createAlternativesFromScores(scores, selected.intervention.id)
+    };
+  }
+  /**
+   * Check if intervention should be delivered at decision point
+   */
+  async shouldDeliver(userId, context, decisionPointType) {
+    const userProfile = await this.getUserProfile(userId);
+    if (decisionPointType === "crisis_triggered") {
+      return true;
+    }
+    const todayInterventions = this.countTodayInterventions(userId);
+    if (todayInterventions >= this.config.maxInterventionsPerDay) {
+      return false;
+    }
+    if (userProfile.lastInterventionAt) {
+      const secondsSince = (Date.now() - userProfile.lastInterventionAt.getTime()) / 1e3;
+      if (secondsSince < this.config.minInterventionIntervalSeconds) {
+        return false;
+      }
+    }
+    if (this.config.enableMRTRandomization) {
+      return randomBooleanSecure(this.config.mrtRandomizationProbability);
+    }
+    if (context.riskLevel > 0.8 && decisionPointType !== "user_initiated") {
+      return randomBooleanSecure(0.3);
+    }
+    if (context.energyLevel < 0.2) {
+      return randomBooleanSecure(0.5);
+    }
+    const engagementRate = userProfile.engagementRate || 0.5;
+    return randomBooleanSecure(0.5 + engagementRate * 0.3);
+  }
+  /**
+   * Get top-k intervention recommendations
+   */
+  async getTopKRecommendations(userId, context, k, availableInterventions) {
+    const userProfile = await this.getUserProfile(userId);
+    const eligible = this.filterEligibleInterventions(availableInterventions, context, userProfile);
+    const scored = [];
+    for (const intervention of eligible) {
+      if (!this.arms.has(intervention.id)) {
+        this.initializeArm(intervention.id);
+      }
+      const arm = this.arms.get(intervention.id);
+      let score = this.config.explorationStrategy === "thompson_sampling" ? this.thompsonSample(arm) : arm.meanReward;
+      if (this.config.enableContextualBandit && this.isContextualArm(arm)) {
+        score += this.calculateContextualBonus(arm, context);
+      }
+      scored.push({ intervention, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    const topK = scored.slice(0, k);
+    return topK.map((item, index) => ({
+      intervention: item.intervention,
+      confidence: this.calculateSelectionConfidence(item.intervention.id),
+      expectedReward: item.score,
+      probability: 1 / (index + 1),
+      // Decreasing probability
+      isExploration: false,
+      explorationStrategy: this.config.explorationStrategy,
+      alternatives: [],
+      reasoning: this.createSelectionReasoning(item.intervention, context, false, []),
+      decisionPoint: this.createDecisionPoint(userId, context, item.intervention, 1 / (index + 1), false)
+    }));
+  }
+  // ============================================================================
+  // REWARD & LEARNING
+  // ============================================================================
+  /**
+   * Record outcome and update bandit
+   */
+  async recordOutcome(outcome) {
+    const decisionPoint = this.decisionPoints.find((dp) => dp.id === outcome.decisionPointId);
+    if (!decisionPoint) {
+      console.warn(`Decision point not found: ${outcome.decisionPointId}`);
+      return;
+    }
+    const reward = this.computeReward([outcome], decisionPoint.context);
+    await this.updateArm(outcome.interventionId, reward, decisionPoint.context);
+    await this.updateUserProfileOnOutcome(outcome.userId, outcome.interventionId, outcome);
+    this.updateGlobalStatsOnOutcome(outcome, reward);
+    this.pendingOutcomes = this.pendingOutcomes.filter(
+      (po) => po.decisionPointId !== outcome.decisionPointId
+    );
+  }
+  /**
+   * Compute reward signal from outcomes
+   */
+  computeReward(outcomes, context) {
+    let immediateReward = 0;
+    let delayedReward = 0;
+    for (const outcome of outcomes) {
+      const discountedValue = outcome.value * Math.pow(
+        this.config.rewardDiscountFactor,
+        outcome.latencySeconds / 3600
+        // Discount by hours
+      );
+      if (outcome.latencySeconds < 300) {
+        immediateReward += discountedValue;
+      } else {
+        delayedReward += discountedValue;
+      }
+    }
+    immediateReward = clamp(immediateReward / Math.max(1, outcomes.length), -1, 1);
+    delayedReward = clamp(delayedReward / Math.max(1, outcomes.length), -1, 1);
+    const shapingComponents = this.computeShapingComponents(outcomes, context);
+    const baseReward = this.config.immediateRewardWeight * immediateReward + this.config.delayedRewardWeight * delayedReward;
+    let shapedReward = baseReward;
+    if (this.config.enableRewardShaping) {
+      const shapingBonus = this.computeShapingBonus(shapingComponents);
+      shapedReward = clamp(baseReward + shapingBonus, -1, 1);
+    }
+    const reward = (shapedReward + 1) / 2;
+    return {
+      reward,
+      immediateReward,
+      delayedReward,
+      shapedReward,
+      discountFactor: this.config.rewardDiscountFactor,
+      outcomes,
+      shapingComponents
+    };
+  }
+  /**
+   * Compute reward shaping components
+   */
+  computeShapingComponents(outcomes, context) {
+    const hasEngagement = outcomes.some((o) => o.outcomeType === "engagement" && o.value > 0);
+    const hasCompletion = outcomes.some((o) => o.outcomeType === "completion" && o.value > 0);
+    const avgValue = outcomes.reduce((sum, o) => sum + o.value, 0) / outcomes.length;
+    return {
+      engagementBonus: hasEngagement ? 0.5 : 0,
+      completionBonus: hasCompletion ? 0.8 : 0,
+      progressPotential: Math.max(0, avgValue),
+      explorationBonus: 0,
+      // Set during selection
+      noveltyBonus: 0,
+      // Set based on intervention history
+      diversityBonus: 0,
+      // Set based on category diversity
+      timingBonus: this.calculateTimingBonus(context),
+      contextMatchBonus: this.calculateContextMatchBonus(context)
+    };
+  }
+  /**
+   * Calculate timing bonus
+   */
+  calculateTimingBonus(context) {
+    const hour = context.hourOfDay;
+    if (hour >= 0 && hour < 6) {
+      return -0.2;
+    }
+    if (hour >= 7 && hour < 10) {
+      return 0.1;
+    }
+    if (hour >= 18 && hour < 21) {
+      return 0.1;
+    }
+    return 0;
+  }
+  /**
+   * Calculate context match bonus
+   */
+  calculateContextMatchBonus(context) {
+    if (context.engagementScore > 0.7) {
+      return 0.1;
+    }
+    if (context.interventionFatigue > 0.5) {
+      return -0.1;
+    }
+    return 0;
+  }
+  /**
+   * Compute shaping bonus from components
+   */
+  computeShapingBonus(components) {
+    const weights = this.config.rewardShapingWeights;
+    return weights.engagementBonus * components.engagementBonus + weights.completionBonus * components.completionBonus + weights.progressPotential * components.progressPotential + weights.explorationBonus * components.explorationBonus + weights.noveltyBonus * components.noveltyBonus + weights.diversityBonus * components.diversityBonus + weights.timingBonus * components.timingBonus + weights.contextMatchBonus * components.contextMatchBonus;
+  }
+  /**
+   * Update bandit arm with reward
+   */
+  async updateArm(interventionId, reward, context) {
+    let arm = this.arms.get(interventionId);
+    if (!arm) {
+      this.initializeArm(interventionId);
+      arm = this.arms.get(interventionId);
+    }
+    const rewardValue = reward.reward;
+    arm.pullCount += 1;
+    arm.totalReward += rewardValue;
+    const delta = rewardValue - arm.meanReward;
+    arm.meanReward += delta / arm.pullCount;
+    const delta2 = rewardValue - arm.meanReward;
+    arm.rewardVariance += delta * delta2;
+    if (rewardValue > 0.5) {
+      arm.alphaSuccess += rewardValue;
+    } else {
+      arm.betaFailure += 1 - rewardValue;
+    }
+    const priorPrecision = arm.normalPrecision;
+    const observationPrecision = 1 / Math.max(0.01, arm.rewardVariance / arm.pullCount);
+    arm.normalPrecision = priorPrecision + observationPrecision;
+    arm.normalMean = (priorPrecision * arm.normalMean + observationPrecision * rewardValue) / arm.normalPrecision;
+    arm.ucbValue = this.calculateUCB(arm, this.getTotalPulls());
+    arm.lastUpdated = /* @__PURE__ */ new Date();
+    arm.lastPulled = /* @__PURE__ */ new Date();
+    if (context && this.config.enableContextualBandit && this.isContextualArm(arm)) {
+      this.updateContextualArm(arm, context, rewardValue);
+    }
+    this.arms.set(interventionId, arm);
+  }
+  /**
+   * Update contextual arm with feature weights
+   */
+  updateContextualArm(arm, context, reward) {
+    const features = this.contextToFeatureVector(context);
+    const prediction = this.dotProduct(arm.featureWeights, features);
+    const error = reward - prediction;
+    for (const [key, value] of Object.entries(features)) {
+      const currentWeight = arm.featureWeights[key] || 0;
+      arm.featureWeights[key] = currentWeight + this.config.learningRate * error * value;
+      arm.featureWeights[key] *= 1 - this.config.contextualRegularization * this.config.learningRate;
+    }
+  }
+  /**
+   * Convert context to feature vector
+   */
+  contextToFeatureVector(context) {
+    return {
+      valence: context.valence,
+      arousal: context.arousal,
+      dominance: context.dominance,
+      emotionalStability: context.emotionalStability,
+      moodTrendImproving: context.moodTrend === "improving" ? 1 : 0,
+      moodTrendDeclining: context.moodTrend === "declining" ? 1 : 0,
+      energyLevel: context.energyLevel,
+      copingCapacity: context.copingCapacity,
+      socialSupport: context.socialSupport,
+      riskLevel: context.riskLevel,
+      hourNormalized: context.hourOfDay / 24,
+      dayOfWeekNormalized: context.dayOfWeek / 7,
+      completionRate: context.completionRate,
+      engagementScore: context.engagementScore,
+      interventionFatigue: context.interventionFatigue,
+      bias: 1
+      // Intercept term
+    };
+  }
+  /**
+   * Dot product of feature weights and features
+   */
+  dotProduct(weights, features) {
+    let sum = 0;
+    for (const [key, value] of Object.entries(features)) {
+      sum += (weights[key] || 0) * value;
+    }
+    return sum;
+  }
+  /**
+   * Batch update from multiple outcomes
+   */
+  async batchUpdate(outcomes) {
+    const grouped = /* @__PURE__ */ new Map();
+    for (const outcome of outcomes) {
+      const existing = grouped.get(outcome.interventionId) || [];
+      existing.push(outcome);
+      grouped.set(outcome.interventionId, existing);
+    }
+    for (const [interventionId, interventionOutcomes] of grouped) {
+      const firstOutcome = interventionOutcomes[0];
+      if (!firstOutcome) {
+        continue;
+      }
+      const decisionPoint = this.decisionPoints.find(
+        (dp) => dp.id === firstOutcome.decisionPointId
+      );
+      if (decisionPoint) {
+        const reward = this.computeReward(interventionOutcomes, decisionPoint.context);
+        await this.updateArm(interventionId, reward, decisionPoint.context);
+      }
+    }
+  }
+  // ============================================================================
+  // USER PROFILE
+  // ============================================================================
+  /**
+   * Get or create user intervention profile
+   */
+  async getUserProfile(userId) {
+    let profile = this.userProfiles.get(userId);
+    if (!profile) {
+      profile = this.createDefaultProfile(userId);
+      this.userProfiles.set(userId, profile);
+    }
+    return profile;
+  }
+  /**
+   * Create default user profile
+   */
+  createDefaultProfile(userId) {
+    const categoryHistory = {};
+    for (const category of Object.keys(INTERVENTION_CATEGORIES)) {
+      categoryHistory[category] = {
+        count: 0,
+        averageReward: 0,
+        rewardVariance: 0,
+        engagementRate: 0,
+        completionRate: 0
+      };
+    }
+    return {
+      userId,
+      totalInterventions: 0,
+      categoryHistory,
+      interventionStats: {},
+      preferredCategories: [],
+      avoidedCategories: [],
+      preferredIntensity: "brief",
+      preferredTimeOfDay: ["morning", "evening"],
+      engagementRate: 0.5,
+      // Prior assumption
+      completionRate: 0.5,
+      averageOutcomeImprovement: 0,
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date()
+    };
+  }
+  /**
+   * Update user preferences
+   */
+  async updateUserPreferences(userId, preferences) {
+    const profile = await this.getUserProfile(userId);
+    Object.assign(profile, preferences, { updatedAt: /* @__PURE__ */ new Date() });
+    this.userProfiles.set(userId, profile);
+  }
+  /**
+   * Record user explicit feedback
+   */
+  async recordUserFeedback(userId, interventionId, feedback) {
+    const profile = await this.getUserProfile(userId);
+    if (!profile.interventionStats[interventionId]) {
+      profile.interventionStats[interventionId] = this.createDefaultInterventionStats();
+    }
+    profile.interventionStats[interventionId].userFeedback = feedback;
+    profile.updatedAt = /* @__PURE__ */ new Date();
+    const feedbackReward = feedback === "positive" ? 0.9 : feedback === "negative" ? 0.1 : 0.5;
+    await this.updateArm(interventionId, {
+      reward: feedbackReward,
+      immediateReward: feedbackReward,
+      delayedReward: 0,
+      shapedReward: feedbackReward,
+      discountFactor: 1,
+      outcomes: [],
+      shapingComponents: this.createEmptyShapingComponents()
+    });
+    this.userProfiles.set(userId, profile);
+  }
+  /**
+   * Update user profile after outcome
+   */
+  async updateUserProfileOnOutcome(userId, interventionId, outcome) {
+    const profile = await this.getUserProfile(userId);
+    const intervention = this.interventions.get(interventionId);
+    profile.totalInterventions += 1;
+    profile.lastInterventionAt = /* @__PURE__ */ new Date();
+    if (!profile.interventionStats[interventionId]) {
+      profile.interventionStats[interventionId] = this.createDefaultInterventionStats();
+    }
+    const stats = profile.interventionStats[interventionId];
+    stats.deliveryCount += 1;
+    if (outcome.outcomeType === "engagement" && outcome.value > 0) {
+      stats.engagementCount += 1;
+    }
+    if (outcome.outcomeType === "completion" && outcome.value > 0) {
+      stats.completionCount += 1;
+    }
+    stats.totalReward += outcome.value;
+    stats.averageReward = stats.totalReward / stats.deliveryCount;
+    stats.bestOutcome = Math.max(stats.bestOutcome, outcome.value);
+    stats.lastDelivered = /* @__PURE__ */ new Date();
+    if (intervention) {
+      const categoryStats = profile.categoryHistory[intervention.category];
+      categoryStats.count += 1;
+      categoryStats.averageReward = (categoryStats.averageReward * (categoryStats.count - 1) + outcome.value) / categoryStats.count;
+      categoryStats.lastUsed = /* @__PURE__ */ new Date();
+      if (outcome.outcomeType === "engagement") {
+        categoryStats.engagementRate = (categoryStats.engagementRate * (categoryStats.count - 1) + (outcome.value > 0 ? 1 : 0)) / categoryStats.count;
+      }
+      if (outcome.outcomeType === "completion") {
+        categoryStats.completionRate = (categoryStats.completionRate * (categoryStats.count - 1) + (outcome.value > 0 ? 1 : 0)) / categoryStats.count;
+      }
+    }
+    profile.engagementRate = this.calculateOverallRate(profile, "engagementRate");
+    profile.completionRate = this.calculateOverallRate(profile, "completionRate");
+    const sortedCategories = Object.entries(profile.categoryHistory).filter(([_, stats2]) => stats2.count >= 3).sort(([_, a], [__, b]) => b.averageReward - a.averageReward);
+    profile.preferredCategories = sortedCategories.slice(0, 3).map(([cat]) => cat);
+    profile.updatedAt = /* @__PURE__ */ new Date();
+    this.userProfiles.set(userId, profile);
+  }
+  /**
+   * Calculate overall rate from category history
+   */
+  calculateOverallRate(profile, rateType) {
+    let totalCount = 0;
+    let weightedSum = 0;
+    for (const stats of Object.values(profile.categoryHistory)) {
+      if (stats.count > 0) {
+        weightedSum += stats[rateType] * stats.count;
+        totalCount += stats.count;
+      }
+    }
+    return totalCount > 0 ? weightedSum / totalCount : 0.5;
+  }
+  /**
+   * Create default intervention stats
+   */
+  createDefaultInterventionStats() {
+    return {
+      deliveryCount: 0,
+      engagementCount: 0,
+      completionCount: 0,
+      totalReward: 0,
+      averageReward: 0,
+      bestOutcome: 0
+    };
+  }
+  /**
+   * Create empty shaping components
+   */
+  createEmptyShapingComponents() {
+    return {
+      engagementBonus: 0,
+      completionBonus: 0,
+      progressPotential: 0,
+      explorationBonus: 0,
+      noveltyBonus: 0,
+      diversityBonus: 0,
+      timingBonus: 0,
+      contextMatchBonus: 0
+    };
+  }
+  // ============================================================================
+  // INTERVENTION MANAGEMENT
+  // ============================================================================
+  /**
+   * Register new intervention
+   */
+  async registerIntervention(intervention) {
+    this.interventions.set(intervention.id, intervention);
+    this.initializeArm(intervention.id);
+    if (intervention.category === "crisis_intervention" && !this.crisisIntervention) {
+      this.crisisIntervention = intervention;
+    }
+  }
+  /**
+   * Update intervention definition
+   */
+  async updateIntervention(interventionId, updates) {
+    const intervention = this.interventions.get(interventionId);
+    if (intervention) {
+      const updated = { ...intervention, ...updates, updatedAt: /* @__PURE__ */ new Date() };
+      this.interventions.set(interventionId, updated);
+    }
+  }
+  /**
+   * Deactivate intervention
+   */
+  async deactivateIntervention(interventionId) {
+    const intervention = this.interventions.get(interventionId);
+    if (intervention) {
+      const updated = { ...intervention, isActive: false, updatedAt: /* @__PURE__ */ new Date() };
+      this.interventions.set(interventionId, updated);
+    }
+  }
+  /**
+   * Get intervention by ID
+   */
+  async getIntervention(interventionId) {
+    return this.interventions.get(interventionId) || null;
+  }
+  /**
+   * Filter eligible interventions for context
+   */
+  filterEligibleInterventions(interventions, context, userProfile) {
+    return interventions.filter((intervention) => {
+      if (!intervention.isActive) {
+        return false;
+      }
+      const pre = intervention.preconditions;
+      if (pre.minValence !== void 0 && context.valence < pre.minValence) {
+        return false;
+      }
+      if (pre.maxValence !== void 0 && context.valence > pre.maxValence) {
+        return false;
+      }
+      if (pre.minArousal !== void 0 && context.arousal < pre.minArousal) {
+        return false;
+      }
+      if (pre.maxArousal !== void 0 && context.arousal > pre.maxArousal) {
+        return false;
+      }
+      if (pre.minEnergy !== void 0 && context.energyLevel < pre.minEnergy) {
+        return false;
+      }
+      if (pre.maxRiskLevel !== void 0) {
+        const riskOrder = ["none", "low", "moderate", "elevated", "high", "crisis"];
+        const contextRiskIndex = Math.floor(context.riskLevel * 5);
+        const maxRiskIndex = riskOrder.indexOf(pre.maxRiskLevel);
+        if (contextRiskIndex > maxRiskIndex) {
+          return false;
+        }
+      }
+      if (pre.allowedTimeOfDay && pre.allowedTimeOfDay.length > 0) {
+        const currentTimeOfDay = getCurrentTimeOfDay(context.hourOfDay);
+        if (!pre.allowedTimeOfDay.includes(currentTimeOfDay)) {
+          return false;
+        }
+      }
+      if (pre.minSessionsCompleted !== void 0 && context.sessionsTotalLifetime < pre.minSessionsCompleted) {
+        return false;
+      }
+      const contra = intervention.contraindications;
+      if (contra.crisisState && context.riskLevel > 0.8) {
+        return false;
+      }
+      if (contra.userDeclined) {
+        return false;
+      }
+      if (contra.maxDailyInterventions !== void 0) {
+        const todayCount = this.countTodayInterventionsForCategory(
+          userProfile.userId,
+          intervention.category
+        );
+        if (todayCount >= contra.maxDailyInterventions) {
+          return false;
+        }
+      }
+      if (contra.minTimeSinceLastIntervention !== void 0 && userProfile.lastInterventionAt) {
+        const secondsSince = (Date.now() - userProfile.lastInterventionAt.getTime()) / 1e3;
+        if (secondsSince < contra.minTimeSinceLastIntervention) {
+          return false;
+        }
+      }
+      if (userProfile.avoidedCategories.includes(intervention.category)) {
+        return false;
+      }
+      return true;
+    });
+  }
+  // ============================================================================
+  // STATISTICS & ANALYTICS
+  // ============================================================================
+  /**
+   * Get arm statistics
+   */
+  async getArmStats(interventionId) {
+    return this.arms.get(interventionId) || null;
+  }
+  /**
+   * Get global optimizer statistics
+   */
+  async getGlobalStats() {
+    return { ...this.globalStats };
+  }
+  /**
+   * Get optimizer state for persistence
+   */
+  async getState() {
+    return {
+      config: { ...this.config },
+      arms: Object.fromEntries(this.arms),
+      userProfiles: Object.fromEntries(this.userProfiles),
+      recentDecisionPoints: this.decisionPoints.slice(-1e3),
+      // Keep last 1000
+      pendingOutcomes: [...this.pendingOutcomes],
+      globalStats: { ...this.globalStats },
+      lastUpdated: /* @__PURE__ */ new Date(),
+      version: "1.0.0"
+    };
+  }
+  /**
+   * Load optimizer state
+   */
+  async loadState(state) {
+    this.config = { ...DEFAULT_OPTIMIZER_CONFIG, ...state.config };
+    this.arms = new Map(Object.entries(state.arms));
+    this.userProfiles = new Map(Object.entries(state.userProfiles));
+    this.decisionPoints = state.recentDecisionPoints;
+    this.pendingOutcomes = state.pendingOutcomes;
+    this.globalStats = state.globalStats;
+  }
+  // ============================================================================
+  // EXPLORATION CONTROL
+  // ============================================================================
+  /**
+   * Sample from Thompson Sampling posterior
+   */
+  thompsonSample(arm) {
+    if (arm.pullCount < this.config.minPullsPerArm) {
+      const priorAlpha = this.config.thompsonPriorStrength;
+      const priorBeta = this.config.thompsonPriorStrength;
+      return sampleBeta(
+        arm.alphaSuccess + priorAlpha,
+        arm.betaFailure + priorBeta
+      );
+    }
+    const stddev = 1 / Math.sqrt(arm.normalPrecision);
+    return sampleNormal(arm.normalMean, stddev);
+  }
+  /**
+   * Calculate UCB value for arm
+   */
+  calculateUCB(arm, totalPulls) {
+    if (arm.pullCount === 0) {
+      return Infinity;
+    }
+    const exploitation = arm.meanReward;
+    const exploration = this.config.ucbConstant * Math.sqrt(
+      Math.log(totalPulls + 1) / arm.pullCount
+    );
+    return exploitation + exploration;
+  }
+  /**
+   * Get exploration probability
+   */
+  getExplorationProbability() {
+    return this.config.epsilon;
+  }
+  /**
+   * Decay exploration rate
+   */
+  decayExploration(decayFactor) {
+    this.config.epsilon *= decayFactor;
+    this.config.epsilon = Math.max(0.01, this.config.epsilon);
+  }
+  // ============================================================================
+  // CRISIS HANDLING
+  // ============================================================================
+  /**
+   * Get crisis intervention
+   */
+  async getCrisisIntervention(_context) {
+    if (this.crisisIntervention) {
+      return this.crisisIntervention;
+    }
+    return {
+      id: "crisis_default",
+      name: "Crisis Support",
+      description: "Immediate crisis support and safety resources",
+      category: "crisis_intervention",
+      intensity: "standard",
+      modality: "text_message",
+      estimatedDurationSeconds: 300,
+      preconditions: {},
+      contraindications: {},
+      content: {
+        en: {
+          introduction: "I notice you may be going through a difficult time.",
+          mainContent: "Your safety is the most important thing right now. You are not alone.",
+          closing: "Please reach out to a crisis helpline if you need immediate support.",
+          quickVersion: "You are not alone. Help is available."
+        },
+        ru: {
+          introduction: "\u042F \u0437\u0430\u043C\u0435\u0442\u0438\u043B, \u0447\u0442\u043E \u0442\u0435\u0431\u0435 \u0441\u0435\u0439\u0447\u0430\u0441 \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u0442\u044F\u0436\u0435\u043B\u043E.",
+          mainContent: "\u0422\u0432\u043E\u044F \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u044C \u0441\u0435\u0439\u0447\u0430\u0441 \u0432\u0430\u0436\u043D\u0435\u0435 \u0432\u0441\u0435\u0433\u043E. \u0422\u044B \u043D\u0435 \u043E\u0434\u0438\u043D.",
+          closing: "\u041F\u043E\u0436\u0430\u043B\u0443\u0439\u0441\u0442\u0430, \u043F\u043E\u0437\u0432\u043E\u043D\u0438 \u043D\u0430 \u0433\u043E\u0440\u044F\u0447\u0443\u044E \u043B\u0438\u043D\u0438\u044E, \u0435\u0441\u043B\u0438 \u0442\u0435\u0431\u0435 \u043D\u0443\u0436\u043D\u0430 \u0441\u0440\u043E\u0447\u043D\u0430\u044F \u043F\u043E\u043C\u043E\u0449\u044C: 8-800-2000-122",
+          quickVersion: "\u0422\u044B \u043D\u0435 \u043E\u0434\u0438\u043D. \u041F\u043E\u043C\u043E\u0449\u044C \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0430."
+        }
+      },
+      mechanisms: ["emotional_processing", "social_connection"],
+      targetOutcomes: ["crisis_averted", "engagement"],
+      evidenceLevel: "expert_consensus",
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date(),
+      isActive: true
+    };
+  }
+  /**
+   * Check if context indicates crisis
+   */
+  isCrisisContext(context) {
+    return context.riskLevel > 0.8 || context.crisisProximity > 0.7;
+  }
+  // ============================================================================
+  // CONFIGURATION
+  // ============================================================================
+  /**
+   * Update optimizer configuration
+   */
+  updateConfig(config) {
+    this.config = { ...this.config, ...config };
+  }
+  /**
+   * Get current configuration
+   */
+  getConfig() {
+    return { ...this.config };
+  }
+  // ============================================================================
+  // PRIVATE HELPERS
+  // ============================================================================
+  /**
+   * Initialize bandit arm for intervention
+   */
+  initializeArm(interventionId) {
+    const arm = {
+      interventionId,
+      pullCount: 0,
+      totalReward: 0,
+      meanReward: 0.5,
+      // Optimistic initialization
+      rewardVariance: 0.25,
+      alphaSuccess: this.config.thompsonPriorStrength,
+      betaFailure: this.config.thompsonPriorStrength,
+      normalMean: 0.5,
+      normalPrecision: 1 / 0.25,
+      // Prior precision
+      ucbValue: Infinity,
+      lastUpdated: /* @__PURE__ */ new Date()
+    };
+    if (this.config.enableContextualBandit) {
+      const contextualArm = {
+        ...arm,
+        featureWeights: {},
+        covarianceMatrix: [],
+        featureAccumulator: [],
+        rewardFeatureAccumulator: []
+      };
+      this.arms.set(interventionId, contextualArm);
+    } else {
+      this.arms.set(interventionId, arm);
+    }
+  }
+  /**
+   * Check if arm is contextual
+   */
+  isContextualArm(arm) {
+    return "featureWeights" in arm;
+  }
+  /**
+   * Calculate contextual bonus
+   */
+  calculateContextualBonus(arm, context) {
+    const features = this.contextToFeatureVector(context);
+    return this.dotProduct(arm.featureWeights, features);
+  }
+  /**
+   * Should explore vs exploit
+   */
+  shouldExplore() {
+    if (this.config.explorationStrategy === "thompson_sampling") {
+      return false;
+    }
+    if (this.config.explorationStrategy === "ucb") {
+      return false;
+    }
+    return randomBooleanSecure(this.config.epsilon);
+  }
+  /**
+   * Get total pulls across all arms
+   */
+  getTotalPulls() {
+    let total = 0;
+    for (const arm of this.arms.values()) {
+      total += arm.pullCount;
+    }
+    return total;
+  }
+  /**
+   * Get mean reward for arm
+   */
+  getArmMeanReward(interventionId) {
+    const arm = this.arms.get(interventionId);
+    return arm ? arm.meanReward : 0.5;
+  }
+  /**
+   * Calculate gradient preference for gradient bandit
+   */
+  calculateGradientPreference(arm) {
+    const avgReward = this.getAverageReward();
+    return arm.meanReward - avgReward;
+  }
+  /**
+   * Get average reward across all arms
+   */
+  getAverageReward() {
+    if (this.arms.size === 0) {
+      return 0.5;
+    }
+    let totalReward = 0;
+    let totalPulls = 0;
+    for (const arm of this.arms.values()) {
+      totalReward += arm.totalReward;
+      totalPulls += arm.pullCount;
+    }
+    return totalPulls > 0 ? totalReward / totalPulls : 0.5;
+  }
+  /**
+   * Get alternatives list
+   */
+  getAlternatives(interventions, selectedId) {
+    return interventions.filter((i) => i.id !== selectedId).slice(0, 5).map((i) => ({
+      interventionId: i.id,
+      expectedReward: this.getArmMeanReward(i.id),
+      probability: 0,
+      reasonNotSelected: "Lower expected reward"
+    }));
+  }
+  /**
+   * Create alternatives from scores
+   */
+  createAlternativesFromScores(scores, selectedId) {
+    const topScore = scores[0]?.score ?? 0;
+    return scores.filter((s) => s.intervention.id !== selectedId).slice(0, 5).map((s) => ({
+      interventionId: s.intervention.id,
+      expectedReward: s.score,
+      probability: 0,
+      reasonNotSelected: s.score < topScore ? "Lower expected reward" : "Not selected by sampling"
+    }));
+  }
+  /**
+   * Calculate selection confidence
+   */
+  calculateSelectionConfidence(interventionId) {
+    const arm = this.arms.get(interventionId);
+    if (!arm || arm.pullCount === 0) {
+      return 0.5;
+    }
+    const pullConfidence = 1 - Math.exp(-arm.pullCount / 10);
+    const varianceConfidence = 1 / (1 + arm.rewardVariance);
+    return 0.5 * pullConfidence + 0.5 * varianceConfidence;
+  }
+  /**
+   * Create decision point
+   */
+  createDecisionPoint(userId, context, intervention, probability, wasExploration) {
+    const decisionPoint = {
+      id: generateId2(),
+      userId,
+      timestamp: /* @__PURE__ */ new Date(),
+      type: "event_triggered",
+      context,
+      interventionDelivered: true,
+      selectedIntervention: intervention.id,
+      selectionProbability: probability,
+      selectionReason: wasExploration ? "Exploration" : "Exploitation",
+      wasExploration
+    };
+    this.decisionPoints.push(decisionPoint);
+    this.pendingOutcomes.push({
+      decisionPointId: decisionPoint.id,
+      expectedOutcomeTime: new Date(Date.now() + 36e5)
+      // 1 hour
+    });
+    return decisionPoint;
+  }
+  /**
+   * Create crisis selection
+   */
+  createCrisisSelection(intervention, context, userId) {
+    const decisionPoint = this.createDecisionPoint(userId, context, intervention, 1, false);
+    decisionPoint.type = "crisis_triggered";
+    decisionPoint.selectionReason = "Crisis override - immediate safety response";
+    return {
+      intervention,
+      confidence: 1,
+      expectedReward: 1,
+      probability: 1,
+      isExploration: false,
+      explorationStrategy: this.config.explorationStrategy,
+      alternatives: [],
+      reasoning: {
+        primaryFactor: "Crisis detection triggered immediate safety response",
+        influentialFeatures: [
+          { feature: "riskLevel", value: context.riskLevel, influence: "positive" },
+          { feature: "crisisProximity", value: context.crisisProximity, influence: "positive" }
+        ],
+        rejectionReasons: {},
+        exploitationExplanation: "Crisis intervention bypasses normal selection",
+        clinicalNotes: "User safety is the priority. Normal bandit selection overridden."
+      },
+      decisionPoint
+    };
+  }
+  /**
+   * Create selection reasoning
+   */
+  createSelectionReasoning(intervention, context, wasExploration, alternatives) {
+    const influentialFeatures = [];
+    if (context.valence < 0) {
+      influentialFeatures.push({ feature: "valence", value: context.valence, influence: "negative" });
+    }
+    if (context.energyLevel < 0.3) {
+      influentialFeatures.push({ feature: "energyLevel", value: context.energyLevel, influence: "negative" });
+    }
+    if (context.engagementScore > 0.7) {
+      influentialFeatures.push({ feature: "engagementScore", value: context.engagementScore, influence: "positive" });
+    }
+    const rejectionReasons = {};
+    for (const alt of alternatives.slice(0, 3)) {
+      rejectionReasons[alt.interventionId] = alt.reasonNotSelected;
+    }
+    return {
+      primaryFactor: wasExploration ? "Random exploration to discover new interventions" : `${this.config.explorationStrategy} selected highest expected reward`,
+      influentialFeatures,
+      rejectionReasons,
+      exploitationExplanation: wasExploration ? "Exploration phase - trying less-used intervention" : `Selected ${intervention.category} based on past success`,
+      clinicalNotes: intervention.category === "crisis_intervention" ? "Crisis intervention selected - prioritize safety" : void 0
+    };
+  }
+  /**
+   * Update global stats on selection
+   */
+  updateGlobalStatsOnSelection(intervention, context, wasExploration) {
+    this.globalStats.totalDecisionPoints += 1;
+    this.globalStats.totalInterventionsDelivered += 1;
+    this.globalStats.categoryDistribution[intervention.category] += 1;
+    const timeOfDay = getCurrentTimeOfDay(context.hourOfDay);
+    this.globalStats.timeOfDayDistribution[timeOfDay] += 1;
+    const explorationCount = wasExploration ? 1 : 0;
+    this.globalStats.explorationRatio = (this.globalStats.explorationRatio * (this.globalStats.totalDecisionPoints - 1) + explorationCount) / this.globalStats.totalDecisionPoints;
+  }
+  /**
+   * Update global stats on outcome
+   */
+  updateGlobalStatsOnOutcome(outcome, reward) {
+    if (outcome.outcomeType === "engagement") {
+      const engaged = outcome.value > 0 ? 1 : 0;
+      this.globalStats.overallEngagementRate = (this.globalStats.overallEngagementRate * (this.globalStats.totalDecisionPoints - 1) + engaged) / this.globalStats.totalDecisionPoints;
+    }
+    this.globalStats.overallOutcomeImprovement = 0.95 * this.globalStats.overallOutcomeImprovement + 0.05 * outcome.value;
+    this.globalStats.rewardTrend.push(reward.reward);
+    if (this.globalStats.rewardTrend.length > 168) {
+      this.globalStats.rewardTrend.shift();
+    }
+  }
+  /**
+   * Count today's interventions for user
+   */
+  countTodayInterventions(userId) {
+    const today = /* @__PURE__ */ new Date();
+    today.setHours(0, 0, 0, 0);
+    return this.decisionPoints.filter(
+      (dp) => dp.userId === userId && dp.interventionDelivered && dp.timestamp >= today
+    ).length;
+  }
+  /**
+   * Count today's interventions for category
+   */
+  countTodayInterventionsForCategory(userId, category) {
+    const today = /* @__PURE__ */ new Date();
+    today.setHours(0, 0, 0, 0);
+    return this.decisionPoints.filter((dp) => {
+      if (dp.userId !== userId || !dp.interventionDelivered || dp.timestamp < today) {
+        return false;
+      }
+      const intervention = this.interventions.get(dp.selectedIntervention || "");
+      return intervention?.category === category;
+    }).length;
+  }
+};
+var createInterventionOptimizer = (config) => {
+  return new InterventionOptimizer(config);
+};
 
 // src/explainability/interfaces/IExplainability.ts
 var DEFAULT_EXPLAINABILITY_CONFIG = {
@@ -6472,7 +9269,28 @@ function createKalmanFormerEngine(config) {
 }
 
 // src/temporal/engines/PLRNNEngine.ts
-var STATE_DIMENSIONS2 = ["valence", "arousal", "dominance", "risk", "resources"];
+var STATE_DIMENSIONS2 = [
+  // Core psychological dimensions (PLRNN mental health foundation)
+  "valence",
+  // Positive/negative affect
+  "arousal",
+  // Activation/energy level
+  "dominance",
+  // Sense of control
+  "risk",
+  // Risk/crisis indicator
+  "resources",
+  // Coping resources
+  // Sleep-specific dimensions (SleepCore extension)
+  "sleepEfficiency",
+  // TST/TIB ratio
+  "sleepQuality",
+  // Subjective sleep quality
+  "sleepLatency",
+  // Time to fall asleep
+  "circadianPhase"
+  // Chronotype alignment
+];
 var PLRNNEngine = class {
   constructor(config) {
     __publicField(this, "config");
@@ -11456,6 +14274,7 @@ exports.AIModelNotLoadedError = AIModelNotLoadedError;
 exports.AuditBehavior = AuditBehavior;
 exports.BaseEventHandler = BaseEventHandler;
 exports.BeliefStateAdapter = BeliefStateAdapter;
+exports.BeliefUpdateEngine = BeliefUpdateEngine;
 exports.BeliefUpdateError = BeliefUpdateError;
 exports.CHANGE_TALK_PATTERNS = CHANGE_TALK_PATTERNS;
 exports.COGNICORE_VERSION = COGNICORE_VERSION;
@@ -11499,6 +14318,7 @@ exports.INDEX_THRESHOLDS = INDEX_THRESHOLDS;
 exports.InMemoryAuditLogger = InMemoryAuditLogger;
 exports.InMemoryEventStore = InMemoryEventStore;
 exports.InterventionNotFoundError = InterventionNotFoundError;
+exports.InterventionOptimizer = InterventionOptimizer;
 exports.InterventionOutcomeHandler = InterventionOutcomeHandler;
 exports.InterventionSelectionError = InterventionSelectionError;
 exports.InvalidCausalGraphError = InvalidCausalGraphError;
@@ -11557,6 +14377,7 @@ exports.beliefStateToUncertainty = beliefStateToUncertainty;
 exports.betaSampleSecure = betaSampleSecure;
 exports.boxMullerSecure = boxMullerSecure;
 exports.createBeliefStateAdapter = createBeliefStateAdapter;
+exports.createBeliefUpdateEngine = createBeliefUpdateEngine;
 exports.createCrisisAwareBehaviors = createCrisisAwareBehaviors;
 exports.createCrisisDetector = createCrisisDetector;
 exports.createCrisisHandlerRegistry = createCrisisHandlerRegistry;
@@ -11569,6 +14390,7 @@ exports.createExplainabilityService = createExplainabilityService;
 exports.createInMemoryAuditLogger = createInMemoryAuditLogger;
 exports.createInMemoryEventStore = createInMemoryEventStore;
 exports.createInitializedEventBus = createInitializedEventBus;
+exports.createInterventionOptimizer = createInterventionOptimizer;
 exports.createKalmanFormerEngine = createKalmanFormerEngine;
 exports.createMinimalEventSystem = createMinimalEventSystem;
 exports.createPLRNNEngine = createPLRNNEngine;

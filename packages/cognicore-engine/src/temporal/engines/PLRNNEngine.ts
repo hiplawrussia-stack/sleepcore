@@ -50,8 +50,27 @@ import { KalmanFormerEngine } from './KalmanFormerEngine';
 
 /**
  * State dimension labels for interpretability
+ *
+ * Extended for SleepCore application:
+ * - Original psychological: valence, arousal, dominance, risk, resources
+ * - Sleep-specific: sleepEfficiency, sleepQuality, sleepLatency, circadianPhase
+ *
+ * Note: latentDim in config determines how many dimensions are actually used.
+ * The engine will use the first N dimensions from this array.
  */
-const STATE_DIMENSIONS = ['valence', 'arousal', 'dominance', 'risk', 'resources'];
+const STATE_DIMENSIONS = [
+  // Core psychological dimensions (PLRNN mental health foundation)
+  'valence',        // Positive/negative affect
+  'arousal',        // Activation/energy level
+  'dominance',      // Sense of control
+  'risk',           // Risk/crisis indicator
+  'resources',      // Coping resources
+  // Sleep-specific dimensions (SleepCore extension)
+  'sleepEfficiency',  // TST/TIB ratio
+  'sleepQuality',     // Subjective sleep quality
+  'sleepLatency',     // Time to fall asleep
+  'circadianPhase',   // Chronotype alignment
+];
 
 /**
  * PLRNN Engine Implementation
