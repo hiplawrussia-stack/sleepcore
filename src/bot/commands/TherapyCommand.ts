@@ -545,6 +545,31 @@ ${formatter.tip('Каждая сессия занимает 30-60 минут. П
       // Continue without recommendation
     }
 
+    // Wave 5: Phenotype-based recommendation (Blanken 2019, PAT Ruan 2024)
+    // Takes priority if profile available, as it incorporates actigraphy data
+    let phenotypeSection = '';
+    try {
+      const sleepProfile = ctx.sleepCore.getSleepProfile?.(ctx.userId);
+      if (sleepProfile) {
+        const phenotypeRec = ctx.sleepCore.getPhenotypeBasedTherapyRecommendation?.(
+          ctx.userId,
+          sleepProfile
+        );
+        if (phenotypeRec) {
+          // Override standard recommendation with phenotype-based one
+          recommendation = phenotypeRec;
+          const phenotypeName = this.getPhenotypeDisplayName(sleepProfile.phenotype.primaryPhenotype);
+          phenotypeSection = `
+🧬 *Фенотип сна:* ${phenotypeName}
+_Уверенность: ${Math.round(sleepProfile.confidence * 100)}%_
+${phenotypeRec.rationale}
+`;
+        }
+      }
+    } catch {
+      // Graceful degradation: skip phenotype section
+    }
+
     // Get arousal-based recommendation (PSAS-inspired, Nicassio et al. 1985)
     let arousalSection = '';
     try {
@@ -589,7 +614,7 @@ ${formatter.divider()}
 ${recommendation ? `
 🎯 *Рекомендация на основе вашего профиля:*
 ${recommendation.rationale}
-` : ''}${arousalSection}
+` : ''}${phenotypeSection}${arousalSection}
 
 ${formatter.tip('Выберите терапию для подробной информации. Рекомендуемые отмечены ⭐')}
     `.trim();
@@ -3586,6 +3611,25 @@ ${formatter.tip('Протокол Spielman (1987): еженедельная ко
     }
 
     return 1;
+  }
+
+  /**
+   * Get display name for sleep phenotype (Blanken 2019 classification)
+   * Used in phenotype-based therapy recommendation display
+   */
+  private getPhenotypeDisplayName(phenotypeClass: string): string {
+    const names: Record<string, string> = {
+      healthy_sleeper: 'Здоровый сон',
+      short_sleeper: 'Короткий сон (Type 2/3)',
+      long_sleeper: 'Длинный сон',
+      delayed_phase: 'Задержанная фаза',
+      advanced_phase: 'Продвинутая фаза',
+      irregular: 'Нерегулярный сон (Type 1)',
+      fragmented: 'Фрагментированный сон (Type 4)',
+      social_jetlag: 'Социальный джетлаг',
+      shift_worker: 'Сменная работа',
+    };
+    return names[phenotypeClass] ?? 'Неопределённый';
   }
 
   /**

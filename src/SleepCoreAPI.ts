@@ -112,6 +112,14 @@ import { crisisEscalationService } from './bot/services/CrisisEscalationService'
 
 // Wave 4: Gamification facade routing (P2-1 fix)
 import { getGamificationEngine } from './bot/services/GamificationContext';
+
+// Wave 5: Precision Phenotyping (Blanken 2019, PAT Ruan 2024)
+import {
+  PhenotypingService,
+  type ISleepProfile,
+  type ITherapyRecommendation as IPhenotypeTherapyRecommendation,
+} from './sleep/services/PhenotypingService';
+import type { IActigraphySession } from './sleep/interfaces/IActigraphy';
 import type {
   IGamificationEngine,
   IGamificationResult,
@@ -158,6 +166,9 @@ export interface ISleepCoreSession {
 
   /** Weekly snapshots of dysfunctional beliefs for cognitive progress tracking */
   readonly beliefHistory: import('./cbt-i/interfaces/ICBTIComponents').IDysfunctionalBelief[][];
+
+  /** Sleep phenotype profile from PAT analysis (Blanken 2019, Ruan 2024) */
+  readonly sleepProfile: ISleepProfile | null;
 }
 
 /**
@@ -252,6 +263,9 @@ export class SleepCoreAPI {
   private readonly tcmEngine: TCMIntegratedCBTIEngine;
   private readonly ayurvedaEngine: AyurvedaYogaEngine;
   private readonly guideline2023: EuropeanGuideline2023;
+
+  // Wave 5: Precision Phenotyping (Blanken 2019, PAT Ruan 2024)
+  private readonly phenotypingService: PhenotypingService;
 
   private sessions: Map<string, ISleepCoreSession>;
   private sleepStates: Map<string, ISleepState[]>;
@@ -417,6 +431,10 @@ export class SleepCoreAPI {
     this.ayurvedaEngine = new AyurvedaYogaEngine();
     this.guideline2023 = new EuropeanGuideline2023();
 
+    // Wave 5: Precision Phenotyping (Blanken 2019, PAT Ruan 2024)
+    // Links to ThirdWaveCoordinator for phenotype-based therapy selection
+    this.phenotypingService = new PhenotypingService();
+
     this.sessions = new Map();
     this.sleepStates = new Map();
   }
@@ -443,6 +461,8 @@ export class SleepCoreAPI {
       tcmPlan: null,
       ayurvedicAssessment: null,
       beliefHistory: [],
+      // Wave 5: Phenotype profile (Blanken 2019, PAT Ruan 2024)
+      sleepProfile: null,
     };
 
     this.sessions.set(userId, session);
@@ -1945,6 +1965,152 @@ export class SleepCoreAPI {
 
     const actiEngine = this.thirdWave.getACTIEngine();
     return actiEngine.generateSessionSummary(session.actiPlan);
+  }
+
+  // ============= Wave 5: Precision Phenotyping (Blanken 2019, PAT Ruan 2024) =============
+
+  /**
+   * Generate comprehensive sleep profile from actigraphy data
+   *
+   * Scientific basis:
+   * - Blanken et al., 2019: 5-class insomnia phenotype model (Lancet Psychiatry)
+   * - Ruan et al., 2024: PAT (Pretrained Actigraphy Transformer)
+   *
+   * Returns ISleepProfile with:
+   * - PAT-derived phenotype classification
+   * - Risk assessment
+   * - Therapy recommendations based on phenotype
+   * - Circadian profile from actigraphy
+   *
+   * @param userId - User identifier
+   * @param actigraphySession - Actigraphy data (3-7 days recommended)
+   * @param supplementaryData - Optional ISI/DBAS scores for enhanced recommendations
+   */
+  async generateSleepProfile(
+    userId: string,
+    actigraphySession: IActigraphySession,
+    supplementaryData?: {
+      recentSleepMetrics?: ISleepMetrics[];
+      isiScore?: number;
+      dbasScore?: number;
+    }
+  ): Promise<ISleepProfile> {
+    const profile = await this.phenotypingService.generateProfile(
+      userId,
+      actigraphySession,
+      supplementaryData
+    );
+
+    // Store profile in session for later retrieval
+    this.storeSleepProfile(userId, profile);
+
+    return profile;
+  }
+
+  /**
+   * Store a sleep profile in the user's session
+   * Called automatically by generateSleepProfile()
+   */
+  storeSleepProfile(userId: string, profile: ISleepProfile): void {
+    const session = this.sessions.get(userId);
+    if (session) {
+      this.sessions.set(userId, { ...session, sleepProfile: profile });
+    }
+  }
+
+  /**
+   * Get stored sleep profile for a user
+   * Returns null if no profile has been generated yet
+   */
+  getSleepProfile(userId: string): ISleepProfile | null {
+    const session = this.sessions.get(userId);
+    return session?.sleepProfile ?? null;
+  }
+
+  /**
+   * Get phenotype-based therapy recommendation integrated with ThirdWaveCoordinator
+   *
+   * Links Blanken phenotypes to third-wave therapy selection:
+   * - Type 1 (Highly Distressed) → ACT-I priority (emotional regulation)
+   * - Type 2 (Reward-Sensitive) → MBT-I priority (attention regulation)
+   * - Type 3 (Reward-Insensitive) → Standard CBT-I + behavioral activation
+   * - Type 4 (High-Reactive) → MCT priority (worry management)
+   * - Type 5 (Low-Reactive) → Standard CBT-I first line
+   *
+   * @param userId - User identifier
+   * @param profile - Sleep profile from generateSleepProfile()
+   * @returns Therapy recommendation or null if insufficient sleep state data
+   */
+  getPhenotypeBasedTherapyRecommendation(
+    userId: string,
+    profile: ISleepProfile
+  ): IThirdWaveRecommendation | null {
+    const sleepStates = this.getSleepStates(userId);
+    if (!sleepStates || sleepStates.length === 0) {
+      // Cannot make therapy recommendation without sleep state history
+      // User needs to complete at least 1 sleep diary entry first
+      return null;
+    }
+
+    const lastState = sleepStates[sleepStates.length - 1];
+
+    // Map phenotype to treatment history hints for ThirdWaveCoordinator
+    const treatmentHistory = this.mapPhenotypeToTreatmentHints(profile);
+
+    return this.thirdWave.recommendApproach(lastState, treatmentHistory);
+  }
+
+  /**
+   * Map Blanken phenotype to treatment history hints
+   * Used by ThirdWaveCoordinator for therapy selection
+   *
+   * Research basis (confidence: MEDIUM - no direct RCT):
+   * - Blanken 2019 phenotypes map to psychological profiles
+   * - ThirdWave engines target specific psychological mechanisms
+   * - Mapping based on mechanism alignment, not direct evidence
+   */
+  private mapPhenotypeToTreatmentHints(
+    profile: ISleepProfile
+  ): { failedCBTI: boolean; preferences: string[] } {
+    const preferences: string[] = [];
+    const phenotypeClass = profile.phenotype.primaryPhenotype;
+
+    // Map sleep phenotype patterns to therapy preferences
+    // fragmented = Type 4 analog (high reactivity, worry)
+    // irregular = Type 1 analog (distress, emotional dysregulation)
+    // short_sleeper = Type 2/3 analog (reward sensitivity)
+    if (phenotypeClass === 'fragmented') {
+      preferences.push('mct', 'relaxation');
+    } else if (phenotypeClass === 'irregular') {
+      preferences.push('acti', 'emotional_regulation');
+    } else if (phenotypeClass === 'short_sleeper') {
+      preferences.push('mbti', 'attention_regulation');
+    }
+
+    // High distress indicators suggest third-wave priority
+    const hasHighDistress = profile.riskAssessment.scores.anxietyRisk > 0.7 ||
+                           profile.riskAssessment.scores.depressionRisk > 0.7;
+
+    return {
+      failedCBTI: hasHighDistress, // Consider standard CBT-I insufficient for high distress
+      preferences,
+    };
+  }
+
+  /**
+   * Check if PhenotypingService is ready
+   * PAT model requires async initialization
+   */
+  isPhenotypingReady(): boolean {
+    return this.phenotypingService.isReady();
+  }
+
+  /**
+   * Initialize PhenotypingService (loads PAT model)
+   * Call before first use if async initialization needed
+   */
+  async initializePhenotyping(): Promise<void> {
+    await this.phenotypingService.initialize();
   }
 
   // ============= Circadian AI (Chronotype & Circadian Personalization) =============
