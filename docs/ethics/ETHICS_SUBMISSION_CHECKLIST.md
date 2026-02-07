@@ -156,6 +156,7 @@ This checklist covers requirements for submission to:
 | 5.2.1 | Privacy Policy | ✅ Complete | 1.0 | `PRIVACY_POLICY.md` |
 | 5.2.2 | Data Protection Impact Assessment | ⏳ Pending | - | DPIA (GDPR Art. 35) |
 | 5.2.3 | Data Breach Response Plan | ⏳ Pending | - | Incident response |
+| 5.2.4 | Data Sharing Review | ✅ Complete | 1.0 | `DATA_SHARING_REVIEW.md` |
 
 ---
 
@@ -308,12 +309,12 @@ Examples:
 | Sponsor/Site | 0 | 6 | 2 | 8 |
 | Regulatory (Russia) | 2 | 4 | 0 | 6 |
 | Device Documents | 1 | 6 | 0 | 7 |
-| Data Management | 2 | 5 | 0 | 7 |
+| Data Management | 3 | 5 | 0 | 8 |
 | Instruments | 7 | 2 | 0 | 9 |
 | Participant Materials | 1 | 5 | 0 | 6 |
-| **TOTAL** | **25** | **35** | **3** | **63** |
+| **TOTAL** | **26** | **35** | **3** | **64** |
 
-**Completion:** 40% (25/60 applicable items)
+**Completion:** 43% (26/61 applicable items)
 
 ---
 
