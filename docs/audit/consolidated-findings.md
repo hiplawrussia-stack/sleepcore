@@ -110,11 +110,11 @@
 ### Test Distribution
 | Type | Count |
 |------|-------|
-| Unit Tests | ~8018 (+115 repository tests) |
+| Unit Tests | ~8138 (+115 repository tests, +120 safety-critical repository tests) |
 | Integration Tests | 272 (+54 cognitive commands, +13 audit retention, +66 PHI/GDPR) |
 | E2E Tests | 87 |
 | Smoke Tests | 25 |
-| **Total** | **8632** |
+| **Total** | **8752** |
 
 ### Safety-Critical Coverage
 | Module | Coverage |
@@ -126,6 +126,8 @@
 | PHI Encryption | 99%+ |
 | CogniCore Safety | 99.48% |
 | SleepCoreAdapter | 96.54% |
+| SafetyPlanRepository | 100% |
+| AdverseEventRepository | 97.67% |
 
 ### Platform Coverage (Updated 2026-02-07)
 | Module | Lines | Target | Status |
@@ -136,7 +138,7 @@
 | Infrastructure | 47.41% | 45% | PASS |
 | **Infrastructure/Repositories** | **57.25%** | 45% | **EXCEEDS** |
 
-### Repository Coverage Details (NEW)
+### Repository Coverage Details (Updated 2026-02-07)
 | Repository | Stmts | Lines | Target | Status |
 |------------|-------|-------|--------|--------|
 | SleepDiaryRepository | 98.68% | 100% | 90% | EXCEEDS |
@@ -144,6 +146,15 @@
 | TherapySessionRepository | 100% | 100% | 90% | EXCEEDS |
 | UserRepository | 93.44% | 97.91% | 90% | EXCEEDS |
 | GamificationRepository | 89.78% | 91.07% | 90% | EXCEEDS |
+| **SafetyPlanRepository** | **100%** | **100%** | 90% | **EXCEEDS** |
+| **AdverseEventRepository** | **95.95%** | **97.67%** | 90% | **EXCEEDS** |
+
+### Safety-Critical Repository Tests Added
+| Repository | Tests | Compliance |
+|------------|-------|------------|
+| SafetyPlanRepository | 27 | Stanley-Brown, SAMHSA 2025 |
+| AdverseEventRepository | 47 | ICH E2B(R3), 21 CFR Part 11 |
+| SafetyAlertRepository | 46 | Crisis escalation workflow |
 
 ---
 
