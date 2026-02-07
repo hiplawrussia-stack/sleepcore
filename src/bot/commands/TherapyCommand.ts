@@ -36,6 +36,13 @@ import type {
   IInlineButton,
 } from './interfaces/ICommand';
 import type { ICBTIIntervention, CBTIComponent } from '../../cbt-i/interfaces/ICBTIComponents';
+import {
+  SE_THRESHOLDS,
+  TIB_ADJUSTMENT,
+  ADHERENCE_THRESHOLDS,
+  CLINICAL_TARGETS,
+  getISISeverityLabel,
+} from '../../cbt-i/constants';
 import { formatter } from './utils/MessageFormatter';
 import { sonya } from '../persona';
 import type { arousalAssessmentService } from '../services/ArousalAssessmentService';
@@ -1012,7 +1019,7 @@ ${formatter.divider()}
 ⏰ *Следующая сессия:* через 7 дней
 📓 *Не забывайте:* вести дневник сна каждый день
 
-${sonya.tip('Регулярное выполнение заданий — ключ к успеху терапии. Исследования показывают, что adherence > 80% даёт лучшие результаты.')}
+${sonya.tip(`Регулярное выполнение заданий — ключ к успеху терапии. Исследования показывают, что adherence > ${ADHERENCE_THRESHOLDS.EXCELLENT}% даёт лучшие результаты.`)}
     `.trim();
 
     const keyboard: IInlineButton[][] = [];
@@ -3029,16 +3036,16 @@ _d ≥ 0.8 = большой эффект, 0.5-0.8 = средний, 0.2-0.5 = м
       ? `${progress.currentSleepEfficiency.toFixed(1)}%`
       : 'рассчитывается...';
 
-    // Determine titration recommendation
+    // Determine titration recommendation using centralized thresholds (CLAUDE.md §13.4)
     let titrationAdvice: string;
     if (progress?.currentSleepEfficiency) {
       const se = progress.currentSleepEfficiency;
-      if (se >= 90) {
-        titrationAdvice = '📈 SE ≥ 90%: можно увеличить TIB на 15 минут';
-      } else if (se >= 85) {
-        titrationAdvice = '📊 SE 85-90%: поддерживайте текущее окно';
+      if (se >= SE_THRESHOLDS.INCREASE) {
+        titrationAdvice = `📈 SE ≥ ${SE_THRESHOLDS.INCREASE}%: можно увеличить TIB на ${TIB_ADJUSTMENT.STEP} минут`;
+      } else if (se >= SE_THRESHOLDS.MAINTAIN_MIN) {
+        titrationAdvice = `📊 SE ${SE_THRESHOLDS.MAINTAIN_MIN}-${SE_THRESHOLDS.INCREASE}%: поддерживайте текущее окно`;
       } else {
-        titrationAdvice = '📉 SE < 85%: сохраняйте текущее окно (или сократите на 15 мин)';
+        titrationAdvice = `📉 SE < ${SE_THRESHOLDS.MAINTAIN_MIN}%: сохраняйте текущее окно (или сократите на ${TIB_ADJUSTMENT.STEP} мин)`;
       }
     } else {
       titrationAdvice = 'Титрация будет доступна после недели данных';
@@ -3303,7 +3310,7 @@ ${formatter.divider()}
         ? `
 📊 *Ваше соблюдение SCT:* ${adherencePercent}%
 ${formatter.progressBar(adherencePercent, 10)}
-${adherencePercent >= 80 ? '✅ Отличная приверженность!' : '💪 Продолжайте практиковать!'}`
+${adherencePercent >= ADHERENCE_THRESHOLDS.EXCELLENT ? '✅ Отличная приверженность!' : '💪 Продолжайте практиковать!'}`
         : '';
 
       // Get leave reminder based on typical awake time
@@ -3374,7 +3381,7 @@ ${adherenceSection}
       const categoryLines: string[] = [];
       for (const [category, scoreValue] of Object.entries(assessment.scores)) {
         const scorePercent = Math.round((scoreValue as number) * 100);
-        const icon = scorePercent >= 80 ? '✅' : scorePercent >= 60 ? '🔶' : '🔴';
+        const icon = scorePercent >= ADHERENCE_THRESHOLDS.EXCELLENT ? '✅' : scorePercent >= ADHERENCE_THRESHOLDS.GOOD ? '🔶' : '🔴';
         const categoryName = categoryNames[category] || category;
         categoryLines.push(`${icon} *${categoryName}:* ${scorePercent}%`);
       }
@@ -3499,10 +3506,10 @@ ${disclaimer}
       ? `\n\n${formatter.warning('Окно сна < 6 часов. Будьте внимательны за рулём и при работе с механизмами. При выраженной сонливости сообщите нам.')}`
       : '';
 
-    // Phase 6: Adapt summary tone via AdaptivePersonaService
-    const baseSummary = se >= 90
+    // Phase 6: Adapt summary tone via AdaptivePersonaService (using centralized thresholds)
+    const baseSummary = se >= SE_THRESHOLDS.INCREASE
       ? 'Отличный результат! Ваш сон стабилизируется.'
-      : se >= 85
+      : se >= SE_THRESHOLDS.MAINTAIN_MIN
         ? 'Хороший прогресс. Продолжайте в том же духе.'
         : 'Корректировка поможет улучшить результат.';
     let adaptedSummary: string;
@@ -3520,7 +3527,7 @@ ${sonya.tip(`Неделя ${updatedPlan.currentWeek}. Анализ вашего 
 ${formatter.divider()}
 
 *Эффективность сна (SE):* ${se.toFixed(1)}%
-${se >= 90 ? '✅ Отлично! SE ≥ 90%' : se >= 85 ? '🟡 Хорошо. SE 85-89%' : '🔻 SE < 85% — требуется корректировка'}
+${se >= SE_THRESHOLDS.INCREASE ? `✅ Отлично! SE ≥ ${SE_THRESHOLDS.INCREASE}%` : se >= SE_THRESHOLDS.MAINTAIN_MIN ? `🟡 Хорошо. SE ${SE_THRESHOLDS.MAINTAIN_MIN}-${SE_THRESHOLDS.INCREASE - 1}%` : `🔻 SE < ${SE_THRESHOLDS.MAINTAIN_MIN}% — требуется корректировка`}
 
 _${adaptedSummary}_
 
@@ -3639,13 +3646,10 @@ ${formatter.tip('Протокол Spielman (1987): еженедельная ко
 
   /**
    * Get ISI severity label (Russian)
-   * Based on Morin et al. cutoffs
+   * Uses centralized thresholds from cbt-i/constants.ts
    */
   private getISISeverity(isi: number): string {
-    if (isi <= 7) return 'норма';
-    if (isi <= 14) return 'субклиническая';
-    if (isi <= 21) return 'умеренная';
-    return 'тяжёлая';
+    return getISISeverityLabel(isi);
   }
 
   /**
@@ -3676,15 +3680,15 @@ ${formatter.tip('Протокол Spielman (1987): еженедельная ко
     switch (metric) {
       case 'isi': {
         const isi = progress.currentISI;
-        if (isi <= 7) return '✅ достигнуто';
-        if (isi <= 14) return '🔄 улучшается';
+        if (isi <= CLINICAL_TARGETS.ISI_REMISSION) return '✅ достигнуто';
+        if (isi <= CLINICAL_TARGETS.ISI_REMISSION * 2) return '🔄 улучшается';
         return '⏳ в процессе';
       }
       case 'se': {
         const se = progress.currentSleepEfficiency;
-        if (se >= 90) return '✅ отлично';
-        if (se >= 85) return '✅ достигнуто';
-        if (se >= 80) return '🔄 близко';
+        if (se >= SE_THRESHOLDS.INCREASE) return '✅ отлично';
+        if (se >= SE_THRESHOLDS.MAINTAIN_MIN) return '✅ достигнуто';
+        if (se >= SE_THRESHOLDS.CLOSE_TO_TARGET) return '🔄 близко';
         return '⏳ в процессе';
       }
       case 'sol':

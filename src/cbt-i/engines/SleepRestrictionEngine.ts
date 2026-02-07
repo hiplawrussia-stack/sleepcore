@@ -25,33 +25,35 @@ import type {
   ISleepRestrictionRules,
 } from '../interfaces/ICBTIComponents';
 import type { ISleepMetrics } from '../../sleep/interfaces/ISleepState';
+import {
+  SE_THRESHOLDS,
+  TIB_LIMITS,
+  TIB_ADJUSTMENT,
+  EVALUATION_PERIOD,
+} from '../constants';
 
 /**
  * Default adjustment rules based on clinical guidelines
+ * Uses centralized constants from cbt-i/constants.ts
  */
 const DEFAULT_RULES: ISleepRestrictionRules = {
-  increaseThreshold: 90,      // SE ≥ 90% → increase TIB
-  maintainRange: { min: 85, max: 89.9 },
-  decreaseThreshold: 85,      // SE < 85% → decrease TIB
-  increaseAmount: 15,         // Add 15 minutes
-  decreaseAmount: 15,         // Remove 15 minutes
+  increaseThreshold: SE_THRESHOLDS.INCREASE,      // SE ≥ 90% → increase TIB
+  maintainRange: { min: SE_THRESHOLDS.MAINTAIN_MIN, max: SE_THRESHOLDS.MAINTAIN_MAX },
+  decreaseThreshold: SE_THRESHOLDS.DECREASE,      // SE < 85% → decrease TIB
+  increaseAmount: TIB_ADJUSTMENT.STEP,            // Add 15 minutes
+  decreaseAmount: TIB_ADJUSTMENT.STEP,            // Remove 15 minutes
 };
 
 /**
  * Minimum allowed Time In Bed (5 hours = 300 minutes)
- * Safety limit per clinical guidelines
+ * Safety limit per clinical guidelines - RED LINE per CLAUDE.md §2.1
  */
-const MINIMUM_TIB = 300;
+const MINIMUM_TIB = TIB_LIMITS.MINIMUM;
 
 /**
  * Maximum Time In Bed (9 hours = 540 minutes)
  */
-const MAXIMUM_TIB = 540;
-
-/**
- * Days in evaluation period
- */
-const EVALUATION_PERIOD = 7;
+const MAXIMUM_TIB = TIB_LIMITS.MAXIMUM;
 
 /**
  * Sleep Restriction Therapy Engine

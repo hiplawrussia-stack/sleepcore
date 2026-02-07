@@ -46,8 +46,8 @@
 |----|---------|----------|--------|----------------|
 | P2-1 | Missing integration tests | RecallCommand, RehearsalCommand, SmartTipsCommand, WhatIfCommand | Test gaps | Add integration tests | **DONE** (54 tests, all passing) |
 | P2-2 | SleepCoreAdapter coverage | SleepCoreAdapter.ts | 81.79% < 90% target | Increase coverage | **DONE** (96.54% lines) |
-| P2-3 | SleepCoreAPI coverage | SleepCoreAPI.ts | 81.83% < 90% target (↑ from 77.95%) | Increase coverage | **IN PROGRESS** |
-| P2-4 | SE thresholds scattered | TherapyCommand.ts | Maintenance risk | Centralize in constants |
+| P2-3 | SleepCoreAPI coverage | SleepCoreAPI.ts | 81.83% < 90% target (↑ from 77.95%) | Increase coverage | **DONE** (92.83% lines) |
+| P2-4 | SE thresholds scattered | TherapyCommand.ts | Maintenance risk | Centralize in constants | **DONE** (src/cbt-i/constants.ts) |
 | P2-5 | PLRNNEngine missing dimension | PLRNNEngine.ts:543 | WhatIfCommand simulation fails | Add 'sleepEfficiency' to STATE_DIMENSIONS | **DONE** |
 
 ---
@@ -209,8 +209,8 @@ Badge, Quest, and Evolution commands import services directly rather than throug
 
 ### Future (Backlog)
 6. [x] Increase SleepCoreAdapter coverage to 90% (P2-2) **DONE** — 96.54%
-7. [ ] Increase SleepCoreAPI coverage to 90% (P2-3) — 81.83% in progress
-8. [ ] Centralize SE thresholds (P2-4)
+7. [x] Increase SleepCoreAPI coverage to 90% (P2-3) **DONE** — 92.83%
+8. [x] Centralize SE thresholds (P2-4) **DONE** — src/cbt-i/constants.ts
 9. [ ] Document gamification bypass decision (P3-1)
 10. [ ] Add audit retention integration test (P3-3)
 
@@ -225,6 +225,8 @@ All safety-critical modules exceed 98% test coverage with verified invariants. T
 **Progress since initial audit:**
 - P2-1 (Cognitive Commands integration tests): **DONE** — 54 tests added, all passing
 - P2-2 (SleepCoreAdapter coverage): **DONE** — 96.54% (exceeds 90% target)
+- P2-3 (SleepCoreAPI coverage): **DONE** — 92.83% (exceeds 90% target)
+- P2-4 (SE thresholds): **DONE** — centralized in src/cbt-i/constants.ts
 - P2-5 (PLRNNEngine bug): **DONE** — extended STATE_DIMENSIONS with sleep metrics
 - P1-3 (Flaky tests): **DONE** — Date mocking implemented
 
