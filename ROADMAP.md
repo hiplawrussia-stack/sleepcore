@@ -1,6 +1,6 @@
 # SleepCore: Дорожная карта развития
 
-> Последнее обновление: Январь 2026
+> Последнее обновление: Февраль 2026
 
 ## Статус проекта
 
@@ -8,9 +8,10 @@
 |---------|----------|
 | Версия | 1.0.0-alpha.4 |
 | Команд бота | 25 |
-| Тестов | 1,244+ |
-| Покрытие | ~80% |
-| CogniCore интеграция | 95% |
+| Тестов | **8752+** |
+| Покрытие | **84.97%** (Lines) |
+| CogniCore интеграция | **100%** (7 фаз) |
+| IEC 62304 аудит | **COMPLETE** |
 | Статус деплоя | Production (155.212.189.174) |
 
 ---
@@ -89,6 +90,25 @@
   - Proactive insights с feedback
   - Cron job каждые 2 часа (10:00-20:00 MSK)
 - [x] 32 unit-теста для новых компонентов
+
+### Фаза D.2: Precision Phenotyping + Аудит (Февраль 2026) ✅
+
+#### Sprint 5+: Precision Phenotyping (Wave 5) ✅
+- [x] PhenotypingService интеграция в SleepCoreAPI
+- [x] Blanken 5-class модель инсомнии
+- [x] PAT-based классификация фенотипа
+- [x] Phenotype → ThirdWaveCoordinator цепочка
+- [x] 21 интеграционный тест
+- [x] *Исследование*: Blanken et al. 2019, Lancet Psychiatry
+
+#### IEC 62304 Class IIa Аудит ✅
+- [x] Connectivity Matrix — 32 сервиса, 6 точек входа
+- [x] Safety-Critical Modules — все >98% покрытие
+- [x] Vertical Slices — 4/4 journey verified
+- [x] Traceability Matrix — 12/12 requirements traced
+- [x] **8752+ тестов**, 84.97% покрытие
+- [x] Все P0-P3 issues закрыты
+- [x] **Статус: READY FOR RELEASE**
 
 ---
 
@@ -257,6 +277,7 @@
 | Янв 2026 | v2.0 | Sprint 1-4 выполнены |
 | Янв 2026 | v2.1 | Sprint 5 (Proactive Intelligence) выполнен |
 | Янв 2026 | v2.2 | Консолидация документации, Sprint 6-10 план |
+| Фев 2026 | v2.3 | Precision Phenotyping (Wave 5), IEC 62304 аудит COMPLETE, 8752+ тестов |
 
 ---
 
@@ -267,5 +288,5 @@
 | [docs/production/launch-plan.md](docs/production/launch-plan.md) | План запуска в продакшен |
 | [docs/research/](docs/research/) | Исследования по спринтам |
 | [docs/archive/SPRINT_COMPLETION_REPORTS.md](docs/archive/SPRINT_COMPLETION_REPORTS.md) | Отчёты Sprint 2-3 |
-| [docs/archive/INTEGRATION_ROADMAP.md](docs/archive/INTEGRATION_ROADMAP.md) | CogniCore интеграция (98%) |
+| [docs/archive/INTEGRATION_ROADMAP.md](docs/archive/INTEGRATION_ROADMAP.md) | CogniCore интеграция (100%) |
 

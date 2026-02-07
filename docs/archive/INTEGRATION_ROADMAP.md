@@ -5,12 +5,12 @@
 | Метрика | Было | Стало |
 |---------|------|-------|
 | Архитектура CogniCore | 100% реализована | 100% реализована |
-| Интеграция в Telegram бот | ~30% | **98%** |
+| Интеграция в Telegram бот | ~30% | **100%** |
 | Активные компоненты | 3 из 15 | **15 из 15** |
 | Deprecated код в runtime | SleepCorePOMDP | Частично |
 | Новые AI-команды | 0 | **6** (/predict, /insights, /explain, /safety, /twin, /whatif) |
 | Proactive Intelligence | Нет | **CSD + Thompson Sampling + Anti-Fatigue + Voice Biomarkers** |
-| Тестов | ~1200 | **1,300+** |
+| Тестов | ~1200 | **8752+** |
 
 **Статус**: ✅ Основная интеграция завершена (Sprints 1-6)
 
