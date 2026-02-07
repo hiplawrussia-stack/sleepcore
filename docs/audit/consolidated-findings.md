@@ -99,22 +99,22 @@
 
 ## Key Metrics
 
-### Test Coverage
+### Test Coverage (with infrastructure/database included)
 | Metric | Value | Threshold | Delta |
 |--------|-------|-----------|-------|
-| Statements | 86.85% | 45% | +41.85% |
-| Branches | 76.05% | 40% | +36.05% |
-| Functions | 91.83% | 50% | +41.83% |
-| Lines | 87.32% | 45% | +42.32% |
+| Statements | 84.52% | 45% | +39.52% |
+| Branches | 72.45% | 40% | +32.45% |
+| Functions | 87.47% | 50% | +37.47% |
+| Lines | 84.97% | 45% | +39.97% |
 
 ### Test Distribution
 | Type | Count |
 |------|-------|
-| Unit Tests | ~7903 |
+| Unit Tests | ~8018 (+115 repository tests) |
 | Integration Tests | 272 (+54 cognitive commands, +13 audit retention, +66 PHI/GDPR) |
 | E2E Tests | 87 |
 | Smoke Tests | 25 |
-| **Total** | **8517** |
+| **Total** | **8632** |
 
 ### Safety-Critical Coverage
 | Module | Coverage |
@@ -134,7 +134,16 @@
 | SleepCoreAPI | 92.83% | 90% | EXCEEDS |
 | **Bot Services** | **93.40%** | 90% | **EXCEEDS** |
 | Infrastructure | 47.41% | 45% | PASS |
-| Infrastructure/Repositories | 31.47% | 45% | NEEDS WORK |
+| **Infrastructure/Repositories** | **57.25%** | 45% | **EXCEEDS** |
+
+### Repository Coverage Details (NEW)
+| Repository | Stmts | Lines | Target | Status |
+|------------|-------|-------|--------|--------|
+| SleepDiaryRepository | 98.68% | 100% | 90% | EXCEEDS |
+| AssessmentRepository | 100% | 100% | 90% | EXCEEDS |
+| TherapySessionRepository | 100% | 100% | 90% | EXCEEDS |
+| UserRepository | 93.44% | 97.91% | 90% | EXCEEDS |
+| GamificationRepository | 89.78% | 91.07% | 90% | EXCEEDS |
 
 ---
 

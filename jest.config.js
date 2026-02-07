@@ -16,9 +16,10 @@ module.exports = {
     '!src/**/index.ts',
     // Exclude interfaces (no logic to test)
     '!src/**/interfaces/**/*.ts',
-    // Exclude database infrastructure (requires real DB connections)
-    // Note: Database integration tests are separate from unit tests
-    '!src/infrastructure/database/**/*.ts',
+    // Exclude database connection implementations (requires real DB)
+    '!src/infrastructure/database/sqlite/**/*.ts',
+    '!src/infrastructure/database/postgres/**/*.ts',
+    // Keep repositories and security in coverage (unit testable with mocks)
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
