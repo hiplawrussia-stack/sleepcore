@@ -17,6 +17,7 @@ import {
   userRoutes,
   syncRoutes,
   healthRoutes,
+  wearableRoutes,
 } from './routes/index.js';
 
 export interface AppConfig {
@@ -58,6 +59,7 @@ export function createApp(config: AppConfig): Hono {
   app.route('/api/breathing', breathingRoutes);
   app.route('/api/user', userRoutes);
   app.route('/api/sync', syncRoutes);
+  app.route('/api/wearable', wearableRoutes);
 
   // Root endpoint
   app.get('/', (c) => {
