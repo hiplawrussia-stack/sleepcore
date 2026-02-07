@@ -415,14 +415,16 @@ const SLEEP_ACTIONS = [
 
 ## 8. Тестирование
 
-### 8.1. Текущее покрытие
+### 8.1. Текущее покрытие (обновлено Февраль 2026)
 
 | Метрика | Значение | Порог |
 |---------|----------|-------|
-| Statements | 46.45% | 45% ✓ |
-| Branches | 39.94% | 40% ⚠️ |
-| Functions | 50.32% | 50% ✓ |
-| Lines | 46.55% | 45% ✓ |
+| Statements | 83.67% | 80% ✓ |
+| Branches | 73.23% | 70% ✓ |
+| Functions | 87.70% | 80% ✓ |
+| Lines | 84.01% | 80% ✓ |
+
+**Тесты:** 180 test suites, 8830 tests passed
 
 ### 8.2. Покрытие по модулям (обновлено Февраль 2026)
 
@@ -448,9 +450,9 @@ npm test -- --watch         # Watch mode
 ```
 
 **Test Distribution:**
-- Unit Tests: 50 files
-- Integration Tests: 6 files (modules)
-- E2E Tests: 4 files (Playwright)
+- Unit Tests: 86 files (src/**/*.test.ts)
+- Integration Tests: 9 files (tests/integration/)
+- E2E Tests: 2 files (tests/e2e/)
 - Smoke Tests: 1 file (25 commands)
 
 ### 8.4. Требования к тестам для Safety-Critical
@@ -741,9 +743,9 @@ describe('Treatment Journey Integration', () => {
 |---------|-------------------|--------|--------|
 | /start | startSession() | — | ✅ |
 | /diary | addDiaryEntry() | — | ✅ |
-| /diary ×7 | processCheckIn() | CBTIEngine.initializePlan() | ❓ |
-| /therapy | getNextIntervention() | CBTIEngine | ❓ |
-| /relax | getRelaxationRecommendation() | RelaxationEngine | ❓ |
+| /diary ×7 | processCheckIn() | CBTIEngine.initializePlan() | ✅ |
+| /therapy | getNextIntervention() | CBTIEngine | ✅ |
+| /relax | getRelaxationRecommendation() | RelaxationEngine | ✅ |
 
 **Правило:** Если команда не вызывает соответствующий движок — это баг архитектуры.
 **Правило:** При аудите "orphan" модулей — grep по ВСЕМУ `src/`, не по отдельным папкам.
@@ -789,7 +791,7 @@ REQ-001      CBTIEngine  test.ts   E2E Journey
 |------------|-----------|-----------|------------------|----------|
 | REQ-SRT-001: TIB ≥ 5h | SleepRestrictionEngine | ✅ | ✅ | ✅ |
 | REQ-ISI-001: Severity classification | ISIRussian | ✅ | ✅ | ✅ |
-| REQ-TREAT-001: Plan creation after 7 days | CBTIEngine + DiaryCommand | ✅ | ❌ | ❌ |
+| REQ-TREAT-001: Plan creation after 7 days | CBTIEngine + DiaryCommand | ✅ | ✅ | ✅ |
 
 **Правило:** Пустые ячейки в матрице = пробелы в интеграции.
 
@@ -1039,6 +1041,6 @@ plan.sleepRestriction                                  // ❌ Не сущест�
 
 ---
 
-*Версия: 1.3 | Дата: Февраль 2026 | БФ «Другой путь»*
+*Версия: 1.4 | Дата: 2026-02-07 | БФ «Другой путь»*
 *Основано на принципах «Конституции Claude» (Anthropic, 2025)*
 *Клиническая база: European Insomnia Guideline 2023, Spielman et al. 1987*
