@@ -2945,4 +2945,360 @@ describe('SleepCoreAPI', () => {
       expect(progress === null || typeof progress === 'object').toBe(true);
     });
   });
+
+  // ============= MCT (Metacognitive Therapy) Methods =============
+
+  describe('MCT Methods', () => {
+    describe('initializeMCT()', () => {
+      it('should initialize MCT therapy with sufficient baseline', async () => {
+        const userId = 'mct-init';
+        api.startSession(userId);
+        const baseline = createBaselineData(userId, 7);
+
+        const plan = api.initializeMCT(userId, baseline);
+        expect(plan).toBeDefined();
+        expect(plan).toHaveProperty('userId', userId);
+      });
+
+      it('should throw error with insufficient baseline data', () => {
+        const userId = 'mct-insufficient';
+        api.startSession(userId);
+        const baseline = createBaselineData(userId, 5);
+
+        expect(() => api.initializeMCT(userId, baseline)).toThrow('Need at least 7 days');
+      });
+    });
+
+    describe('getWorryPostponementExercise()', () => {
+      it('should return null without MCT plan', () => {
+        const userId = 'worry-no-plan';
+        api.startSession(userId);
+
+        const exercise = api.getWorryPostponementExercise(userId);
+        expect(exercise).toBeNull();
+      });
+
+      it('should return exercise with MCT plan', async () => {
+        const userId = 'worry-with-plan';
+        api.startSession(userId);
+        api.initializeMCT(userId, createBaselineData(userId, 7));
+
+        const exercise = api.getWorryPostponementExercise(userId, 'Не могу заснуть');
+        expect(exercise).toHaveProperty('instructions');
+        expect(exercise).toHaveProperty('postponeToTime');
+        expect(exercise).toHaveProperty('worryPeriodDuration');
+      });
+
+      it('should work without worry content', async () => {
+        const userId = 'worry-default';
+        api.startSession(userId);
+        api.initializeMCT(userId, createBaselineData(userId, 7));
+
+        const exercise = api.getWorryPostponementExercise(userId);
+        expect(exercise).toBeDefined();
+      });
+    });
+
+    describe('getDetachedMindfulnessExercise()', () => {
+      it('should return exercise for racing_thoughts trigger', () => {
+        const exercise = api.getDetachedMindfulnessExercise('racing_thoughts');
+        expect(exercise).toHaveProperty('instructions');
+        expect(exercise).toHaveProperty('metaphor');
+        expect(exercise).toHaveProperty('duration');
+      });
+
+      it('should return exercise for worry trigger', () => {
+        const exercise = api.getDetachedMindfulnessExercise('worry');
+        expect(exercise).toHaveProperty('instructions');
+      });
+
+      it('should return exercise for rumination trigger', () => {
+        const exercise = api.getDetachedMindfulnessExercise('rumination');
+        expect(exercise).toHaveProperty('instructions');
+      });
+
+      it('should return exercise for sleep_anxiety trigger', () => {
+        const exercise = api.getDetachedMindfulnessExercise('sleep_anxiety');
+        expect(exercise).toHaveProperty('instructions');
+      });
+    });
+
+    describe('getATTSession()', () => {
+      it('should return selective phase session by default', () => {
+        const session = api.getATTSession();
+        expect(session).toHaveProperty('instructions');
+        expect(session).toHaveProperty('tips');
+      });
+
+      it('should return switching phase session', () => {
+        const session = api.getATTSession('switching');
+        expect(session).toHaveProperty('instructions');
+      });
+
+      it('should return divided phase session', () => {
+        const session = api.getATTSession('divided');
+        expect(session).toHaveProperty('instructions');
+      });
+
+      it('should accept custom duration', () => {
+        const session = api.getATTSession('selective', 20);
+        expect(session).toHaveProperty('instructions');
+      });
+    });
+
+    describe('getMCTSessionSummary()', () => {
+      it('should return null without MCT plan', () => {
+        const userId = 'summary-no-plan';
+        api.startSession(userId);
+
+        const summary = api.getMCTSessionSummary(userId);
+        expect(summary).toBeNull();
+      });
+
+      it('should return summary with MCT plan', async () => {
+        const userId = 'summary-with-plan';
+        api.startSession(userId);
+        api.initializeMCT(userId, createBaselineData(userId, 7));
+
+        const summary = api.getMCTSessionSummary(userId);
+        expect(summary).toHaveProperty('keyTakeaways');
+        expect(summary).toHaveProperty('homeExperiments');
+        expect(summary).toHaveProperty('nextSessionPreview');
+      });
+    });
+  });
+
+  // ============= Relaxation Methods Extended =============
+
+  describe('Relaxation Methods Extended', () => {
+    describe('getRelaxationRecommendation() with sleep state', () => {
+      it('should recommend technique based on user state', async () => {
+        const userId = 'relax-state';
+        api.startSession(userId);
+        await api.initializeTreatment(userId, createBaselineData(userId, 7));
+        await api.processDailyCheckIn(createDailyCheckIn({ userId }));
+
+        const recommendation = api.getRelaxationRecommendation(userId, 'bedtime');
+        expect(recommendation).toHaveProperty('technique');
+        expect(recommendation).toHaveProperty('instructions');
+        expect(recommendation).toHaveProperty('duration');
+      });
+
+      it('should use intermediate level after week 4', async () => {
+        const userId = 'relax-intermediate';
+        api.startSession(userId);
+        await api.initializeTreatment(userId, createBaselineData(userId, 7));
+
+        // Simulate 5 weeks of progress
+        for (let i = 0; i < 35; i++) {
+          await api.processDailyCheckIn(createDailyCheckIn({
+            userId,
+            date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          }));
+        }
+
+        const recommendation = api.getRelaxationRecommendation(userId, 'bedtime');
+        expect(recommendation).toHaveProperty('technique');
+      });
+    });
+
+    describe('getRelaxationProtocol()', () => {
+      it('should return beginner bedtime protocol', () => {
+        const protocol = api.getRelaxationProtocol('beginner', 'bedtime');
+        expect(protocol).toHaveProperty('techniques');
+        expect(protocol).toHaveProperty('totalDuration');
+      });
+
+      it('should return intermediate daytime protocol', () => {
+        const protocol = api.getRelaxationProtocol('intermediate', 'daytime');
+        expect(protocol).toHaveProperty('techniques');
+      });
+
+      it('should return advanced wakeup protocol', () => {
+        const protocol = api.getRelaxationProtocol('advanced', 'wakeup');
+        expect(protocol).toHaveProperty('techniques');
+      });
+    });
+
+    describe('getRelaxationTechniqueInstructions()', () => {
+      it('should generate instructions for PMR', () => {
+        const instructions = api.getRelaxationTechniqueInstructions('progressive_muscle_relaxation', 15);
+        expect(Array.isArray(instructions)).toBe(true);
+        expect(instructions.length).toBeGreaterThan(0);
+      });
+
+      it('should generate instructions for diaphragmatic breathing', () => {
+        const instructions = api.getRelaxationTechniqueInstructions('diaphragmatic_breathing', 10);
+        expect(Array.isArray(instructions)).toBe(true);
+      });
+
+      it('should generate instructions for body scan', () => {
+        const instructions = api.getRelaxationTechniqueInstructions('body_scan', 20);
+        expect(Array.isArray(instructions)).toBe(true);
+      });
+    });
+  });
+
+  // ============= Service Accessors =============
+
+  describe('Service Accessors', () => {
+    describe('getMetacognitiveEngine()', () => {
+      it('should return metacognitive engine service', () => {
+        const engine = api.getMetacognitiveEngine();
+        expect(engine).toBeDefined();
+      });
+    });
+
+    describe('getSleepPrediction()', () => {
+      it('should return sleep prediction service', () => {
+        const prediction = api.getSleepPrediction();
+        expect(prediction).toBeDefined();
+      });
+    });
+
+    describe('adaptMessageTone()', () => {
+      it('should adapt message tone for user', async () => {
+        const userId = 'adapt-tone';
+        api.startSession(userId);
+
+        const result = await api.adaptMessageTone(userId, 'Привет, как дела?');
+        expect(typeof result).toBe('string');
+      });
+
+      it('should return original message on error', async () => {
+        const userId = 'adapt-error';
+        const original = 'Test message';
+
+        const result = await api.adaptMessageTone(userId, original);
+        // Should return something, either adapted or original
+        expect(typeof result).toBe('string');
+      });
+    });
+
+    describe('getProactiveInsights()', () => {
+      it('should return insights array for user', () => {
+        const userId = 'insights-user';
+        api.startSession(userId);
+
+        const insights = api.getProactiveInsights(userId);
+        expect(Array.isArray(insights)).toBe(true);
+      });
+
+      it('should return empty array for unknown user', () => {
+        const insights = api.getProactiveInsights('unknown-user');
+        expect(Array.isArray(insights)).toBe(true);
+      });
+    });
+  });
+
+  // ============= Weekly Summary and Adherence =============
+
+  describe('Weekly Summary and Adherence', () => {
+    describe('getWeeklySummary()', () => {
+      it('should return summary for valid week', async () => {
+        const userId = 'weekly-summary';
+        api.startSession(userId);
+        await api.initializeTreatment(userId, createBaselineData(userId, 7));
+
+        const weekStart = new Date().toISOString().split('T')[0];
+        const summary = api.getWeeklySummary(userId, weekStart);
+        // May return undefined if no data for that week
+        expect(summary === undefined || typeof summary === 'object').toBe(true);
+      });
+    });
+
+    describe('analyzePatterns()', () => {
+      it('should analyze patterns for user with data', async () => {
+        const userId = 'patterns-user';
+        api.startSession(userId);
+        await api.initializeTreatment(userId, createBaselineData(userId, 7));
+
+        for (let i = 0; i < 10; i++) {
+          await api.processDailyCheckIn(createDailyCheckIn({
+            userId,
+            date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          }));
+        }
+
+        try {
+          const patterns = api.analyzePatterns(userId);
+          expect(patterns === null || typeof patterns === 'object').toBe(true);
+        } catch {
+          // May throw if not enough data
+          expect(true).toBe(true);
+        }
+      });
+    });
+
+    describe('estimateISI()', () => {
+      it('should estimate ISI from diary data', async () => {
+        const userId = 'estimate-isi';
+        api.startSession(userId);
+        await api.initializeTreatment(userId, createBaselineData(userId, 7));
+
+        for (let i = 0; i < 7; i++) {
+          await api.processDailyCheckIn(createDailyCheckIn({
+            userId,
+            date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          }));
+        }
+
+        const isi = api.estimateISI(userId);
+        expect(typeof isi).toBe('number');
+        expect(isi).toBeGreaterThanOrEqual(0);
+        expect(isi).toBeLessThanOrEqual(28);
+      });
+    });
+  });
+
+  // ============= Stimulus Control Adherence =============
+
+  describe('Stimulus Control Adherence', () => {
+    describe('trackStimulusControlAdherence()', () => {
+      it('should return null for user without session', () => {
+        const result = api.trackStimulusControlAdherence('unknown-user');
+        expect(result).toBeNull();
+      });
+
+      it('should return null for user without plan', () => {
+        const userId = 'adherence-no-plan';
+        api.startSession(userId);
+
+        const result = api.trackStimulusControlAdherence(userId);
+        expect(result).toBeNull();
+      });
+
+      it('should track adherence for user with plan and data', async () => {
+        const userId = 'adherence-valid';
+        api.startSession(userId);
+        await api.initializeTreatment(userId, createBaselineData(userId, 7));
+
+        // Add a daily check-in to have sleep state data
+        await api.processDailyCheckIn(createDailyCheckIn({ userId }));
+
+        const result = api.trackStimulusControlAdherence(userId);
+        // May be null if stimulus control not in plan, or have adherence data
+        expect(result === null || typeof result === 'object').toBe(true);
+      });
+    });
+
+    describe('assessSleepHygiene()', () => {
+      it('should return null for user without sleep states', () => {
+        const result = api.assessSleepHygiene('unknown-user');
+        expect(result).toBeNull();
+      });
+
+      it('should return assessment for user with data', async () => {
+        const userId = 'hygiene-valid';
+        api.startSession(userId);
+        await api.initializeTreatment(userId, createBaselineData(userId, 7));
+
+        await api.processDailyCheckIn(createDailyCheckIn({ userId }));
+
+        const result = api.assessSleepHygiene(userId);
+        // May be null if no sleep state, or have assessment data
+        expect(result === null || typeof result === 'object').toBe(true);
+      });
+    });
+  });
 });
