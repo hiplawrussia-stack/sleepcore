@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SleepCore</string>
+
+    <!-- Link Screen -->
+    <string name="link_title">Connect Device</string>
+    <string name="link_instructions">Enter the 6-character code from the SleepCore Telegram bot to link this device.</string>
+    <string name="link_code_label">Link Code</string>
+    <string name="link_button">Connect</string>
+    <string name="health_connect_unavailable">Health Connect is not available on this device. Please install or update it from Google Play.</string>
+
+    <!-- Sync Screen -->
+    <string name="sync_title">Sleep Sync</string>
+    <string name="sync_connected_via_telegram">Connected via Telegram</string>
+    <string name="sync_permissions_required">Health Connect Permissions</string>
+    <string name="sync_permissions_description">To sync your sleep data, please grant access to Health Connect. We will read your sleep sessions, heart rate, and HRV data.</string>
+    <string name="sync_grant_permissions">Grant Permissions</string>
+    <string name="sync_statistics">Statistics</string>
+    <string name="sync_total_sessions">Total Sessions</string>
+    <string name="sync_last_7_days">Last 7 Days</string>
+    <string name="sync_last_sync">Last Sync</string>
+    <string name="sync_never">Never synced</string>
+    <string name="sync_now">Sync Now</string>
+    <string name="sync_syncing">Syncing…</string>
+    <string name="sync_background_sync">Background Sync</string>
+    <string name="sync_background_description">Automatically sync sleep data every 15 minutes</string>
+
+    <!-- Unlink Dialog -->
+    <string name="unlink_title">Unlink Device?</string>
+    <string name="unlink_message">This will disconnect your device from SleepCore. You will need to link again to sync sleep data.</string>
+    <string name="unlink_confirm">Unlink</string>
+    <string name="cancel">Cancel</string>
+
+    <!-- Privacy Policy -->
+    <string name="privacy_policy_title">Privacy Policy</string>
+    <string name="privacy_policy_content">
+        SleepCore Companion App Privacy Policy\n\n
+        We collect sleep data from Health Connect to provide personalized sleep therapy recommendations.\n\n
+        Data collected:\n
+        • Sleep sessions (duration, stages)\n
+        • Heart Rate Variability (HRV)\n
+        • Heart Rate during sleep\n
+        • Resting Heart Rate\n\n
+        Your data is:\n
+        • Encrypted in transit (TLS 1.3)\n
+        • Stored securely on our servers\n
+        • Never shared with third parties\n
+        • Used only for your sleep therapy\n\n
+        You can delete your data at any time by unlinking the device.
+    </string>
+</resources>

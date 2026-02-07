@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SleepCore Companion App - Android Manifest
+  ==========================================
+  Health Connect permissions based on research (February 2026):
+  - Sleep sessions (READ/WRITE)
+  - Heart Rate Variability (READ) - RMSSD for sleep quality
+  - Heart Rate (READ) - Resting HR correlation
+  - Resting Heart Rate (READ)
+  - Background read (Android 15+) for periodic sync
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Internet for API communication -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Foreground service for sync operations -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+
+    <!-- Wake lock for WorkManager -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      Health Connect Permissions
+      Based on World Sleep Society 2025 Fundamental Sleep Measures:
+      - TST, SOL, SE, WASO, Sleep Stages, TIB, Awakenings
+      Plus HRV (RMSSD) for sleep quality assessment
+    -->
+
+    <!-- Sleep Data - Core requirement -->
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+
+    <!-- HRV Data - Research: r=0.937-0.979 correlation with ECG for RMSSD -->
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
+
+    <!-- Heart Rate - For resting HR and sleep HR patterns -->
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+
+    <!-- Background Read (Android 15+) - For periodic sync every 15 minutes -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
+
+    <!-- Historical Data (>30 days) - For complete sleep history -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
+
+    <application
+        android:name=".SleepCoreCompanionApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SleepCoreCompanion"
+        android:networkSecurityConfig="@xml/network_security_config">
+
+        <activity
+            android:name=".presentation.main.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.SleepCoreCompanion">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Health Connect permissions rationale -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+
+            <!-- Deep link for device linking from Telegram -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="sleepcore"
+                    android:host="link" />
+            </intent-filter>
+        </activity>
+
+        <!-- Privacy policy activity for Health Connect -->
+        <activity
+            android:name=".presentation.main.PrivacyPolicyActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity>
+
+        <!-- WorkManager for background sync -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+        <!-- Health Connect availability meta-data -->
+        <meta-data
+            android:name="health_connect_opt_in_enabled"
+            android:value="true" />
+
+        <!-- Hilt WorkManager initialization -->
+        <provider
+            android:name="androidx.hilt.work.HiltWorkerFactory"
+            android:authorities="${applicationId}.hilt.work"
+            android:exported="false" />
+
+    </application>
+
+    <!-- Health Connect availability query -->
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+        <intent>
+            <action android:name="androidx.health.ACTION_HEALTH_CONNECT_SETTINGS" />
+        </intent>
+    </queries>
+
+</manifest>

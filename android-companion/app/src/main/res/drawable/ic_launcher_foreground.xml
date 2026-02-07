@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SleepCore Launcher Icon Foreground
+  ===================================
+  Moon with sleep waves - representing sleep therapy.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Moon shape -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,24
+            a26,26 0 1,0 0,52
+            a20,20 0 0,1 0,-52"
+        android:strokeWidth="0"/>
+
+    <!-- Sleep wave 1 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M30,58 Q38,52 46,58 Q54,64 62,58"/>
+
+    <!-- Sleep wave 2 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M34,68 Q40,64 46,68 Q52,72 58,68"/>
+
+    <!-- Sleep wave 3 (small) -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M38,76 Q42,74 46,76 Q50,78 54,76"/>
+
+</vector>

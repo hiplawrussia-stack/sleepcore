@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sleep-themed primary colors -->
+    <color name="sleep_purple">#6B5CE7</color>
+    <color name="sleep_purple_light">#9B8FFF</color>
+    <color name="sleep_purple_dark">#4A3FB3</color>
+
+    <!-- Secondary colors -->
+    <color name="sleep_blue">#1E88E5</color>
+    <color name="sleep_indigo">#3F51B5</color>
+
+    <!-- Background colors -->
+    <color name="background_light">#FFFBFF</color>
+    <color name="background_dark">#1C1B1F</color>
+
+    <!-- Surface colors -->
+    <color name="surface_light">#FFFBFF</color>
+    <color name="surface_dark">#1C1B1F</color>
+</resources>
