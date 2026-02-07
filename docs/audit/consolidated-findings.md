@@ -34,9 +34,9 @@
 
 | ID | Finding | Location | Impact | Recommendation |
 |----|---------|----------|--------|----------------|
-| P1-1 | Hardcoded clinical content | TherapyCommand.ts:110-270, 3607-3900 | ~440 lines of clinical text blocks localization, clinical review | Migrate to ClinicalContent.ts |
-| P1-2 | main.ts low test coverage | src/main.ts | 12.18% coverage, integration hub untested | Add unit tests for critical paths |
-| P1-3 | Flaky tests | ProactiveIntelligenceService | 2 time-dependent tests | Mock Date in tests |
+| P1-1 | Hardcoded clinical content | TherapyCommand.ts:110-270, 3607-3900 | ~440 lines of clinical text blocks localization, clinical review | Migrate to ClinicalContent.ts | **DONE** |
+| P1-2 | main.ts low test coverage | src/main.ts | 12.18% coverage, integration hub untested | Add unit tests for critical paths | **PARTIAL** (64 tests added for exported functions; higher coverage requires refactoring 2800-line integration hub) |
+| P1-3 | Flaky tests | ProactiveIntelligenceService | 2 time-dependent tests | Mock Date in tests | **DONE** |
 
 ---
 
