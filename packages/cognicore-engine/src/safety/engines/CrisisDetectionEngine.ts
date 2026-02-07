@@ -124,8 +124,9 @@ export const CRISIS_PATTERNS = {
 
 /**
  * Crisis type indicators for more specific classification
+ * Exported for test purposes (lastIndex reset)
  */
-const CRISIS_TYPE_INDICATORS = {
+export const CRISIS_TYPE_INDICATORS = {
   suicidal: [
     /суицид|самоубийство|убить себя|покончить|умереть/gi,
     /suicide|kill myself|end my life/gi,

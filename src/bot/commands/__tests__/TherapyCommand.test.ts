@@ -79,6 +79,17 @@ jest.mock('../../../modules/content/clinical/ClinicalContent', () => ({
   ],
   CBTI_COMPONENT_NAMES: {},
   CBTI_COMPONENT_ICONS: {},
+  // Core sessions for 6-week CBT-I program (CLAUDE.md §13.4)
+  CORE_SESSIONS: [
+    { id: 'overview', weekNumber: 1, title: 'Overview', titleRu: 'Обзор программы', duration: '30-45 мин', icon: '📚', objectives: [], components: [], homework: [] },
+    { id: 'sleep_behavior_1', weekNumber: 2, title: 'Sleep Behavior I', titleRu: 'Ограничение сна', duration: '45-60 мин', icon: '🛏️', objectives: [], components: ['Минимальный безопасный TIB: 5.5 часов'], homework: [] },
+    { id: 'sleep_behavior_2', weekNumber: 3, title: 'Sleep Behavior II', titleRu: 'Поведенческая практика', duration: '30-45 мин', icon: '🔄', objectives: [], components: [], homework: [] },
+    { id: 'sleep_education', weekNumber: 4, title: 'Sleep Education', titleRu: 'Гигиена сна', duration: '30-45 мин', icon: '🌙', objectives: [], components: [], homework: [] },
+    { id: 'sleep_thoughts', weekNumber: 5, title: 'Sleep Thoughts', titleRu: 'Когнитивная терапия', duration: '45-60 мин', icon: '🧠', objectives: [], components: [], homework: [] },
+    { id: 'problem_prevention', weekNumber: 6, title: 'Problem Prevention', titleRu: 'Профилактика рецидива', duration: '30-45 мин', icon: '🛡️', objectives: [], components: [], homework: [] },
+  ],
+  getCoreContent: (sessionId: string) => `Mock content for ${sessionId}`,
+  getCoreExercise: (sessionId: string) => sessionId === 'sleep_behavior_1' ? 'Mock exercise with 5.5 hours safety floor' : `Mock exercise for ${sessionId}`,
 }));
 
 describe('TherapyCommand', () => {

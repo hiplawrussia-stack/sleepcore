@@ -25,7 +25,15 @@ describe('ProactiveIntelligenceService', () => {
   let service: ProactiveIntelligenceService;
 
   beforeEach(() => {
+    // Fix flaky time-dependent tests: set system time to evening (19:00)
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2024-06-15T19:00:00'));
+
     service = createProactiveIntelligenceService();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   // Helper to create mock sleep history
@@ -554,8 +562,9 @@ describe('ProactiveIntelligenceService', () => {
       // Mark insight as delivered to trigger persistence
       service.markInsightSent('user-persist', 'insight-1');
 
-      // Wait for async persistence
-      await new Promise(resolve => setTimeout(resolve, 10));
+      // Wait for async persistence (advance fake timers)
+      jest.advanceTimersByTime(10);
+      await Promise.resolve(); // Flush microtasks
 
       expect(mockRepo.set).toHaveBeenCalled();
     });

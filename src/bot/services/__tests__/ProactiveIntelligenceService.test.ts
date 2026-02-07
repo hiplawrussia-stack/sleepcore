@@ -169,8 +169,16 @@ describe('ProactiveIntelligenceService', () => {
   }
 
   beforeEach(() => {
+    // Fix flaky time-dependent tests: set system time to evening (19:00)
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2024-06-15T19:00:00'));
+
     service = new ProactiveIntelligenceService();
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   // ==========================================================================
