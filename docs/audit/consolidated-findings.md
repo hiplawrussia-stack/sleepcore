@@ -110,11 +110,11 @@
 ### Test Distribution
 | Type | Count |
 |------|-------|
-| Unit Tests | ~7566 |
+| Unit Tests | ~7903 |
 | Integration Tests | 272 (+54 cognitive commands, +13 audit retention, +66 PHI/GDPR) |
 | E2E Tests | 87 |
 | Smoke Tests | 25 |
-| **Total** | **8180** |
+| **Total** | **8517** |
 
 ### Safety-Critical Coverage
 | Module | Coverage |
@@ -127,11 +127,14 @@
 | CogniCore Safety | 99.48% |
 | SleepCoreAdapter | 96.54% |
 
-### Platform Coverage (Updated)
+### Platform Coverage (Updated 2026-02-07)
 | Module | Lines | Target | Status |
 |--------|-------|--------|--------|
 | SleepCoreAdapter | 96.54% | 90% | EXCEEDS |
-| SleepCoreAPI | 81.83% | 90% | IN PROGRESS |
+| SleepCoreAPI | 92.83% | 90% | EXCEEDS |
+| **Bot Services** | **93.40%** | 90% | **EXCEEDS** |
+| Infrastructure | 47.41% | 45% | PASS |
+| Infrastructure/Repositories | 31.47% | 45% | NEEDS WORK |
 
 ---
 

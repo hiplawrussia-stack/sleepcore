@@ -434,9 +434,9 @@ const SLEEP_ACTIONS = [
 | Third-Wave | 94.67% | Отлично |
 | Platform | 99.1% | Отлично |
 | Gamification | 82.94% | Хорошо |
-| **Bot Services** | **~5-10%** | **КРИТИЧНО** (32 сервиса, тесты есть для ~5) |
-| **Bot Adapters** | **0%** | **КРИТИЧНО** |
-| **Infrastructure** | **~0%** | **КРИТИЧНО** (encryption, audit, repositories) |
+| Bot Services | 93.40% | Отлично (32 сервиса, все с тестами) |
+| Infrastructure | 47.41% | Хорошо (security 56%, monitoring 92%) |
+| **Infrastructure/Repositories** | **31.47%** | **ТРЕБУЕТ РАБОТЫ** (14 репозиториев) |
 
 ### 8.3. Типы тестов
 
