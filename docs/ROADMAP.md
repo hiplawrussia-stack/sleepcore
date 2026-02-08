@@ -1,7 +1,7 @@
 # SleepCore Unified Roadmap
 
-**Version**: 3.0
-**Updated**: 2026-02-07
+**Version**: 3.1
+**Updated**: 2026-02-08
 **Status**: Active Development
 
 ---
@@ -47,8 +47,10 @@
 ├── Gamification                         ████████████████░░░░ 83%
 ├── Mini App                             ████████████░░░░░░░░ 60%
 │
+ГОТОВО
+├── Android Companion App                ████████████████████ 100%
+│
 НЕ НАЧАТО
-├── Android Companion App                ░░░░░░░░░░░░░░░░░░░░ 0%
 ├── iOS App                              ░░░░░░░░░░░░░░░░░░░░ 0%
 ├── Payment/Subscription                 ░░░░░░░░░░░░░░░░░░░░ 0%
 └── RCT Clinical Trial                   ░░░░░░░░░░░░░░░░░░░░ 0%
@@ -73,7 +75,7 @@
 | # | Задача | Статус | Блокирует |
 |---|--------|--------|-----------|
 | 1 | ~~Wearable Backend API~~ | ✅ Done | Android App |
-| 2 | Android Companion App (Health Connect) | ⏳ Next | Real wearable data |
+| 2 | ~~Android Companion App (Health Connect)~~ | ✅ Done | Real wearable data |
 | 3 | Bot Commands branches: 34% → 60% | ⏳ In Progress | Quality |
 | 4 | Command → Engine integration verification | ⏳ In Progress | Clinical safety |
 | 5 | Ethics Committee submission | 🔜 Ready docs | Pilot start |
@@ -133,7 +135,7 @@
 | Phenotype → ThirdWaveCoordinator | ✅ | 2026-02-07 |
 | /therapy phenotype UI | ✅ | 2026-02-07 |
 | **Wearable Backend (HRV integration)** | ✅ | **2026-02-07** |
-| Android Companion App | ⏳ | Q1-Q2 2026 |
+| **Android Companion App** | ✅ | **2026-02-08** |
 | Background sync | ⏳ | Q2 2026 |
 | Daily readiness scoring | 🔜 | Q2 2026 |
 | Dynamic SRT adjustment | 🔜 | Q2 2026 |
@@ -196,11 +198,12 @@
 │  ├── Types for Health Connect                                   │
 │  └── 46 unit tests                                              │
 │                                                                 │
-│  Phase 2: Android Companion App ⏳ NEXT                         │
+│  Phase 2: Android Companion App ✅ COMPLETE (2026-02-08)        │
 │  ├── Kotlin + Health Connect SDK                                │
 │  ├── Samsung Galaxy Watch support                               │
 │  ├── Foreground sync (manual)                                   │
-│  └── Telegram bot linking                                       │
+│  ├── Telegram bot linking                                       │
+│  └── 42 files, 7 test files, 2281 lines of tests                │
 │                                                                 │
 │  Phase 3: Background Sync 🔜                                    │
 │  ├── WorkManager (Android 15+ only)                             │
@@ -320,6 +323,11 @@
 
 ## Changelog
 
+### 2026-02-08
+- ✅ Android Companion App complete (42 files, Kotlin/Compose)
+- ✅ Unit tests for Android (7 test files, 2281 lines)
+- ✅ Health Connect integration with Samsung Galaxy Watch support
+
 ### 2026-02-07
 - ✅ Added Wearable Backend (WearableIngestionService, WearablePATIntegration)
 - ✅ Updated Precision Phenotyping status
@@ -336,5 +344,5 @@
 
 ---
 
-*Unified Roadmap v3.0 — Updated 2026-02-07*
+*Unified Roadmap v3.1 — Updated 2026-02-08*
 *Next review: After Pilot (Q3 2026)*

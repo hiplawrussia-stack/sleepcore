@@ -1,7 +1,7 @@
 # SleepCore — Полный статус проекта
 
 **Версия документа:** 1.1
-**Дата:** Февраль 2026 (обновлено 2026-02-07)
+**Дата:** Февраль 2026 (обновлено 2026-02-08)
 **Продукт:** SleepCore v1.0.0-alpha.4
 **Тип:** AI-powered цифровая терапия (DTx) хронической бессонницы
 
@@ -44,6 +44,7 @@ sleepcore/
 ├── mini-app/                   # Telegram Mini App (React)
 ├── packages/
 │   └── cognicore-engine/       # CogniCore Engine v2.0.0-phase1 (local package)
+├── android-companion/          # Android Companion App (Kotlin/Compose) — NEW 2026-02-08
 ├── deploy/                     # Docker Compose конфигурации
 ├── tests/                      # Unit, Integration, E2E тесты
 ├── docs/                       # Документация (регуляторная, бизнес, исследования)
@@ -308,8 +309,8 @@ BOT SERVICES (тесты)                   █░░░░░░░░░░░
 | **Bot Commands branches: 34.81%** | СРЕДНЕ | Ветвления в командах покрыты ниже порога (40%) |
 | **Отдельные сервисы < 10%** | ВЫСОКАЯ | AdverseEventService (4.95%), CausalInsightsService (4.19%) |
 | **Команда → Движок интеграция** | ВЫСОКАЯ | Не верифицировано, что команды вызывают движки |
-| **Mobile App (iOS/Android)** | ВЫСОКАЯ | Не начато — нужно для push уведомлений и wearables |
-| **Wearable Integration** | СРЕДНЕ | ~~Terra API~~ → Health Connect backend готов, нужен Android app |
+| **Mobile App (iOS)** | ВЫСОКАЯ | Не начато — нужно для push уведомлений |
+| **Wearable Integration** | НИЗКАЯ | ✅ Health Connect backend + Android Companion App готовы |
 | **Payment / Подписка** | ВЫСОКАЯ | Монетизация не реализована |
 | **LLM-терапевт** | СРЕДНЯЯ | Запланирован на 2027 |
 | **Рандомизация для RCT** | СРЕДНЯЯ | Модуль не создан |
@@ -341,7 +342,7 @@ BOT SERVICES (тесты)                   █░░░░░░░░░░░
 | 2 | **Telegram Mini App** | React + Vite | ALPHA | Q2 2026 (пилот) |
 | 3 | **Web App** | React (на базе Mini App) | НЕ НАЧАТО | Q4 2026 |
 | 4 | **iOS App** | React Native или Swift | НЕ НАЧАТО | Q1 2027 |
-| 5 | **Android App** | React Native или Kotlin | НЕ НАЧАТО | Q1 2027 |
+| 5 | **Android Companion App** | Kotlin + Compose | ✅ ГОТОВО | 2026-02-08 |
 | 6 | **Prescriber Dashboard** | Web (React) | НЕ НАЧАТО | Q2 2027 |
 
 ### 2. Фазы запуска
@@ -402,9 +403,9 @@ BOT SERVICES (тесты)                   █░░░░░░░░░░░
 |-----------|--------|--------|
 | P0 | Покрытие ветвлений Bot Commands (34.81% → 60%) | В ПРОЦЕССЕ |
 | P0 | Верификация Command → Engine интеграции | НЕ НАЧАТО |
-| P1 | Native Mobile App (iOS + Android) | НЕ НАЧАТО |
+| P1 | Native Mobile App (iOS) | НЕ НАЧАТО |
 | P1 | Push Notifications (вне Telegram) | НЕ НАЧАТО |
-| P1 | Wearable интеграция (Health Connect: Samsung, etc.) | **BACKEND ГОТОВ** — нужен Android app |
+| P1 | ~~Wearable интеграция (Health Connect)~~ | ✅ **ГОТОВО** (Backend + Android Companion App) |
 | P2 | Payment / Подписка | НЕ НАЧАТО |
 | P2 | Prescriber Dashboard | НЕ НАЧАТО |
 | P2 | A/B тестирование геймификации | НЕ НАЧАТО |
