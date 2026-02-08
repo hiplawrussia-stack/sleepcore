@@ -4,9 +4,23 @@
 
 [![Version](https://img.shields.io/badge/version-1.0.0--alpha.4-blue.svg)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
+[![Tests](https://img.shields.io/badge/tests-8752%2B-green.svg)](package.json)
+[![Coverage](https://img.shields.io/badge/coverage-84.97%25-green.svg)](package.json)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 SleepCore is a clinical-grade digital therapeutic (DTx) platform implementing evidence-based Cognitive Behavioral Therapy for Insomnia (CBT-I). Built on the CogniCore Engine, it provides AI-optimized personalized treatment for chronic insomnia.
+
+## Status
+
+| Component | Status |
+|-----------|--------|
+| CBT-I Engine (5 components) | ✅ Complete |
+| Third-Wave (MBT-I, ACT-I, MCT) | ✅ Complete |
+| CogniCore Integration (POMDP, Digital Twin) | ✅ Complete |
+| Precision Phenotyping | ✅ Complete |
+| Wearable Backend + Android App | ✅ Complete |
+| IEC 62304 Audit | ✅ Complete |
+| Clinical Pilot | 🔜 Q2 2026 |
 
 ## Market Context
 
@@ -20,26 +34,43 @@ SleepCore is a clinical-grade digital therapeutic (DTx) platform implementing ev
 
 | Component | Description | Status |
 |-----------|-------------|--------|
-| **Sleep Restriction (SRT)** | Optimizes time-in-bed based on sleep efficiency | Implemented |
-| **Stimulus Control (SCT)** | Bed-only-for-sleep conditioning | Implemented |
-| **Cognitive Restructuring** | Dysfunctional belief identification & challenge | Implemented |
-| **Sleep Hygiene (SHE)** | Environment & behavior optimization | Implemented |
-| **Relaxation Training** | 7 techniques (PMR, breathing, imagery, etc.) | Implemented |
+| **Sleep Restriction (SRT)** | Optimizes time-in-bed based on sleep efficiency | ✅ |
+| **Stimulus Control (SCT)** | Bed-only-for-sleep conditioning | ✅ |
+| **Cognitive Restructuring** | Dysfunctional belief identification & challenge | ✅ |
+| **Sleep Hygiene (SHE)** | Environment & behavior optimization | ✅ |
+| **Relaxation Training** | 7 techniques (PMR, breathing, imagery, etc.) | ✅ |
 
-### AI/ML Optimization
+### AI/ML Optimization (CogniCore Engine)
 
-- **POMDP Framework**: Optimal intervention selection under uncertainty
-- **Thompson Sampling**: Personalized treatment via bandit algorithms
-- **Kalman Filter**: Continuous sleep state estimation
-- **Digital Twin**: Predictive user modeling
+| Feature | Description |
+|---------|-------------|
+| **POMDP Framework** | Optimal intervention selection under uncertainty |
+| **Thompson Sampling** | Personalized treatment via bandit algorithms |
+| **Digital Twin (PLRNN)** | Predictive user modeling |
+| **Causal Discovery** | Personalized causal insights |
+| **Critical Slowing Down** | Early warning signals for deterioration |
+| **Constitutional AI** | Safe, aligned responses |
 
 ### Extended Therapies
 
 - **MBT-I**: Mindfulness-Based Therapy for Insomnia (Ong et al., 2014)
 - **ACT-I**: Acceptance & Commitment Therapy for Insomnia (Meadows et al.)
+- **MCT**: Metacognitive Therapy for sleep-related worry
 - **Chronotherapy**: Circadian rhythm optimization (MEQ, MCTQ)
 - **TCM Integration**: Traditional Chinese Medicine sleep protocols
 - **Ayurveda Integration**: Yoga Nidra, Dinacharya, herbal support
+
+### Precision Phenotyping
+
+- **Blanken 5-Class Model**: Insomnia subtype classification
+- **HRV Integration**: Wearable-based autonomic analysis
+- **PAT-based Estimation**: Pretrained Actigraphy Transformer
+
+### Wearable Integration
+
+- **Android Companion App**: Health Connect SDK, Samsung Galaxy Watch support
+- **Backend API**: WearableIngestionService, real-time sync
+- **HRV Analysis**: RMSSD, SDNN, LF/HF ratio tracking
 
 ### Clinical Assessments
 
@@ -52,14 +83,15 @@ SleepCore is a clinical-grade digital therapeutic (DTx) platform implementing ev
 
 - **Database**: SQLite (development) / PostgreSQL (production)
 - **Security**: AES-256-GCM encryption, HIPAA audit trail, automated backups
-- **Migrations**: Version-controlled schema management
-- **Repository Pattern**: Clean data access abstraction
+- **Bot**: Telegram with 25 commands, Mini App
+- **Deployment**: Docker, Traefik, health monitoring
 
 ## Architecture
 
 ```
 src/
 ├── SleepCoreAPI.ts          # Main facade (unified API)
+├── main.ts                  # Bot integration hub (2800+ lines)
 ├── assessment/              # Clinical instruments (ISI, MEQ, etc.)
 ├── cbt-i/                   # 5-component CBT-I engines
 ├── circadian/               # Chronotype & circadian AI
@@ -70,13 +102,15 @@ src/
 │   └── database/
 │       ├── migrations/      # Schema versioning
 │       ├── repositories/    # Data access layer
-│       ├── security/        # Encryption, audit, backup
-│       ├── sqlite/          # SQLite implementation
-│       └── postgres/        # PostgreSQL implementation
-├── personalization/         # User adaptation
-├── platform/                # POMDP algorithms
-├── sleep/                   # Sleep state interfaces
-└── third-wave/              # MBT-I, ACT-I engines
+│       └── security/        # Encryption, audit, backup
+├── modules/
+│   ├── gamification/        # XP, badges, streaks
+│   └── wearable/            # Health Connect integration
+├── platform/                # POMDP, Thompson Sampling
+├── third-wave/              # MBT-I, ACT-I, MCT engines
+└── bot/
+    ├── commands/            # 25 bot commands
+    └── services/            # 32+ services
 ```
 
 ## Quick Start
@@ -90,12 +124,18 @@ npm install
 ### Configuration
 
 ```bash
-# Environment variables
+# Required
+BOT_TOKEN=<telegram_bot_token>
+ADMIN_USER_IDS=<comma_separated_ids>
+ENCRYPTION_MASTER_KEY=<64-hex-chars>
+
+# Database
+DATABASE_PATH=./data/sleepcore.db      # SQLite (dev)
+DATABASE_URL=postgresql://...           # PostgreSQL (prod)
+
+# Optional
+SENTRY_DSN=<sentry_dsn>
 NODE_ENV=development|production
-DATABASE_TYPE=sqlite|postgres
-SQLITE_PATH=./data/sleepcore.db      # For SQLite
-DATABASE_URL=postgresql://...         # For PostgreSQL
-ENCRYPTION_MASTER_KEY=<64-hex-chars>  # For PHI encryption
 ```
 
 ### Usage
@@ -114,16 +154,8 @@ for (const entry of baselineEntries) {
 // Initialize treatment
 const plan = sleepCore.initializeTreatment('user123', baselineStates);
 
-// Daily flow
-const result = sleepCore.processDailyCheckIn({
-  userId: 'user123',
-  date: '2025-01-15',
-  diaryEntry: todayEntry,
-  morningMood: 4,
-  energyLevel: 3,
-  followedSleepWindow: true,
-  usedRelaxation: true,
-});
+// Get next intervention
+const intervention = sleepCore.getNextIntervention('user123');
 
 // Track progress
 const progress = sleepCore.getProgressReport('user123');
@@ -144,67 +176,43 @@ console.log(`ISI: ${progress.currentISI} (change: ${progress.isiChange})`);
 
 ### Clinical Targets
 
-- **ISI Reduction**: >7 points (MCID)
-- **Sleep Efficiency**: >85%
+- **ISI Reduction**: ≥7 points (MCID)
+- **Sleep Efficiency**: ≥85%
 - **SOL**: <20 minutes
 - **WASO**: <30 minutes
-- **Remission Rate**: >50% (ISI ≤ 7)
+- **Remission Rate**: ≥50% (ISI ≤ 7)
 
-## Database Infrastructure
+## Development
 
-### Phases Completed
+### Scripts
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| Phase 1 | SQLite + Migrations | Complete |
-| Phase 2 | Sleep-specific Repositories | Complete |
-| Phase 3 | PostgreSQL Abstraction | Complete |
-| Phase 4 | Encryption + Audit + Backup | Complete |
-
-### Security Features
-
-- **EncryptionService**: AES-256-GCM for PHI fields
-- **AuditService**: HIPAA-compliant 6-year audit trail
-- **BackupService**: WAL checkpoint + cloud upload
-
-## API Reference
-
-### Session Management
-```typescript
-sleepCore.startSession(userId)
-sleepCore.getSession(userId)
-sleepCore.endSession(userId)
+```bash
+npm run build         # TypeScript compilation
+npm run dev           # Watch mode
+npm run bot           # Start Telegram bot
+npm test              # Run tests (8752+)
+npm run test:coverage # Coverage report (84.97%)
+npm run lint          # ESLint check
 ```
 
-### Sleep Diary
-```typescript
-sleepCore.addDiaryEntry(entry)
-sleepCore.getWeeklySummary(userId, weekStart)
-sleepCore.analyzePatterns(userId)
-```
+### Testing
 
-### CBT-I Treatment
-```typescript
-sleepCore.initializeTreatment(userId, baselineData)
-sleepCore.processDailyCheckIn(checkIn)
-sleepCore.getNextIntervention(userId)
-sleepCore.assessResponse(userId)
-```
+| Metric | Value |
+|--------|-------|
+| Total Tests | 8752+ |
+| Line Coverage | 84.97% |
+| Branch Coverage | 72.45% |
+| Function Coverage | 87.47% |
 
-### Third-Wave Therapies
-```typescript
-sleepCore.initializeMBTI(userId, baseline, options)
-sleepCore.getMindfulnessPractice(userId, context, duration)
-sleepCore.initializeACTI(userId, baseline)
-sleepCore.getDefusionTechnique(experience, level)
-```
+## Documentation
 
-### Circadian Optimization
-```typescript
-sleepCore.assessChronotypeFromMEQ(userId, response)
-sleepCore.generateChronotherapyPlan(userId)
-sleepCore.getSocialJetlag(userId)
-```
+See [docs/](docs/) for full documentation:
+
+- [ROADMAP.md](docs/ROADMAP.md) — Development roadmap
+- [CLAUDE.md](CLAUDE.md) — Development guidelines
+- [docs/audit/](docs/audit/) — IEC 62304 audit reports
+- [docs/ethics/](docs/ethics/) — Clinical study protocols
+- [docs/research/](docs/research/) — Scientific research
 
 ## Evidence Base
 
@@ -214,48 +222,27 @@ sleepCore.getSocialJetlag(userId)
 - American College of Physicians recommendations
 
 ### Scientific References
-- Spielman et al. (1987) - Sleep Restriction
-- Bootzin (1972) - Stimulus Control
-- Morin et al. (1993) - ISI development
-- Ong et al. (2014) - MBT-I protocol
+- Spielman et al. (1987) — Sleep Restriction
+- Bootzin (1972) — Stimulus Control
+- Morin et al. (1993) — ISI development
+- Ong et al. (2014) — MBT-I protocol
+- Blanken et al. (2019) — Insomnia phenotypes
 
-### Benchmark Studies
-- **SleepioRx**: 76% achieve healthy sleep, 54% SOL reduction
-- **Somryst**: 9-week structured dCBT-I protocol
+## Regulatory Pathway
 
-## Development
-
-### Scripts
-
-```bash
-npm run build        # TypeScript compilation
-npm run dev          # Watch mode
-npm run test         # Run tests
-npm run test:coverage # Coverage report
-npm run lint         # ESLint check
-```
-
-### Dependencies
-
-- **CogniCore Engine**: POMDP, Thompson Sampling, Kalman Filter
-- **better-sqlite3**: SQLite driver
-- **pg**: PostgreSQL driver
-
-## Roadmap
-
-See [ROADMAP.md](ROADMAP.md) for detailed development plan.
-
-### Upcoming Phases
-- Phase 5: Test Coverage (>80%)
-- Phase 6: Content Library (educational materials)
-- Phase 7: Wearable Integration (Apple Health, Fitbit)
-- Phase 8: FDA 510(k) Preparation
+| Market | Classification | Target |
+|--------|---------------|--------|
+| Russia | Roszdravnadzor Class IIa | Q3 2026 |
+| EU | CE Mark Class IIa | Q1 2027 |
+| Germany | DiGA Fast-Track | Q2 2027 |
+| USA | FDA 510(k) | Q4 2027 |
 
 ## License
 
-MIT License - see LICENSE for details.
+MIT License — see LICENSE for details.
 
 ## Contact
 
 - **Tech**: tech@awfond.ru
+- **Bot**: @SleepCore_Bot
 - **Platform**: CogniCore Engine
