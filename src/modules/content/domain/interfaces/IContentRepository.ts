@@ -1,7 +1,10 @@
 /**
- * IContentRepository Interface
- * ============================
+ * IContentRepository - Content Repository Interface
+ * ==================================================
  * Repository contract for accessing therapeutic content.
+ *
+ * @packageDocumentation
+ * @module @sleepcore/modules/content
  */
 
 import {

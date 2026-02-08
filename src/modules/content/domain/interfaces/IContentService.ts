@@ -1,7 +1,10 @@
 /**
- * IContentService Interface
- * =========================
+ * IContentService - Content Service Interface
+ * ============================================
  * Service contract for content personalization and delivery.
+ *
+ * @packageDocumentation
+ * @module @sleepcore/modules/content
  */
 
 import {

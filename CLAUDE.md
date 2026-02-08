@@ -424,7 +424,7 @@ const SLEEP_ACTIONS = [
 | Functions | 87.70% | 80% ✓ |
 | Lines | 84.01% | 80% ✓ |
 
-**Тесты:** 180 test suites, 8830 tests passed
+**Тесты:** 190 test suites, 9319 tests passed
 
 ### 8.2. Покрытие по модулям (обновлено Февраль 2026)
 
@@ -438,7 +438,7 @@ const SLEEP_ACTIONS = [
 | Gamification | 82.94% | Хорошо |
 | Bot Services | 93.40% | Отлично (32 сервиса, все с тестами) |
 | Infrastructure | 47.41% | Хорошо (security 56%, monitoring 92%) |
-| **Infrastructure/Repositories** | **31.47%** | **ТРЕБУЕТ РАБОТЫ** (14 репозиториев) |
+| Infrastructure/Repositories | 95.17% | Отлично (15 из 16 репозиториев >90%) |
 
 ### 8.3. Типы тестов
 
@@ -1041,6 +1041,144 @@ plan.sleepRestriction                                  // ❌ Не сущест�
 
 ---
 
-*Версия: 1.4 | Дата: 2026-02-07 | БФ «Другой путь»*
+## 19. Стандарт заголовков файлов
+
+### 19.1. Обязательная структура
+
+Каждый `.ts` файл должен начинаться с JSDoc-комментария:
+
+```typescript
+/**
+ * [Название модуля] - [Краткое описание]
+ * ======================================
+ * [Развёрнутое описание назначения]
+ *
+ * [Scientific Foundation / Научная основа]:  // для клинических модулей
+ * - [Источник] (год)
+ *
+ * [Compliance]:  // для safety-critical
+ * - [Стандарт, например IEC 62304]
+ *
+ * @see CLAUDE.md §[секция]  // для RED LINE требований
+ * @packageDocumentation
+ * @module @sleepcore/[путь/модуля]
+ */
+```
+
+### 19.2. Обязательные элементы
+
+| Элемент | Обязательность | Пример |
+|---------|----------------|--------|
+| Название модуля | ✅ Всегда | `SleepRestrictionEngine` |
+| Краткое описание | ✅ Всегда | `Sleep Restriction Therapy Implementation` |
+| Разделитель `===` | ✅ Всегда | Визуальное выделение |
+| `@module` | ✅ Всегда | `@sleepcore/cbt-i/engines` |
+| Scientific Foundation | ✅ Клинические | `Spielman et al., 1987` |
+| `@see CLAUDE.md` | ✅ Safety-critical | `@see CLAUDE.md §2.1` |
+| Compliance | ⚪ По необходимости | `IEC 62304`, `HIPAA` |
+
+### 19.3. Запрещённые элементы
+
+| Элемент | Причина |
+|---------|---------|
+| ❌ Упоминание других проектов | Путаница (например, "Adapted from byte-bot") |
+| ❌ Конкретная версия пакета | Устаревает (`@sleepcore/app v1.0.0`) |
+| ❌ Номер спринта в заголовке | Устаревает, лучше в git history |
+| ❌ Дата создания файла | Есть в git history |
+
+### 19.4. Примеры по типам модулей
+
+**Клинический движок (CBT-I, Third-Wave):**
+```typescript
+/**
+ * SleepRestrictionEngine - Sleep Restriction Therapy Implementation
+ * ==================================================================
+ * Implements Spielman's Sleep Restriction Therapy (1987).
+ *
+ * Scientific Foundation:
+ * - Spielman et al., 1987 — Original SRT protocol
+ * - European Insomnia Guideline 2023 — SE thresholds
+ *
+ * Safety:
+ * - TIB minimum: 5 hours (RED LINE)
+ * - Weekly adjustment: ±15 min
+ *
+ * @see CLAUDE.md §2.1 — TIB minimum requirement
+ * @see CLAUDE.md §3.2 — SRT safety constants
+ * @packageDocumentation
+ * @module @sleepcore/cbt-i/engines
+ */
+```
+
+**Bot service (safety-critical):**
+```typescript
+/**
+ * 🚨 CrisisDetectionService - Multi-Layer Crisis Detection
+ * =========================================================
+ * Integrates CogniCore Engine's crisis detection into SleepCore.
+ *
+ * Scientific Foundation:
+ * - Columbia-SSRS Protocol
+ * - SAMHSA Guidelines 2025
+ *
+ * @see CLAUDE.md §2.1 — Crisis detection always active
+ * @packageDocumentation
+ * @module @sleepcore/bot/services
+ */
+```
+
+**Infrastructure (database, security):**
+```typescript
+/**
+ * SQLiteConnection - SQLite Database Connection
+ * ==============================================
+ * Production-ready SQLite connection for SleepCore DTx.
+ *
+ * Compliance:
+ * - HIPAA: PHI encryption support
+ * - GDPR: Soft delete, data export
+ *
+ * @packageDocumentation
+ * @module @sleepcore/infrastructure/database
+ */
+```
+
+**Вспомогательный файл (index.ts, types.ts):**
+```typescript
+/**
+ * Bot Services Module
+ * ===================
+ * Exports for bot-related services.
+ *
+ * @packageDocumentation
+ * @module @sleepcore/bot/services
+ */
+```
+
+### 19.5. Эмодзи в заголовках (опционально)
+
+Эмодзи допускаются для визуальной идентификации типа модуля:
+
+| Эмодзи | Тип модуля |
+|--------|------------|
+| 🚨 | Crisis/Safety-critical |
+| 🧬 | Digital Twin, AI/ML |
+| 🌐 | Platform, Integration |
+| 🔐 | Security, Encryption |
+| 📊 | Analytics, Metrics |
+
+### 19.6. Чеклист перед коммитом
+
+```
+□ Заголовок соответствует шаблону §19.1?
+□ @module указан и корректен?
+□ Нет упоминаний других проектов?
+□ Scientific Foundation указан (для клинических)?
+□ @see CLAUDE.md указан (для safety-critical)?
+```
+
+---
+
+*Версия: 1.5 | Дата: 2026-02-08 | БФ «Другой путь»*
 *Основано на принципах «Конституции Claude» (Anthropic, 2025)*
 *Клиническая база: European Insomnia Guideline 2023, Spielman et al. 1987*

@@ -3,7 +3,7 @@
  * ============================================
  * Multi-Channel Platform Adapter for SleepCore DTx
  *
- * Scientific Foundation (2024-2025 Research):
+ * Architecture Foundation:
  * - Grammy Telegram Framework (TypeScript Global Summit 2024)
  * - Platform Adapter Pattern (SAP Bot Connector, MuseBot)
  * - 12-Factor App Configuration (dotenv, secrets management)
@@ -11,7 +11,8 @@
  * - Event-Driven Microservices (API Gateway patterns)
  * - Multi-Channel Chatbot Architecture (ChatBotKit patterns)
  *
- * Adapted from byte-bot for SleepCore DTx - @sleepcore/app v1.0.0
+ * @packageDocumentation
+ * @module @sleepcore/bot/interfaces
  */
 
 // ============================================================================

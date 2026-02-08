@@ -1,7 +1,10 @@
 /**
- * ContentService
- * ==============
- * Service for content personalization and delivery.
+ * ContentService - Content Personalization and Delivery
+ * ======================================================
+ * Service for therapeutic content personalization and delivery.
+ *
+ * @packageDocumentation
+ * @module @sleepcore/modules/content
  */
 
 import {

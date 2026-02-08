@@ -1,7 +1,10 @@
 /**
- * JsonContentRepository
- * =====================
+ * JsonContentRepository - JSON-based Content Repository
+ * ======================================================
  * Repository implementation that loads content from JSON files.
+ *
+ * @packageDocumentation
+ * @module @sleepcore/modules/content
  */
 
 import * as fs from 'fs';

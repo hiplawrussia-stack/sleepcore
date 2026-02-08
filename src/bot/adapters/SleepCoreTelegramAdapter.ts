@@ -3,7 +3,7 @@
  * =================================================
  * Production-ready Telegram adapter using Grammy framework
  *
- * Scientific Foundation (2024-2025 Research):
+ * Architecture Foundation:
  * - Grammy Framework (TypeScript Global Summit 2024)
  * - grammY Runner for concurrent processing (>500 msg/sec)
  * - Auto-Retry Plugin for rate limit handling (429 errors)
@@ -19,7 +19,8 @@
  * - Graceful shutdown support
  * - Prometheus-ready metrics
  *
- * SleepCore DTx - Adapted from byte-bot | @sleepcore/app v1.0.0
+ * @packageDocumentation
+ * @module @sleepcore/bot/adapters
  */
 
 import { Bot, Context, Api, GrammyError, HttpError, InputFile } from 'grammy';

@@ -1,10 +1,11 @@
 /**
  * IDatabaseConnection - Abstract Database Connection Interface
  * =============================================================
+ * Abstraction layer for SQLite/PostgreSQL implementations.
  *
- * Provides abstraction layer for SQLite/PostgreSQL implementations.
- * Based on byte-bot DatabaseService pattern with enhancements for
- * production health data compliance.
+ * Compliance:
+ * - HIPAA: PHI encryption support
+ * - GDPR: Soft delete, data export
  *
  * @packageDocumentation
  * @module @sleepcore/infrastructure/database

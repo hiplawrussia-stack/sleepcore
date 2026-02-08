@@ -1,9 +1,7 @@
 /**
  * SQLiteMigration - Schema Migration Runner for SQLite
  * =====================================================
- *
  * Version-controlled schema migrations with rollback support.
- * Based on byte-bot DatabaseMigration pattern.
  *
  * Features:
  * - Atomic migrations within transactions

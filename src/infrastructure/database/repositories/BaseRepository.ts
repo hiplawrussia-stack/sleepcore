@@ -1,13 +1,14 @@
 /**
  * BaseRepository - Abstract Repository Implementation
  * ====================================================
- *
  * Provides common CRUD operations for all repositories.
- * Based on byte-bot repository pattern with Data Mapper.
+ *
+ * Design Patterns:
+ * - Repository Pattern with Data Mapper
+ * - Soft delete support (GDPR compliance)
  *
  * Features:
  * - Generic CRUD operations
- * - Soft delete support (GDPR compliance)
  * - Audit timestamps (created_at, updated_at)
  * - Type-safe queries
  *

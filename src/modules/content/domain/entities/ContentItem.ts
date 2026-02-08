@@ -1,8 +1,13 @@
 /**
- * ContentItem Entity
- * ==================
+ * ContentItem - Therapeutic Content Entity
+ * =========================================
  * Core entity representing a single piece of therapeutic content.
- * Based on 2025 evidence-based research across global wellness traditions.
+ *
+ * Scientific Foundation:
+ * - Evidence-based wellness traditions (2025 research)
+ *
+ * @packageDocumentation
+ * @module @sleepcore/modules/content
  */
 
 /**

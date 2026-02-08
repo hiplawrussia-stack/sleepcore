@@ -1,9 +1,7 @@
 /**
  * IRepository - Generic Repository Interface
  * ===========================================
- *
- * Based on byte-bot IRepository pattern with sleep-specific extensions.
- * Implements Repository Pattern for data access abstraction.
+ * Repository Pattern for data access abstraction in SleepCore.
  *
  * Design Patterns:
  * - Repository Pattern: Data access abstraction

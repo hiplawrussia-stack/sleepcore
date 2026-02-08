@@ -1,14 +1,13 @@
 /**
  * SQLiteConnection - SQLite Database Connection Implementation
  * =============================================================
+ * Production-ready SQLite connection for SleepCore DTx.
  *
- * Production-ready SQLite connection with:
+ * Features:
  * - WAL mode for concurrent reads
  * - Performance optimizations (cache, mmap)
  * - Transaction support with ACID guarantees
  * - Health monitoring
- *
- * Based on byte-bot DatabaseService with enhancements.
  *
  * @packageDocumentation
  * @module @sleepcore/infrastructure/database
