@@ -1,7 +1,7 @@
 module.exports = {
   apps: [{
     name: 'sleepcore-bot',
-    script: 'dist/bot/index.js',
+    script: 'dist/main.js',
     cwd: '/opt/sleepcore',
     instances: 1,
     exec_mode: 'fork',
