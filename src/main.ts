@@ -960,6 +960,7 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCom
 
   // /therapy command - Direct access to CBT-I therapy sessions
   bot.command(['therapy', 'терапия', 'cbt', 'cbti'], async (ctx) => {
+    console.log('[Command] /therapy received from', ctx.from?.id);
     const sleepCoreCtx = extendContext(ctx, api);
     ctx.session.lastActivityAt = new Date();
     const result = await therapyCommand.execute(sleepCoreCtx as ISleepCoreContext);
