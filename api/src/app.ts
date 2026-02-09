@@ -2,6 +2,15 @@
  * Hono App Configuration
  * ======================
  * Main application setup with middleware and routes.
+ *
+ * Security Controls:
+ * - OWASP API4:2023 — Rate limiting on all endpoints
+ * - OWASP API8:2023 — CORS validation (no wildcard in production)
+ * - NIST SP 800-228 — API protection guidelines
+ *
+ * @see https://owasp.org/API-Security/
+ * @packageDocumentation
+ * @module @sleepcore/api
  */
 
 import { Hono } from 'hono';
@@ -9,8 +18,14 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 import { timing } from 'hono/timing';
+import { bodyLimit } from 'hono/body-limit';
 
-import { errorHandler, notFoundHandler } from './middleware/index.js';
+import {
+  errorHandler,
+  notFoundHandler,
+  createRateLimitMiddleware,
+  RATE_LIMITS,
+} from './middleware/index.js';
 import {
   authRoutes,
   breathingRoutes,
@@ -24,24 +39,78 @@ export interface AppConfig {
   botToken: string;
   jwtSecret: string;
   corsOrigin?: string;
+  /** Environment: 'production' requires explicit CORS origin */
+  nodeEnv?: string;
 }
 
 export function createApp(config: AppConfig): Hono {
   const app = new Hono();
+  const isProduction = config.nodeEnv === 'production';
+  const corsOrigin = config.corsOrigin;
 
-  // Global middleware
+  // =========================================================================
+  // CORS Validation (OWASP API8:2023 — Security Misconfiguration)
+  // =========================================================================
+  // Production MUST have explicit CORS origin — wildcard is a security risk
+  if (isProduction && (!corsOrigin || corsOrigin === '*')) {
+    throw new Error(
+      '[SECURITY] CORS_ORIGIN must be explicitly set in production. ' +
+      'Wildcard (*) is not allowed. Set CORS_ORIGIN environment variable.'
+    );
+  }
+
+  // Development warning
+  if (!isProduction && (!corsOrigin || corsOrigin === '*')) {
+    console.warn(
+      '[SECURITY] CORS origin is wildcard (*). ' +
+      'Acceptable for development, but MUST be configured for production.'
+    );
+  }
+
+  // =========================================================================
+  // Global Middleware
+  // =========================================================================
   app.use('*', logger());
   app.use('*', timing());
   app.use('*', secureHeaders());
 
+  // =========================================================================
+  // Request Body Size Limits (OWASP API4:2023 — DoS Protection)
+  // =========================================================================
+  // Default: 1MB for most endpoints
+  app.use('*', bodyLimit({
+    maxSize: 1024 * 1024, // 1MB
+    onError: (c) => {
+      return c.json({
+        success: false,
+        error: 'Request body too large',
+        timestamp: Date.now(),
+      }, 413);
+    },
+  }));
+
+  // Wearable sync: 5MB (may contain raw HRV/HR data)
+  app.use('/api/wearable/sync', bodyLimit({
+    maxSize: 5 * 1024 * 1024, // 5MB
+    onError: (c) => {
+      return c.json({
+        success: false,
+        error: 'Request body too large. Maximum size is 5MB.',
+        timestamp: Date.now(),
+      }, 413);
+    },
+  }));
+
   // CORS configuration
+  const hasExplicitOrigin = Boolean(corsOrigin && corsOrigin !== '*');
   app.use('*', cors({
-    origin: config.corsOrigin || '*',
+    origin: corsOrigin || '*',
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Init-Data'],
-    exposeHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining'],
+    exposeHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset', 'Retry-After'],
     maxAge: 86400,
-    credentials: true,
+    // credentials only valid with explicit origin, not '*'
+    credentials: hasExplicitOrigin,
   }));
 
   // Inject config into context
@@ -51,10 +120,28 @@ export function createApp(config: AppConfig): Hono {
     await next();
   });
 
-  // Health routes (no /api prefix)
+  // =========================================================================
+  // Health Routes (no rate limiting, no /api prefix)
+  // =========================================================================
   app.route('/health', healthRoutes);
 
-  // API routes
+  // =========================================================================
+  // Rate Limiting (OWASP API4:2023 — Unrestricted Resource Consumption)
+  // Order matters: more specific routes first
+  // =========================================================================
+
+  // Auth endpoints — strict limits (brute force protection)
+  app.use('/api/auth/*', createRateLimitMiddleware(RATE_LIMITS.auth));
+
+  // Sync endpoints — generous for offline-first
+  app.use('/api/sync/*', createRateLimitMiddleware(RATE_LIMITS.sync));
+
+  // General API — standard limits
+  app.use('/api/*', createRateLimitMiddleware(RATE_LIMITS.api));
+
+  // =========================================================================
+  // API Routes
+  // =========================================================================
   app.route('/api/auth', authRoutes);
   app.route('/api/breathing', breathingRoutes);
   app.route('/api/user', userRoutes);

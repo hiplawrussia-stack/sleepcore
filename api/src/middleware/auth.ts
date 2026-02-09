@@ -2,11 +2,16 @@
  * Authentication Middleware
  * =========================
  * JWT verification and user context middleware.
+ *
+ * Security Controls:
+ * - OWASP API2:2023 — Broken Authentication
+ * - Token blacklist checking for revoked tokens
  */
 
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import { verifyToken } from '../utils/jwt.js';
+import { isTokenRevoked } from '../utils/tokenBlacklist.js';
 import type { JWTPayload } from '../types/index.js';
 
 // Extend Hono context with user
@@ -20,7 +25,7 @@ declare module 'hono' {
 
 /**
  * JWT Authentication middleware
- * Verifies Bearer token and adds user to context
+ * Verifies Bearer token, checks blacklist, and adds user to context
  */
 export const authMiddleware = createMiddleware(async (c, next) => {
   const authHeader = c.req.header('Authorization');
@@ -40,6 +45,16 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 
   if (!result.valid || !result.payload) {
     throw new HTTPException(401, { message: result.error || 'Invalid token' });
+  }
+
+  // Check token blacklist (revoked tokens)
+  const { jti, telegramId, iat } = result.payload;
+  if (jti && telegramId && iat) {
+    // Convert iat from seconds to milliseconds
+    const issuedAtMs = iat * 1000;
+    if (isTokenRevoked(jti, telegramId, issuedAtMs)) {
+      throw new HTTPException(401, { message: 'Token has been revoked' });
+    }
   }
 
   // Add user to context

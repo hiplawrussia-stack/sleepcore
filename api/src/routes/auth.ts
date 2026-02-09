@@ -11,6 +11,7 @@ import { nanoid } from 'nanoid';
 import { eq } from 'drizzle-orm';
 import { validateInitData } from '../utils/telegram.js';
 import { generateTokenPair, verifyToken } from '../utils/jwt.js';
+import { revokeToken, revokeAllUserTokens } from '../utils/tokenBlacklist.js';
 import { getDatabase, users } from '../db/index.js';
 import type { ApiResponse } from '../types/index.js';
 
@@ -298,6 +299,103 @@ auth.get('/me', async (c) => {
       level: user.level ?? 1,
       streak: user.streak ?? 0,
     },
+    timestamp: Date.now(),
+  };
+
+  return c.json(response, 200);
+});
+
+/**
+ * POST /api/auth/logout
+ * Revoke current access token
+ *
+ * Security: OWASP API2:2023 — Proper session termination
+ */
+auth.post('/logout', async (c) => {
+  const authHeader = c.req.header('Authorization');
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const response: ApiResponse<null> = {
+      success: false,
+      error: 'Unauthorized',
+      timestamp: Date.now(),
+    };
+    return c.json(response, 401);
+  }
+
+  const token = authHeader.slice(7);
+  const jwtSecret = c.get('jwtSecret');
+
+  const result = await verifyToken(token, jwtSecret);
+
+  if (!result.valid || !result.payload) {
+    // Token already invalid, consider logout successful
+    const response: ApiResponse<{ loggedOut: boolean }> = {
+      success: true,
+      data: { loggedOut: true },
+      timestamp: Date.now(),
+    };
+    return c.json(response, 200);
+  }
+
+  const { jti, telegramId, exp } = result.payload;
+
+  if (jti && telegramId && exp) {
+    // Convert exp from seconds to milliseconds
+    const expiresAtMs = exp * 1000;
+    revokeToken(jti, telegramId, expiresAtMs, 'logout');
+  }
+
+  const response: ApiResponse<{ loggedOut: boolean }> = {
+    success: true,
+    data: { loggedOut: true },
+    timestamp: Date.now(),
+  };
+
+  return c.json(response, 200);
+});
+
+/**
+ * POST /api/auth/logout-all
+ * Revoke all tokens for current user (logout from all devices)
+ *
+ * Security: OWASP API2:2023 — Emergency session termination
+ */
+auth.post('/logout-all', async (c) => {
+  const authHeader = c.req.header('Authorization');
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const response: ApiResponse<null> = {
+      success: false,
+      error: 'Unauthorized',
+      timestamp: Date.now(),
+    };
+    return c.json(response, 401);
+  }
+
+  const token = authHeader.slice(7);
+  const jwtSecret = c.get('jwtSecret');
+
+  const result = await verifyToken(token, jwtSecret);
+
+  if (!result.valid || !result.payload) {
+    const response: ApiResponse<null> = {
+      success: false,
+      error: 'Invalid token',
+      timestamp: Date.now(),
+    };
+    return c.json(response, 401);
+  }
+
+  const { telegramId } = result.payload;
+
+  if (telegramId) {
+    revokeAllUserTokens(telegramId, 'logout_all');
+  }
+
+  const response: ApiResponse<{ loggedOutAll: boolean }> = {
+    success: true,
+    data: { loggedOutAll: true },
     timestamp: Date.now(),
   };
 

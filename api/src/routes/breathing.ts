@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { eq, desc, and, gte, sql } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
+import { safeParseInt, QUERY_LIMITS } from '../utils/validation.js';
 import { getDatabase, breathingSessions, users, dailyStats } from '../db/index.js';
 import type { ApiResponse, BreathingStats } from '../types/index.js';
 
@@ -223,8 +224,18 @@ breathing.get('/stats', async (c) => {
  */
 breathing.get('/history', async (c) => {
   const user = c.get('user');
-  const limit = parseInt(c.req.query('limit') || '20', 10);
-  const offset = parseInt(c.req.query('offset') || '0', 10);
+
+  // Safe query parameter parsing (OWASP A03:2021 — Injection)
+  const limit = safeParseInt(c.req.query('limit'), {
+    default: 20,
+    min: 1,
+    max: QUERY_LIMITS.MAX_PAGE_SIZE,
+  });
+  const offset = safeParseInt(c.req.query('offset'), {
+    default: 0,
+    min: 0,
+    max: 100000, // Reasonable max offset
+  });
 
   const db = getDatabase();
 

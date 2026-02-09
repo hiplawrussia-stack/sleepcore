@@ -27,6 +27,7 @@ import {
 } from '../db/wearable-schema.js';
 // Note: authMiddleware not used here - using deviceAuthMiddleware instead
 import { generateDeviceToken, verifyDeviceToken } from '../utils/wearable-auth.js';
+import { getEncryptionService, isEncryptionAvailable } from '../utils/encryption.js';
 import type { ApiResponse } from '../types/index.js';
 
 const wearable = new Hono();
@@ -543,7 +544,37 @@ wearable.post(
         // Calculate metrics
         const metrics = calculateSleepMetrics(session);
 
-        // Insert session
+        // Encrypt PHI fields (HIPAA compliance)
+        // @see CLAUDE.md §2.2 — PHI encryption requirements
+        let stagesJsonEncrypted: string | null = null;
+        let hrvJsonEncrypted: string | null = null;
+        let heartRateJsonEncrypted: string | null = null;
+
+        if (isEncryptionAvailable()) {
+          const encryption = getEncryptionService();
+          if (session.stages) {
+            stagesJsonEncrypted = encryption.encrypt(JSON.stringify(session.stages));
+          }
+          if (session.hrv) {
+            hrvJsonEncrypted = encryption.encrypt(JSON.stringify(session.hrv));
+          }
+          if (session.heartRate) {
+            heartRateJsonEncrypted = encryption.encrypt(JSON.stringify(session.heartRate));
+          }
+        } else {
+          // Fallback to unencrypted (development only)
+          // Production MUST have encryption configured
+          if (process.env.NODE_ENV === 'production') {
+            throw new HTTPException(500, {
+              message: 'PHI encryption is required in production',
+            });
+          }
+          stagesJsonEncrypted = session.stages ? JSON.stringify(session.stages) : null;
+          hrvJsonEncrypted = session.hrv ? JSON.stringify(session.hrv) : null;
+          heartRateJsonEncrypted = session.heartRate ? JSON.stringify(session.heartRate) : null;
+        }
+
+        // Insert session with encrypted PHI
         await db.insert(wearableSleepSessions).values({
           id: nanoid(),
           userId: device.userId,
@@ -566,9 +597,9 @@ wearable.post(
           hrvSdRmssd: metrics.hrvSdRmssd,
           hrvSampleCount: metrics.hrvSampleCount,
           restingHeartRate: session.restingHeartRate ?? null,
-          stagesJson: session.stages ? JSON.stringify(session.stages) : null,
-          hrvJson: session.hrv ? JSON.stringify(session.hrv) : null,
-          heartRateJson: session.heartRate ? JSON.stringify(session.heartRate) : null,
+          stagesJson: stagesJsonEncrypted,
+          hrvJson: hrvJsonEncrypted,
+          heartRateJson: heartRateJsonEncrypted,
           notes: session.notes ?? null,
           processedAt: now,
           syncedAt: now,

@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { eq, gt, and, desc } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
+import { safeParseInt, QUERY_LIMITS } from '../utils/validation.js';
 import {
   getDatabase,
   syncLog,
@@ -41,8 +42,18 @@ const pushSchema = z.object({
  */
 sync.get('/changes', async (c) => {
   const authUser = c.get('user');
-  const since = parseInt(c.req.query('since') || '0', 10);
-  const limit = parseInt(c.req.query('limit') || '100', 10);
+
+  // Safe query parameter parsing (OWASP A03:2021 — Injection)
+  const since = safeParseInt(c.req.query('since'), {
+    default: 0,
+    min: 0,
+    max: QUERY_LIMITS.MAX_TIMESTAMP,
+  });
+  const limit = safeParseInt(c.req.query('limit'), {
+    default: QUERY_LIMITS.DEFAULT_PAGE_SIZE,
+    min: 1,
+    max: QUERY_LIMITS.MAX_PAGE_SIZE,
+  });
 
   const db = getDatabase();
 
