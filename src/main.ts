@@ -1386,6 +1386,12 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
           }
           break;
 
+        case 'chronotype':
+          if ('handleCallback' in chronotypeCommand) {
+            result = await (chronotypeCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
+          }
+          break;
+
         case 'relax':
           result = await relaxCommand.execute(sleepCoreCtx as ISleepCoreContext, action);
           break;
