@@ -70,12 +70,15 @@ import {
 import {
   TCMIntegratedCBTIEngine,
   AyurvedaYogaEngine,
+  INSOMNIA_ACUPOINTS,
   type ITCMAssessment,
   type ITCMCBTIPlan,
   type IAyurvedicAssessment,
   type IYogaNidraProtocol,
   type IDinacharya,
   type IAyurvedicHerb,
+  type IYogaNidraSafetyScreening,
+  type IYogaNidraSafetyResult,
 } from './cultural-adaptations';
 import {
   EuropeanGuideline2023,
@@ -2337,6 +2340,53 @@ export class SleepCoreAPI {
   getAyurvedicHerbs(userId: string): readonly IAyurvedicHerb[] | null {
     const session = this.sessions.get(userId);
     return session?.ayurvedicAssessment?.herbs || null;
+  }
+
+  /**
+   * Check Yoga Nidra safety based on screening answers
+   *
+   * Safety protocol based on:
+   * - PubMed 39690521: Trauma-informed Yoga Nidra components
+   * - PMC10714319: Yoga Nidra mental health contraindications
+   *
+   * @see CLAUDE.md §2.1 — Safety always comes first
+   */
+  checkYogaNidraSafety(
+    screening: IYogaNidraSafetyScreening
+  ): IYogaNidraSafetyResult {
+    return this.ayurvedaEngine.checkYogaNidraSafety(screening);
+  }
+
+  /**
+   * Get basic self-acupressure instructions for insomnia
+   * Uses primary points (HT7, SP6) without requiring TCM assessment
+   *
+   * Evidence: Self-administered acupressure RCT (N=200, 2022)
+   * - ISI reduction 2.89 points greater than control (p<0.001)
+   * - Training: 2 sessions × 2 hours sufficient
+   */
+  getBasicAcupressureInstructions(): string[] {
+    const primaryPoints = [
+      this.tcmEngine.getAcupoints().find(p => p.code === 'HT7')!,
+      this.tcmEngine.getAcupoints().find(p => p.code === 'SP6')!,
+    ].filter(Boolean);
+
+    return this.tcmEngine.getAcupressureInstructions(primaryPoints);
+  }
+
+  /**
+   * Get Yoga Nidra basic protocol (without dosha assessment)
+   * Standard 30-min Satyananda tradition protocol
+   */
+  getBasicYogaNidraProtocol(): IYogaNidraProtocol {
+    return this.ayurvedaEngine.getYogaNidraProtocol();
+  }
+
+  /**
+   * Get Yoga Nidra instructions for bedtime
+   */
+  getYogaNidraInstructions(): string[] {
+    return this.ayurvedaEngine.getYogaNidraInstructions();
   }
 
   // ============= European Guideline 2023 (Evidence-Based Recommendations) =============

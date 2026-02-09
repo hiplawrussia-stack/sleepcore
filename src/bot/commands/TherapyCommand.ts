@@ -325,6 +325,31 @@ export class TherapyCommand implements IConversationCommand {
       case 'adaptive_done':
         return this.handleAdaptiveRecommendationDone(ctx, conversationData);
 
+      // ==================== Cultural Adaptations Handlers ====================
+      case 'cultural_menu':
+        return this.showCulturalMenu(ctx, conversationData);
+
+      case 'acupressure_intro':
+        return this.showAcupressureIntro(ctx, conversationData);
+
+      case 'acupressure_practice':
+        return this.showAcupressurePractice(ctx, conversationData);
+
+      case 'yoga_nidra_intro':
+        return this.showYogaNidraIntro(ctx, conversationData);
+
+      case 'yoga_nidra_screening':
+        return this.showYogaNidraScreening(ctx, conversationData);
+
+      case 'yoga_nidra_screening_result': {
+        // Parse screening answers from callback data
+        const answers = parts.slice(2).join(':');
+        return this.handleYogaNidraScreeningResult(ctx, answers, conversationData);
+      }
+
+      case 'yoga_nidra_practice':
+        return this.showYogaNidraPractice(ctx, conversationData);
+
       default:
         return { success: false, error: `Unknown action: ${action}` };
     }
@@ -482,6 +507,13 @@ ${formatter.tip('Каждая сессия занимает 30-60 минут. П
         { text: '🌿 Альтернативные подходы (Third-Wave)', callbackData: 'therapy:third_wave_menu' },
       ]);
     }
+
+    // Cultural adaptations (TCM self-acupressure, Yoga Nidra)
+    // Available from Week 1 as adjunctive relaxation techniques
+    // Evidence: Umbrella Review 2025 (36 SR/MA), Hong Kong Tai Chi RCT 2025
+    keyboard.push([
+      { text: '🌏 Культурные адаптации (TCM/Yoga)', callbackData: 'therapy:cultural_menu' },
+    ]);
 
     return {
       success: true,
@@ -3744,6 +3776,400 @@ ${formatter.tip('Протокол Spielman (1987): еженедельная ко
       default:
         return '🔄 в процессе';
     }
+  }
+
+  // ==================== Cultural Adaptations Methods ====================
+
+  /**
+   * Show cultural adaptations menu
+   *
+   * Evidence basis:
+   * - Umbrella Review 2025: 36 SR/MA on TCM for insomnia
+   * - Hong Kong Tai Chi RCT 2025: Non-inferior to CBT-I at 15 months
+   * - Yoga Nidra: 89% sleep induction rate (Pandi-Perumal, 2022)
+   */
+  private async showCulturalMenu(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const message = `
+${formatter.header('Культурные адаптации')}
+
+🌏 *Доказательные методы из традиционных медицинских систем*
+
+Эти методы могут использоваться как дополнение к основной программе КПТ-И:
+
+*🔘 Самоакупрессура (ТКМ)*
+Массаж биологически активных точек HT7 и SP6.
+📊 Эффект: снижение ISI на 2.89 балла (p<0.001)
+🔬 Источник: Self-acupressure RCT, N=200, 2022
+
+*🧘 Йога-Нидра*
+Медитативная практика "йогического сна" для расслабления.
+📊 Эффект: 89% индукции сна
+🔬 Источник: Pandi-Perumal, 2022
+
+${formatter.divider()}
+
+${formatter.tip('Эти методы дополняют, но не заменяют основную терапию КПТ-И.')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '🔘 Самоакупрессура (HT7, SP6)', callbackData: 'therapy:acupressure_intro' }],
+      [{ text: '🧘 Йога-Нидра', callbackData: 'therapy:yoga_nidra_intro' }],
+      [{ text: '⬅️ Назад к терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'cultural_menu' },
+    };
+  }
+
+  /**
+   * Show acupressure introduction
+   */
+  private async showAcupressureIntro(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const message = `
+${formatter.header('Самоакупрессура для сна')}
+
+🔘 *Точечный массаж активных точек*
+
+Самоакупрессура — это безопасный метод воздействия на биологически активные точки без использования игл.
+
+*Научная основа:*
+• Umbrella Review 2025: 36 систематических обзоров
+• РКИ (N=200, 2022): ISI снижение на 2.89 балла
+• Безопасен для самостоятельного применения
+
+*Основные точки для сна:*
+
+📍 *HT7 (Шэнь-Мэнь / 神门)*
+Расположение: на внутренней стороне запястья, в углублении между сухожилиями
+Действие: успокаивает ум, улучшает качество сна
+
+📍 *SP6 (Сань-Инь-Цзяо / 三阴交)*
+Расположение: на 4 пальца выше внутренней лодыжки
+Действие: гармонизирует инь, помогает при бессоннице
+
+${formatter.warning('Противопоказания: беременность (SP6), открытые раны')}
+
+${formatter.tip('Практикуйте за 30-60 минут до сна, по 1-2 минуты на точку')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '▶️ Показать инструкции', callbackData: 'therapy:acupressure_practice' }],
+      [{ text: '⬅️ Назад', callbackData: 'therapy:cultural_menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'acupressure_intro' },
+    };
+  }
+
+  /**
+   * Show acupressure practice instructions
+   */
+  private async showAcupressurePractice(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    // Get instructions from SleepCoreAPI facade
+    const instructions = ctx.sleepCore.getBasicAcupressureInstructions();
+
+    const message = `
+${formatter.header('Практика самоакупрессуры')}
+
+${instructions.join('\n')}
+
+${formatter.divider()}
+
+*Рекомендации:*
+• Выполняйте ежедневно за 30-60 минут до сна
+• Используйте в сочетании с глубоким дыханием
+• При дискомфорте уменьшите силу нажатия
+
+${formatter.tip('Ведите заметки в дневнике сна о качестве сна после практики')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📝 К дневнику сна', callbackData: 'diary:menu' }],
+      [{ text: '⬅️ К культурным адаптациям', callbackData: 'therapy:cultural_menu' }],
+      [{ text: '🏠 К терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'acupressure_practice' },
+    };
+  }
+
+  /**
+   * Show Yoga Nidra introduction
+   */
+  private async showYogaNidraIntro(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const message = `
+${formatter.header('Йога-Нидра для сна')}
+
+🧘 *"Йогический сон" — глубокое расслабление*
+
+Йога-Нидра — это медитативная практика осознанного расслабления между бодрствованием и сном.
+
+*Научная основа:*
+• 89% показатель индукции сна (Pandi-Perumal, 2022)
+• S-VYASA RCT (2023): эффективность при острой бессоннице
+• Традиция Сатьянанда: стандартизированный 30-минутный протокол
+
+*Этапы практики:*
+1. Подготовка и намерение (Санкальпа)
+2. Вращение осознанности по телу
+3. Осознание дыхания
+4. Противоположные ощущения
+5. Визуализация
+6. Возвращение
+
+*Лучшее время:* вечером или перед сном
+
+${formatter.warning('Важно: требуется скрининг безопасности перед началом')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '✅ Пройти скрининг безопасности', callbackData: 'therapy:yoga_nidra_screening' }],
+      [{ text: '⬅️ Назад', callbackData: 'therapy:cultural_menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'yoga_nidra_intro' },
+    };
+  }
+
+  /**
+   * Show Yoga Nidra safety screening
+   *
+   * Based on research (2025):
+   * - PubMed 39690521: 10 key components of trauma-informed Yoga Nidra
+   * - PMC10714319: Contraindications for Yoga Nidra
+   */
+  private async showYogaNidraScreening(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    const message = `
+${formatter.header('Скрининг безопасности Йога-Нидры')}
+
+⚠️ *Важные вопросы перед началом практики*
+
+Йога-Нидра — мощная практика глубокого расслабления. Для вашей безопасности, пожалуйста, ответьте честно на следующие вопросы.
+
+*Выберите все утверждения, которые относятся к вам:*
+
+(Если ничего не подходит, нажмите "Ничего из перечисленного")
+
+${formatter.divider()}
+
+${formatter.tip('Ваши ответы конфиденциальны и используются только для подбора безопасной практики.')}
+    `.trim();
+
+    // Simplified screening with callback encoding
+    // Format: yoga_nidra_screening_result:flags (binary encoding)
+    const keyboard: IInlineButton[][] = [
+      [{ text: '😔 Мысли о суициде или самоповреждении', callbackData: 'therapy:yoga_nidra_screening_result:suicide' }],
+      [{ text: '🌀 Галлюцинации или бред', callbackData: 'therapy:yoga_nidra_screening_result:psychosis' }],
+      [{ text: '😰 Тяжёлый ПТСР или недавняя травма', callbackData: 'therapy:yoga_nidra_screening_result:ptsd' }],
+      [{ text: '🤰 Беременность', callbackData: 'therapy:yoga_nidra_screening_result:pregnant' }],
+      [{ text: '✅ Ничего из перечисленного', callbackData: 'therapy:yoga_nidra_screening_result:safe' }],
+      [{ text: '⬅️ Назад', callbackData: 'therapy:yoga_nidra_intro' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'yoga_nidra_screening' },
+    };
+  }
+
+  /**
+   * Handle Yoga Nidra screening result
+   */
+  private async handleYogaNidraScreeningResult(
+    ctx: ISleepCoreContext,
+    flag: string,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    // Build screening object based on flag
+    const screening = {
+      hasActivePsychosis: flag === 'psychosis',
+      hasSuicidalIdeation: flag === 'suicide',
+      hasDepersonalization: false,
+      hasPTSD: flag === 'ptsd',
+      hasSevereAnxiety: false,
+      hasRecentTrauma: flag === 'ptsd',
+      isPregnant: flag === 'pregnant',
+    };
+
+    // Get safety result from engine
+    const result = ctx.sleepCore.checkYogaNidraSafety(screening);
+
+    if (result.safetyLevel === 'contraindicated') {
+      // Absolute contraindication
+      const message = `
+${formatter.header('Результат скрининга')}
+
+${formatter.warning('Йога-Нидра не рекомендуется')}
+
+К сожалению, практика Йога-Нидры не рекомендуется в вашем случае из-за:
+
+${result.absoluteContraindications.map(c => `• ${c}`).join('\n')}
+
+*Рекомендация:*
+${result.recommendation}
+
+${result.alternativeRecommendation ? `\n*Альтернатива:* ${result.alternativeRecommendation}` : ''}
+
+${formatter.tip('Пожалуйста, проконсультируйтесь со специалистом')}
+      `.trim();
+
+      const keyboard: IInlineButton[][] = [
+        [{ text: '🔘 Попробовать акупрессуру', callbackData: 'therapy:acupressure_intro' }],
+        [{ text: '⬅️ К культурным адаптациям', callbackData: 'therapy:cultural_menu' }],
+      ];
+
+      return { success: true, message, keyboard };
+    }
+
+    if (result.safetyLevel === 'caution') {
+      // Relative contraindication - can proceed with modifications
+      const message = `
+${formatter.header('Результат скрининга')}
+
+⚠️ *Практика возможна с осторожностью*
+
+Йога-Нидра может практиковаться, но с некоторыми модификациями:
+
+${result.warnings.map(w => `• ${w}`).join('\n')}
+
+*Рекомендации:*
+• Начните с коротких сессий (10-15 минут)
+• Избегайте глубоких визуализаций
+• Держите глаза слегка приоткрытыми при необходимости
+• Прекратите практику при любом дискомфорте
+
+${formatter.tip('При ухудшении состояния обратитесь к специалисту')}
+      `.trim();
+
+      const keyboard: IInlineButton[][] = [
+        [{ text: '▶️ Начать практику (с осторожностью)', callbackData: 'therapy:yoga_nidra_practice' }],
+        [{ text: '⬅️ Выбрать другой метод', callbackData: 'therapy:cultural_menu' }],
+      ];
+
+      return { success: true, message, keyboard };
+    }
+
+    // Safe to proceed
+    const message = `
+${formatter.header('Результат скрининга')}
+
+✅ *Практика безопасна для вас*
+
+Вы можете практиковать Йога-Нидру без ограничений.
+
+*Рекомендации для начинающих:*
+• Начните с 20-30 минутных сессий
+• Практикуйте в тихом, комфортном месте
+• Лежа на спине (Шавасана) или сидя
+• Используйте подушку под колени при необходимости
+
+${formatter.tip('Практикуйте ежедневно для лучшего эффекта')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '▶️ Начать практику', callbackData: 'therapy:yoga_nidra_practice' }],
+      [{ text: '⬅️ Назад', callbackData: 'therapy:cultural_menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'yoga_nidra_screening_result', screeningPassed: true },
+    };
+  }
+
+  /**
+   * Show Yoga Nidra practice instructions
+   */
+  private async showYogaNidraPractice(
+    ctx: ISleepCoreContext,
+    _data: Record<string, unknown>
+  ): Promise<ICommandResult> {
+    // Get protocol from SleepCoreAPI
+    const protocol = ctx.sleepCore.getBasicYogaNidraProtocol();
+    const instructions = ctx.sleepCore.getYogaNidraInstructions();
+
+    const stageNames: Record<string, string> = {
+      preparation: '1. Подготовка',
+      sankalpa: '2. Санкальпа (намерение)',
+      body_rotation: '3. Вращение осознанности',
+      breath_awareness: '4. Осознание дыхания',
+      opposite_feelings: '5. Противоположные ощущения',
+      visualization: '6. Визуализация',
+      externalization: '7. Возвращение',
+    };
+
+    const stages = protocol.stages.map(s => stageNames[s] || s).join('\n');
+
+    const message = `
+${formatter.header('Практика Йога-Нидры')}
+
+🧘 *${protocol.duration}-минутный протокол (традиция Сатьянанда)*
+
+*Лучшее время:* ${protocol.bestTime === 'bedtime' ? 'перед сном' : protocol.bestTime === 'evening' ? 'вечером' : 'днём'}
+*Частота:* ${protocol.frequency}
+
+${formatter.divider()}
+
+*Этапы практики:*
+${stages}
+
+${formatter.divider()}
+
+*Инструкции:*
+${instructions.map((instr, i) => `${i + 1}. ${instr}`).join('\n')}
+
+${formatter.divider()}
+
+${formatter.tip('Для глубокого эффекта практикуйте ежедневно в течение 2-4 недель')}
+    `.trim();
+
+    const keyboard: IInlineButton[][] = [
+      [{ text: '📝 К дневнику сна', callbackData: 'diary:menu' }],
+      [{ text: '⬅️ К культурным адаптациям', callbackData: 'therapy:cultural_menu' }],
+      [{ text: '🏠 К терапии', callbackData: 'therapy:menu' }],
+    ];
+
+    return {
+      success: true,
+      message,
+      keyboard,
+      metadata: { step: 'yoga_nidra_practice' },
+    };
   }
 }
 

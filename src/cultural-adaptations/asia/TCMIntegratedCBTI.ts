@@ -400,6 +400,14 @@ export class TCMIntegratedCBTIEngine {
   }
 
   /**
+   * Get all insomnia acupoints for self-acupressure
+   * @returns All evidence-based acupoints for insomnia
+   */
+  getAcupoints(): readonly IAcupoint[] {
+    return INSOMNIA_ACUPOINTS;
+  }
+
+  /**
    * Get acupressure self-treatment instructions
    */
   getAcupressureInstructions(acupoints: IAcupoint[]): string[] {

@@ -52,4 +52,6 @@ export type {
   IYogaNidraProtocol,
   IDinacharya,
   IAyurvedicAssessment,
+  IYogaNidraSafetyScreening,
+  IYogaNidraSafetyResult,
 } from './asia/AyurvedaYogaIntegration';

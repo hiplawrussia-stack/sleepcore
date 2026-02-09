@@ -621,11 +621,142 @@ export class AyurvedaYogaEngine {
   }
 
   /**
+   * Get standard Yoga Nidra protocol (Satyananda tradition)
+   * @returns 30-min protocol for bedtime practice
+   */
+  getYogaNidraProtocol(): IYogaNidraProtocol {
+    return YOGA_NIDRA_PROTOCOL;
+  }
+
+  /**
    * Get Yoga Nidra instructions for bedtime
    */
   getYogaNidraInstructions(): string[] {
     return YOGA_NIDRA_PROTOCOL.instructions;
   }
+
+  /**
+   * Yoga Nidra Safety Screening
+   *
+   * Based on research (2025):
+   * - PubMed 39690521: 10 key components of trauma-informed Yoga Nidra
+   * - PMC10714319: Contraindications for Yoga Nidra in mental health
+   *
+   * Absolute contraindications:
+   * - Active psychosis, schizophrenia
+   * - Severe depression with suicidal ideation
+   * - Episodes of depersonalization/derealization
+   *
+   * Relative contraindications (require professional supervision):
+   * - PTSD (flashbacks risk during visualizations)
+   * - Severe anxiety
+   * - Recent trauma
+   *
+   * @param screeningAnswers User's responses to screening questions
+   * @returns Safety check result with recommendation
+   */
+  checkYogaNidraSafety(screeningAnswers: IYogaNidraSafetyScreening): IYogaNidraSafetyResult {
+    const absoluteContraindications: string[] = [];
+    const relativeContraindications: string[] = [];
+    const warnings: string[] = [];
+
+    // Check absolute contraindications
+    if (screeningAnswers.hasActivePsychosis) {
+      absoluteContraindications.push('Активный психоз или шизофрения');
+    }
+    if (screeningAnswers.hasSuicidalIdeation) {
+      absoluteContraindications.push('Суицидальные мысли — требуется помощь специалиста');
+    }
+    if (screeningAnswers.hasDepersonalization) {
+      absoluteContraindications.push('Эпизоды деперсонализации или дереализации');
+    }
+
+    // Check relative contraindications
+    if (screeningAnswers.hasPTSD) {
+      relativeContraindications.push('ПТСР — риск флешбэков при визуализации');
+    }
+    if (screeningAnswers.hasSevereAnxiety) {
+      relativeContraindications.push('Тяжёлая тревожность');
+    }
+    if (screeningAnswers.hasRecentTrauma) {
+      relativeContraindications.push('Недавняя психотравма');
+    }
+
+    // Check warnings
+    if (screeningAnswers.isPregnant) {
+      warnings.push('Беременность — адаптируйте позу (подушка под колени)');
+    }
+
+    // Determine safety level
+    if (absoluteContraindications.length > 0) {
+      return {
+        isSafe: false,
+        safetyLevel: 'contraindicated',
+        absoluteContraindications,
+        relativeContraindications,
+        warnings,
+        recommendation: 'Йога Нидра не рекомендована без наблюдения психиатра. ' +
+          'Пожалуйста, обратитесь к специалисту. ' +
+          'Если вам нужна экстренная помощь: 8-800-2000-122 (бесплатно, круглосуточно).',
+        alternativeRecommendation: 'Вместо Йога Нидры рекомендуем: ' +
+          'прогрессивную мышечную релаксацию (команда /relax) или дыхательные упражнения.',
+      };
+    }
+
+    if (relativeContraindications.length > 0) {
+      return {
+        isSafe: true,
+        safetyLevel: 'caution',
+        absoluteContraindications,
+        relativeContraindications,
+        warnings,
+        recommendation: 'Йога Нидра возможна с осторожностью. ' +
+          'Рекомендуем: (1) пропустить этап визуализации, ' +
+          '(2) держать глаза слегка приоткрытыми, ' +
+          '(3) прервать практику при дискомфорте.',
+        alternativeRecommendation: 'При сильном дискомфорте используйте /relax для мягкой релаксации.',
+      };
+    }
+
+    return {
+      isSafe: true,
+      safetyLevel: 'safe',
+      absoluteContraindications,
+      relativeContraindications,
+      warnings,
+      recommendation: 'Йога Нидра безопасна для вас. Следуйте инструкциям.',
+      alternativeRecommendation: null,
+    };
+  }
+}
+
+/**
+ * Yoga Nidra Safety Screening Questions
+ */
+export interface IYogaNidraSafetyScreening {
+  // Absolute contraindications
+  hasActivePsychosis: boolean;
+  hasSuicidalIdeation: boolean;
+  hasDepersonalization: boolean;
+  // Relative contraindications
+  hasPTSD: boolean;
+  hasSevereAnxiety: boolean;
+  hasRecentTrauma: boolean;
+  // Warnings
+  isPregnant: boolean;
+}
+
+/**
+ * Yoga Nidra Safety Check Result
+ */
+export interface IYogaNidraSafetyResult {
+  isSafe: boolean;
+  safetyLevel: 'safe' | 'caution' | 'contraindicated';
+  absoluteContraindications: string[];
+  relativeContraindications: string[];
+  warnings: string[];
+  recommendation: string;
+  alternativeRecommendation: string | null;
 }
 
 /**
