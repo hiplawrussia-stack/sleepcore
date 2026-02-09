@@ -1,7 +1,7 @@
 # SleepCore Unified Roadmap
 
-**Version**: 3.1
-**Updated**: 2026-02-08
+**Version**: 3.2
+**Updated**: 2026-02-09
 **Status**: Active Development
 
 ---
@@ -43,11 +43,11 @@
 ├── Wearable Backend (NEW 2026-02-07)    ████████████████████
 │
 В ПРОЦЕССЕ
-├── Bot Commands Integration             ██████████░░░░░░░░░░ 54%
 ├── Gamification                         ████████████████░░░░ 83%
 ├── Mini App                             ████████████░░░░░░░░ 60%
 │
 ГОТОВО
+├── Bot Commands Integration             ████████████████████ 100% (audit 2026-02-09)
 ├── Android Companion App                ████████████████████ 100%
 │
 НЕ НАЧАТО
