@@ -1102,7 +1102,7 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
           chatId: ctx.chat?.id.toString() || '',
           details: `Crisis escalation: severity=${activeCrisis.severity}, trigger=callback_${command}:${action}`,
           severity: activeCrisis.severity === 'critical' ? 'critical' : 'warning',
-          metadata: { crisisType: activeCrisis.type, command, action },
+          metadata: { crisisType: activeCrisis.crisisType, command, action },
         });
 
         // P0-1 FIX: Escalate to admins - crisis detection ALWAYS triggers escalation (IEC 62304 §7.1)
@@ -2116,7 +2116,7 @@ function setupMessages(bot: Bot<MyContext>, api: SleepCoreAPI): void {
           type: 'crisis_escalation',
           userId,
           chatId,
-          details: `Crisis detected: severity=${crisisResponse.severity}, type=${crisisResponse.event?.type || 'unknown'}`,
+          details: `Crisis detected: severity=${crisisResponse.severity}, type=${crisisResponse.event?.crisisType || 'unknown'}`,
           severity: crisisResponse.severity === 'critical' ? 'critical' : 'warning',
           metadata: { severity: crisisResponse.severity, messageLength: text.length },
         });
