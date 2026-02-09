@@ -47,8 +47,8 @@ scrape_configs:
   # SleepCore Bot
   - job_name: 'sleepcore-bot'
     static_configs:
-      - targets: ['bot:3000']
-    metrics_path: /metrics
+      - targets: ['bot:3001']
+    metrics_path: /health
     scrape_interval: 30s
 
   # SleepCore API
