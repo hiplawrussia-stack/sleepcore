@@ -53,6 +53,18 @@ import {
   evolutionCommand,
   // Phase 7: Structured CBT-I Sessions
   therapyCommand,
+  // Phase 8: Advanced AI Commands (Integration Sprint Feb 2026)
+  chronotypeCommand,
+  profileCommand,
+  adminCommand,
+  aeReportCommand,
+  whatIfCommand,
+  predictCommand,
+  insightsCommand,
+  explainCommand,
+  safetyCommand,
+  twinCommand,
+  smartTipsCommand,
   type ICommandResult,
   type ISleepCoreContext,
   type IConversationCommand,
@@ -848,6 +860,110 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCom
       parse_mode: 'Markdown',
       reply_markup: keyboard,
     });
+  });
+
+  // ============================================================================
+  // PHASE 8: ADVANCED AI COMMANDS (Integration Sprint Feb 2026)
+  // Wiring previously orphan commands to complete command→engine integration
+  // ============================================================================
+
+  // /chronotype command - Circadian rhythm assessment (MEQ, MCTQ)
+  bot.command(['chronotype', 'хронотип', 'mctq', 'meq'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const result = await chronotypeCommand.execute(sleepCoreCtx as ISleepCoreContext);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /profile command - User profile and statistics
+  bot.command(['profile', 'профиль', 'статистика'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const args = ctx.message?.text?.split(' ').slice(1).join(' ');
+    const result = await profileCommand.execute(sleepCoreCtx as ISleepCoreContext, args);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /admin command - Clinical pilot monitoring dashboard (admin only)
+  bot.command(['admin', 'dashboard', 'monitor'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const result = await adminCommand.execute(sleepCoreCtx as ISleepCoreContext);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /ae_report command - Adverse event reporting
+  bot.command(['ae_report', 'ae', 'побочный', 'adverse'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const result = await aeReportCommand.execute(sleepCoreCtx as ISleepCoreContext);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /whatif command - Counterfactual analysis (Digital Twin)
+  bot.command(['whatif', 'чтоесли', 'scenario'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const args = ctx.message?.text?.split(' ').slice(1).join(' ');
+    const result = await whatIfCommand.execute(sleepCoreCtx as ISleepCoreContext, args);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /predict command - Sleep predictions
+  bot.command(['predict', 'прогноз', 'prediction'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const result = await predictCommand.execute(sleepCoreCtx as ISleepCoreContext);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /insights command - Causal insights and analysis
+  bot.command(['insights', 'инсайты', 'анализ'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const result = await insightsCommand.execute(sleepCoreCtx as ISleepCoreContext);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /explain command - Explainability for AI decisions
+  bot.command(['explain', 'объясни', 'почему'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const result = await explainCommand.execute(sleepCoreCtx as ISleepCoreContext);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /safety command - Safety status and crisis detection
+  bot.command(['safety', 'безопасность', 'кризис'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const result = await safetyCommand.execute(sleepCoreCtx as ISleepCoreContext);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /twin command - Digital Twin status
+  bot.command(['twin', 'близнец', 'digitaltwin'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const result = await twinCommand.execute(sleepCoreCtx as ISleepCoreContext);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /tips command - Smart personalized tips
+  bot.command(['tips', 'советы', 'smarttips'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const args = ctx.message?.text?.split(' ').slice(1).join(' ');
+    const result = await smartTipsCommand.execute(sleepCoreCtx as ISleepCoreContext, args);
+    await sendResultWithKeyboard(ctx, result);
+  });
+
+  // /therapy command - Direct access to CBT-I therapy sessions
+  bot.command(['therapy', 'терапия', 'cbt', 'cbti'], async (ctx) => {
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const result = await therapyCommand.execute(sleepCoreCtx as ISleepCoreContext);
+    await sendResultWithKeyboard(ctx, result);
   });
 }
 
