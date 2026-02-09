@@ -66,11 +66,19 @@ export class PHIEncryptionManager {
         this.isEnabled = false;
       }
     } else {
+      // CRITICAL: Enforce encryption in production (HIPAA/GDPR compliance)
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+          '[PHIEncryptionManager] CRITICAL: ENCRYPTION_MASTER_KEY is required in production. ' +
+          'PHI data cannot be stored without encryption. ' +
+          'Generate a 64-character hex key: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+        );
+      }
       this.isEnabled = false;
       console.warn(
-        '[PHIEncryptionManager] WARNING: ENCRYPTION_MASTER_KEY not set. ' +
+        '[PHIEncryptionManager] DEV MODE: ENCRYPTION_MASTER_KEY not set. ' +
         'PHI data will be stored in PLAINTEXT. ' +
-        'Set ENCRYPTION_MASTER_KEY in .env for production.'
+        'This is only acceptable in development environment.'
       );
     }
   }

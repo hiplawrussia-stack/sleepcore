@@ -21,3 +21,11 @@ export type {
   IConstitutionalCheck,
   IConstitutionalConfig,
 } from './ConstitutionalMiddleware';
+
+// ==================== Rate Limiting Middleware ====================
+export {
+  RateLimiter,
+  getRateLimiter,
+  createRateLimitMiddleware,
+  stopRateLimiter,
+} from './rateLimiter';

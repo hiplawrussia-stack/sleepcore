@@ -85,6 +85,7 @@ import {
   type IKeyboardCommand,
 } from './modules';
 import { createBotConfigFromEnv, type BotConfigOutput } from './bot/config/BotConfig';
+import { createRateLimitMiddleware, stopRateLimiter } from './bot/middleware';
 import {
   createProactiveNotificationService,
   createISISchedulingService,
@@ -345,6 +346,10 @@ function createBot(config: BotConfigOutput, options?: CreateBotOptions): Bot<MyC
     // Use SQLite storage if provided, otherwise fall back to memory
     storage: options?.sessionStorage,
   }));
+
+  // 4. Rate limiting middleware (OWASP 2025 best practice)
+  // Prevents command flooding and protects database from abuse
+  bot.use(createRateLimitMiddleware());
 
   return bot;
 }
@@ -1029,9 +1034,35 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
 
   bot.on('callback_query:data', async (ctx) => {
     const data = ctx.callbackQuery.data;
-    ctx.session.lastActivityAt = new Date();
+
+    // =========================================================================
+    // SECURITY: Callback Query Validation (OWASP 2025)
+    // Validate callback data format and content before processing
+    // =========================================================================
+    if (!data || typeof data !== 'string' || data.length > 64) {
+      await ctx.answerCallbackQuery({ text: 'Invalid action' });
+      return;
+    }
+
+    // Whitelist of allowed command prefixes
+    const ALLOWED_COMMANDS = [
+      'menu', 'start', 'diary', 'quest', 'badge', 'sos', 'hub', 'isi',
+      'therapy', 'relax', 'mindful', 'progress', 'evolution', 'onboard',
+      'noop', 'streak', 'checkin', 'sleep_quality', 'mood', 'cogtest',
+      'admin', 'insight', 'explain', 'predict', 'safety', 'twin',
+      'chronotype', 'profile', 'ae_report', 'whatif', 'smart_tips',
+      'mcq30', 'arousal', 'dm', 'worry', 'att', 'voice'
+    ];
 
     const [command, action] = data.split(':');
+
+    if (!command || !ALLOWED_COMMANDS.includes(command)) {
+      console.warn(`[Security] Unknown callback command: ${command} from user ${ctx.from?.id}`);
+      await ctx.answerCallbackQuery({ text: 'Unknown action' });
+      return;
+    }
+
+    ctx.session.lastActivityAt = new Date();
     const sleepCoreCtx = extendContext(ctx, api);
 
     // =========================================================================
@@ -3049,6 +3080,10 @@ async function main(): Promise<void> {
       await db.close();
       console.log("[DB] Database closed");
     }
+
+    // Stop rate limiter cleanup timer
+    stopRateLimiter();
+    console.log("[RateLimiter] Service stopped");
 
     // Flush Sentry events before exit (2025 best practice)
     await sentryService.flush(2000);
