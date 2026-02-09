@@ -8,7 +8,7 @@
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from '@/components/common';
+import { Card, PrivacyCenter } from '@/components/common';
 import { useTelegram, useHaptics, useUserProfile, useBreathingStats, useEvolution } from '@/hooks';
 import { formatDuration } from '@/components/breathing/patterns';
 
@@ -308,6 +308,16 @@ export const Profile: React.FC = () => {
             </button>
           </div>
         </Card>
+      </motion.div>
+
+      {/* Privacy & Data section (GDPR) */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.45 }}
+        className="mt-6"
+      >
+        <PrivacyCenter />
       </motion.div>
 
       {/* Badges section */}

@@ -30,6 +30,21 @@ vi.mock('@twa-dev/sdk', () => ({
     ready: vi.fn(),
     expand: vi.fn(),
     close: vi.fn(),
+    showAlert: vi.fn((message: string, callback?: () => void) => {
+      callback?.();
+    }),
+    showConfirm: vi.fn((message: string, callback?: (confirmed: boolean) => void) => {
+      callback?.(true);
+    }),
+    showPopup: vi.fn((params: unknown, callback?: (buttonId: string) => void) => {
+      callback?.('ok');
+    }),
+    openLink: vi.fn(),
+    openTelegramLink: vi.fn(),
+    setHeaderColor: vi.fn(),
+    setBackgroundColor: vi.fn(),
+    enableClosingConfirmation: vi.fn(),
+    onEvent: vi.fn(),
     MainButton: {
       text: '',
       color: '',

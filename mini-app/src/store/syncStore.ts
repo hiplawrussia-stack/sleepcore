@@ -1,12 +1,20 @@
 /**
- * Sync Store
- * ==========
+ * Sync Store - Encrypted Offline Storage
+ * =======================================
  * Zustand store for offline-first synchronization.
  * Manages pending changes and sync status.
+ *
+ * Security:
+ * - Pending changes encrypted in localStorage (defense-in-depth)
+ * - Uses AES-256-GCM via Web Crypto API
+ *
+ * @see CLAUDE.md §2.2 - Encryption requirements
+ * @module @sleepcore/mini-app/store
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { createEncryptedStorage } from '@/utils/crypto';
 
 interface PendingChange {
   localId: string;
@@ -96,7 +104,9 @@ export const useSyncStore = create<SyncState>()(
       setSyncError: (error) => set({ syncError: error }),
     }),
     {
-      name: 'sleepcore-sync',
+      name: 'sleepcore-sync-v2', // New name to avoid legacy data issues
+      // Use encrypted storage for PII protection
+      storage: createJSONStorage(() => createEncryptedStorage()),
       // Persist pending changes and last sync time
       partialize: (state) => ({
         pendingChanges: state.pendingChanges,

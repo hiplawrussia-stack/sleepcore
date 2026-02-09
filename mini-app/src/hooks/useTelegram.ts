@@ -22,6 +22,7 @@ interface UseTelegramReturn {
   hideBackButton: () => void;
   showAlert: (message: string) => Promise<void>;
   showConfirm: (message: string) => Promise<boolean>;
+  openLink: (url: string) => void;
   close: () => void;
 }
 
@@ -69,6 +70,10 @@ export const useTelegram = (): UseTelegramReturn => {
     return telegram.showConfirm(message);
   }, []);
 
+  const openLink = useCallback((url: string) => {
+    telegram.openLink(url);
+  }, []);
+
   const close = useCallback(() => {
     telegram.close();
   }, []);
@@ -88,6 +93,7 @@ export const useTelegram = (): UseTelegramReturn => {
     hideBackButton,
     showAlert,
     showConfirm,
+    openLink,
     close,
   };
 };
