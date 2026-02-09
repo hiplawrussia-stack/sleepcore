@@ -29,3 +29,22 @@ export {
   createRateLimitMiddleware,
   stopRateLimiter,
 } from './rateLimiter';
+
+// ==================== Security Middleware ====================
+export {
+  createSecurityMiddleware,
+  sanitizeInput,
+  validateAdminIds,
+  isValidAdmin,
+  verifySessionBinding,
+  clearSessionBinding,
+  getSessionBindingStats,
+  securityAuditLog,
+  DEFAULT_SECURITY_CONFIG,
+} from './securityMiddleware';
+
+export type {
+  ISecurityEvent,
+  SecurityEventType,
+  ISecurityConfig,
+} from './securityMiddleware';

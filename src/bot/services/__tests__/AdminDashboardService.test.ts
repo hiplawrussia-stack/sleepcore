@@ -59,10 +59,11 @@ describe('AdminDashboardService', () => {
 
   beforeEach(() => {
     // Setup environment variables for admin config
+    // Note: Admin IDs must be valid numeric Telegram user IDs (OWASP 2025 validation)
     process.env = {
       ...originalEnv,
-      ADMIN_USER_IDS: 'admin123,admin456',
-      SUPER_ADMIN_IDS: 'superadmin789',
+      ADMIN_USER_IDS: '123456789,987654321',
+      SUPER_ADMIN_IDS: '111222333',
     };
 
     mockDb = createMockDb();
@@ -80,31 +81,31 @@ describe('AdminDashboardService', () => {
   // ==========================================================================
   describe('Authorization (RBAC)', () => {
     it('should identify admin users', () => {
-      expect(service.isAdmin('admin123')).toBe(true);
-      expect(service.isAdmin('admin456')).toBe(true);
+      expect(service.isAdmin('123456789')).toBe(true);
+      expect(service.isAdmin('987654321')).toBe(true);
     });
 
     it('should identify super admin as admin', () => {
-      expect(service.isAdmin('superadmin789')).toBe(true);
+      expect(service.isAdmin('111222333')).toBe(true);
     });
 
     it('should reject non-admin users', () => {
-      expect(service.isAdmin('regular_user')).toBe(false);
-      expect(service.isAdmin('unknown')).toBe(false);
+      expect(service.isAdmin('999888777')).toBe(false);
+      expect(service.isAdmin('555666777')).toBe(false);
     });
 
     it('should identify super admin users', () => {
-      expect(service.isSuperAdmin('superadmin789')).toBe(true);
+      expect(service.isSuperAdmin('111222333')).toBe(true);
     });
 
     it('should not identify regular admin as super admin', () => {
-      expect(service.isSuperAdmin('admin123')).toBe(false);
+      expect(service.isSuperAdmin('123456789')).toBe(false);
     });
 
     it('should return correct user roles', () => {
-      expect(service.getUserRole('superadmin789')).toBe('super_admin');
-      expect(service.getUserRole('admin123')).toBe('admin');
-      expect(service.getUserRole('regular_user')).toBe('user');
+      expect(service.getUserRole('111222333')).toBe('super_admin');
+      expect(service.getUserRole('123456789')).toBe('admin');
+      expect(service.getUserRole('999888777')).toBe('user');
     });
   });
 
@@ -115,13 +116,13 @@ describe('AdminDashboardService', () => {
     it('should log admin actions', () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
-      service.logAdminAction('admin123', 'Admin Name', 'VIEW_DASHBOARD');
+      service.logAdminAction('123456789', 'Admin Name', 'VIEW_DASHBOARD');
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('[Admin Audit]')
       );
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('admin123')
+        expect.stringContaining('123456789')
       );
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('VIEW_DASHBOARD')
@@ -133,7 +134,7 @@ describe('AdminDashboardService', () => {
     it('should log action with target user', () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
-      service.logAdminAction('admin123', 'Admin', 'VIEW_USER_DETAIL', 42);
+      service.logAdminAction('123456789', 'Admin', 'VIEW_USER_DETAIL', 42);
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('User: 42')
@@ -145,7 +146,7 @@ describe('AdminDashboardService', () => {
     it('should log action with details', () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
-      service.logAdminAction('admin123', 'Admin', 'EXPORT_DATA', undefined, 'Full export');
+      service.logAdminAction('123456789', 'Admin', 'EXPORT_DATA', undefined, 'Full export');
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('Full export')
@@ -338,7 +339,7 @@ describe('AdminDashboardService', () => {
     });
 
     it('should acknowledge safety alert', async () => {
-      const result = await service.acknowledgeSafetyAlert(0, 'admin123');
+      const result = await service.acknowledgeSafetyAlert(0, '123456789');
 
       expect(result).toBe(true);
     });
@@ -513,7 +514,7 @@ describe('AdminDashboardService', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const noEnvService = new AdminDashboardService(mockDb as any);
 
-      expect(noEnvService.isAdmin('admin123')).toBe(false);
+      expect(noEnvService.isAdmin('123456789')).toBe(false);
     });
 
     it('should handle database errors gracefully', async () => {
@@ -630,7 +631,7 @@ describe('AdminDashboardService', () => {
     it('should have correct UserRole type', () => {
       const roles: UserRole[] = ['user', 'clinician', 'admin', 'super_admin'];
 
-      expect(roles).toContain(service.getUserRole('superadmin789'));
+      expect(roles).toContain(service.getUserRole('111222333'));
     });
 
     it('should have correct AdminAction type', () => {

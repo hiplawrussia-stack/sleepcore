@@ -24,6 +24,7 @@
 import type { IDatabaseConnection } from '../../infrastructure/database/interfaces/IDatabaseConnection';
 import { AdverseEventService, createAdverseEventService } from './AdverseEventService';
 import type { ISafetyAlert } from './AdverseEventService';
+import { validateAdminIds, securityAuditLog } from '../middleware';
 
 // ==================== Types ====================
 
@@ -128,14 +129,44 @@ export interface IAdminAuditEntry {
  * Admin configuration from environment
  * ADMIN_USER_IDS: Comma-separated list of Telegram user IDs with admin access
  * SUPER_ADMIN_IDS: Comma-separated list of super admin IDs (can view audit logs)
+ *
+ * Security (OWASP 2025):
+ * - Validates numeric format of admin IDs
+ * - Logs invalid IDs for security monitoring
  */
 const getAdminConfig = () => {
-  const adminIds = process.env.ADMIN_USER_IDS?.split(',').map((id) => id.trim()) || [];
-  const superAdminIds = process.env.SUPER_ADMIN_IDS?.split(',').map((id) => id.trim()) || [];
+  // Validate admin IDs format (must be numeric Telegram user IDs)
+  const adminValidation = validateAdminIds(process.env.ADMIN_USER_IDS);
+  const superAdminValidation = validateAdminIds(process.env.SUPER_ADMIN_IDS);
+
+  // Log invalid IDs for security audit
+  if (adminValidation.invalidIds.length > 0) {
+    console.warn(`[AdminDashboard] Invalid ADMIN_USER_IDS ignored: ${adminValidation.invalidIds.join(', ')}`);
+    securityAuditLog.log({
+      type: 'auth_failure',
+      userId: 'system',
+      chatId: 'system',
+      details: `Invalid ADMIN_USER_IDS format: ${adminValidation.invalidIds.join(', ')}`,
+      severity: 'warning',
+      metadata: { invalidIds: adminValidation.invalidIds },
+    });
+  }
+
+  if (superAdminValidation.invalidIds.length > 0) {
+    console.warn(`[AdminDashboard] Invalid SUPER_ADMIN_IDS ignored: ${superAdminValidation.invalidIds.join(', ')}`);
+    securityAuditLog.log({
+      type: 'auth_failure',
+      userId: 'system',
+      chatId: 'system',
+      details: `Invalid SUPER_ADMIN_IDS format: ${superAdminValidation.invalidIds.join(', ')}`,
+      severity: 'warning',
+      metadata: { invalidIds: superAdminValidation.invalidIds },
+    });
+  }
 
   return {
-    adminIds,
-    superAdminIds,
+    adminIds: adminValidation.validIds,
+    superAdminIds: superAdminValidation.validIds,
     /** Days of inactivity to consider user inactive */
     inactiveDaysThreshold: 7,
     /** Days of inactivity to consider user dropped */
@@ -206,6 +237,9 @@ export class AdminDashboardService {
   /**
    * Log admin action (21 CFR Part 11 compliance)
    * Secure, computer-generated, time-stamped audit trail
+   *
+   * Security (OWASP 2025):
+   * - Also logs to security audit for centralized monitoring
    */
   logAdminAction(
     adminId: string,
@@ -224,6 +258,16 @@ export class AdminDashboardService {
     };
 
     this.auditLog.push(entry);
+
+    // Also log to security audit log for centralized monitoring
+    securityAuditLog.log({
+      type: 'admin_action',
+      userId: adminId,
+      chatId: 'admin',
+      details: `${action}${targetUserId ? ` on user ${targetUserId}` : ''}${details ? `: ${details}` : ''}`,
+      severity: action === 'EXPORT_DATA' || action === 'VIEW_AUDIT_LOG' ? 'warning' : 'info',
+      metadata: { action, targetUserId, adminName },
+    });
 
     // Also log to console for persistent storage
     console.log(

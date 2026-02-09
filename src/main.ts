@@ -85,7 +85,12 @@ import {
   type IKeyboardCommand,
 } from './modules';
 import { createBotConfigFromEnv, type BotConfigOutput } from './bot/config/BotConfig';
-import { createRateLimitMiddleware, stopRateLimiter } from './bot/middleware';
+import {
+  createRateLimitMiddleware,
+  stopRateLimiter,
+  createSecurityMiddleware,
+  securityAuditLog,
+} from './bot/middleware';
 import {
   createProactiveNotificationService,
   createISISchedulingService,
@@ -350,6 +355,12 @@ function createBot(config: BotConfigOutput, options?: CreateBotOptions): Bot<MyC
   // 4. Rate limiting middleware (OWASP 2025 best practice)
   // Prevents command flooding and protects database from abuse
   bot.use(createRateLimitMiddleware());
+
+  // 5. Security middleware (OWASP 2025)
+  // - Session binding verification
+  // - Input sanitization
+  // - Security event logging
+  bot.use(createSecurityMiddleware());
 
   return bot;
 }
@@ -1083,6 +1094,16 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
       if (activeCrisis) {
         // Audit log: user with active crisis is navigating via callbacks
         console.log(`[CRISIS] User ${userId} with active crisis (severity=${activeCrisis.severity}) using callback: ${command}:${action}`);
+
+        // Security audit log for crisis escalation (SAMHSA 2025)
+        securityAuditLog.log({
+          type: 'crisis_escalation',
+          userId,
+          chatId: ctx.chat?.id.toString() || '',
+          details: `Crisis escalation: severity=${activeCrisis.severity}, trigger=callback_${command}:${action}`,
+          severity: activeCrisis.severity === 'critical' ? 'critical' : 'warning',
+          metadata: { crisisType: activeCrisis.type, command, action },
+        });
 
         // P0-1 FIX: Escalate to admins - crisis detection ALWAYS triggers escalation (IEC 62304 §7.1)
         // Research: SAMHSA 2025 - maintain awareness AND ensure professional oversight
@@ -2089,6 +2110,16 @@ function setupMessages(bot: Bot<MyContext>, api: SleepCoreAPI): void {
       if (crisisResponse.shouldInterrupt) {
         // Log crisis event for audit
         console.log(`[CRISIS] Detected severity=${crisisResponse.severity} for user=${userId}`);
+
+        // Security audit log for crisis detection (SAMHSA 2025)
+        securityAuditLog.log({
+          type: 'crisis_escalation',
+          userId,
+          chatId,
+          details: `Crisis detected: severity=${crisisResponse.severity}, type=${crisisResponse.event?.type || 'unknown'}`,
+          severity: crisisResponse.severity === 'critical' ? 'critical' : 'warning',
+          metadata: { severity: crisisResponse.severity, messageLength: text.length },
+        });
 
         // Send crisis response with resources (Woebot pattern: empathetic + actionable)
         await ctx.reply(crisisResponse.message, { parse_mode: 'HTML' });
