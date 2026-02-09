@@ -1,13 +1,23 @@
 /**
- * API Service
- * ===========
+ * API Service - Telegram initData Authentication
+ * ===============================================
  * Client for communicating with SleepCore backend.
- * Handles authentication via Telegram initData.
+ * Handles authentication via Telegram initData on every request.
+ *
+ * Security Features:
+ * - initData sent with every request (X-Telegram-Init-Data header)
+ * - Request timeout via AbortSignal.timeout()
+ * - No tokens stored in localStorage
+ *
+ * @module @sleepcore/mini-app/services
  */
 
 import { telegram } from './telegram';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
+/** Request timeout in milliseconds */
+const REQUEST_TIMEOUT_MS = 10_000;
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -53,7 +63,11 @@ class ApiService {
   }
 
   /**
-   * Make authenticated API request
+   * Make authenticated API request with timeout
+   *
+   * Security:
+   * - initData sent in X-Telegram-Init-Data header
+   * - Request timeout via AbortSignal.timeout()
    */
   private async request<T>(
     endpoint: string,
@@ -63,8 +77,17 @@ class ApiService {
     const initData = telegram.getInitData();
 
     try {
+      // Create timeout signal
+      const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+
+      // Combine with existing signal if provided
+      const signal = options.signal
+        ? AbortSignal.any([timeoutSignal, options.signal])
+        : timeoutSignal;
+
       const response = await fetch(url, {
         ...options,
+        signal,
         headers: {
           'Content-Type': 'application/json',
           'X-Telegram-Init-Data': initData,
@@ -80,6 +103,17 @@ class ApiService {
       const data = await response.json();
       return { success: true, data };
     } catch (error) {
+      // Handle timeout specifically
+      if (error instanceof DOMException && error.name === 'TimeoutError') {
+        console.error('[ApiService] Request timeout:', endpoint);
+        return { success: false, error: `Request timeout after ${REQUEST_TIMEOUT_MS}ms` };
+      }
+
+      // Handle user cancellation
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return { success: false, error: 'Request cancelled' };
+      }
+
       console.error('[ApiService] Request failed:', error);
       return {
         success: false,

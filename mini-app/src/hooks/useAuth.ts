@@ -1,8 +1,15 @@
 /**
- * useAuth Hook
- * ============
+ * useAuth Hook - Secure Authentication for Telegram Mini Apps
+ * ============================================================
  * Authentication hook using TanStack Query for Telegram Mini App.
- * Handles initial auth and token refresh.
+ *
+ * Security Architecture:
+ * - NO refresh tokens stored in localStorage
+ * - Re-authentication via Telegram initData when token expires
+ * - Memory-only token storage (XSS safe)
+ *
+ * @see client.ts for token management details
+ * @module @sleepcore/mini-app/hooks
  */
 
 import { useEffect, useCallback } from 'react';
@@ -67,7 +74,12 @@ export const useAuth = (): UseAuthReturn => {
     },
   });
 
-  // Authenticate with Telegram initData
+  /**
+   * Authenticate with Telegram initData
+   *
+   * Security: NO refresh tokens used. When token expires,
+   * re-authentication happens automatically via initData.
+   */
   const authenticate = useCallback(async () => {
     // Check if we're in Telegram
     if (!telegram.isInTelegram() && !import.meta.env.DEV) {
@@ -81,36 +93,12 @@ export const useAuth = (): UseAuthReturn => {
       return;
     }
 
-    // Try to recover session with stored refresh token
-    const storedRefresh = tokenManager.loadStoredRefreshToken();
-    if (storedRefresh) {
-      try {
-        setAuthenticating(true);
-        const response = await apiClient.request<{
-          accessToken: string;
-          refreshToken: string;
-          expiresIn: number;
-        }>('/auth/refresh', {
-          method: 'POST',
-          body: JSON.stringify({ refreshToken: storedRefresh }),
-          skipAuth: true,
-        });
-
-        tokenManager.setTokens(
-          response.accessToken,
-          response.refreshToken,
-          response.expiresIn
-        );
-
-        await refetchUser();
-        return;
-      } catch {
-        // Refresh failed, do full auth
-        tokenManager.clearTokens();
-      }
-    }
+    // Clean up any legacy refresh tokens from localStorage
+    // (from previous versions that stored them insecurely)
+    tokenManager.clearTokens();
 
     // Full authentication with Telegram initData
+    // This is the ONLY authentication method - no refresh tokens
     setAuthenticating(true);
     await authMutation.mutateAsync();
   }, [isAuthenticated, authMutation, refetchUser, setAuthenticating, setAuthError]);
