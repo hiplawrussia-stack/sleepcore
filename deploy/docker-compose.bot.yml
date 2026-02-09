@@ -6,9 +6,10 @@ services:
       dockerfile: Dockerfile
     container_name: sleepcore-bot
     restart: unless-stopped
+    env_file:
+      - ../.env
     environment:
       - NODE_ENV=production
-      - BOT_TOKEN=${BOT_TOKEN}
       - DATABASE_PATH=/app/data/bot.db
       - ENABLE_ENHANCED_BOT=true
       - TZ=Europe/Moscow
