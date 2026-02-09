@@ -323,6 +323,11 @@
 
 ## Changelog
 
+### 2026-02-09
+- ✅ Fixed Command → Engine integration: wired 11 orphan commands into main.ts
+- ✅ Fixed ChronotypeCommand callback routing (was silently failing)
+- 📋 Identified orphaned engines: TCMIntegratedCBTIEngine, AyurvedaYogaEngine need commands
+
 ### 2026-02-08
 - ✅ Android Companion App complete (42 files, Kotlin/Compose)
 - ✅ Unit tests for Android (7 test files, 2281 lines)
