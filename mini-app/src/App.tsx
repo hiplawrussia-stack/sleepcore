@@ -8,6 +8,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Home, Breathing, Profile } from '@/pages';
 import { QueryProvider } from '@/providers/QueryProvider';
+import { ErrorBoundary } from '@/components/common';
 import { telegram } from '@/services/telegram';
 import { useAuth, useSync } from '@/hooks';
 
@@ -179,13 +180,15 @@ export const App: React.FC = () => {
   }, []);
 
   return (
-    <QueryProvider>
-      <BrowserRouter>
-        <div className="min-h-screen bg-night-900">
-          <AppContent />
-        </div>
-      </BrowserRouter>
-    </QueryProvider>
+    <ErrorBoundary>
+      <QueryProvider>
+        <BrowserRouter>
+          <div className="min-h-screen bg-night-900">
+            <AppContent />
+          </div>
+        </BrowserRouter>
+      </QueryProvider>
+    </ErrorBoundary>
   );
 };
 

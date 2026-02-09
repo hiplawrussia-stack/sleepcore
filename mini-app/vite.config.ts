@@ -27,7 +27,10 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // Security: 'hidden' generates sourcemaps but doesn't expose sourceMappingURL
+    // This prevents source code leakage while still allowing debugging via manual upload
+    // @see https://blog.sentry.security/abusing-exposed-sourcemaps/
+    sourcemap: 'hidden',
     minify: 'terser',
     rollupOptions: {
       output: {
