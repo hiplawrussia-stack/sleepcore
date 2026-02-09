@@ -76,8 +76,8 @@
 |---|--------|--------|-----------|
 | 1 | ~~Wearable Backend API~~ | ✅ Done | Android App |
 | 2 | ~~Android Companion App (Health Connect)~~ | ✅ Done | Real wearable data |
-| 3 | Bot Commands branches: 34% → 60% | ⏳ In Progress | Quality |
-| 4 | Command → Engine integration verification | ⏳ In Progress | Clinical safety |
+| 3 | ~~Bot Commands branches: 82.2%~~ | ✅ Done (was 34%, target 60%) | Quality |
+| 4 | ~~Command → Engine integration~~ | ✅ Done (full audit 2026-02-09) | Clinical safety |
 | 5 | Ethics Committee submission | 🔜 Ready docs | Pilot start |
 
 ### Приоритет P1 — Пилот
@@ -326,7 +326,10 @@
 ### 2026-02-09
 - ✅ Fixed Command → Engine integration: wired 11 orphan commands into main.ts
 - ✅ Fixed ChronotypeCommand callback routing (was silently failing)
-- 📋 Identified orphaned engines: TCMIntegratedCBTIEngine, AyurvedaYogaEngine need commands
+- ✅ Integrated TCM self-acupressure and Yoga Nidra into /therapy (was orphaned)
+- ✅ Added Yoga Nidra safety screening (PubMed 39690521)
+- ✅ Full integration audit: NO orphan modules found (17 engines, 29 services, 25 commands)
+- ✅ Bot Commands branch coverage: 82.2% (target was 60%)
 
 ### 2026-02-08
 - ✅ Android Companion App complete (42 files, Kotlin/Compose)
