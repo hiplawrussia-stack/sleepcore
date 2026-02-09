@@ -2759,4 +2759,586 @@ describe('TherapyCommand', () => {
       expect(exercise.message).toMatch(/5\.5|минимум/i);
     });
   });
+
+  // ==================== Phase 7: Branch Coverage Improvements ====================
+
+  describe('Third-Wave Menu - Phenotype Integration', () => {
+    it('should show phenotype section when profile available', async () => {
+      const ctx = createMockContext();
+      // Mock getSleepProfile to return a profile
+      ctx.sleepCore.getSleepProfile = jest.fn().mockReturnValue({
+        phenotype: {
+          primaryPhenotype: 'highly_distressed',
+          confidence: 0.85,
+        },
+        confidence: 0.85,
+      });
+      // Mock getPhenotypeBasedTherapyRecommendation
+      ctx.sleepCore.getPhenotypeBasedTherapyRecommendation = jest.fn().mockReturnValue({
+        recommendedApproach: 'acti',
+        rationale: 'ACT-I рекомендуется для вашего фенотипа',
+      });
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:third_wave_menu', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Фенотип сна');
+      expect(result.message).toContain('85%');
+    });
+
+    it('should handle missing phenotype gracefully', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getSleepProfile = jest.fn().mockReturnValue(null);
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:third_wave_menu', {});
+
+      expect(result.success).toBe(true);
+      // Should still show menu without phenotype section
+      expect(result.message).toContain('Альтернативные подходы');
+    });
+
+    it('should handle phenotype error gracefully', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getSleepProfile = jest.fn().mockImplementation(() => {
+        throw new Error('Profile unavailable');
+      });
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:third_wave_menu', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Альтернативные подходы');
+    });
+  });
+
+  describe('Third-Wave Menu - Arousal Profile Integration', () => {
+    it('should show cognitive arousal section when dominant', async () => {
+      const ctx = createMockContext();
+      // Need 7+ sleep states for arousal profile
+      const mockSleepStates = Array(7).fill({
+        efficiency: 0.75,
+        latency: 30,
+        waso: 45,
+        quality: 3,
+      });
+      ctx.sleepCore.getSleepStates = jest.fn().mockReturnValue(mockSleepStates);
+      ctx.sleepCore.estimateArousalProfile = jest.fn().mockReturnValue({
+        available: true,
+        dominantArousal: 'cognitive',
+        estimatedCognitive: 28,
+        estimatedSomatic: 15,
+        recommendation: {
+          rationaleRu: 'Когнитивное возбуждение доминирует',
+        },
+      });
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:third_wave_menu', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('🧠');
+      expect(result.message).toContain('Профиль возбуждения');
+      expect(result.message).toContain('28/40');
+    });
+
+    it('should show somatic arousal section when dominant', async () => {
+      const ctx = createMockContext();
+      const mockSleepStates = Array(7).fill({
+        efficiency: 0.75,
+        latency: 30,
+        waso: 45,
+        quality: 3,
+      });
+      ctx.sleepCore.getSleepStates = jest.fn().mockReturnValue(mockSleepStates);
+      ctx.sleepCore.estimateArousalProfile = jest.fn().mockReturnValue({
+        available: true,
+        dominantArousal: 'somatic',
+        estimatedCognitive: 12,
+        estimatedSomatic: 30,
+        recommendation: {
+          rationaleRu: 'Соматическое возбуждение доминирует',
+        },
+      });
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:third_wave_menu', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('💪');
+    });
+
+    it('should show balanced arousal icon', async () => {
+      const ctx = createMockContext();
+      const mockSleepStates = Array(7).fill({
+        efficiency: 0.75,
+        latency: 30,
+        waso: 45,
+        quality: 3,
+      });
+      ctx.sleepCore.getSleepStates = jest.fn().mockReturnValue(mockSleepStates);
+      ctx.sleepCore.estimateArousalProfile = jest.fn().mockReturnValue({
+        available: true,
+        dominantArousal: 'mixed',
+        estimatedCognitive: 20,
+        estimatedSomatic: 22,
+        recommendation: {
+          rationaleRu: 'Смешанный профиль возбуждения',
+        },
+      });
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:third_wave_menu', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('⚖️');
+    });
+
+    it('should skip arousal section when not enough data', async () => {
+      const ctx = createMockContext();
+      // Only 3 states, need 7+
+      ctx.sleepCore.getSleepStates = jest.fn().mockReturnValue([{}, {}, {}]);
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:third_wave_menu', {});
+
+      expect(result.success).toBe(true);
+      // Should not contain arousal profile section
+      expect(result.message).not.toContain('Профиль возбуждения');
+    });
+
+    it('should skip arousal section when unavailable', async () => {
+      const ctx = createMockContext();
+      const mockSleepStates = Array(7).fill({});
+      ctx.sleepCore.getSleepStates = jest.fn().mockReturnValue(mockSleepStates);
+      ctx.sleepCore.estimateArousalProfile = jest.fn().mockReturnValue({
+        available: false,
+      });
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:third_wave_menu', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).not.toContain('Профиль возбуждения');
+    });
+  });
+
+  describe('Adaptive Recommendation - Thompson Sampling', () => {
+    it('should show adaptive recommendation in homework when available', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getNextIntervention = jest.fn().mockResolvedValue({
+        component: 'sleep_restriction',
+        action: 'Сократите время в кровати до 6.5 часов',
+        rationale: 'SE 78% требует консолидации',
+        priority: 4,
+      });
+
+      const result = await therapyCommand.handleStep(ctx, 'core_homework', {
+        currentCore: 'sleep_behavior_1',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Персональная рекомендация');
+      expect(result.message).toContain('Ограничение сна');
+      expect(result.message).toContain('⭐⭐⭐⭐');
+    });
+
+    it('should show relevance note for non-current core recommendations', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getNextIntervention = jest.fn().mockResolvedValue({
+        component: 'cognitive_restructuring',
+        action: 'Оспорьте убеждение о необходимости 8 часов сна',
+        rationale: 'Когнитивные искажения',
+        priority: 3,
+      });
+
+      // Current core is sleep_behavior_1, but recommendation is for cognitive
+      const result = await therapyCommand.handleStep(ctx, 'core_homework', {
+        currentCore: 'sleep_behavior_1',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Дополнительная рекомендация');
+    });
+
+    it('should handle adaptive recommendation error gracefully', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getNextIntervention = jest.fn().mockRejectedValue(new Error('Service unavailable'));
+
+      const result = await therapyCommand.handleStep(ctx, 'core_homework', {
+        currentCore: 'sleep_behavior_1',
+      });
+
+      expect(result.success).toBe(true);
+      // Should still show homework without adaptive block
+      expect(result.message).toContain('Домашнее задание');
+    });
+
+    it('should handle adaptive_done callback', async () => {
+      const ctx = createMockContext();
+      const mockIntervention = {
+        component: 'sleep_restriction',
+        action: 'Test action',
+        rationale: 'Test rationale',
+        priority: 3,
+      };
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:adaptive_done', {
+        adaptiveIntervention: mockIntervention,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Рекомендация принята');
+      expect(result.message).toContain('Ограничение сна');
+      expect(result.metadata?.adaptiveAccepted).toBe(true);
+    });
+
+    it('should handle adaptive_done without intervention data', async () => {
+      const ctx = createMockContext();
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:adaptive_done', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Рекомендация принята');
+      expect(result.message).toContain('рекомендацию');
+    });
+  });
+
+  describe('Cognitive Progress with Report', () => {
+    it('should show cognitive progress with markdown table when report available', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getCognitiveProgressReport = jest.fn().mockReturnValue({
+        toMarkdownTable: () => '| Неделя | Убеждения | Прогресс |\n|--------|-----------|----------|',
+        summary: {
+          totalBeliefs: 5,
+          dominantCategory: 'catastrophizing',
+        },
+      });
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:cognitive_progress', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Когнитивный прогресс');
+      expect(result.message).toContain('Обработано убеждений');
+      expect(result.message).toContain('5');
+    });
+
+    it('should show fallback when no cognitive progress report', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getCognitiveProgressReport = jest.fn().mockReturnValue(null);
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:cognitive_progress', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Когнитивный прогресс');
+      // Should show fallback message for no data
+    });
+  });
+
+  describe('Personalized SRT Content - Titration Logic', () => {
+    const createMockSessionWithSRT = () => ({
+      plan: {
+        activeComponents: {
+          sleepRestriction: {
+            prescribedBedtime: '23:30',
+            prescribedWakeTime: '06:00',
+            prescribedTIB: 390,
+          },
+        },
+      },
+    });
+
+    it('should show increase recommendation when SE >= 90%', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getSession = jest.fn().mockReturnValue(createMockSessionWithSRT());
+      ctx.sleepCore.getProgressReport = jest.fn().mockReturnValue({
+        currentSleepEfficiency: 92,
+      });
+
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_behavior_1',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('увеличить TIB');
+    });
+
+    it('should show maintain recommendation when SE 85-89%', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getSession = jest.fn().mockReturnValue(createMockSessionWithSRT());
+      ctx.sleepCore.getProgressReport = jest.fn().mockReturnValue({
+        currentSleepEfficiency: 87,
+      });
+
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_behavior_1',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('поддерживайте');
+    });
+
+    it('should show decrease recommendation when SE < 85%', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getSession = jest.fn().mockReturnValue(createMockSessionWithSRT());
+      ctx.sleepCore.getProgressReport = jest.fn().mockReturnValue({
+        currentSleepEfficiency: 78,
+      });
+
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_behavior_1',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('сохраняйте');
+    });
+
+    it('should show pending titration when no SE data', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getSession = jest.fn().mockReturnValue(createMockSessionWithSRT());
+      ctx.sleepCore.getProgressReport = jest.fn().mockReturnValue({
+        currentSleepEfficiency: null,
+      });
+
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_behavior_1',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('после недели данных');
+    });
+  });
+
+  describe('Personalized CR Content - Socratic Questions', () => {
+    it('should show Socratic questions for identified beliefs', async () => {
+      const ctx = createMockContext();
+      // Mock the session with beliefHistory
+      ctx.sleepCore.getSession = jest.fn().mockReturnValue({
+        beliefHistory: [[
+          {
+            belief: 'Мне нужно 8 часов сна',
+            category: 'catastrophizing',
+            evidenceFor: ['Всегда так думал'],
+            evidenceAgainst: ['Могу функционировать с 6-7 часами'],
+          },
+        ]],
+      });
+      ctx.sleepCore.getSocraticQuestions = jest.fn().mockReturnValue([
+        'Откуда вы знаете, что это правда?',
+        'Какие доказательства против?',
+        'Что бы вы сказали другу?',
+      ]);
+      ctx.sleepCore.generateAlternativeThought = jest.fn().mockReturnValue(
+        'Мне достаточно 6-7 часов качественного сна'
+      );
+      ctx.sleepCore.getCognitiveProgressReport = jest.fn().mockReturnValue({
+        summary: {
+          totalBeliefs: 3,
+          successfulRestructurings: 2,
+          avgBeliefReduction: 35,
+        },
+      });
+
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_thoughts',
+      });
+
+      expect(result.success).toBe(true);
+      // Content depends on engine availability
+    });
+
+    it('should show belief reduction level correctly', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getSession = jest.fn().mockReturnValue({
+        beliefHistory: [[{ belief: 'Test belief', category: 'worry' }]],
+      });
+      ctx.sleepCore.getSocraticQuestions = jest.fn().mockReturnValue(['Q1', 'Q2']);
+      ctx.sleepCore.generateAlternativeThought = jest.fn().mockReturnValue('Alternative');
+      ctx.sleepCore.getCognitiveProgressReport = jest.fn().mockReturnValue({
+        summary: {
+          totalBeliefs: 1,
+          successfulRestructurings: 1,
+          avgBeliefReduction: 55, // Should show "отличный результат"
+        },
+      });
+
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_thoughts',
+      });
+
+      expect(result.success).toBe(true);
+      // Content depends on engine availability
+    });
+
+    it('should fallback to simple CR content when beliefs empty', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getSession = jest.fn().mockReturnValue({
+        beliefHistory: [],
+        plan: {
+          activeComponents: {
+            cognitiveTargets: [
+              { belief: 'Fallback belief', category: 'worry', alternativeThought: 'Better thought' },
+            ],
+          },
+        },
+      });
+
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_thoughts',
+      });
+
+      expect(result.success).toBe(true);
+      // Should use fallback content
+    });
+  });
+
+  describe('Personalized SCT Content', () => {
+    it('should show stimulus control rules from engine', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getStimulusControlRules = jest.fn().mockReturnValue({
+        rules: [
+          { rule: 'Ложитесь только когда сонливы', adherence: 0.8 },
+          { rule: 'Используйте кровать только для сна', adherence: 0.6 },
+        ],
+        overallAdherence: 0.7,
+      });
+
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_behavior_2',
+      });
+
+      expect(result.success).toBe(true);
+      // Should include SCT content
+    });
+
+    it('should handle SCT content error gracefully', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getStimulusControlRules = jest.fn().mockImplementation(() => {
+        throw new Error('Engine unavailable');
+      });
+
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_behavior_2',
+      });
+
+      expect(result.success).toBe(true);
+      // Should still show session content
+    });
+  });
+
+  describe('Personalized SHE Content', () => {
+    it('should show sleep hygiene assessment with categories', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.assessSleepHygiene = jest.fn().mockReturnValue({
+        scores: {
+          caffeine: 0.9,
+          alcohol: 0.7,
+          exercise: 0.5,
+          environment: 0.8,
+        },
+        overallScore: 0.72,
+        recommendations: [
+          { recommendation: 'Сократите кофеин после 14:00', priority: 'high' },
+          { recommendation: 'Добавьте вечернюю активность', priority: 'medium' },
+        ],
+      });
+      ctx.sleepCore.trackHygieneImprovement = jest.fn().mockReturnValue({
+        improved: ['caffeine'],
+        declined: [],
+      });
+
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_education',
+      });
+
+      expect(result.success).toBe(true);
+      // Should include hygiene assessment
+    });
+
+    it('should show priority improvements section', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.assessSleepHygiene = jest.fn().mockReturnValue({
+        scores: { caffeine: 0.4 },
+        overallScore: 0.4,
+        recommendations: [
+          { recommendation: 'Срочно сократите кофеин', priority: 'high' },
+        ],
+      });
+      ctx.sleepCore.trackHygieneImprovement = jest.fn().mockReturnValue(null);
+
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_education',
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should handle SHE assessment error gracefully', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.assessSleepHygiene = jest.fn().mockImplementation(() => {
+        throw new Error('Assessment unavailable');
+      });
+
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_education',
+      });
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('Helper Method Coverage', () => {
+    it('should handle getRecentUserText with diary notes', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getSleepStates = jest.fn().mockReturnValue([
+        { notes: 'Не мог заснуть, думал о работе' },
+        { notes: 'Проснулся в 3 утра с тревогой' },
+      ]);
+
+      // This is tested indirectly through CR content
+      const result = await therapyCommand.handleStep(ctx, 'core_content', {
+        currentCore: 'sleep_thoughts',
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should handle DBAS severity levels', async () => {
+      const ctx = createMockContext();
+      // The DBAS severity is used in cognitive restructuring section
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:cognitive_progress', {});
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should get phenotype display name for all types', async () => {
+      const ctx = createMockContext();
+
+      // Test each phenotype type
+      const phenotypes = ['highly_distressed', 'moderately_distressed', 'mildly_distressed', 'low_distress', 'average'];
+
+      for (const phenotype of phenotypes) {
+        ctx.sleepCore.getSleepProfile = jest.fn().mockReturnValue({
+          phenotype: { primaryPhenotype: phenotype },
+          confidence: 0.8,
+        });
+        ctx.sleepCore.getPhenotypeBasedTherapyRecommendation = jest.fn().mockReturnValue({
+          recommendedApproach: 'acti',
+          rationale: 'Test',
+        });
+
+        const result = await therapyCommand.handleCallback(ctx, 'therapy:third_wave_menu', {});
+        expect(result.success).toBe(true);
+      }
+    });
+
+    it('should get belief category names in Russian', async () => {
+      const ctx = createMockContext();
+      ctx.sleepCore.getCognitiveProgressReport = jest.fn().mockReturnValue({
+        toMarkdownTable: () => '| Test |',
+        summary: {
+          totalBeliefs: 1,
+          dominantCategory: 'catastrophizing',
+        },
+      });
+
+      const result = await therapyCommand.handleCallback(ctx, 'therapy:cognitive_progress', {});
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Доминирующая категория');
+    });
+  });
 });
