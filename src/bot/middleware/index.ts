@@ -39,6 +39,7 @@ export {
   verifySessionBinding,
   clearSessionBinding,
   getSessionBindingStats,
+  verifyReplyToMessage,
   securityAuditLog,
   DEFAULT_SECURITY_CONFIG,
 } from './securityMiddleware';
@@ -47,4 +48,5 @@ export type {
   ISecurityEvent,
   SecurityEventType,
   ISecurityConfig,
+  IReplyVerificationResult,
 } from './securityMiddleware';

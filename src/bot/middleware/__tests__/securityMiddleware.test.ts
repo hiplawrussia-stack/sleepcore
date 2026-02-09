@@ -14,6 +14,7 @@ import {
   verifySessionBinding,
   clearSessionBinding,
   getSessionBindingStats,
+  verifyReplyToMessage,
   securityAuditLog,
   DEFAULT_SECURITY_CONFIG,
 } from '../securityMiddleware';
@@ -280,6 +281,97 @@ describe('securityMiddleware', () => {
       expect(stats).toHaveProperty('critical');
       expect(stats).toHaveProperty('warning');
       expect(stats).toHaveProperty('byType');
+    });
+  });
+
+  // ==========================================================================
+  // Reply-to-Message Verification
+  // ==========================================================================
+  describe('verifyReplyToMessage', () => {
+    const currentTime = Math.floor(Date.now() / 1000);
+    const botId = 123456789;
+
+    it('should validate reply to bot message in same chat', () => {
+      const replyToMessage = {
+        from: { id: botId, is_bot: true },
+        chat: { id: 100 },
+        date: currentTime - 60, // 1 minute ago
+      };
+
+      const result = verifyReplyToMessage(replyToMessage, 100, botId, 24);
+      expect(result.valid).toBe(true);
+      expect(result.isStale).toBeUndefined();
+      expect(result.isToNonBot).toBeUndefined();
+    });
+
+    it('should detect reply to different chat', () => {
+      const replyToMessage = {
+        from: { id: botId, is_bot: true },
+        chat: { id: 200 }, // Different chat
+        date: currentTime - 60,
+      };
+
+      const result = verifyReplyToMessage(replyToMessage, 100, botId, 24);
+      expect(result.valid).toBe(false);
+      expect(result.reason).toContain('different chat');
+    });
+
+    it('should flag reply to non-bot message', () => {
+      const replyToMessage = {
+        from: { id: 999, is_bot: false }, // User, not bot
+        chat: { id: 100 },
+        date: currentTime - 60,
+      };
+
+      const result = verifyReplyToMessage(replyToMessage, 100, botId, 24);
+      expect(result.valid).toBe(true); // Still valid, just flagged
+      expect(result.isToNonBot).toBe(true);
+    });
+
+    it('should flag stale reply', () => {
+      const replyToMessage = {
+        from: { id: botId, is_bot: true },
+        chat: { id: 100 },
+        date: currentTime - (25 * 60 * 60), // 25 hours ago
+      };
+
+      const result = verifyReplyToMessage(replyToMessage, 100, botId, 24);
+      expect(result.valid).toBe(true); // Still valid, just flagged
+      expect(result.isStale).toBe(true);
+      expect(result.reason).toContain('old message');
+    });
+
+    it('should accept reply within time limit', () => {
+      const replyToMessage = {
+        from: { id: botId, is_bot: true },
+        chat: { id: 100 },
+        date: currentTime - (23 * 60 * 60), // 23 hours ago (within 24h limit)
+      };
+
+      const result = verifyReplyToMessage(replyToMessage, 100, botId, 24);
+      expect(result.valid).toBe(true);
+      expect(result.isStale).toBeUndefined();
+    });
+
+    it('should work without bot ID', () => {
+      const replyToMessage = {
+        from: { id: 999, is_bot: true },
+        chat: { id: 100 },
+        date: currentTime - 60,
+      };
+
+      const result = verifyReplyToMessage(replyToMessage, 100, undefined, 24);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should work with message without from field', () => {
+      const replyToMessage = {
+        chat: { id: 100 },
+        date: currentTime - 60,
+      };
+
+      const result = verifyReplyToMessage(replyToMessage, 100, botId, 24);
+      expect(result.valid).toBe(true);
     });
   });
 });

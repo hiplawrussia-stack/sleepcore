@@ -6,6 +6,7 @@
  * Features:
  * - Session hijacking protection (chat_id + user_id binding)
  * - Input sanitization for free-text fields
+ * - Reply-to-message verification (prevents reply spoofing)
  * - Security event audit logging
  * - Admin ID validation
  *
@@ -45,15 +46,20 @@ export type SecurityEventType =
   | 'admin_action'
   | 'crisis_escalation'
   | 'auth_failure'
-  | 'input_sanitized';
+  | 'input_sanitized'
+  | 'invalid_reply';
 
 export interface ISecurityConfig {
   /** Enable session binding (user_id + chat_id) */
   enableSessionBinding: boolean;
   /** Enable input sanitization */
   enableInputSanitization: boolean;
+  /** Enable reply-to-message verification */
+  enableReplyVerification: boolean;
   /** Max message length (chars) */
   maxMessageLength: number;
+  /** Max reply age in hours (stale replies are suspicious) */
+  maxReplyAgeHours: number;
   /** Patterns to detect in input (potential injection) */
   suspiciousPatterns: RegExp[];
   /** Log retention period (days) */
@@ -67,7 +73,9 @@ export interface ISecurityConfig {
 const DEFAULT_CONFIG: ISecurityConfig = {
   enableSessionBinding: true,
   enableInputSanitization: true,
+  enableReplyVerification: true,
   maxMessageLength: 4096, // Telegram limit
+  maxReplyAgeHours: 24, // Replies older than 24h are suspicious
   suspiciousPatterns: [
     // Script injection attempts
     /<script/i,
@@ -356,6 +364,74 @@ export function getSessionBindingStats(): { activeSessions: number; oldestSessio
 }
 
 // ============================================================================
+// REPLY VERIFICATION
+// ============================================================================
+
+export interface IReplyVerificationResult {
+  /** Whether the reply is valid */
+  valid: boolean;
+  /** Reason for invalid reply */
+  reason?: string;
+  /** Whether this is a stale reply (old message) */
+  isStale?: boolean;
+  /** Whether the reply is to a non-bot message */
+  isToNonBot?: boolean;
+}
+
+/**
+ * Verify reply-to-message for security
+ * Checks:
+ * 1. Reply is to a bot message (from.is_bot)
+ * 2. Reply is not too old (stale)
+ * 3. Reply is in the same chat
+ *
+ * @param replyToMessage - The message being replied to
+ * @param currentChatId - Current chat ID
+ * @param botId - Bot's user ID
+ * @param maxAgeHours - Maximum age of reply in hours
+ */
+export function verifyReplyToMessage(
+  replyToMessage: { from?: { id: number; is_bot?: boolean }; chat: { id: number }; date: number },
+  currentChatId: number,
+  botId: number | undefined,
+  maxAgeHours: number
+): IReplyVerificationResult {
+  // Check if reply is to the same chat
+  if (replyToMessage.chat.id !== currentChatId) {
+    return {
+      valid: false,
+      reason: `Reply to message from different chat (reply_chat: ${replyToMessage.chat.id}, current: ${currentChatId})`,
+    };
+  }
+
+  // Check if reply is to a bot message (if botId is known)
+  if (botId && replyToMessage.from) {
+    if (!replyToMessage.from.is_bot || replyToMessage.from.id !== botId) {
+      // Not necessarily invalid, but notable - user is replying to their own or another user's message
+      return {
+        valid: true,
+        isToNonBot: true,
+        reason: 'Reply to non-bot message',
+      };
+    }
+  }
+
+  // Check if reply is stale (too old)
+  const replyAgeMs = Date.now() - replyToMessage.date * 1000;
+  const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
+
+  if (replyAgeMs > maxAgeMs) {
+    return {
+      valid: true, // Not blocking, just flagging
+      isStale: true,
+      reason: `Reply to old message (age: ${Math.round(replyAgeMs / 3600000)}h, max: ${maxAgeHours}h)`,
+    };
+  }
+
+  return { valid: true };
+}
+
+// ============================================================================
 // MIDDLEWARE
 // ============================================================================
 
@@ -367,7 +443,7 @@ export function getSessionBindingStats(): { activeSessions: number; oldestSessio
  * bot.use(createSecurityMiddleware());
  * ```
  */
-export function createSecurityMiddleware(config: Partial<ISecurityConfig> = {}) {
+export function createSecurityMiddleware(config: Partial<ISecurityConfig> = {}, botId?: number) {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
 
   return async (ctx: Context, next: NextFunction): Promise<void> => {
@@ -397,7 +473,45 @@ export function createSecurityMiddleware(config: Partial<ISecurityConfig> = {}) 
       }
     }
 
-    // 2. Input sanitization for text messages
+    // 2. Reply-to-message verification
+    if (fullConfig.enableReplyVerification && ctx.message?.reply_to_message) {
+      const replyResult = verifyReplyToMessage(
+        ctx.message.reply_to_message,
+        ctx.chat?.id || 0,
+        botId,
+        fullConfig.maxReplyAgeHours
+      );
+
+      if (!replyResult.valid) {
+        securityAuditLog.log({
+          type: 'invalid_reply',
+          userId,
+          chatId,
+          details: replyResult.reason || 'Invalid reply-to-message',
+          severity: 'warning',
+          metadata: {
+            replyToMessageId: ctx.message.reply_to_message.message_id,
+            replyToChatId: ctx.message.reply_to_message.chat.id,
+          },
+        });
+      } else if (replyResult.isStale) {
+        // Log stale replies for monitoring (not blocking)
+        securityAuditLog.log({
+          type: 'invalid_reply',
+          userId,
+          chatId,
+          details: replyResult.reason || 'Stale reply detected',
+          severity: 'info',
+          metadata: {
+            replyToMessageId: ctx.message.reply_to_message.message_id,
+            isStale: true,
+          },
+        });
+      }
+      // Note: isToNonBot is not logged as it's normal user behavior
+    }
+
+    // 3. Input sanitization for text messages
     if (fullConfig.enableInputSanitization && ctx.message?.text) {
       const result = sanitizeInput(ctx.message.text, fullConfig);
 
