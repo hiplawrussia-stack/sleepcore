@@ -37,6 +37,14 @@ export const queryKeys = {
     status: () => [...queryKeys.sync.all, 'status'] as const,
     changes: (since?: number) => [...queryKeys.sync.all, 'changes', since] as const,
   },
+
+  // Leaderboard
+  leaderboard: {
+    all: ['leaderboard'] as const,
+    weekly: () => [...queryKeys.leaderboard.all, 'weekly'] as const,
+    monthly: () => [...queryKeys.leaderboard.all, 'monthly'] as const,
+    settings: () => [...queryKeys.leaderboard.all, 'settings'] as const,
+  },
 } as const;
 
 // Type helpers

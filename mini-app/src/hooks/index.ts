@@ -24,6 +24,7 @@ export {
   useQuests,
   useBadges,
   useGamification,
+  useLeaderboard,
 } from './useEvolution';
 
 // Sync

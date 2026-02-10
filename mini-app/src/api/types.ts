@@ -95,6 +95,31 @@ export interface Badge {
   earnedAt: string;
 }
 
+// ========== Leaderboard Types ==========
+
+export interface LeaderboardEntry {
+  rank: number;
+  displayName: string;
+  isAnonymous: boolean;
+  totalSessions: number;
+  totalMinutes: number;
+  streak: number;
+  evolutionStage: string;
+  isCurrentUser: boolean;
+}
+
+export interface LeaderboardSettings {
+  isOptedIn: boolean;
+  showAnonymously: boolean;
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  userSettings: LeaderboardSettings;
+  period: 'weekly' | 'monthly' | 'allTime';
+  updatedAt: string;
+}
+
 // ========== Sync Types ==========
 
 export interface SyncChange {

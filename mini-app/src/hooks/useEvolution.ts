@@ -4,9 +4,9 @@
  * TanStack Query hook for evolution status and gamification data.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, queryKeys } from '@/api';
-import type { EvolutionStatus, Quest, Badge } from '@/api';
+import type { EvolutionStatus, Quest, Badge, LeaderboardEntry, LeaderboardSettings } from '@/api';
 import { useAuthStore } from '@/store/authStore';
 
 // ========== useEvolution ==========
@@ -143,6 +143,73 @@ export const useGamification = (): UseGamificationReturn => {
     badges,
     isLoading: isLoadingEvolution || isLoadingQuests || isLoadingBadges,
     refetchAll,
+  };
+};
+
+// ========== useLeaderboard ==========
+
+interface UseLeaderboardReturn {
+  entries: LeaderboardEntry[] | undefined;
+  settings: LeaderboardSettings | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  error: Error | null;
+  refetch: () => Promise<unknown>;
+  optIn: (anonymous: boolean) => Promise<void>;
+  optOut: () => Promise<void>;
+}
+
+export const useLeaderboard = (): UseLeaderboardReturn => {
+  const { isAuthenticated } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  // Fetch leaderboard data
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: queryKeys.leaderboard.weekly(),
+    queryFn: async () => {
+      return apiClient.request<{
+        entries: LeaderboardEntry[];
+        settings: LeaderboardSettings;
+      }>('/leaderboard/weekly');
+    },
+    enabled: isAuthenticated,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  // Opt-in mutation
+  const optInMutation = useMutation({
+    mutationFn: async (anonymous: boolean) => {
+      return apiClient.request('/leaderboard/opt-in', {
+        method: 'POST',
+        body: JSON.stringify({ anonymous }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.leaderboard.all });
+    },
+  });
+
+  // Opt-out mutation
+  const optOutMutation = useMutation({
+    mutationFn: async () => {
+      return apiClient.request('/leaderboard/opt-out', {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.leaderboard.all });
+    },
+  });
+
+  return {
+    entries: data?.entries,
+    settings: data?.settings,
+    isLoading,
+    isError,
+    error: error as Error | null,
+    refetch,
+    optIn: optInMutation.mutateAsync,
+    optOut: optOutMutation.mutateAsync,
   };
 };
 

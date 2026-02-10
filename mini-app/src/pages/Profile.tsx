@@ -9,6 +9,7 @@ import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Card, PrivacyCenter } from '@/components/common';
+import { QuestsPanel } from '@/components/gamification';
 import { useTelegram, useHaptics, useUserProfile, useBreathingStats, useEvolution } from '@/hooks';
 import { formatDuration } from '@/components/breathing/patterns';
 
@@ -203,6 +204,16 @@ export const Profile: React.FC = () => {
           </Card>
         </motion.div>
       )}
+
+      {/* Quests Panel */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.22 }}
+        className="mb-6"
+      >
+        <QuestsPanel limit={3} activeOnly />
+      </motion.div>
 
       {/* Weekly progress chart */}
       {stats?.weeklyProgress && stats.weeklyProgress.length > 0 && (
