@@ -9,6 +9,10 @@
  *   npm start     - Run production build
  */
 
+// IMPORTANT: Sentry must be initialized FIRST for proper error capture
+import { initSentry, flush as flushSentry } from './utils/sentry.js';
+initSentry();
+
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { initDatabase, closeDatabase } from './db/index.js';
@@ -109,9 +113,13 @@ console.log('[API] Health check: /health');
 console.log('[API] API endpoints: /api/*');
 
 // Graceful shutdown
-const shutdown = () => {
+const shutdown = async () => {
   console.log('\n[API] Shutting down...');
   setInitialized(false);
+
+  // Flush Sentry events before exit
+  await flushSentry(2000);
+
   closeDatabase();
   process.exit(0);
 };

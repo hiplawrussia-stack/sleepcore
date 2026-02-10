@@ -1,12 +1,13 @@
 /**
  * Error Handler Middleware
  * ========================
- * Global error handling with consistent API responses.
+ * Global error handling with consistent API responses and Sentry integration.
  *
  * Security Controls:
  * - OWASP A01:2021 — Broken Access Control (no info leakage)
  * - Production error sanitization (no stack traces, internal paths)
  * - Safe error messages that don't reveal system internals
+ * - Sentry: HIPAA-compliant error monitoring
  *
  * @packageDocumentation
  * @module api/middleware
@@ -16,6 +17,7 @@ import type { ErrorHandler, NotFoundHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { ZodError } from 'zod';
 import type { ApiResponse } from '../types/index.js';
+import { captureError, addBreadcrumb } from '../utils/sentry.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -85,20 +87,17 @@ function sanitizeErrorMessage(message: string, statusCode: number): string {
 }
 
 /**
- * Global error handler
+ * Global error handler with Sentry integration
  */
 export const errorHandler: ErrorHandler = (err, c) => {
-  // Log full error for debugging (Sentry will capture this)
-  console.error('[API Error]', {
-    message: err.message,
-    stack: isProduction ? undefined : err.stack,
-    path: c.req.path,
-    method: c.req.method,
-  });
+  const path = c.req.path;
+  const method = c.req.method;
 
-  // Zod validation errors — safe to expose field names
+  // Add breadcrumb for debugging context
+  addBreadcrumb(`${method} ${path}`, 'http', { status: 'error' });
+
+  // Zod validation errors — safe to expose field names, don't send to Sentry
   if (err instanceof ZodError) {
-    // Sanitize field paths to not reveal internal structure
     const safeErrors = err.errors.map(e => {
       const field = e.path.join('.');
       return field ? `${field}: ${e.message}` : e.message;
@@ -112,9 +111,17 @@ export const errorHandler: ErrorHandler = (err, c) => {
     return c.json(response, 400);
   }
 
-  // HTTP exceptions
+  // HTTP exceptions — only capture 5xx to Sentry
   if (err instanceof HTTPException) {
     const safeMessage = sanitizeErrorMessage(err.message, err.status);
+
+    // Capture server errors (5xx) to Sentry
+    if (err.status >= 500) {
+      captureError(err, {
+        category: 'http',
+        tags: { status: err.status.toString(), path, method },
+      });
+    }
 
     const response: ApiResponse<null> = {
       success: false,
@@ -124,7 +131,13 @@ export const errorHandler: ErrorHandler = (err, c) => {
     return c.json(response, err.status);
   }
 
-  // Unknown errors — always sanitize in production
+  // Unknown errors — always capture to Sentry, sanitize for client
+  captureError(err, {
+    category: 'unknown',
+    tags: { path, method },
+    extra: { stack: err.stack },
+  });
+
   const response: ApiResponse<null> = {
     success: false,
     error: isProduction
