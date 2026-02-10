@@ -16,7 +16,7 @@ if (isDevelopment && !window.Telegram?.WebApp) {
   console.log('[SleepCore] Running in development mode - mocking Telegram environment');
 
   // Mock Telegram WebApp for local development
-  (window as any).Telegram = {
+  (window as { Telegram?: unknown }).Telegram = {
     WebApp: {
       initData: 'mock_init_data',
       initDataUnsafe: {
@@ -83,15 +83,15 @@ if (isDevelopment && !window.Telegram?.WebApp) {
         selectionChanged: () => console.log('[Mock] Haptic selection'),
       },
       CloudStorage: {
-        setItem: (key: string, value: string, callback?: (error: any) => void) => {
+        setItem: (key: string, value: string, callback?: (error: unknown) => void) => {
           localStorage.setItem(`tg_${key}`, value);
           callback?.(null);
         },
-        getItem: (key: string, callback?: (error: any, value?: string) => void) => {
+        getItem: (key: string, callback?: (error: unknown, value?: string) => void) => {
           const value = localStorage.getItem(`tg_${key}`);
           callback?.(null, value || undefined);
         },
-        removeItem: (key: string, callback?: (error: any) => void) => {
+        removeItem: (key: string, callback?: (error: unknown) => void) => {
           localStorage.removeItem(`tg_${key}`);
           callback?.(null);
         },
@@ -104,7 +104,7 @@ if (isDevelopment && !window.Telegram?.WebApp) {
         const confirmed = confirm(message);
         callback?.(confirmed);
       },
-      showPopup: (params: any, callback?: (buttonId: string) => void) => {
+      showPopup: (params: { message: string }, callback?: (buttonId: string) => void) => {
         alert(params.message);
         callback?.('ok');
       },

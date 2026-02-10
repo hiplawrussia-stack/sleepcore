@@ -12,12 +12,12 @@ import { Card } from '../../src/components/common/Card';
 // Mock framer-motion
 vi.mock('motion/react', () => ({
   motion: {
-    div: ({ children, className, onClick, whileTap, ...props }: any) => (
+    div: ({ children, className, onClick, whileTap: _whileTap, ...props }: React.ComponentProps<'div'> & { whileTap?: unknown }) => (
       <div className={className} onClick={onClick} {...props}>
         {children}
       </div>
     ),
-    button: ({ children, className, onClick, whileTap, ...props }: any) => (
+    button: ({ children, className, onClick, whileTap: _whileTap, ...props }: React.ComponentProps<'button'> & { whileTap?: unknown }) => (
       <button className={className} onClick={onClick} {...props}>
         {children}
       </button>

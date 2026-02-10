@@ -160,9 +160,8 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
           onComplete(selectedPattern.id, totalCycles, durationSeconds);
         }
       }
-    } catch (error) {
-      // Exercise was cancelled
-      console.log('[HapticBreathing] Exercise cancelled');
+    } catch (_error) {
+      // Exercise was cancelled - silently ignore
     } finally {
       setIsRunning(false);
     }

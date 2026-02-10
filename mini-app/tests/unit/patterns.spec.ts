@@ -162,7 +162,7 @@ describe('Breathing Patterns', () => {
     });
 
     it('should handle pattern without hold2', () => {
-      const pattern = { inhale: 4, hold: 2, exhale: 6 } as any;
+      const pattern = { inhale: 4, hold: 2, exhale: 6 } as { inhale: number; hold: number; exhale: number; hold2?: number };
       const duration = getPatternDuration(pattern);
       expect(duration).toBe(12);
     });

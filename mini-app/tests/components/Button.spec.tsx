@@ -12,12 +12,12 @@ import { Button } from '../../src/components/common/Button';
 // Mock framer-motion
 vi.mock('motion/react', () => ({
   motion: {
-    button: ({ children, onClick, disabled, className, whileTap, ...props }: any) => (
+    button: ({ children, onClick, disabled, className, whileTap: _whileTap, ...props }: React.ComponentProps<'button'> & { whileTap?: unknown }) => (
       <button onClick={onClick} disabled={disabled} className={className} {...props}>
         {children}
       </button>
     ),
-    div: ({ children, className, animate, transition, ...props }: any) => (
+    div: ({ children, className, animate: _animate, transition: _transition, ...props }: React.ComponentProps<'div'> & { animate?: unknown; transition?: unknown }) => (
       <div className={className} {...props}>{children}</div>
     ),
   },

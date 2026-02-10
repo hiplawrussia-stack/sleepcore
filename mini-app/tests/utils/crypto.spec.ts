@@ -96,12 +96,9 @@ describe('Crypto Utilities', () => {
       mockSubtle.encrypt.mockResolvedValue(new ArrayBuffer(16));
 
       await encrypt('test1');
-      const call1 = mockSubtle.encrypt.mock.calls[0];
-
       await encrypt('test2');
-      const call2 = mockSubtle.encrypt.mock.calls[1];
 
-      // IV should be generated (getRandomValues called)
+      // IV should be generated (getRandomValues called twice, once per encrypt)
       expect(mockCrypto.getRandomValues).toHaveBeenCalledTimes(2);
     });
 

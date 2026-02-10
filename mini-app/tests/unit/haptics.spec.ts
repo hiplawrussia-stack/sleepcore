@@ -49,7 +49,7 @@ const createMockHapticsService = () => {
       this.hapticFeedback.selectionChanged();
     }
 
-    async breatheIn(durationMs: number = 4000): Promise<void> {
+    async breatheIn(_durationMs: number = 4000): Promise<void> {
       if (!this.isAvailable()) {
         return;
       }
