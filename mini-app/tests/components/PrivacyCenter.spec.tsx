@@ -2,6 +2,14 @@
  * PrivacyCenter Component Tests
  * ==============================
  * Tests for GDPR data subject rights UI (Articles 15, 17, 20).
+ *
+ * IEC 62304 Compliance:
+ * - Unit verification per §5.5.5
+ * - GDPR Art. 15: Right of access verification
+ * - GDPR Art. 17: Right to erasure verification
+ * - GDPR Art. 20: Data portability verification
+ *
+ * @module @sleepcore/mini-app/tests
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';

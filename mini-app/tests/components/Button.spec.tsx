@@ -2,6 +2,12 @@
  * Button Component Tests
  * ======================
  * Tests for reusable Button component.
+ *
+ * IEC 62304 Compliance:
+ * - Unit verification per §5.5.5
+ * - UI: Core interaction element testing
+ *
+ * @module @sleepcore/mini-app/tests
  */
 
 import React from 'react';

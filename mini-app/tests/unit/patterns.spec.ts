@@ -2,6 +2,13 @@
  * Breathing Patterns Tests
  * ========================
  * Tests for breathing pattern utilities.
+ *
+ * IEC 62304 Compliance:
+ * - Unit verification per §5.5.5
+ * - Clinical: Breathing pattern timing accuracy
+ * - Safety: Pattern duration calculations
+ *
+ * @module @sleepcore/mini-app/tests
  */
 
 import { describe, it, expect } from 'vitest';

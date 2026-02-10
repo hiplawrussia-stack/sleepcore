@@ -2,6 +2,13 @@
  * Haptics Service Tests
  * =====================
  * Tests for haptic feedback service.
+ *
+ * IEC 62304 Compliance:
+ * - Unit verification per §5.5.5
+ * - UX: Breathing guidance feedback
+ * - Accessibility: Tactile user feedback
+ *
+ * @module @sleepcore/mini-app/tests
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';

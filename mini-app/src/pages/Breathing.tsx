@@ -4,13 +4,16 @@
  * Full breathing exercise experience with haptic feedback.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { HapticBreathing } from '@/components/breathing';
+import { HapticBreathing, getPatternById } from '@/components/breathing';
 import { EvolutionCelebrationModal } from '@/components/common';
 import { useTelegram } from '@/hooks';
 import { useUserStore } from '@/store';
 import { api } from '@/services/api';
+
+/** Default pattern ID for fallback */
+const DEFAULT_PATTERN_ID = '478';
 
 interface EvolutionData {
   previousStage: string;
@@ -25,7 +28,14 @@ export const Breathing: React.FC = () => {
 
   const [evolutionData, setEvolutionData] = useState<EvolutionData | null>(null);
 
-  const initialPattern = searchParams.get('pattern') || '478';
+  // Validate pattern parameter against known patterns (security: input validation)
+  const initialPattern = useMemo(() => {
+    const patternParam = searchParams.get('pattern');
+    if (patternParam && getPatternById(patternParam)) {
+      return patternParam;
+    }
+    return DEFAULT_PATTERN_ID;
+  }, [searchParams]);
 
   // Setup back button
   useEffect(() => {

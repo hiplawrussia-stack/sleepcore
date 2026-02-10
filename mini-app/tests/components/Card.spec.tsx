@@ -2,6 +2,12 @@
  * Card Component Tests
  * ====================
  * Tests for reusable Card container component.
+ *
+ * IEC 62304 Compliance:
+ * - Unit verification per §5.5.5
+ * - UI: Container element testing
+ *
+ * @module @sleepcore/mini-app/tests
  */
 
 import React from 'react';

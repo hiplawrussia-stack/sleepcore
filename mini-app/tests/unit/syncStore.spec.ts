@@ -2,6 +2,13 @@
  * Sync Store Tests
  * ================
  * Tests for Zustand sync state management (offline-first).
+ *
+ * IEC 62304 Compliance:
+ * - Unit verification per §5.5.5
+ * - Data integrity: Offline queue persistence
+ * - Safety: Session data sync reliability
+ *
+ * @module @sleepcore/mini-app/tests
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';

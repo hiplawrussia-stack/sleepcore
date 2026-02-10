@@ -111,11 +111,13 @@ export const useAuth = (): UseAuthReturn => {
   }, [storeLogout, queryClient]);
 
   // Auto-authenticate on mount if in Telegram
+  // Intentionally runs once on mount - adding deps would cause re-authentication loops
   useEffect(() => {
     if (!isAuthenticated && !isAuthenticating && telegram.isInTelegram()) {
       authenticate();
     }
-  }, []); // Run only once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     user,

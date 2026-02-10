@@ -10,3 +10,6 @@ export type { ApiResponse } from './client';
 export { queryKeys } from './queryKeys';
 
 export * from './types';
+
+// Zod schemas for runtime validation
+export * from './schemas';

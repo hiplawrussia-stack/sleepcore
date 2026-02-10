@@ -2,6 +2,13 @@
  * ErrorBoundary Component Tests
  * =============================
  * Tests for production error handling.
+ *
+ * IEC 62304 Compliance:
+ * - Unit verification per §5.5.5
+ * - Safety: Graceful degradation on errors
+ * - User safety: Prevents crash loops
+ *
+ * @module @sleepcore/mini-app/tests
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';

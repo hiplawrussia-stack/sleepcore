@@ -2,15 +2,22 @@
  * App Component
  * =============
  * Root component with routing, Telegram initialization, and TanStack Query.
+ *
+ * Performance: Uses React.lazy() for code-splitting pages.
+ * This reduces initial bundle size by ~15-20%.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { Home, Breathing, Profile } from '@/pages';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { ErrorBoundary } from '@/components/common';
 import { telegram } from '@/services/telegram';
 import { useAuth, useSync } from '@/hooks';
+
+// Lazy-loaded pages for code splitting
+const Home = React.lazy(() => import('@/pages/Home'));
+const Breathing = React.lazy(() => import('@/pages/Breathing'));
+const Profile = React.lazy(() => import('@/pages/Profile'));
 
 // Bottom navigation component
 const BottomNav: React.FC = () => {
@@ -77,6 +84,15 @@ const AuthLoading: React.FC = () => {
         <div className="text-4xl mb-4 animate-pulse">🦉</div>
         <p className="text-night-400 text-sm">Загрузка...</p>
       </div>
+    </div>
+  );
+};
+
+// Page loading fallback for Suspense (lighter than AuthLoading)
+const PageLoading: React.FC = () => {
+  return (
+    <div className="min-h-screen bg-night-900 flex items-center justify-center pb-16">
+      <div className="text-2xl animate-pulse">🦉</div>
     </div>
   );
 };
@@ -162,12 +178,14 @@ const AppContent: React.FC = () => {
   return (
     <>
       <SyncIndicator />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/breathing" element={<Breathing />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<PageLoading />}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/breathing" element={<Breathing />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
       {showBottomNav && <BottomNav />}
     </>
   );

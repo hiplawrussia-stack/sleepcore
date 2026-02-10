@@ -2,6 +2,13 @@
  * Auth Store Tests
  * ================
  * Tests for Zustand auth state management.
+ *
+ * IEC 62304 Compliance:
+ * - Unit verification per §5.5.5
+ * - Security-critical: Token storage, session management
+ * - HIPAA/GDPR: PHI access control verification
+ *
+ * @module @sleepcore/mini-app/tests
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';

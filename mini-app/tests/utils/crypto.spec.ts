@@ -2,6 +2,14 @@
  * Crypto Utilities Tests
  * ======================
  * Tests for AES-256-GCM localStorage encryption.
+ *
+ * IEC 62304 Compliance:
+ * - Unit verification per §5.5.5
+ * - Security-critical: PHI encryption at rest
+ * - HIPAA §164.312(a)(2)(iv): Encryption standard verification
+ * - GDPR Art. 32: Security of processing
+ *
+ * @module @sleepcore/mini-app/tests
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';

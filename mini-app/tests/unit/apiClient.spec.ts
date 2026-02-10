@@ -3,10 +3,16 @@
  * =========================
  * Tests for secure token management and request handling.
  *
+ * IEC 62304 Compliance:
+ * - Unit verification per §5.5.5
+ * - Security-critical: Token management, request integrity
+ *
  * Security features tested:
  * - Memory-only token storage (no localStorage)
  * - Request timeouts via AbortSignal
  * - auth_date validation
+ *
+ * @module @sleepcore/mini-app/tests
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';

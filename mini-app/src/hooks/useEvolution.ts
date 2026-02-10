@@ -177,9 +177,9 @@ export const useLeaderboard = (): UseLeaderboardReturn => {
   });
 
   // Opt-in mutation
-  const optInMutation = useMutation({
-    mutationFn: async (anonymous: boolean) => {
-      return apiClient.request('/leaderboard/opt-in', {
+  const optInMutation = useMutation<void, Error, boolean>({
+    mutationFn: async (anonymous: boolean): Promise<void> => {
+      await apiClient.request('/leaderboard/opt-in', {
         method: 'POST',
         body: JSON.stringify({ anonymous }),
       });
@@ -190,9 +190,9 @@ export const useLeaderboard = (): UseLeaderboardReturn => {
   });
 
   // Opt-out mutation
-  const optOutMutation = useMutation({
-    mutationFn: async () => {
-      return apiClient.request('/leaderboard/opt-out', {
+  const optOutMutation = useMutation<void, Error, void>({
+    mutationFn: async (): Promise<void> => {
+      await apiClient.request('/leaderboard/opt-out', {
         method: 'POST',
       });
     },
