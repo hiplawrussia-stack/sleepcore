@@ -175,6 +175,8 @@ class ApiService {
 
   /**
    * Check evolution status
+   *
+   * @returns Evolution status with current stage and progress
    */
   async checkEvolution(): Promise<ApiResponse<{
     evolved: boolean;
@@ -182,7 +184,25 @@ class ApiService {
     progress: number;
     nextStage?: string;
   }>> {
-    return this.request('/evolution/check');
+    return this.request('/user/evolution');
+  }
+
+  // ========== GDPR Article 17: Right to Erasure ==========
+
+  /**
+   * Delete all user data (GDPR Article 17)
+   *
+   * Compliance:
+   * - Hard delete of active records
+   * - Audit log preserved for compliance
+   * - Response within 1 month (handled by backend)
+   *
+   * @see https://gdpr-info.eu/art-17-gdpr/
+   */
+  async deleteUserData(): Promise<ApiResponse<{ deleted: boolean; message: string }>> {
+    return this.request('/user/data', {
+      method: 'DELETE',
+    });
   }
 
   /**

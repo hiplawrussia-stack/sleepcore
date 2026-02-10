@@ -21,6 +21,7 @@ import { Card } from './Card';
 import { useTelegram } from '@/hooks';
 import { useAuthStore } from '@/store/authStore';
 import { useSyncStore } from '@/store/syncStore';
+import { api } from '@/services/api';
 
 interface UserDataExport {
   exportDate: string;
@@ -162,13 +163,23 @@ export const PrivacyCenter: React.FC = () => {
       }
       keysToRemove.forEach(key => localStorage.removeItem(key));
 
-      // TODO: Call backend API to delete server-side data
-      // await api.deleteUserData();
+      // GDPR Article 17: Delete server-side data
+      const deleteResult = await api.deleteUserData();
 
-      await showAlert(
-        '✅ Локальные данные удалены\n\n' +
-        'Для полного удаления данных с сервера свяжитесь с поддержкой через @SleepCore_Bot'
-      );
+      if (deleteResult.success) {
+        await showAlert(
+          '✅ Все данные удалены\n\n' +
+          'Локальные и серверные данные успешно удалены согласно GDPR Article 17.'
+        );
+      } else {
+        // Local data deleted, but server deletion failed
+        console.error('[PrivacyCenter] Server deletion failed:', deleteResult.error);
+        await showAlert(
+          '⚠️ Локальные данные удалены\n\n' +
+          'Не удалось удалить данные с сервера. ' +
+          'Свяжитесь с поддержкой через @SleepCore_Bot для полного удаления.'
+        );
+      }
     } catch (error) {
       console.error('[PrivacyCenter] Delete failed:', error);
       await showAlert('❌ Ошибка при удалении данных');

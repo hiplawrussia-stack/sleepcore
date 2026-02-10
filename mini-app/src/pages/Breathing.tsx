@@ -4,18 +4,26 @@
  * Full breathing exercise experience with haptic feedback.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { HapticBreathing } from '@/components/breathing';
+import { EvolutionCelebrationModal } from '@/components/common';
 import { useTelegram } from '@/hooks';
 import { useUserStore } from '@/store';
 import { api } from '@/services/api';
+
+interface EvolutionData {
+  previousStage: string;
+  newStage: string;
+}
 
 export const Breathing: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { showBackButton, hideBackButton } = useTelegram();
-  const { logSession } = useUserStore();
+  const { logSession, profile } = useUserStore();
+
+  const [evolutionData, setEvolutionData] = useState<EvolutionData | null>(null);
 
   const initialPattern = searchParams.get('pattern') || '478';
 
@@ -38,15 +46,26 @@ export const Breathing: React.FC = () => {
   ) => {
     console.log('[Breathing] Session completed:', { patternId, cycles, durationSeconds });
 
+    // Store current stage before logging session
+    const previousStage = profile?.evolutionStage || 'owlet';
+
     // Log to backend
     await logSession(patternId, cycles, durationSeconds);
 
-    // Check for evolution (if applicable)
+    // Check for evolution
     const evolutionResult = await api.checkEvolution();
     if (evolutionResult.success && evolutionResult.data?.evolved) {
-      // TODO: Show evolution celebration modal
       console.log('[Breathing] Evolution!', evolutionResult.data);
+      setEvolutionData({
+        previousStage,
+        newStage: evolutionResult.data.currentStage,
+      });
     }
+  };
+
+  // Handle evolution modal close
+  const handleEvolutionClose = () => {
+    setEvolutionData(null);
   };
 
   // Handle cancellation
@@ -55,11 +74,21 @@ export const Breathing: React.FC = () => {
   };
 
   return (
-    <HapticBreathing
-      initialPatternId={initialPattern}
-      onComplete={handleComplete}
-      onCancel={handleCancel}
-    />
+    <>
+      <HapticBreathing
+        initialPatternId={initialPattern}
+        onComplete={handleComplete}
+        onCancel={handleCancel}
+      />
+
+      {/* Evolution Celebration Modal */}
+      <EvolutionCelebrationModal
+        isVisible={evolutionData !== null}
+        previousStage={evolutionData?.previousStage || 'owlet'}
+        newStage={evolutionData?.newStage || 'young_owl'}
+        onClose={handleEvolutionClose}
+      />
+    </>
   );
 };
 
