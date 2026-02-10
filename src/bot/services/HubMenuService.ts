@@ -32,6 +32,13 @@ import {
   adaptiveKeyboardService,
 } from '../../modules/adaptive-keyboard';
 
+// ==================== Constants ====================
+
+/**
+ * Mini-App URL for Telegram WebApp
+ */
+const MINIAPP_URL = process.env.MINIAPP_URL || 'https://app.sleepcore.ru/';
+
 // ==================== Types ====================
 
 /**
@@ -298,6 +305,10 @@ export class HubMenuService {
   buildHubKeyboard(): InlineKeyboard {
     const keyboard = new InlineKeyboard();
 
+    // Mini-App button (primary action)
+    keyboard.webApp('📱 Открыть приложение', MINIAPP_URL);
+    keyboard.row();
+
     for (const section of ALL_SECTIONS) {
       // Section header as first button in row
       // keyboard.text(`${section.emoji} ${section.title}`, `hub:section:${section.id}`);
@@ -327,6 +338,10 @@ export class HubMenuService {
    */
   buildSectionKeyboard(): InlineKeyboard {
     const keyboard = new InlineKeyboard();
+
+    // Mini-App button (primary action)
+    keyboard.webApp('📱 Открыть приложение', MINIAPP_URL);
+    keyboard.row();
 
     // First row: Daily section (most used)
     keyboard.text('📓 Дневник', 'menu:diary');
