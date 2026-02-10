@@ -19,6 +19,7 @@ import { migration006 } from './006_voice_diary';
 import { migration007 } from './007_audit_metadata';
 import { migration008 } from './008_adverse_events';
 import { migration009 } from './009_service_persistence';
+import { migration010 } from './010_gdpr_deletion_requests';
 
 /**
  * All registered migrations in version order
@@ -33,6 +34,7 @@ export const MIGRATIONS: readonly IMigration[] = [
   migration007,
   migration008,
   migration009,
+  migration010,
 ] as const;
 
 /**
@@ -59,3 +61,4 @@ export { migration006 } from './006_voice_diary';
 export { migration007 } from './007_audit_metadata';
 export { migration008 } from './008_adverse_events';
 export { migration009 } from './009_service_persistence';
+export { migration010 } from './010_gdpr_deletion_requests';

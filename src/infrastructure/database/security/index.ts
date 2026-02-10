@@ -118,3 +118,17 @@ export {
   type IMigrationProgress,
   type IFieldMigrationResult,
 } from './PHIDataMigration';
+
+// ============================================================================
+// GDPR Deletion Service (Article 17 Right to Erasure)
+// ============================================================================
+
+export {
+  GDPRDeletionService,
+  createGDPRDeletionService,
+  type DeletionStatus,
+  type DeletionType,
+  type DeletionSource,
+  type IDeletionRequest,
+  type IDeletionResult,
+} from './GDPRDeletionService';
