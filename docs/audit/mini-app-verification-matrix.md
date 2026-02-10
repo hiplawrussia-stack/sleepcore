@@ -83,13 +83,30 @@ This verification matrix documents the traceability between requirements, implem
 
 | Module Category | Test Files | Tests | Coverage |
 |-----------------|------------|-------|----------|
-| Hooks | 4 | 89 | 93%+ |
-| Stores | 3 | 45 | 95%+ |
-| Components | 6 | 127 | 90%+ |
-| Utils | 2 | 41 | 98%+ |
-| **Total** | **17** | **302** | **56%+ overall** |
+| Hooks | 9 | 174 | 93%+ |
+| Stores | 3 | 67 | 95%+ |
+| Components | 8 | 159 | 90%+ |
+| Services | 5 | 168 | 95%+ |
+| Utils | 2 | 35 | 98%+ |
+| **Total** | **28** | **603** | **80%+ overall** |
 
 Critical modules (useAuth, useSync, userStore, HapticBreathing) have 93-100% coverage.
+
+### 3.1 E2E Test Coverage (Playwright)
+
+| Test Suite | Test Cases | Requirements Covered |
+|------------|------------|---------------------|
+| navigation.spec.ts | 8 | UX-001, UX-002 |
+| breathing.spec.ts | 12 | CLI-001, CLI-002, CLI-003, CLI-004, SEC-005 |
+| profile.spec.ts | 16 | GDPR-015, GDPR-017, GDPR-020, GAM-001, GAM-002, GAM-003 |
+| accessibility.spec.ts | 13 | WCAG 2.2 AA compliance |
+| **Total E2E** | **49** | System-level verification |
+
+E2E tests use Playwright with:
+- Mobile device emulation (iPhone 14, Pixel 7)
+- Telegram WebApp mock for isolated testing
+- Clock API for timer/animation testing
+- Page Object Model for maintainability
 
 ---
 
@@ -104,6 +121,7 @@ Critical modules (useAuth, useSync, userStore, HapticBreathing) have 93-100% cov
 | 5.3 | Software architecture | src/ structure, index.ts barrels | COMPLIANT |
 | 5.4 | Software detailed design | Component JSDoc headers | COMPLIANT |
 | 5.5.5 | Unit verification | 302 unit tests | COMPLIANT |
+| 5.7 | Software system testing | 50 E2E tests (Playwright) | COMPLIANT |
 
 ### 4.2 Software Maintenance (Section 6)
 
@@ -152,6 +170,8 @@ Critical modules (useAuth, useSync, userStore, HapticBreathing) have 93-100% cov
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-02-10 | Claude Code | Initial verification matrix |
+| 1.1 | 2026-02-10 | Claude Code | Added E2E test coverage (§5.7) |
+| 1.2 | 2026-02-10 | Claude Code | Updated test counts: 603 unit + 49 E2E = 652 total |
 
 ---
 
