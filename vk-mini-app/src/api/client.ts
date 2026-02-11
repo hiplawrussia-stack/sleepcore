@@ -12,7 +12,7 @@
  * @module @sleepcore/vk-mini-app/api
  */
 
-import { z, type ZodSchema } from 'zod';
+import type { ZodSchema } from 'zod';
 import { vk } from '@/services/vk';
 
 /**

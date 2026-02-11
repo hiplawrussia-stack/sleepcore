@@ -11,7 +11,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, queryKeys } from '@/api';
 import { BreathingSessionSchema, BreathingStatsSchema } from '@/api/schemas';
-import type { BreathingSession, BreathingStats } from '@/api';
+import type { BreathingSession } from '@/api';
 import { z } from 'zod';
 import { vk } from '@/services/vk';
 

@@ -13,10 +13,7 @@
  * @module @sleepcore/vk-mini-app/services
  */
 
-import bridge, {
-  type UserInfo,
-  type LaunchParams,
-} from '@vkontakte/vk-bridge';
+import bridge from '@vkontakte/vk-bridge';
 
 /**
  * VK user info (similar to Telegram user)
@@ -48,6 +45,42 @@ export interface VKLaunchParams {
   vk_is_favorite: number;
   vk_ts: number;
   sign: string;
+}
+
+/**
+ * Story sticker options
+ */
+export interface StorySticker {
+  sticker_type: 'renderable' | 'native';
+  sticker: {
+    content_type: 'image' | 'gif';
+    blob?: string;
+    url?: string;
+    transform?: {
+      translation_x?: number;
+      translation_y?: number;
+      rotation?: number;
+      scale?: number;
+    };
+  };
+}
+
+/**
+ * Story box options for VKWebAppShowStoryBox
+ */
+export interface StoryBoxOptions {
+  background_type: 'image' | 'video' | 'none';
+  blob?: string;
+  url?: string;
+  stickers?: StorySticker[];
+  attachment?: {
+    text: 'open' | 'learn_more' | 'view' | 'go_to' | 'install';
+    type: 'url' | 'photo' | 'video';
+    url?: string;
+    owner_id?: number;
+    id?: number;
+  };
+  locked?: boolean;
 }
 
 /**
@@ -144,14 +177,10 @@ class VKService {
 
   /**
    * Show native alert (equivalent to WebApp.showAlert())
+   * Note: VK Bridge doesn't have a native alert API, using browser alert
    */
-  async showAlert(message: string): Promise<void> {
-    try {
-      await bridge.send('VKWebAppAlert', { message });
-    } catch {
-      // Fallback to browser alert
-      window.alert(message);
-    }
+  showAlert(message: string): void {
+    window.alert(message);
   }
 
   /**
@@ -190,12 +219,18 @@ class VKService {
   ): Promise<void> {
     try {
       if (type === 'impact') {
+        const impactStyle = (style === 'light' || style === 'medium' || style === 'heavy')
+          ? style
+          : 'light';
         await bridge.send('VKWebAppTapticImpactOccurred', {
-          style: style || 'light',
+          style: impactStyle,
         });
       } else if (type === 'notification') {
+        const notificationType = (style === 'success' || style === 'warning' || style === 'error')
+          ? style
+          : 'success';
         await bridge.send('VKWebAppTapticNotificationOccurred', {
-          type: (style as 'success' | 'warning' | 'error') || 'success',
+          type: notificationType,
         });
       } else {
         await bridge.send('VKWebAppTapticSelectionChanged');
@@ -235,6 +270,35 @@ class VKService {
         `https://vk.com/share.php?url=${encodeURIComponent(link)}`,
         '_blank'
       );
+    }
+  }
+
+  /**
+   * Show story editor box
+   * @see https://dev.vk.com/bridge/VKWebAppShowStoryBox
+   */
+  async showStoryBox(options: StoryBoxOptions): Promise<{ result: boolean }> {
+    try {
+      await bridge.send('VKWebAppShowStoryBox', options as never);
+      return { result: true };
+    } catch (error) {
+      console.error('[VK] Story box failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Post story to wall
+   */
+  async postToWall(message: string, attachments?: string): Promise<boolean> {
+    try {
+      await bridge.send('VKWebAppShowWallPostBox', {
+        message,
+        attachments,
+      });
+      return true;
+    } catch {
+      return false;
     }
   }
 

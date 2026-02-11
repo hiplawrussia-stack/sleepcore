@@ -1,46 +1,95 @@
 /**
  * VK Mini App Root
  * ================
- * Main application component with VKUI and routing.
+ * Main application component with VKUI and TabBar navigation.
+ *
+ * Navigation structure:
+ * - Epic: root container for tab-based navigation
+ * - View: screen container for each tab
+ * - Panel: individual screens within a view
+ *
+ * Tabs (5 max for thumb-friendly UX):
+ * 1. Home - main dashboard
+ * 2. Breathing - breathing exercises
+ * 3. Quests - gamification tasks
+ * 4. Leaderboard - rankings
+ * 5. Profile - user settings
  *
  * @packageDocumentation
  * @module @sleepcore/vk-mini-app
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   AdaptivityProvider,
   ConfigProvider,
   AppRoot,
   SplitLayout,
   SplitCol,
+  Epic,
   View,
   Panel,
   PanelHeader,
+  Tabbar,
+  TabbarItem,
   Spinner,
   Placeholder,
   Button,
 } from '@vkontakte/vkui';
+import {
+  Icon28HomeOutline,
+  Icon28MoonOutline,
+  Icon28GiftOutline,
+  Icon28UsersOutline,
+  Icon28UserCircleOutline,
+} from '@vkontakte/icons';
 import '@vkontakte/vkui/dist/vkui.css';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useQuests } from '@/hooks/useEvolution';
 import { vk } from '@/services/vk';
 import Home from '@/pages/Home';
 import Breathing from '@/pages/Breathing';
 import Profile from '@/pages/Profile';
+import Quests from '@/pages/Quests';
+import LeaderboardPage from '@/pages/LeaderboardPage';
 
 /**
- * Panel IDs for navigation
+ * Tab IDs for navigation
  */
-export type PanelId = 'home' | 'breathing' | 'profile';
+export type TabId = 'home' | 'breathing' | 'quests' | 'leaderboard' | 'profile';
+
+/**
+ * Panel IDs (kept for backwards compatibility)
+ */
+export type PanelId = TabId;
+
+/**
+ * Tab configuration
+ */
+const TABS: Array<{
+  id: TabId;
+  label: string;
+  icon: React.ReactNode;
+}> = [
+  { id: 'home', label: 'Главная', icon: <Icon28HomeOutline /> },
+  { id: 'breathing', label: 'Дыхание', icon: <Icon28MoonOutline /> },
+  { id: 'quests', label: 'Задания', icon: <Icon28GiftOutline /> },
+  { id: 'leaderboard', label: 'Рейтинг', icon: <Icon28UsersOutline /> },
+  { id: 'profile', label: 'Профиль', icon: <Icon28UserCircleOutline /> },
+];
 
 /**
  * App component
  */
 function App() {
-  const [activePanel, setActivePanel] = useState<PanelId>('home');
+  const [activeTab, setActiveTab] = useState<TabId>('home');
   const [vkReady, setVkReady] = useState(false);
   const { user, isAuthenticated, isAuthenticating, authError, authenticate } = useAuth();
+  const { quests } = useQuests();
+
+  // Count active quests for badge
+  const activeQuestsCount = quests.filter(q => q.status === 'active').length;
 
   // Initialize VK Bridge
   useEffect(() => {
@@ -50,7 +99,6 @@ function App() {
         setVkReady(true);
       } catch (error) {
         console.error('[App] VK init failed:', error);
-        // Still mark as ready to show error UI
         setVkReady(true);
       }
     };
@@ -58,12 +106,11 @@ function App() {
     initVK();
   }, []);
 
-  // Navigate to a panel
-  const go = (panel: PanelId) => {
-    setActivePanel(panel);
-    // Haptic feedback
+  // Navigate to a tab
+  const go = useCallback((tab: TabId) => {
+    setActiveTab(tab);
     vk.hapticFeedback('selection_change');
-  };
+  }, []);
 
   // Show loading state
   if (!vkReady || isAuthenticating) {
@@ -76,7 +123,7 @@ function App() {
                 <View activePanel="loading">
                   <Panel id="loading" centered>
                     <Placeholder>
-                      <Spinner size="large" />
+                      <Spinner size="l" />
                     </Placeholder>
                   </Panel>
                 </View>
@@ -101,13 +148,15 @@ function App() {
                     <PanelHeader>SleepCore</PanelHeader>
                     <Placeholder
                       icon={<span style={{ fontSize: 56 }}>:(</span>}
-                      header="Ошибка авторизации"
                       action={
                         <Button size="m" onClick={() => authenticate()}>
                           Повторить
                         </Button>
                       }
                     >
+                      <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 18 }}>
+                        Ошибка авторизации
+                      </div>
                       {authError}
                     </Placeholder>
                   </Panel>
@@ -120,23 +169,70 @@ function App() {
     );
   }
 
+  /**
+   * TabBar component
+   */
+  const tabbar = (
+    <Tabbar>
+      {TABS.map((tab) => (
+        <TabbarItem
+          key={tab.id}
+          selected={activeTab === tab.id}
+          onClick={() => go(tab.id)}
+          label={
+            tab.id === 'quests' && activeQuestsCount > 0
+              ? `${tab.label} (${activeQuestsCount})`
+              : tab.label
+          }
+        >
+          {tab.icon}
+        </TabbarItem>
+      ))}
+    </Tabbar>
+  );
+
   return (
     <ConfigProvider>
       <AdaptivityProvider>
         <AppRoot>
           <SplitLayout>
             <SplitCol>
-              <View activePanel={activePanel}>
-                <Panel id="home">
-                  <Home go={go} user={user} />
-                </Panel>
-                <Panel id="breathing">
-                  <Breathing go={go} />
-                </Panel>
-                <Panel id="profile">
-                  <Profile go={go} user={user} />
-                </Panel>
-              </View>
+              <Epic activeStory={activeTab} tabbar={tabbar}>
+                {/* Home tab */}
+                <View id="home" activePanel="home">
+                  <Panel id="home">
+                    <Home go={go} user={user} />
+                  </Panel>
+                </View>
+
+                {/* Breathing tab */}
+                <View id="breathing" activePanel="breathing">
+                  <Panel id="breathing">
+                    <Breathing go={go} />
+                  </Panel>
+                </View>
+
+                {/* Quests tab */}
+                <View id="quests" activePanel="quests">
+                  <Panel id="quests">
+                    <Quests />
+                  </Panel>
+                </View>
+
+                {/* Leaderboard tab */}
+                <View id="leaderboard" activePanel="leaderboard">
+                  <Panel id="leaderboard">
+                    <LeaderboardPage />
+                  </Panel>
+                </View>
+
+                {/* Profile tab */}
+                <View id="profile" activePanel="profile">
+                  <Panel id="profile">
+                    <Profile go={go} user={user} />
+                  </Panel>
+                </View>
+              </Epic>
             </SplitCol>
           </SplitLayout>
         </AppRoot>

@@ -247,9 +247,6 @@ export default function Breathing({ go }: BreathingProps) {
 
   // Render breathing animation
   const renderBreathingCircle = () => {
-    const duration = getCurrentPhaseDuration();
-    const phaseProgress = duration > 0 ? (timer / duration) * 100 : 0;
-
     return (
       <Div style={{ textAlign: 'center', padding: '40px 20px' }}>
         {/* Main circle */}
@@ -315,7 +312,7 @@ export default function Breathing({ go }: BreathingProps) {
       <Spacing size={24} />
 
       {isLogging ? (
-        <Spinner size="regular" />
+        <Spinner size="m" />
       ) : (
         <Button size="l" onClick={stopExercise}>
           Готово

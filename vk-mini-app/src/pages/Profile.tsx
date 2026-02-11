@@ -238,7 +238,7 @@ export default function Profile({ go, user }: ProfileProps) {
 
         <CellButton
           before={<Icon28DeleteOutline />}
-          mode="danger"
+          appearance="negative"
           onClick={handleDeleteAccount}
         >
           Удалить аккаунт
@@ -269,8 +269,8 @@ export default function Profile({ go, user }: ProfileProps) {
           ]}
           actionsLayout="horizontal"
           onClose={() => setShowDeleteAlert(false)}
-          header="Удаление аккаунта"
-          text="Вы уверены? Все ваши данные будут удалены безвозвратно."
+          title="Удаление аккаунта"
+          description="Вы уверены? Все ваши данные будут удалены безвозвратно."
         />
       )}
     </>
