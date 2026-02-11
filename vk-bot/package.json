@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "vk-io": "^4.9.1",
-    "@vk-io/session": "^2.3.0",
+    "@vk-io/session": "^2.2.1",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {
@@ -28,7 +28,9 @@
     "@typescript-eslint/eslint-plugin": "^8.16.0",
     "@typescript-eslint/parser": "^8.16.0"
   },
-  "peerDependencies": {
-    "@sleepcore/bot": "workspace:*"
+  "peerDependenciesMeta": {
+    "@sleepcore/bot": {
+      "optional": true
+    }
   }
 }

@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createApp } from '../../src/app.js';
 import { generateMockInitData } from '../../src/utils/telegram.js';
 import { generateAccessToken, generateRefreshToken } from '../../src/utils/jwt.js';
+import { clearAllRateLimits } from '../../src/middleware/rateLimit.js';
 
 const TEST_BOT_TOKEN = '1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh';
 const TEST_JWT_SECRET = 'test-jwt-secret-key-1234567890abcdef';
@@ -63,6 +64,7 @@ describe('Auth Routes', () => {
   beforeEach(() => {
     mockUsers.clear();
     vi.clearAllMocks();
+    clearAllRateLimits();
   });
 
   describe('POST /api/auth/telegram', () => {
