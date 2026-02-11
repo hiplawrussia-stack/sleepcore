@@ -112,7 +112,7 @@ export function decodeToken(token: string): JWTPayload | null {
 }
 
 /**
- * Generate both access and refresh tokens
+ * Generate both access and refresh tokens for Telegram users
  */
 export async function generateTokenPair(
   user: ValidatedUser,
@@ -121,6 +121,81 @@ export async function generateTokenPair(
   const [accessToken, refreshToken] = await Promise.all([
     generateAccessToken(user, jwtSecret),
     generateRefreshToken(user, jwtSecret),
+  ]);
+
+  return {
+    accessToken,
+    refreshToken,
+    expiresIn: 15 * 60, // 15 minutes in seconds
+  };
+}
+
+/**
+ * VK user type for token generation
+ */
+export interface ValidatedVKUser {
+  vkId: number;
+  firstName: string;
+  lastName?: string;
+  languageCode: string;
+}
+
+/**
+ * Generate access token for VK user
+ */
+export async function generateAccessTokenForVK(
+  user: ValidatedVKUser,
+  jwtSecret: string
+): Promise<string> {
+  const secret = getSecret(jwtSecret);
+
+  const token = await new jose.SignJWT({
+    vkId: user.vkId,
+    firstName: user.firstName,
+    provider: 'vk',
+  })
+    .setProtectedHeader({ alg: JWT_ALGORITHM })
+    .setIssuedAt()
+    .setExpirationTime(ACCESS_TOKEN_TTL)
+    .setJti(nanoid())
+    .sign(secret);
+
+  return token;
+}
+
+/**
+ * Generate refresh token for VK user
+ */
+export async function generateRefreshTokenForVK(
+  user: ValidatedVKUser,
+  jwtSecret: string
+): Promise<string> {
+  const secret = getSecret(jwtSecret);
+
+  const token = await new jose.SignJWT({
+    vkId: user.vkId,
+    type: 'refresh',
+    provider: 'vk',
+  })
+    .setProtectedHeader({ alg: JWT_ALGORITHM })
+    .setIssuedAt()
+    .setExpirationTime(REFRESH_TOKEN_TTL)
+    .setJti(nanoid())
+    .sign(secret);
+
+  return token;
+}
+
+/**
+ * Generate both access and refresh tokens for VK users
+ */
+export async function generateTokenPairForVK(
+  user: ValidatedVKUser,
+  jwtSecret: string
+): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
+  const [accessToken, refreshToken] = await Promise.all([
+    generateAccessTokenForVK(user, jwtSecret),
+    generateRefreshTokenForVK(user, jwtSecret),
   ]);
 
   return {

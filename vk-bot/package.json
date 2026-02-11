@@ -1,0 +1,34 @@
+{
+  "name": "@sleepcore/vk-bot",
+  "version": "1.0.0",
+  "description": "SleepCore VK Bot - AI-powered CBT-I therapy",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsup src/index.ts --format esm --dts",
+    "start": "node dist/index.js",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage"
+  },
+  "dependencies": {
+    "vk-io": "^4.9.1",
+    "@vk-io/session": "^2.3.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "@vitest/coverage-v8": "^2.1.9",
+    "eslint": "^9.16.0",
+    "@typescript-eslint/eslint-plugin": "^8.16.0",
+    "@typescript-eslint/parser": "^8.16.0"
+  },
+  "peerDependencies": {
+    "@sleepcore/bot": "workspace:*"
+  }
+}

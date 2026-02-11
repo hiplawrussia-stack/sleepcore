@@ -41,6 +41,8 @@ export interface AppConfig {
   corsOrigin?: string;
   /** Environment: 'production' requires explicit CORS origin */
   nodeEnv?: string;
+  /** VK app secret key for launch params validation */
+  vkSecretKey?: string;
 }
 
 export function createApp(config: AppConfig): Hono {
@@ -106,7 +108,7 @@ export function createApp(config: AppConfig): Hono {
   app.use('*', cors({
     origin: corsOrigin || '*',
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Init-Data'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Init-Data', 'X-VK-Launch-Params'],
     exposeHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset', 'Retry-After'],
     maxAge: 86400,
     // credentials only valid with explicit origin, not '*'
@@ -117,6 +119,9 @@ export function createApp(config: AppConfig): Hono {
   app.use('*', async (c, next) => {
     c.set('botToken', config.botToken);
     c.set('jwtSecret', config.jwtSecret);
+    if (config.vkSecretKey) {
+      c.set('vkSecretKey', config.vkSecretKey);
+    }
     await next();
   });
 

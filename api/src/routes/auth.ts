@@ -10,7 +10,8 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { eq } from 'drizzle-orm';
 import { validateInitData } from '../utils/telegram.js';
-import { generateTokenPair, verifyToken } from '../utils/jwt.js';
+import { validateVKLaunchParams, type ValidatedVKUser } from '../utils/vk.js';
+import { generateTokenPair, generateTokenPairForVK, verifyToken } from '../utils/jwt.js';
 import { revokeToken, revokeAllUserTokens } from '../utils/tokenBlacklist.js';
 import { getDatabase, users } from '../db/index.js';
 import type { ApiResponse } from '../types/index.js';
@@ -144,6 +145,137 @@ auth.post(
           firstName: user.firstName,
           lastName: user.lastName ?? undefined,
           username: user.username ?? undefined,
+          evolutionStage: user.evolutionStage ?? 'owlet',
+          xp: user.xp ?? 0,
+          level: user.level ?? 1,
+        },
+      },
+      timestamp: Date.now(),
+    };
+
+    return c.json(response, 200);
+  }
+);
+
+// Validation schema for VK auth
+const vkAuthSchema = z.object({
+  launchParams: z.string().min(1, 'launchParams is required'),
+});
+
+/**
+ * POST /api/auth/vk
+ * Authenticate using VK Mini App launch params
+ */
+auth.post(
+  '/vk',
+  zValidator('json', vkAuthSchema),
+  async (c) => {
+    const { launchParams } = c.req.valid('json');
+    const vkSecretKey = c.get('vkSecretKey');
+    const jwtSecret = c.get('jwtSecret');
+
+    if (!vkSecretKey || !jwtSecret) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: 'Server configuration error',
+        timestamp: Date.now(),
+      };
+      return c.json(response, 500);
+    }
+
+    // Validate VK launch params
+    const validation = validateVKLaunchParams(launchParams, vkSecretKey);
+
+    if (!validation.valid || !validation.user) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: validation.error || 'Invalid launch params',
+        timestamp: Date.now(),
+      };
+      return c.json(response, 401);
+    }
+
+    const { user: vkUser } = validation;
+    const db = getDatabase();
+    const now = new Date().toISOString();
+
+    // Find or create user by vkId
+    let user = await db.query.users.findFirst({
+      where: eq(users.vkId, vkUser.vkId),
+    });
+
+    if (!user) {
+      // Create new user
+      const newUserId = nanoid();
+      await db.insert(users).values({
+        id: newUserId,
+        vkId: vkUser.vkId,
+        telegramId: null, // VK users don't have telegramId
+        firstName: vkUser.firstName,
+        lastName: vkUser.lastName ?? null,
+        username: null,
+        languageCode: vkUser.languageCode ?? 'ru',
+        isPremium: false,
+        evolutionStage: 'owlet',
+        xp: 0,
+        level: 1,
+        streak: 0,
+        longestStreak: 0,
+        lastActiveAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      user = await db.query.users.findFirst({
+        where: eq(users.id, newUserId),
+      });
+    } else {
+      // Update last active
+      await db
+        .update(users)
+        .set({
+          firstName: vkUser.firstName,
+          lastName: vkUser.lastName ?? null,
+          lastActiveAt: now,
+          updatedAt: now,
+        })
+        .where(eq(users.id, user.id));
+    }
+
+    if (!user) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: 'Failed to create user',
+        timestamp: Date.now(),
+      };
+      return c.json(response, 500);
+    }
+
+    // Generate tokens for VK user
+    const tokens = await generateTokenPairForVK(vkUser, jwtSecret);
+
+    const response: ApiResponse<{
+      accessToken: string;
+      refreshToken: string;
+      expiresIn: number;
+      user: {
+        id: string;
+        vkId: number;
+        firstName: string;
+        lastName?: string;
+        evolutionStage: string;
+        xp: number;
+        level: number;
+      };
+    }> = {
+      success: true,
+      data: {
+        ...tokens,
+        user: {
+          id: user.id,
+          vkId: user.vkId!,
+          firstName: user.firstName,
+          lastName: user.lastName ?? undefined,
           evolutionStage: user.evolutionStage ?? 'owlet',
           xp: user.xp ?? 0,
           level: user.level ?? 1,

@@ -13,7 +13,8 @@ import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
  */
 export const users = sqliteTable('api_users', {
   id: text('id').primaryKey(),
-  telegramId: integer('telegram_id').unique().notNull(),
+  telegramId: integer('telegram_id').unique(),
+  vkId: integer('vk_id').unique(),
   firstName: text('first_name').notNull(),
   lastName: text('last_name'),
   username: text('username'),

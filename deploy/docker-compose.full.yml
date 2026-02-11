@@ -68,7 +68,8 @@ services:
       - DATABASE_PATH=/app/data/api.db
       - JWT_SECRET=${JWT_SECRET}
       - BOT_TOKEN=${BOT_TOKEN}
-      - CORS_ORIGIN=https://app.sleepcore.ru
+      - VK_SECRET_KEY=${VK_SECRET_KEY}
+      - CORS_ORIGIN=https://app.sleepcore.ru,https://vk.sleepcore.ru
       - TZ=Europe/Moscow
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
       - ENCRYPTION_MASTER_KEY_SALT=${ENCRYPTION_MASTER_KEY_SALT}
@@ -110,6 +111,49 @@ services:
       - "traefik.http.routers.app.rule=Host(`app.sleepcore.ru`)"
       - "traefik.http.routers.app.tls.certresolver=letsencrypt"
       - "traefik.http.services.app.loadbalancer.server.port=80"
+
+  # VK Bot
+  vk-bot:
+    build:
+      context: ../vk-bot
+      dockerfile: Dockerfile
+    container_name: sleepcore-vk-bot
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - VK_TOKEN=${VK_BOT_TOKEN}
+      - VK_GROUP_ID=${VK_GROUP_ID}
+      - DATABASE_PATH=/app/data/vk-bot.db
+      - TZ=Europe/Moscow
+      - ADMIN_USER_IDS=${ADMIN_VK_USER_IDS}
+      - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
+    volumes:
+      - vk-bot-data:/app/data
+    networks:
+      - sleepcore-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # VK Mini App (Static)
+  vk-mini-app:
+    build:
+      context: ../vk-mini-app
+      dockerfile: Dockerfile.prod
+      args:
+        - VITE_API_URL=https://api.sleepcore.ru
+        - VITE_VK_APP_ID=${VK_APP_ID}
+    container_name: sleepcore-vk-mini-app
+    restart: unless-stopped
+    networks:
+      - sleepcore-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vk-app.rule=Host(`vk.sleepcore.ru`)"
+      - "traefik.http.routers.vk-app.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vk-app.loadbalancer.server.port=80"
 
   # Grafana
   grafana:
@@ -168,5 +212,6 @@ volumes:
   letsencrypt:
   bot-data:
   api-data:
+  vk-bot-data:
   grafana-data:
   prometheus-data:

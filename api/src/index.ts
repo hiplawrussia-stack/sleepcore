@@ -26,6 +26,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const JWT_SECRET = process.env.JWT_SECRET || process.env.BOT_TOKEN || '';
 const DATABASE_PATH = process.env.DATABASE_PATH || './database/api.db';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+const VK_SECRET_KEY = process.env.VK_SECRET_KEY || '';
 
 // Validate required config
 if (!BOT_TOKEN) {
@@ -96,6 +97,7 @@ const app = createApp({
   jwtSecret: JWT_SECRET,
   corsOrigin: CORS_ORIGIN,
   nodeEnv: process.env.NODE_ENV,
+  vkSecretKey: VK_SECRET_KEY || undefined,
 });
 
 // Mark as initialized
