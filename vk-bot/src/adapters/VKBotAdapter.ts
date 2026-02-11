@@ -21,7 +21,7 @@
  * @module @sleepcore/vk-bot/adapters
  */
 
-import { VK, type MessageContext } from 'vk-io';
+import { VK, type MessageContext, type MessageEventContext } from 'vk-io';
 import { SessionManager } from '@vk-io/session';
 import type { SleepCoreAPI } from '../../../src/SleepCoreAPI';
 import type {
@@ -360,12 +360,14 @@ Review recommended.`;
   /**
    * Handle callback query (button press)
    */
-  private async handleCallback(context: MessageContext): Promise<void> {
-    const payload = context.eventPayload as VKCallbackPayload | undefined;
+  private async handleCallback(eventContext: MessageEventContext): Promise<void> {
+    const payload = eventContext.eventPayload as VKCallbackPayload | undefined;
     if (!payload || !payload.command) {
       return;
     }
 
+    // Create a minimal message context adapter for compatibility
+    const context = eventContext as unknown as MessageContext;
     const session = this.getSession(context);
     const ctx = await createVKContext(context, this.sleepCore, this.vk.api);
 

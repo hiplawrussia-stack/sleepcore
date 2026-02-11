@@ -55,22 +55,37 @@ function createMockSleepCoreAPI() {
   } as any;
 }
 
+// Mock VK API
+function createMockAPI() {
+  return {
+    messages: {
+      edit: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    },
+    users: {
+      get: vi.fn().mockResolvedValue([]),
+    },
+  } as any;
+}
+
 describe('VK Context', () => {
   describe('VKSleepCoreContext', () => {
     let mockVKContext: ReturnType<typeof createMockVKContext>;
     let mockSleepCore: ReturnType<typeof createMockSleepCoreAPI>;
+    let mockAPI: ReturnType<typeof createMockAPI>;
     let context: VKSleepCoreContext;
 
     beforeEach(() => {
       mockVKContext = createMockVKContext();
       mockSleepCore = createMockSleepCoreAPI();
-      context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+      mockAPI = createMockAPI();
+      context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
     });
 
     describe('Property getters', () => {
       it('should return userId as string', () => {
         mockVKContext = createMockVKContext({ senderId: 123456789 });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         expect(context.userId).toBe('123456789');
         expect(typeof context.userId).toBe('string');
@@ -78,14 +93,14 @@ describe('VK Context', () => {
 
       it('should return chatId (peerId)', () => {
         mockVKContext = createMockVKContext({ peerId: 2000000001 });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         expect(context.chatId).toBe(2000000001);
       });
 
       it('should return default displayName when no user set', () => {
         mockVKContext = createMockVKContext({ senderId: 123 });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         expect(context.displayName).toBe('User 123');
       });
@@ -96,7 +111,7 @@ describe('VK Context', () => {
           first_name: 'Иван',
           is_closed: false,
         };
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, user);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI, user);
 
         expect(context.displayName).toBe('Иван');
       });
@@ -108,7 +123,7 @@ describe('VK Context', () => {
           last_name: 'Петров',
           is_closed: false,
         };
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, user);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI, user);
 
         expect(context.displayName).toBe('Иван Петров');
       });
@@ -127,14 +142,14 @@ describe('VK Context', () => {
 
       it('should return messageText from vk context', () => {
         mockVKContext = createMockVKContext({ text: 'Привет мир' });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         expect(context.messageText).toBe('Привет мир');
       });
 
       it('should return empty string when no message text', () => {
         mockVKContext = createMockVKContext({ text: undefined as any });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         expect(context.messageText).toBe('');
       });
@@ -145,21 +160,21 @@ describe('VK Context', () => {
           action: 'start',
         };
         mockVKContext = createMockVKContext({ eventPayload: payload });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         expect(context.callbackPayload).toEqual(payload);
       });
 
       it('should return isCallback true when eventPayload exists', () => {
         mockVKContext = createMockVKContext({ eventPayload: { command: 'test' } });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         expect(context.isCallback).toBe(true);
       });
 
       it('should return isCallback false when no eventPayload', () => {
         mockVKContext = createMockVKContext({ eventPayload: undefined });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         expect(context.isCallback).toBe(false);
       });
@@ -370,7 +385,7 @@ describe('VK Context', () => {
     describe('answerCallback', () => {
       it('should show snackbar with text', async () => {
         mockVKContext = createMockVKContext({ eventPayload: { command: 'test' } });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         await context.answerCallback('Успешно!');
 
@@ -382,7 +397,7 @@ describe('VK Context', () => {
 
       it('should show default OK text when no text provided', async () => {
         mockVKContext = createMockVKContext({ eventPayload: { command: 'test' } });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         await context.answerCallback();
 
@@ -394,7 +409,7 @@ describe('VK Context', () => {
 
       it('should not call answer when not a callback context', async () => {
         mockVKContext = createMockVKContext({ eventPayload: undefined });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         await context.answerCallback('Text');
 
@@ -404,7 +419,7 @@ describe('VK Context', () => {
       it('should silently handle answer errors', async () => {
         mockVKContext = createMockVKContext({ eventPayload: { command: 'test' } });
         mockVKContext.answer = vi.fn().mockRejectedValue(new Error('API Error'));
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         // Should not throw
         await expect(context.answerCallback('Text')).resolves.toBeUndefined();
@@ -414,11 +429,11 @@ describe('VK Context', () => {
     describe('editMessage', () => {
       it('should edit message when conversationMessageId exists', async () => {
         mockVKContext = createMockVKContext({ conversationMessageId: 123 });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         await context.editMessage('Обновленный текст');
 
-        expect(mockVKContext.api.messages.edit).toHaveBeenCalledWith({
+        expect(mockAPI.messages.edit).toHaveBeenCalledWith({
           peer_id: mockVKContext.peerId,
           conversation_message_id: 123,
           message: 'Обновленный текст',
@@ -427,12 +442,12 @@ describe('VK Context', () => {
 
       it('should include keyboard in edit', async () => {
         mockVKContext = createMockVKContext({ conversationMessageId: 123 });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
         const keyboard = { buttons: [] };
 
         await context.editMessage('Текст', { keyboard: keyboard as any });
 
-        expect(mockVKContext.api.messages.edit).toHaveBeenCalledWith({
+        expect(mockAPI.messages.edit).toHaveBeenCalledWith({
           peer_id: mockVKContext.peerId,
           conversation_message_id: 123,
           message: 'Текст',
@@ -442,18 +457,18 @@ describe('VK Context', () => {
 
       it('should fallback to reply when no conversationMessageId', async () => {
         mockVKContext = createMockVKContext({ conversationMessageId: undefined });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         await context.editMessage('Текст');
 
-        expect(mockVKContext.api.messages.edit).not.toHaveBeenCalled();
+        expect(mockAPI.messages.edit).not.toHaveBeenCalled();
         expect(mockVKContext.send).toHaveBeenCalled();
       });
 
       it('should fallback to reply when edit fails', async () => {
         mockVKContext = createMockVKContext({ conversationMessageId: 123 });
-        mockVKContext.api.messages.edit = vi.fn().mockRejectedValue(new Error('Edit failed'));
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        mockAPI.messages.edit = vi.fn().mockRejectedValue(new Error('Edit failed'));
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         await context.editMessage('Текст');
 
@@ -464,11 +479,11 @@ describe('VK Context', () => {
     describe('deleteMessage', () => {
       it('should delete message by conversationMessageId', async () => {
         mockVKContext = createMockVKContext({ conversationMessageId: 456 });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         await context.deleteMessage();
 
-        expect(mockVKContext.api.messages.delete).toHaveBeenCalledWith({
+        expect(mockAPI.messages.delete).toHaveBeenCalledWith({
           peer_id: mockVKContext.peerId,
           conversation_message_ids: [456],
           delete_for_all: 1,
@@ -477,11 +492,11 @@ describe('VK Context', () => {
 
       it('should delete message by explicit messageId', async () => {
         mockVKContext = createMockVKContext({ conversationMessageId: 456 });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         await context.deleteMessage(789);
 
-        expect(mockVKContext.api.messages.delete).toHaveBeenCalledWith({
+        expect(mockAPI.messages.delete).toHaveBeenCalledWith({
           peer_id: mockVKContext.peerId,
           conversation_message_ids: [789],
           delete_for_all: 1,
@@ -490,16 +505,16 @@ describe('VK Context', () => {
 
       it('should not throw when no messageId', async () => {
         mockVKContext = createMockVKContext({ conversationMessageId: undefined });
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         await expect(context.deleteMessage()).resolves.toBeUndefined();
-        expect(mockVKContext.api.messages.delete).not.toHaveBeenCalled();
+        expect(mockAPI.messages.delete).not.toHaveBeenCalled();
       });
 
       it('should silently handle delete errors', async () => {
         mockVKContext = createMockVKContext({ conversationMessageId: 123 });
-        mockVKContext.api.messages.delete = vi.fn().mockRejectedValue(new Error('Delete failed'));
-        context = new VKSleepCoreContext(mockVKContext, mockSleepCore);
+        mockAPI.messages.delete = vi.fn().mockRejectedValue(new Error('Delete failed'));
+        context = new VKSleepCoreContext(mockVKContext, mockSleepCore, mockAPI);
 
         await expect(context.deleteMessage()).resolves.toBeUndefined();
       });

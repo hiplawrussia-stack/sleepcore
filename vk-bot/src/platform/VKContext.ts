@@ -13,7 +13,7 @@
  * @module @sleepcore/vk-bot/platform
  */
 
-import type { MessageContext, CallbackQueryContext } from 'vk-io';
+import type { MessageContext, API } from 'vk-io';
 import type { SleepCoreAPI } from '../../../src/SleepCoreAPI';
 import type {
   IVKSleepCoreContext,
@@ -35,16 +35,19 @@ import {
 export class VKSleepCoreContext implements IVKSleepCoreContext {
   private _vkContext: MessageContext;
   private _sleepCore: SleepCoreAPI;
+  private _api: API;
   private _user: VKUser | null = null;
   private _languageCode: string = 'ru';
 
   constructor(
     vkContext: MessageContext,
     sleepCore: SleepCoreAPI,
+    api: API,
     user?: VKUser
   ) {
     this._vkContext = vkContext;
     this._sleepCore = sleepCore;
+    this._api = api;
     this._user = user || null;
   }
 
@@ -231,9 +234,12 @@ export class VKSleepCoreContext implements IVKSleepCoreContext {
         editOptions.keyboard = options.keyboard;
       }
 
-      await this._vkContext.api.messages.edit(
-        editOptions as Parameters<typeof this._vkContext.api.messages.edit>[0]
-      );
+      await this._api.messages.edit(editOptions as {
+        peer_id: number;
+        conversation_message_id: number;
+        message: string;
+        keyboard?: unknown;
+      });
     } catch {
       // Edit failed, send new message
       await this.reply(text, options);
@@ -247,7 +253,7 @@ export class VKSleepCoreContext implements IVKSleepCoreContext {
     try {
       const msgId = messageId || this._vkContext.conversationMessageId;
       if (msgId) {
-        await this._vkContext.api.messages.delete({
+        await this._api.messages.delete({
           peer_id: this._vkContext.peerId,
           conversation_message_ids: [msgId],
           delete_for_all: 1,
@@ -286,17 +292,24 @@ export class VKSleepCoreContext implements IVKSleepCoreContext {
 export async function createVKContext(
   vkContext: MessageContext,
   sleepCore: SleepCoreAPI,
-  api: { users: { get: (params: { user_ids: number[] }) => Promise<VKUser[]> } }
+  api: API
 ): Promise<VKSleepCoreContext> {
-  const ctx = new VKSleepCoreContext(vkContext, sleepCore);
+  const ctx = new VKSleepCoreContext(vkContext, sleepCore, api);
 
   // Fetch user info from VK API
   try {
-    const [user] = await api.users.get({
+    const users = await api.users.get({
       user_ids: [vkContext.senderId],
     });
+    const user = users[0];
     if (user) {
-      ctx.setUser(user);
+      ctx.setUser({
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name || '',
+        is_closed: Boolean(user.is_closed),
+        photo_100: user.photo_100,
+      });
     }
   } catch {
     // User info not available, continue with defaults
