@@ -70,14 +70,23 @@ services:
       - BOT_TOKEN=${BOT_TOKEN}
       - CORS_ORIGIN=https://app.sleepcore.ru
       - TZ=Europe/Moscow
+      - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
+      - ENCRYPTION_MASTER_KEY_SALT=${ENCRYPTION_MASTER_KEY_SALT}
     volumes:
       - api-data:/app/data
     networks:
       - sleepcore-net
     labels:
       - "traefik.enable=true"
+      # Primary route: api.sleepcore.ru
       - "traefik.http.routers.api.rule=Host(`api.sleepcore.ru`)"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api.service=api"
+      # Alternative route: app.sleepcore.ru/api/* (for Russia network restrictions)
+      - "traefik.http.routers.api-alt.rule=Host(`app.sleepcore.ru`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api-alt.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api-alt.service=api"
+      - "traefik.http.routers.api-alt.priority=100"
       - "traefik.http.services.api.loadbalancer.server.port=3001"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
@@ -91,7 +100,7 @@ services:
       context: ../mini-app
       dockerfile: Dockerfile.prod
       args:
-        - VITE_API_URL=https://api.sleepcore.ru/api
+        - VITE_API_URL=https://app.sleepcore.ru/api
     container_name: sleepcore-mini-app
     restart: unless-stopped
     networks:
