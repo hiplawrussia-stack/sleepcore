@@ -39,6 +39,7 @@ npm-debug.log*
 .claude/*
 !.claude/settings.json
 !.claude/commands/
+!.claude/agents/
 tmpclaude-*
 
 # Archives
