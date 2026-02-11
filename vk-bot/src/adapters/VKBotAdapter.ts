@@ -10,6 +10,12 @@
  * - Route messages to appropriate commands
  * - Manage sessions for conversation flows
  * - Handle callback queries (button presses)
+ * - CRITICAL: Crisis detection on every message
+ *
+ * Safety Integration:
+ * - CrisisDetectionService analyzes ALL messages
+ * - VK-specific admin notifications via VK API
+ * - Follows SAMHSA 2025 guidelines
  *
  * @packageDocumentation
  * @module @sleepcore/vk-bot/adapters
@@ -26,6 +32,7 @@ import type {
 import { VKSleepCoreContext, createVKContext } from '../platform/VKContext';
 import { serializePayload } from '../platform/VKKeyboard';
 import type { VKBotConfig, VKSessionData, VKCallbackPayload } from '../platform/types';
+import type { ICrisisEvent, ICrisisResponse } from '../../../src/bot/services/CrisisDetectionService';
 
 /**
  * Session context type for vk-io
@@ -136,6 +143,9 @@ export class VKBotAdapter {
 
   /**
    * Handle incoming text message
+   *
+   * SAFETY: Crisis detection runs on EVERY message before any other processing.
+   * This follows SAMHSA 2025 guidelines and cannot be disabled.
    */
   private async handleMessage(context: MessageContext): Promise<void> {
     const text = context.text?.trim() || '';
@@ -143,6 +153,12 @@ export class VKBotAdapter {
 
     // Create SleepCore context
     const ctx = await createVKContext(context, this.sleepCore, this.vk.api);
+
+    // =========================================================================
+    // SAFETY FIRST: Crisis Detection (ALWAYS runs - cannot be disabled)
+    // Research: Woebot model - show resources, don't block user interaction
+    // =========================================================================
+    await this.runCrisisDetection(ctx, text, context);
 
     // Check if user is in a conversation flow
     if (session.currentCommand && session.currentStep) {
@@ -172,6 +188,173 @@ export class VKBotAdapter {
         'Привет! Я SleepCore бот. Используйте /start для начала или /help для списка команд.'
       );
     }
+  }
+
+  /**
+   * Run crisis detection on message
+   *
+   * CRITICAL: This method must NEVER throw or block normal operation.
+   * Crisis detection errors are logged but do not interrupt user experience.
+   *
+   * Based on:
+   * - SAMHSA 2025 National Guidelines
+   * - Scientific Reports Aug 2025: AI chatbots need robust escalation
+   * - Woebot model: show resources, don't block
+   */
+  private async runCrisisDetection(
+    ctx: VKSleepCoreContext,
+    text: string,
+    vkContext: MessageContext
+  ): Promise<void> {
+    try {
+      const userId = String(vkContext.senderId || '');
+      const chatId = String(vkContext.peerId || '');
+
+      // Skip empty messages
+      if (!text.trim()) return;
+
+      // Analyze message for crisis indicators
+      const crisisResponse: ICrisisResponse = this.sleepCore
+        .getCrisisDetection()
+        .analyzeMessage(text, userId, chatId);
+
+      if (crisisResponse.shouldInterrupt) {
+        // Log crisis event for audit
+        console.log(
+          `[VK Crisis] Detected severity=${crisisResponse.severity} for user=${userId}`
+        );
+
+        // Send crisis response with resources (Woebot pattern: empathetic + actionable)
+        await ctx.reply(crisisResponse.message);
+
+        // Escalate to VK admins for HIGH/CRITICAL severity
+        if (crisisResponse.event) {
+          await this.escalateToVKAdmins(crisisResponse.event);
+        }
+
+        // IMPORTANT: Don't return - allow user to continue using bot
+        // Research shows blocking increases distress (SAMHSA 2025)
+      }
+    } catch (crisisError) {
+      // Crisis detection should NEVER block normal operation
+      console.error('[VK Crisis] Detection error (non-fatal):', crisisError);
+    }
+  }
+
+  /**
+   * Send crisis notifications to VK admins
+   *
+   * Uses VK API directly since Grammy (Telegram) bot is not available here.
+   * Follows same escalation protocol as Telegram version.
+   */
+  private async escalateToVKAdmins(event: ICrisisEvent): Promise<void> {
+    try {
+      // Get admin IDs from config
+      const adminIds = this.config.adminUserIds || [];
+
+      if (adminIds.length === 0) {
+        console.warn('[VK Crisis] No admin user IDs configured for escalation');
+        return;
+      }
+
+      // Format notification message (VK doesn't support HTML, use plain text)
+      const isRussian = event.indicators.some((i) => /[а-яё]/i.test(i));
+      const message = this.formatCrisisNotification(event, isRussian);
+
+      // Send to each admin
+      let successCount = 0;
+      for (const adminId of adminIds) {
+        try {
+          await this.vk.api.messages.send({
+            user_id: adminId,
+            message,
+            random_id: Date.now(),
+          });
+          successCount++;
+        } catch (error) {
+          console.error(`[VK Crisis] Failed to notify admin ${adminId}:`, error);
+        }
+      }
+
+      console.log(
+        `[VK Crisis] Notified ${successCount}/${adminIds.length} admins`
+      );
+
+      // Also escalate via standard CrisisEscalationService if available
+      // This handles AE creation and audit logging
+      try {
+        await this.sleepCore.getCrisisEscalation().escalate(event);
+      } catch (escError) {
+        console.error('[VK Crisis] Standard escalation failed:', escError);
+      }
+    } catch (error) {
+      console.error('[VK Crisis] Escalation error:', error);
+    }
+  }
+
+  /**
+   * Format crisis notification for VK (plain text, no HTML)
+   */
+  private formatCrisisNotification(event: ICrisisEvent, isRussian: boolean): string {
+    const indicators = event.indicators.map((i) => `• ${i}`).join('\n');
+
+    if (isRussian) {
+      return event.severity === 'critical'
+        ? `🚨 КРИТИЧЕСКИЙ КРИЗИС 🚨
+
+Пользователь: ${event.userId}
+Время: ${event.timestamp.toISOString()}
+Тип: ${event.crisisType}
+Уверенность: ${Math.round(event.confidence * 100)}%
+
+Индикаторы:
+${indicators}
+
+Действие: Сессия прервана, показаны кризисные ресурсы.
+
+⚠️ Требуется проверка в течение 30 минут.`
+        : `⚠️ ВЫСОКИЙ РИСК
+
+Пользователь: ${event.userId}
+Время: ${event.timestamp.toISOString()}
+Тип: ${event.crisisType}
+Уверенность: ${Math.round(event.confidence * 100)}%
+
+Индикаторы:
+${indicators}
+
+Действие: Сессия прервана, показаны кризисные ресурсы.
+
+Рекомендуется проверка.`;
+    }
+
+    return event.severity === 'critical'
+      ? `🚨 CRITICAL CRISIS 🚨
+
+User: ${event.userId}
+Time: ${event.timestamp.toISOString()}
+Type: ${event.crisisType}
+Confidence: ${Math.round(event.confidence * 100)}%
+
+Indicators:
+${indicators}
+
+Action: Session interrupted, crisis resources shown.
+
+⚠️ Review and follow-up required within 30 minutes.`
+      : `⚠️ HIGH RISK
+
+User: ${event.userId}
+Time: ${event.timestamp.toISOString()}
+Type: ${event.crisisType}
+Confidence: ${Math.round(event.confidence * 100)}%
+
+Indicators:
+${indicators}
+
+Action: Session interrupted, crisis resources shown.
+
+Review recommended.`;
   }
 
   /**
