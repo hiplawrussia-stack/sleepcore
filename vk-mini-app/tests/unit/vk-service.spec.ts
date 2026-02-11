@@ -173,21 +173,10 @@ describe('VK Service', () => {
   });
 
   describe('showAlert', () => {
-    it('should call VKWebAppAlert', async () => {
-      await vkService.showAlert('Test message');
-
-      expect(bridge.send).toHaveBeenCalledWith('VKWebAppAlert', {
-        message: 'Test message',
-      });
-    });
-
-    it('should fallback to window.alert on error', async () => {
-      (bridge.send as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-        new Error('Not supported')
-      );
+    it('should use window.alert (VK Bridge has no native alert API)', () => {
       const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
 
-      await vkService.showAlert('Test message');
+      vkService.showAlert('Test message');
 
       expect(alertSpy).toHaveBeenCalledWith('Test message');
     });
