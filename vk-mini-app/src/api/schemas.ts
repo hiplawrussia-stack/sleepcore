@@ -112,15 +112,16 @@ export const BreathingStatsSchema = z.object({
 
 /**
  * Leaderboard entry schema
+ * Matches API response from /leaderboard/weekly
  */
 export const LeaderboardEntrySchema = z.object({
   rank: z.number(),
-  userId: z.string(),
   displayName: z.string(),
   isAnonymous: z.boolean(),
-  xp: z.number(),
-  level: z.number(),
+  totalSessions: z.number(),
+  totalMinutes: z.number(),
   streak: z.number(),
+  evolutionStage: z.string(),
   isCurrentUser: z.boolean(),
 });
 
@@ -129,7 +130,18 @@ export const LeaderboardEntrySchema = z.object({
  */
 export const LeaderboardSettingsSchema = z.object({
   isOptedIn: z.boolean(),
-  isAnonymous: z.boolean(),
+  showAnonymously: z.boolean(),
+});
+
+/**
+ * Leaderboard response schema
+ * Matches API response from /leaderboard/weekly
+ */
+export const LeaderboardResponseSchema = z.object({
+  entries: z.array(LeaderboardEntrySchema),
+  userSettings: LeaderboardSettingsSchema,
+  period: z.enum(['weekly', 'monthly', 'allTime']),
+  updatedAt: z.string(),
 });
 
 export type AuthUser = z.infer<typeof AuthUserSchema>;
@@ -141,3 +153,4 @@ export type BreathingSession = z.infer<typeof BreathingSessionSchema>;
 export type BreathingStats = z.infer<typeof BreathingStatsSchema>;
 export type LeaderboardEntry = z.infer<typeof LeaderboardEntrySchema>;
 export type LeaderboardSettings = z.infer<typeof LeaderboardSettingsSchema>;
+export type LeaderboardResponse = z.infer<typeof LeaderboardResponseSchema>;

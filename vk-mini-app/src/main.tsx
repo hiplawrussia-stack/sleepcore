@@ -10,11 +10,10 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ErrorBoundary, FallbackProps } from 'react-error-boundary';
-import { Placeholder, Button } from '@vkontakte/vkui';
 import '@vkontakte/vkui/dist/vkui.css';
 
 import App from './App';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 /**
  * TanStack Query client
@@ -34,32 +33,11 @@ const queryClient = new QueryClient({
 });
 
 /**
- * Error fallback component
+ * Global error handler for unhandled errors
  */
-function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
-        padding: 20,
-      }}
-    >
-      <Placeholder
-        icon={<span style={{ fontSize: 56 }}>:(</span>}
-        header="Что-то пошло не так"
-        action={
-          <Button size="m" onClick={resetErrorBoundary}>
-            Перезагрузить
-          </Button>
-        }
-      >
-        {error.message}
-      </Placeholder>
-    </div>
-  );
+function handleGlobalError(error: unknown) {
+  console.error('[App] Unhandled error:', error);
+  // In production: send to Sentry or error tracking service
 }
 
 /**
@@ -67,7 +45,7 @@ function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
  */
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary FallbackComponent={ErrorFallback}>
+    <ErrorBoundary onError={handleGlobalError}>
       <QueryClientProvider client={queryClient}>
         <App />
       </QueryClientProvider>

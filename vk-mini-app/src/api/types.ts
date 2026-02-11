@@ -111,15 +111,16 @@ export interface Evolution {
 
 /**
  * Leaderboard entry
+ * Matches API response from /leaderboard/weekly
  */
 export interface LeaderboardEntry {
   rank: number;
-  userId: string;
   displayName: string;
   isAnonymous: boolean;
-  xp: number;
-  level: number;
+  totalSessions: number;
+  totalMinutes: number;
   streak: number;
+  evolutionStage: string;
   isCurrentUser: boolean;
 }
 
@@ -128,7 +129,17 @@ export interface LeaderboardEntry {
  */
 export interface LeaderboardSettings {
   isOptedIn: boolean;
-  isAnonymous: boolean;
+  showAnonymously: boolean;
+}
+
+/**
+ * Leaderboard response
+ */
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  userSettings: LeaderboardSettings;
+  period: 'weekly' | 'monthly' | 'allTime';
+  updatedAt: string;
 }
 
 /**

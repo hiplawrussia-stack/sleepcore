@@ -10,4 +10,17 @@
 export * from './client';
 export * from './types';
 export * from './queryKeys';
-export * from './schemas';
+
+// Export only schemas (not types, which are already exported from types.ts)
+export {
+  AuthUserSchema,
+  UserProfileSchema,
+  EvolutionSchema,
+  QuestSchema,
+  BadgeSchema,
+  BreathingSessionSchema,
+  BreathingStatsSchema,
+  LeaderboardEntrySchema,
+  LeaderboardSettingsSchema,
+  LeaderboardResponseSchema,
+} from './schemas';

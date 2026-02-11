@@ -13,7 +13,6 @@ import {
   Header,
   Card,
   CardGrid,
-  SimpleCell,
   Avatar,
   Progress,
   Spinner,
@@ -31,7 +30,8 @@ import {
 
 import type { PanelId } from '@/App';
 import type { AuthUser } from '@/api';
-import { useEvolution, useQuests } from '@/hooks/useEvolution';
+import { useEvolution } from '@/hooks/useEvolution';
+import { QuestsPanel } from '@/components/gamification/QuestsPanel';
 
 interface HomeProps {
   go: (panel: PanelId) => void;
@@ -63,9 +63,6 @@ const stageNames: Record<string, string> = {
  */
 export default function Home({ go, user }: HomeProps) {
   const { evolution, isLoading: evolutionLoading } = useEvolution();
-  const { quests, isLoading: questsLoading } = useQuests();
-
-  const activeQuests = quests.filter((q) => q.status === 'active');
 
   return (
     <>
@@ -94,7 +91,7 @@ export default function Home({ go, user }: HomeProps) {
           <Spacing size={16} />
 
           {evolutionLoading ? (
-            <Spinner size="small" />
+            <Spinner size="s" />
           ) : evolution ? (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -137,42 +134,7 @@ export default function Home({ go, user }: HomeProps) {
       </Group>
 
       {/* Active quests */}
-      <Group header={<Header>Активные задания</Header>}>
-        {questsLoading ? (
-          <Div style={{ textAlign: 'center' }}>
-            <Spinner size="regular" />
-          </Div>
-        ) : activeQuests.length > 0 ? (
-          activeQuests.slice(0, 3).map((quest) => (
-            <SimpleCell
-              key={quest.id}
-              before={
-                <Avatar size={40} style={{ backgroundColor: '#ffc107', fontSize: 20 }}>
-                  {quest.type === 'daily' ? '📅' : quest.type === 'weekly' ? '📆' : '🏆'}
-                </Avatar>
-              }
-              after={
-                <Text weight="2" style={{ color: 'var(--vkui--color_accent_green)' }}>
-                  +{quest.reward} XP
-                </Text>
-              }
-              subtitle={`${quest.progress}/${quest.target}`}
-            >
-              {quest.title}
-            </SimpleCell>
-          ))
-        ) : (
-          <SimpleCell
-            before={
-              <Avatar size={40} style={{ backgroundColor: '#e1e3e6', fontSize: 20 }}>
-                ✓
-              </Avatar>
-            }
-          >
-            Все задания выполнены!
-          </SimpleCell>
-        )}
-      </Group>
+      <QuestsPanel limit={3} activeOnly compact />
 
       {/* Stats preview */}
       <Group header={<Header>Статистика</Header>}>
