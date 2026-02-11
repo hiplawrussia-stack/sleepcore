@@ -33,7 +33,7 @@ interface UserDataExport {
     evolutionStage: string;
     xp: number;
     level: number;
-    streak: number;
+    streak?: number;
   } | null;
   pendingChanges: number;
   lastSyncTime: string | null;

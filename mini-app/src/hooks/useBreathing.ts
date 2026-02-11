@@ -6,6 +6,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
 import { apiClient, queryKeys } from '@/api';
 import type {
   BreathingStats,
@@ -13,8 +14,19 @@ import type {
   LogSessionRequest,
   LogSessionResponse,
 } from '@/api';
+import {
+  BreathingStatsSchema,
+  BreathingSessionSchema,
+  LogSessionResponseSchema,
+} from '@/api/schemas';
 import { useAuthStore } from '@/store/authStore';
 import { useSyncStore } from '@/store/syncStore';
+
+// Schema for breathing history response
+const BreathingHistoryResponseSchema = z.object({
+  sessions: z.array(BreathingSessionSchema),
+  hasMore: z.boolean(),
+});
 
 // ========== useBreathingStats ==========
 
@@ -32,7 +44,7 @@ export const useBreathingStats = (): UseBreathingStatsReturn => {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.breathing.stats(),
     queryFn: async () => {
-      return apiClient.request<BreathingStats>('/breathing/stats');
+      return apiClient.requestValidated('/breathing/stats', BreathingStatsSchema);
     },
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 2, // 2 minutes - stats change more often
@@ -72,8 +84,9 @@ export const useBreathingHistory = (
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.breathing.history({ limit, offset }),
     queryFn: async () => {
-      return apiClient.request<{ sessions: BreathingSession[]; hasMore: boolean }>(
-        `/breathing/history?limit=${limit}&offset=${offset}`
+      return apiClient.requestValidated(
+        `/breathing/history?limit=${limit}&offset=${offset}`,
+        BreathingHistoryResponseSchema
       );
     },
     enabled: isAuthenticated,
@@ -117,7 +130,7 @@ export const useLogSession = (): UseLogSessionReturn => {
         return { id: localId, xpGain: 0 } as LogSessionResponse;
       }
 
-      return apiClient.request<LogSessionResponse>('/breathing/session', {
+      return apiClient.requestValidated('/breathing/session', LogSessionResponseSchema, {
         method: 'POST',
         body: JSON.stringify(session),
       });

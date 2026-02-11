@@ -190,5 +190,5 @@ export interface AuthUser {
   evolutionStage: string;
   xp: number;
   level: number;
-  streak: number;
+  streak?: number;
 }

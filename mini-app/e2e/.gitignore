@@ -1,0 +1,5 @@
+# E2E Test Artifacts
+screenshots/
+test-results/
+playwright-report/
+e2e-results.json

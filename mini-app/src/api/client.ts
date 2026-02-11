@@ -20,6 +20,7 @@
  */
 
 import { telegram } from '@/services/telegram';
+import type { z } from 'zod';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -253,7 +254,8 @@ class ApiClient {
         }
 
         const data = await response.json();
-        return data.data !== undefined ? data.data : data;
+        const result = data.data !== undefined ? data.data : data;
+        return result as T;
       } catch (error) {
         // Handle timeout errors specifically
         if (error instanceof DOMException && error.name === 'TimeoutError') {
@@ -278,6 +280,56 @@ class ApiClient {
     }
 
     throw lastError || new Error('Request failed');
+  }
+
+  /**
+   * Make validated API request with Zod schema
+   *
+   * Security: Validates response at runtime using Zod schema.
+   * This protects against:
+   * - Malformed API responses
+   * - Injection attacks via API
+   * - Type mismatches that could cause runtime errors
+   *
+   * @param endpoint - API endpoint
+   * @param schema - Zod schema for response validation
+   * @param options - Request options
+   * @returns Validated and typed response
+   * @throws ZodError if response doesn't match schema
+   */
+  async requestValidated<T>(
+    endpoint: string,
+    schema: z.ZodSchema<T>,
+    options: RequestOptions = {}
+  ): Promise<T> {
+    const data = await this.request<unknown>(endpoint, options);
+    return schema.parse(data);
+  }
+
+  /**
+   * Make validated API request with fallback on validation failure
+   *
+   * Use when you want graceful degradation instead of throwing on invalid data.
+   * Logs validation errors for debugging.
+   *
+   * @param endpoint - API endpoint
+   * @param schema - Zod schema for response validation
+   * @param fallback - Fallback value if validation fails
+   * @param options - Request options
+   */
+  async requestValidatedSafe<T>(
+    endpoint: string,
+    schema: z.ZodSchema<T>,
+    fallback: T,
+    options: RequestOptions = {}
+  ): Promise<T> {
+    const data = await this.request<unknown>(endpoint, options);
+    try {
+      return schema.parse(data);
+    } catch (error) {
+      console.warn(`[ApiClient] Validation failed for ${endpoint}:`, error);
+      return fallback;
+    }
   }
 
   /**

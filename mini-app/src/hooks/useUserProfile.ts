@@ -8,6 +8,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, queryKeys } from '@/api';
 import type { UserProfile } from '@/api';
+import { UserProfileSchema } from '@/api/schemas';
 import { useAuthStore } from '@/store/authStore';
 
 interface UseUserProfileReturn {
@@ -34,7 +35,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
   } = useQuery({
     queryKey: queryKeys.user.profile(),
     queryFn: async () => {
-      return apiClient.request<UserProfile>('/user/profile');
+      return apiClient.requestValidated('/user/profile', UserProfileSchema);
     },
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5, // 5 minutes

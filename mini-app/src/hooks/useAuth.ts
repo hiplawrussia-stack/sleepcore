@@ -16,6 +16,7 @@ import { useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, tokenManager, queryKeys } from '@/api';
 import type { AuthUser } from '@/api';
+import { AuthUserSchema } from '@/api/schemas';
 import { useAuthStore } from '@/store/authStore';
 import { telegram } from '@/services/telegram';
 
@@ -45,8 +46,7 @@ export const useAuth = (): UseAuthReturn => {
   const { data: currentUser, refetch: refetchUser } = useQuery({
     queryKey: queryKeys.auth.me(),
     queryFn: async () => {
-      const response = await apiClient.request<AuthUser>('/auth/me');
-      return response;
+      return apiClient.requestValidated('/auth/me', AuthUserSchema);
     },
     enabled: isAuthenticated && !!tokenManager.getAccessToken(),
     staleTime: 1000 * 60 * 5, // 5 minutes

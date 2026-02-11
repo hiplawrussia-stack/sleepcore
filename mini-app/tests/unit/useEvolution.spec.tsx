@@ -19,6 +19,7 @@ import React from 'react';
 vi.mock('@/api', () => ({
   apiClient: {
     request: vi.fn(),
+    requestValidated: vi.fn(),
   },
   queryKeys: {
     user: {
@@ -88,7 +89,7 @@ describe('useEvolution', () => {
         daysToNext: 15,
       };
 
-      vi.mocked(apiClient.request).mockResolvedValueOnce(mockEvolution);
+      vi.mocked(apiClient.requestValidated).mockResolvedValueOnce(mockEvolution);
 
       const { result } = renderHook(() => useEvolution(), {
         wrapper: createWrapper(),
@@ -105,7 +106,7 @@ describe('useEvolution', () => {
     });
 
     it('should handle API errors', async () => {
-      vi.mocked(apiClient.request).mockRejectedValueOnce(new Error('Network error'));
+      vi.mocked(apiClient.requestValidated).mockRejectedValueOnce(new Error('Network error'));
 
       const { result } = renderHook(() => useEvolution(), {
         wrapper: createWrapper(),
@@ -131,7 +132,7 @@ describe('useEvolution', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.evolution).toBeUndefined();
-      expect(apiClient.request).not.toHaveBeenCalled();
+      expect(apiClient.requestValidated).not.toHaveBeenCalled();
     });
   });
 });
@@ -171,7 +172,7 @@ describe('useQuests', () => {
       },
     ];
 
-    vi.mocked(apiClient.request).mockResolvedValueOnce({ quests: mockQuests });
+    vi.mocked(apiClient.requestValidated).mockResolvedValueOnce({ quests: mockQuests });
 
     const { result } = renderHook(() => useQuests(), {
       wrapper: createWrapper(),
@@ -186,7 +187,7 @@ describe('useQuests', () => {
   });
 
   it('should return empty array when no quests', async () => {
-    vi.mocked(apiClient.request).mockResolvedValueOnce({ quests: [] });
+    vi.mocked(apiClient.requestValidated).mockResolvedValueOnce({ quests: [] });
 
     const { result } = renderHook(() => useQuests(), {
       wrapper: createWrapper(),
@@ -214,7 +215,7 @@ describe('useBadges', () => {
       { badgeId: 'week_streak', earnedAt: '2025-01-07T00:00:00Z' },
     ];
 
-    vi.mocked(apiClient.request).mockResolvedValueOnce({ badges: mockBadges });
+    vi.mocked(apiClient.requestValidated).mockResolvedValueOnce({ badges: mockBadges });
 
     const { result } = renderHook(() => useBadges(), {
       wrapper: createWrapper(),
@@ -266,7 +267,7 @@ describe('useGamification', () => {
       { badgeId: 'first_session', earnedAt: '2025-01-01T00:00:00Z' },
     ];
 
-    vi.mocked(apiClient.request)
+    vi.mocked(apiClient.requestValidated)
       .mockResolvedValueOnce(mockEvolution)
       .mockResolvedValueOnce({ quests: mockQuests })
       .mockResolvedValueOnce({ badges: mockBadges });
@@ -285,7 +286,7 @@ describe('useGamification', () => {
   });
 
   it('should have refetchAll function', async () => {
-    vi.mocked(apiClient.request).mockResolvedValue({});
+    vi.mocked(apiClient.requestValidated).mockResolvedValue({});
 
     const { result } = renderHook(() => useGamification(), {
       wrapper: createWrapper(),
@@ -327,13 +328,15 @@ describe('useLeaderboard', () => {
           isCurrentUser: true,
         },
       ],
-      settings: {
+      userSettings: {
         isOptedIn: true,
         showAnonymously: false,
       },
+      period: 'weekly',
+      updatedAt: '2026-02-10T00:00:00Z',
     };
 
-    vi.mocked(apiClient.request).mockResolvedValueOnce(mockLeaderboard);
+    vi.mocked(apiClient.requestValidated).mockResolvedValueOnce(mockLeaderboard);
 
     const { result } = renderHook(() => useLeaderboard(), {
       wrapper: createWrapper(),
@@ -344,13 +347,15 @@ describe('useLeaderboard', () => {
     });
 
     expect(result.current.entries).toEqual(mockLeaderboard.entries);
-    expect(result.current.settings).toEqual(mockLeaderboard.settings);
+    expect(result.current.settings).toEqual(mockLeaderboard.userSettings);
   });
 
   it('should provide optIn function', async () => {
-    vi.mocked(apiClient.request).mockResolvedValue({
+    vi.mocked(apiClient.requestValidated).mockResolvedValue({
       entries: [],
-      settings: { isOptedIn: false, showAnonymously: false },
+      userSettings: { isOptedIn: false, showAnonymously: false },
+      period: 'weekly',
+      updatedAt: '2026-02-10T00:00:00Z',
     });
 
     const { result } = renderHook(() => useLeaderboard(), {
@@ -361,7 +366,7 @@ describe('useLeaderboard', () => {
   });
 
   it('should provide optOut function', async () => {
-    vi.mocked(apiClient.request).mockResolvedValue({
+    vi.mocked(apiClient.requestValidated).mockResolvedValue({
       entries: [],
       settings: { isOptedIn: true, showAnonymously: false },
     });

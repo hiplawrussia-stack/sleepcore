@@ -19,6 +19,7 @@ import React from 'react';
 vi.mock('@/api', () => ({
   apiClient: {
     request: vi.fn(),
+    requestValidated: vi.fn(),
   },
   queryKeys: {
     breathing: {
@@ -160,7 +161,7 @@ describe('useSync', () => {
 
       const serverTime = Date.now();
 
-      vi.mocked(apiClient.request)
+      vi.mocked(apiClient.requestValidated)
         .mockResolvedValueOnce({
           results: [{ localId: 'local-123', status: 'synced' }],
           serverTime,
@@ -207,7 +208,7 @@ describe('useSync', () => {
       });
 
       expect(mockSetSyncing).not.toHaveBeenCalled();
-      expect(apiClient.request).not.toHaveBeenCalled();
+      expect(apiClient.requestValidated).not.toHaveBeenCalled();
     });
 
     it('should not sync when not authenticated', async () => {
@@ -224,7 +225,7 @@ describe('useSync', () => {
       });
 
       expect(mockSetSyncing).not.toHaveBeenCalled();
-      expect(apiClient.request).not.toHaveBeenCalled();
+      expect(apiClient.requestValidated).not.toHaveBeenCalled();
     });
 
     it('should not sync when already syncing', async () => {
@@ -249,7 +250,7 @@ describe('useSync', () => {
         await result.current.sync();
       });
 
-      expect(apiClient.request).not.toHaveBeenCalled();
+      expect(apiClient.requestValidated).not.toHaveBeenCalled();
     });
 
     it('should handle push errors', async () => {
@@ -266,7 +267,7 @@ describe('useSync', () => {
         setSyncError: mockSetSyncError,
       });
 
-      vi.mocked(apiClient.request).mockRejectedValueOnce(new Error('Network error'));
+      vi.mocked(apiClient.requestValidated).mockRejectedValueOnce(new Error('Network error'));
 
       const { result } = renderHook(() => useSync(), {
         wrapper: createWrapper(),
@@ -298,7 +299,7 @@ describe('useSync', () => {
 
       const serverTime = Date.now();
 
-      vi.mocked(apiClient.request)
+      vi.mocked(apiClient.requestValidated)
         .mockResolvedValueOnce({
           results: [
             { localId: 'local-123', status: 'synced' },
@@ -339,7 +340,7 @@ describe('useSync', () => {
         setSyncError: mockSetSyncError,
       });
 
-      vi.mocked(apiClient.request).mockResolvedValueOnce({
+      vi.mocked(apiClient.requestValidated).mockResolvedValueOnce({
         changes: [],
         serverTime: Date.now(),
       });
@@ -356,7 +357,7 @@ describe('useSync', () => {
 
       // Only pull should happen, no push because all changes exceeded retry
       // Verify the request was made to pull endpoint
-      const calls = vi.mocked(apiClient.request).mock.calls;
+      const calls = vi.mocked(apiClient.requestValidated).mock.calls;
       const pullCall = calls.find(call => String(call[0]).includes('/sync/changes'));
       expect(pullCall).toBeDefined();
     });
@@ -393,7 +394,7 @@ describe('useSync', () => {
 
       const serverTime = Date.now();
 
-      vi.mocked(apiClient.request).mockResolvedValueOnce({
+      vi.mocked(apiClient.requestValidated).mockResolvedValueOnce({
         changes: [
           { entity: 'session', action: 'create', data: {} },
           { entity: 'profile', action: 'update', data: {} },
@@ -431,7 +432,7 @@ describe('useSync', () => {
         setSyncError: mockSetSyncError,
       });
 
-      vi.mocked(apiClient.request).mockRejectedValueOnce(new Error('Pull failed'));
+      vi.mocked(apiClient.requestValidated).mockRejectedValueOnce(new Error('Pull failed'));
 
       const { result } = renderHook(() => useSync(), {
         wrapper: createWrapper(),
@@ -460,7 +461,7 @@ describe('useSync', () => {
         setSyncError: mockSetSyncError,
       });
 
-      vi.mocked(apiClient.request).mockResolvedValueOnce({
+      vi.mocked(apiClient.requestValidated).mockResolvedValueOnce({
         results: [{ localId: 'local-123', status: 'synced' }],
         serverTime: Date.now(),
       });
@@ -475,9 +476,10 @@ describe('useSync', () => {
         await result.current.forcePush();
       });
 
-      // Should call push endpoint
-      expect(apiClient.request).toHaveBeenCalledWith(
+      // Should call push endpoint (endpoint, schema, options)
+      expect(apiClient.requestValidated).toHaveBeenCalledWith(
         '/sync/push',
+        expect.anything(), // Schema
         expect.objectContaining({
           method: 'POST',
         })
@@ -506,7 +508,7 @@ describe('useSync', () => {
         await result.current.forcePush();
       });
 
-      expect(apiClient.request).not.toHaveBeenCalled();
+      expect(apiClient.requestValidated).not.toHaveBeenCalled();
     });
   });
 

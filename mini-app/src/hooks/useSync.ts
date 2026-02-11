@@ -8,7 +8,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient, queryKeys } from '@/api';
-import type { SyncPushResponse, SyncChangesResponse } from '@/api';
+import { SyncPushResponseSchema, SyncChangesResponseSchema } from '@/api/schemas';
 import { useSyncStore } from '@/store/syncStore';
 import { useAuthStore } from '@/store/authStore';
 
@@ -54,7 +54,7 @@ export const useSync = (): UseSyncReturn => {
     }
 
     try {
-      const response = await apiClient.request<SyncPushResponse>('/sync/push', {
+      const response = await apiClient.requestValidated('/sync/push', SyncPushResponseSchema, {
         method: 'POST',
         body: JSON.stringify({
           changes: changesToPush,
@@ -82,8 +82,9 @@ export const useSync = (): UseSyncReturn => {
   // Pull changes from server
   const pullChanges = useCallback(async (): Promise<boolean> => {
     try {
-      const response = await apiClient.request<SyncChangesResponse>(
-        `/sync/changes?since=${lastSyncTime || 0}`
+      const response = await apiClient.requestValidated(
+        `/sync/changes?since=${lastSyncTime || 0}`,
+        SyncChangesResponseSchema
       );
 
       if (response.changes.length > 0) {

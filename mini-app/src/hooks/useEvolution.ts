@@ -7,6 +7,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, queryKeys } from '@/api';
 import type { EvolutionStatus, Quest, Badge, LeaderboardEntry, LeaderboardSettings } from '@/api';
+import {
+  EvolutionStatusSchema,
+  QuestsResponseSchema,
+  BadgesResponseSchema,
+  LeaderboardResponseSchema,
+} from '@/api/schemas';
 import { useAuthStore } from '@/store/authStore';
 
 // ========== useEvolution ==========
@@ -25,7 +31,7 @@ export const useEvolution = (): UseEvolutionReturn => {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.user.evolution(),
     queryFn: async () => {
-      return apiClient.request<EvolutionStatus>('/user/evolution');
+      return apiClient.requestValidated('/user/evolution', EvolutionStatusSchema);
     },
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5, // 5 minutes
@@ -56,7 +62,7 @@ export const useQuests = (): UseQuestsReturn => {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.user.quests(),
     queryFn: async () => {
-      const response = await apiClient.request<{ quests: Quest[] }>('/user/quests');
+      const response = await apiClient.requestValidated('/user/quests', QuestsResponseSchema);
       return response.quests;
     },
     enabled: isAuthenticated,
@@ -88,7 +94,7 @@ export const useBadges = (): UseBadgesReturn => {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.user.badges(),
     queryFn: async () => {
-      const response = await apiClient.request<{ badges: Badge[] }>('/user/badges');
+      const response = await apiClient.requestValidated('/user/badges', BadgesResponseSchema);
       return response.badges;
     },
     enabled: isAuthenticated,
@@ -167,10 +173,11 @@ export const useLeaderboard = (): UseLeaderboardReturn => {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.leaderboard.weekly(),
     queryFn: async () => {
-      return apiClient.request<{
-        entries: LeaderboardEntry[];
-        settings: LeaderboardSettings;
-      }>('/leaderboard/weekly');
+      const response = await apiClient.requestValidated('/leaderboard/weekly', LeaderboardResponseSchema);
+      return {
+        entries: response.entries,
+        settings: response.userSettings,
+      };
     },
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5, // 5 minutes

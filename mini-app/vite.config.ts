@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 // import basicSsl from '@vitejs/plugin-basic-ssl'; // Uncomment for HTTPS dev
+import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
 
 // https://vitejs.dev/config/
@@ -36,9 +37,20 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
+          query: ['@tanstack/react-query'],
           motion: ['motion'],
         },
       },
+      plugins: [
+        // Bundle analyzer - generates stats.html for visual inspection
+        // Run: npm run build && open dist/stats.html
+        visualizer({
+          filename: 'dist/stats.html',
+          open: false,
+          gzipSize: true,
+          brotliSize: true,
+        }),
+      ],
     },
   },
 });
