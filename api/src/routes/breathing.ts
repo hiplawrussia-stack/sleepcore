@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { eq, desc, and, gte, sql } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
-import { safeParseInt, QUERY_LIMITS } from '../utils/validation.js';
+import { safeParseInt, QUERY_LIMITS, findUserByAuthPayload } from '../utils/index.js';
 import { getDatabase, breathingSessions, users, dailyStats } from '../db/index.js';
 import type { ApiResponse, BreathingStats } from '../types/index.js';
 
@@ -40,10 +40,8 @@ breathing.post(
     const user = c.get('user');
     const db = getDatabase();
 
-    // Get user from database
-    const dbUser = await db.query.users.findFirst({
-      where: eq(users.telegramId, user.telegramId),
-    });
+    // Get user from database (supports both TG and VK)
+    const dbUser = await findUserByAuthPayload(user);
 
     if (!dbUser) {
       const response: ApiResponse<null> = {
@@ -143,10 +141,8 @@ breathing.get('/stats', async (c) => {
   const user = c.get('user');
   const db = getDatabase();
 
-  // Get user from database
-  const dbUser = await db.query.users.findFirst({
-    where: eq(users.telegramId, user.telegramId),
-  });
+  // Get user from database (supports both TG and VK)
+  const dbUser = await findUserByAuthPayload(user);
 
   if (!dbUser) {
     const response: ApiResponse<null> = {
@@ -239,10 +235,8 @@ breathing.get('/history', async (c) => {
 
   const db = getDatabase();
 
-  // Get user from database
-  const dbUser = await db.query.users.findFirst({
-    where: eq(users.telegramId, user.telegramId),
-  });
+  // Get user from database (supports both TG and VK)
+  const dbUser = await findUserByAuthPayload(user);
 
   if (!dbUser) {
     const response: ApiResponse<null> = {

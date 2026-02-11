@@ -10,9 +10,10 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { eq } from 'drizzle-orm';
 import { validateInitData } from '../utils/telegram.js';
-import { validateVKLaunchParams, type ValidatedVKUser } from '../utils/vk.js';
+import { validateVKLaunchParams } from '../utils/vk.js';
 import { generateTokenPair, generateTokenPairForVK, verifyToken } from '../utils/jwt.js';
 import { revokeToken, revokeAllUserTokens } from '../utils/tokenBlacklist.js';
+import { findUserByAuthPayload } from '../utils/user-lookup.js';
 import { getDatabase, users } from '../db/index.js';
 import type { ApiResponse } from '../types/index.js';
 
@@ -141,7 +142,7 @@ auth.post(
         ...tokens,
         user: {
           id: user.id,
-          telegramId: user.telegramId,
+          telegramId: user.telegramId!, // Always present for TG auth
           firstName: user.firstName,
           lastName: user.lastName ?? undefined,
           username: user.username ?? undefined,
@@ -183,8 +184,8 @@ auth.post(
       return c.json(response, 500);
     }
 
-    // Validate VK launch params
-    const validation = validateVKLaunchParams(launchParams, vkSecretKey);
+    // Validate VK launch params (vkSecretKey is guaranteed to be string after check above)
+    const validation = validateVKLaunchParams(launchParams, vkSecretKey as string);
 
     if (!validation.valid || !validation.user) {
       const response: ApiResponse<null> = {
@@ -320,12 +321,8 @@ auth.post(
       return c.json(response, 401);
     }
 
-    const db = getDatabase();
-
-    // Get user from database
-    const user = await db.query.users.findFirst({
-      where: eq(users.telegramId, result.payload.telegramId),
-    });
+    // Get user from database (supports both TG and VK)
+    const user = await findUserByAuthPayload(result.payload);
 
     if (!user) {
       const response: ApiResponse<null> = {
@@ -336,18 +333,28 @@ auth.post(
       return c.json(response, 404);
     }
 
-    // Generate new tokens
-    const tokens = await generateTokenPair(
-      {
-        telegramId: user.telegramId,
-        firstName: user.firstName,
-        lastName: user.lastName ?? undefined,
-        username: user.username ?? undefined,
-        languageCode: user.languageCode ?? 'ru',
-        isPremium: user.isPremium ?? false,
-      },
-      jwtSecret
-    );
+    // Generate new tokens based on auth provider
+    const tokens = user.telegramId
+      ? await generateTokenPair(
+          {
+            telegramId: user.telegramId,
+            firstName: user.firstName,
+            lastName: user.lastName ?? undefined,
+            username: user.username ?? undefined,
+            languageCode: user.languageCode ?? 'ru',
+            isPremium: user.isPremium ?? false,
+          },
+          jwtSecret
+        )
+      : await generateTokenPairForVK(
+          {
+            vkId: user.vkId!,
+            firstName: user.firstName,
+            lastName: user.lastName ?? undefined,
+            languageCode: user.languageCode ?? 'ru',
+          },
+          jwtSecret
+        );
 
     const response: ApiResponse<{
       accessToken: string;
@@ -393,11 +400,8 @@ auth.get('/me', async (c) => {
     return c.json(response, 401);
   }
 
-  const db = getDatabase();
-
-  const user = await db.query.users.findFirst({
-    where: eq(users.telegramId, result.payload.telegramId),
-  });
+  // Get user from database (supports both TG and VK)
+  const user = await findUserByAuthPayload(result.payload);
 
   if (!user) {
     const response: ApiResponse<null> = {
@@ -410,7 +414,8 @@ auth.get('/me', async (c) => {
 
   const response: ApiResponse<{
     id: string;
-    telegramId: number;
+    telegramId?: number;
+    vkId?: number;
     firstName: string;
     lastName?: string;
     username?: string;
@@ -422,7 +427,8 @@ auth.get('/me', async (c) => {
     success: true,
     data: {
       id: user.id,
-      telegramId: user.telegramId,
+      telegramId: user.telegramId ?? undefined,
+      vkId: user.vkId ?? undefined,
       firstName: user.firstName,
       lastName: user.lastName ?? undefined,
       username: user.username ?? undefined,
@@ -470,12 +476,13 @@ auth.post('/logout', async (c) => {
     return c.json(response, 200);
   }
 
-  const { jti, telegramId, exp } = result.payload;
+  const { jti, telegramId, vkId, exp } = result.payload;
+  const userId = telegramId ?? vkId;
 
-  if (jti && telegramId && exp) {
+  if (jti && userId && exp) {
     // Convert exp from seconds to milliseconds
     const expiresAtMs = exp * 1000;
-    revokeToken(jti, telegramId, expiresAtMs, 'logout');
+    revokeToken(jti, userId, expiresAtMs, 'logout');
   }
 
   const response: ApiResponse<{ loggedOut: boolean }> = {
@@ -519,10 +526,11 @@ auth.post('/logout-all', async (c) => {
     return c.json(response, 401);
   }
 
-  const { telegramId } = result.payload;
+  const { telegramId, vkId } = result.payload;
+  const userId = telegramId ?? vkId;
 
-  if (telegramId) {
-    revokeAllUserTokens(telegramId, 'logout_all');
+  if (userId) {
+    revokeAllUserTokens(userId, 'logout_all');
   }
 
   const response: ApiResponse<{ loggedOutAll: boolean }> = {

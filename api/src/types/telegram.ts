@@ -32,7 +32,10 @@ export interface ValidatedUser {
 }
 
 export interface JWTPayload {
-  telegramId: number;
+  /** Telegram user ID (if authenticated via Telegram) */
+  telegramId?: number;
+  /** VK user ID (if authenticated via VK) */
+  vkId?: number;
   firstName: string;
   username?: string;
   iat: number;

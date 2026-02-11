@@ -20,6 +20,7 @@ declare module 'hono' {
     user: JWTPayload;
     jwtSecret: string;
     botToken: string;
+    vkSecretKey?: string;
   }
 }
 
@@ -48,11 +49,13 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   }
 
   // Check token blacklist (revoked tokens)
-  const { jti, telegramId, iat } = result.payload;
-  if (jti && telegramId && iat) {
+  // Supports both TG and VK users
+  const { jti, telegramId, vkId, iat } = result.payload;
+  const userId = telegramId ?? vkId;
+  if (jti && userId && iat) {
     // Convert iat from seconds to milliseconds
     const issuedAtMs = iat * 1000;
-    if (isTokenRevoked(jti, telegramId, issuedAtMs)) {
+    if (isTokenRevoked(jti, userId, issuedAtMs)) {
       throw new HTTPException(401, { message: 'Token has been revoked' });
     }
   }
@@ -93,8 +96,12 @@ export const optionalAuthMiddleware = createMiddleware(async (c, next) => {
 export function getRateLimitKey(c: { get: (key: string) => unknown; req: { header: (name: string) => string | undefined } }): string {
   const user = c.get('user') as JWTPayload | undefined;
 
+  // Support both TG and VK users
   if (user?.telegramId) {
-    return `user:${user.telegramId}`;
+    return `user:tg:${user.telegramId}`;
+  }
+  if (user?.vkId) {
+    return `user:vk:${user.vkId}`;
   }
 
   // Fall back to IP

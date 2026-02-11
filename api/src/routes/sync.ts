@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { eq, gt, and, desc } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
-import { safeParseInt, QUERY_LIMITS } from '../utils/validation.js';
+import { safeParseInt, QUERY_LIMITS, findUserByAuthPayload } from '../utils/index.js';
 import {
   getDatabase,
   syncLog,
@@ -57,10 +57,8 @@ sync.get('/changes', async (c) => {
 
   const db = getDatabase();
 
-  // Get user
-  const dbUser = await db.query.users.findFirst({
-    where: eq(users.telegramId, authUser.telegramId),
-  });
+  // Get user (supports both TG and VK)
+  const dbUser = await findUserByAuthPayload(authUser);
 
   if (!dbUser) {
     const response: ApiResponse<null> = {
@@ -117,10 +115,8 @@ sync.post(
     const authUser = c.get('user');
     const db = getDatabase();
 
-    // Get user
-    const dbUser = await db.query.users.findFirst({
-      where: eq(users.telegramId, authUser.telegramId),
-    });
+    // Get user (supports both TG and VK)
+    const dbUser = await findUserByAuthPayload(authUser);
 
     if (!dbUser) {
       const response: ApiResponse<null> = {
@@ -222,9 +218,8 @@ sync.get('/status', async (c) => {
   const authUser = c.get('user');
   const db = getDatabase();
 
-  const dbUser = await db.query.users.findFirst({
-    where: eq(users.telegramId, authUser.telegramId),
-  });
+  // Get user (supports both TG and VK)
+  const dbUser = await findUserByAuthPayload(authUser);
 
   if (!dbUser) {
     const response: ApiResponse<null> = {

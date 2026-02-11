@@ -106,6 +106,31 @@ export const dailyStats = sqliteTable('api_daily_stats', {
   patterns: text('patterns'), // JSON array of pattern IDs
 });
 
+/**
+ * Leaderboard Settings table
+ * GDPR-compliant opt-in leaderboard participation
+ *
+ * Research basis:
+ * - GDPR Article 7: Explicit consent required
+ * - Syrenis: Pseudonymous avatars for privacy
+ * - University of Oregon: Opt-in reduces anxiety
+ *
+ * @see https://www.mdpi.com/1999-5899/11/3/67
+ */
+export const leaderboardSettings = sqliteTable('api_leaderboard_settings', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id).unique(),
+
+  // GDPR consent
+  isOptedIn: integer('is_opted_in', { mode: 'boolean' }).default(false),
+  showAnonymously: integer('show_anonymously', { mode: 'boolean' }).default(true),
+
+  // Timestamps for audit trail
+  optedInAt: text('opted_in_at'),
+  optedOutAt: text('opted_out_at'),
+  updatedAt: text('updated_at').notNull(),
+});
+
 // Type exports for TypeScript
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -115,3 +140,5 @@ export type UserBadge = typeof userBadges.$inferSelect;
 export type UserQuest = typeof userQuests.$inferSelect;
 export type SyncLogEntry = typeof syncLog.$inferSelect;
 export type DailyStat = typeof dailyStats.$inferSelect;
+export type LeaderboardSetting = typeof leaderboardSettings.$inferSelect;
+export type NewLeaderboardSetting = typeof leaderboardSettings.$inferInsert;

@@ -5,7 +5,9 @@
  */
 
 export * from './telegram.js';
+export * from './vk.js';
 export * from './jwt.js';
 export * from './encryption.js';
 export * from './tokenBlacklist.js';
 export * from './validation.js';
+export * from './user-lookup.js';

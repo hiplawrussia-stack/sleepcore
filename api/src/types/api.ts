@@ -4,10 +4,11 @@
  * Request/Response types for API endpoints.
  */
 
-// User Profile
+// User Profile (supports both TG and VK users)
 export interface UserProfile {
   id: string;
-  telegramId: number;
+  telegramId?: number;
+  vkId?: number;
   firstName: string;
   lastName?: string;
   username?: string;

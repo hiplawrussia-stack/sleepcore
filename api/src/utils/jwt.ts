@@ -8,6 +8,7 @@
 import * as jose from 'jose';
 import { nanoid } from 'nanoid';
 import type { JWTPayload, ValidatedUser } from '../types/index.js';
+import type { ValidatedVKUser } from './vk.js';
 
 // JWT configuration
 const JWT_ALGORITHM = 'HS256';
@@ -128,16 +129,6 @@ export async function generateTokenPair(
     refreshToken,
     expiresIn: 15 * 60, // 15 minutes in seconds
   };
-}
-
-/**
- * VK user type for token generation
- */
-export interface ValidatedVKUser {
-  vkId: number;
-  firstName: string;
-  lastName?: string;
-  languageCode: string;
 }
 
 /**

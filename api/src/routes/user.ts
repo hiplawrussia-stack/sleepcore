@@ -7,9 +7,10 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
+import { findUserByAuthPayload } from '../utils/index.js';
 import { getDatabase, users, userBadges, userQuests } from '../db/index.js';
+import { eq } from 'drizzle-orm';
 import type { ApiResponse, UserProfile, EvolutionStatus } from '../types/index.js';
 
 const user = new Hono();
@@ -32,9 +33,8 @@ user.get('/profile', async (c) => {
   const authUser = c.get('user');
   const db = getDatabase();
 
-  const dbUser = await db.query.users.findFirst({
-    where: eq(users.telegramId, authUser.telegramId),
-  });
+  // Supports both TG and VK users
+  const dbUser = await findUserByAuthPayload(authUser);
 
   if (!dbUser) {
     const response: ApiResponse<null> = {
@@ -52,7 +52,8 @@ user.get('/profile', async (c) => {
 
   const profile: UserProfile = {
     id: dbUser.id,
-    telegramId: dbUser.telegramId,
+    telegramId: dbUser.telegramId ?? undefined,
+    vkId: dbUser.vkId ?? undefined,
     firstName: dbUser.firstName,
     lastName: dbUser.lastName ?? undefined,
     username: dbUser.username ?? undefined,
@@ -86,9 +87,8 @@ user.put(
     const authUser = c.get('user');
     const db = getDatabase();
 
-    const dbUser = await db.query.users.findFirst({
-      where: eq(users.telegramId, authUser.telegramId),
-    });
+    // Supports both TG and VK users
+    const dbUser = await findUserByAuthPayload(authUser);
 
     if (!dbUser) {
       const response: ApiResponse<null> = {
@@ -128,11 +128,9 @@ user.put(
  */
 user.get('/evolution', async (c) => {
   const authUser = c.get('user');
-  const db = getDatabase();
 
-  const dbUser = await db.query.users.findFirst({
-    where: eq(users.telegramId, authUser.telegramId),
-  });
+  // Supports both TG and VK users
+  const dbUser = await findUserByAuthPayload(authUser);
 
   if (!dbUser) {
     const response: ApiResponse<null> = {
@@ -204,9 +202,8 @@ user.get('/quests', async (c) => {
   const authUser = c.get('user');
   const db = getDatabase();
 
-  const dbUser = await db.query.users.findFirst({
-    where: eq(users.telegramId, authUser.telegramId),
-  });
+  // Supports both TG and VK users
+  const dbUser = await findUserByAuthPayload(authUser);
 
   if (!dbUser) {
     const response: ApiResponse<null> = {
@@ -238,9 +235,8 @@ user.get('/badges', async (c) => {
   const authUser = c.get('user');
   const db = getDatabase();
 
-  const dbUser = await db.query.users.findFirst({
-    where: eq(users.telegramId, authUser.telegramId),
-  });
+  // Supports both TG and VK users
+  const dbUser = await findUserByAuthPayload(authUser);
 
   if (!dbUser) {
     const response: ApiResponse<null> = {
