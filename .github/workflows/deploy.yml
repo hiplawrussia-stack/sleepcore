@@ -109,6 +109,36 @@ jobs:
           path: mini-app/dist/
           retention-days: 7
 
+      # Build VK Bot
+      - name: Build and push VK Bot
+        uses: docker/build-push-action@v5
+        with:
+          context: ./vk-bot
+          file: ./vk-bot/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/vk-bot:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/vk-bot:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build VK Mini App (static files)
+      - name: Build VK Mini App
+        run: |
+          cd vk-mini-app
+          npm ci
+          npm run build
+        env:
+          VITE_API_URL: ${{ vars.VK_API_URL || 'https://api.sleepcore.ru' }}
+          VITE_VK_APP_ID: ${{ vars.VK_APP_ID || '' }}
+
+      - name: Upload VK Mini App build
+        uses: actions/upload-artifact@v4
+        with:
+          name: vk-mini-app-dist
+          path: vk-mini-app/dist/
+          retention-days: 7
+
   # Deploy to Staging
   deploy-staging:
     name: Deploy to Staging
@@ -165,6 +195,12 @@ jobs:
           name: mini-app-dist
           path: mini-app/dist/
 
+      - name: Download VK Mini App build
+        uses: actions/download-artifact@v4
+        with:
+          name: vk-mini-app-dist
+          path: vk-mini-app/dist/
+
       - name: Deploy Bot to production
         run: |
           echo "Deploying Bot version ${{ needs.build.outputs.version }} to production..."
@@ -188,11 +224,28 @@ jobs:
           # Example: cloudflare pages deploy
           ls -la mini-app/dist/
 
+      - name: Deploy VK Bot to production
+        run: |
+          echo "Deploying VK Bot version ${{ needs.build.outputs.version }} to production..."
+          # ssh ${{ secrets.PROD_SERVER }} "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/vk-bot:${{ needs.build.outputs.version }}"
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+
+      - name: Deploy VK Mini App
+        run: |
+          echo "Deploying VK Mini App..."
+          # Example: scp -r vk-mini-app/dist/* ${{ secrets.PROD_SERVER }}:/var/www/vk.sleepcore.ru/
+          ls -la vk-mini-app/dist/
+
       - name: Production health check
         run: |
           echo "Checking production health..."
+          # Telegram ecosystem
           # curl -f https://sleepcore.app/health || exit 1
           # curl -f https://api.sleepcore.app/health || exit 1
+          # VK ecosystem
+          # curl -f https://vk.sleepcore.ru/health || exit 1
+          # curl -f https://api.sleepcore.ru/health || exit 1
           echo "Production deployment successful!"
 
       - name: Create deployment record

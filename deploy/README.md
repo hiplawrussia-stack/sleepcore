@@ -34,8 +34,76 @@ This directory contains all configuration and scripts needed for production depl
 │  │  Prometheus :9090 │ Grafana :3000 │ Loki            │    │
 │  └─────────────────────────────────────────────────────┘    │
 │                                                              │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │                VK Ecosystem (Optional)               │    │
+│  │  VK Bot :3002 │ VK Mini App :80 (vk.sleepcore.ru)   │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## VK Ecosystem Deployment
+
+For deploying VK integration alongside Telegram, use `docker-compose.full.yml`:
+
+### 1. Register VK App
+
+1. Go to [VK Developers](https://dev.vk.com/)
+2. Create new app → Mini App
+3. Configure app settings:
+   - **App URL**: `https://vk.sleepcore.ru`
+   - **Allowed domains**: `vk.sleepcore.ru`, `api.sleepcore.ru`
+4. Note your `VK_APP_ID` and `VK_SECRET_KEY`
+
+### 2. Create VK Community Bot
+
+1. Create/use VK community (group)
+2. Go to Community Settings → API Usage → Access Tokens
+3. Create token with permissions: messages, docs
+4. Note your `VK_BOT_TOKEN` and `VK_GROUP_ID`
+
+### 3. Configure VK Environment Variables
+
+Add to your `.env`:
+
+```bash
+# VK Bot
+VK_BOT_TOKEN=vk1.a.xxx...
+VK_GROUP_ID=123456789
+ADMIN_VK_USER_IDS=123456,789012  # VK admin user IDs for crisis escalation
+
+# VK Mini App
+VK_APP_ID=12345678
+VK_SECRET_KEY=xxx...
+```
+
+### 4. Deploy with VK
+
+```bash
+# Deploy full stack (TG + VK + Monitoring)
+docker compose -f docker-compose.full.yml up -d
+
+# View VK bot logs
+docker compose -f docker-compose.full.yml logs -f vk-bot
+
+# View VK mini-app logs
+docker compose -f docker-compose.full.yml logs -f vk-mini-app
+```
+
+### VK-Specific Domains
+
+| Service | Domain | Purpose |
+|---------|--------|---------|
+| VK Mini App | `vk.sleepcore.ru` | VK WebView iframe |
+| API (VK route) | `vk.sleepcore.ru/api/*` | Same-origin proxy for RU network |
+| API (direct) | `api.sleepcore.ru` | Direct API access |
+
+### VK Health Checks
+
+| Service | Health URL |
+|---------|-----------|
+| VK Bot | `http://localhost:3002/health` |
+| VK Mini App | `https://vk.sleepcore.ru/health` |
 
 ## Quick Start
 
@@ -76,7 +144,8 @@ echo $GITHUB_TOKEN | docker login ghcr.io -u your-username --password-stdin
 
 ```
 deploy/
-├── docker-compose.prod.yml      # Main production stack
+├── docker-compose.prod.yml      # Main production stack (TG only)
+├── docker-compose.full.yml      # Full stack (TG + VK + Monitoring)
 ├── docker-compose.monitoring.yml # Monitoring stack (optional)
 ├── .env.prod.example            # Environment template
 ├── .env                         # Your environment (not in git)
@@ -173,10 +242,13 @@ All services expose health endpoints:
 
 | Service | Health URL |
 |---------|-----------|
-| Bot | `http://localhost:3000/health` |
+| Bot (TG) | `http://localhost:3000/health` |
 | API | `http://localhost:3001/health` |
+| Mini App (TG) | `http://localhost:80/health` |
 | Traefik | `http://localhost:8080/ping` |
 | PostgreSQL | `pg_isready` command |
+| VK Bot | `http://localhost:3002/health` |
+| VK Mini App | `http://localhost:80/health` |
 
 ## Environment Variables
 
@@ -192,6 +264,11 @@ See `.env.prod.example` for all required variables:
 | `ENCRYPTION_MASTER_KEY_SALT` | **Yes** | Key derivation salt (32 hex chars) |
 | `TRAEFIK_DASHBOARD_AUTH` | Yes | Dashboard htpasswd |
 | `GRAFANA_ADMIN_PASSWORD` | No | Grafana password |
+| `VK_BOT_TOKEN` | VK only | VK Community API token |
+| `VK_GROUP_ID` | VK only | VK Community (group) ID |
+| `VK_APP_ID` | VK only | VK Mini App ID |
+| `VK_SECRET_KEY` | VK only | VK App secret for sign verification |
+| `ADMIN_VK_USER_IDS` | VK only | VK user IDs for crisis escalation |
 
 ### PHI Encryption Setup (HIPAA/GDPR Compliance)
 

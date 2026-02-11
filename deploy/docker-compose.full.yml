@@ -83,11 +83,16 @@ services:
       - "traefik.http.routers.api.rule=Host(`api.sleepcore.ru`)"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
       - "traefik.http.routers.api.service=api"
-      # Alternative route: app.sleepcore.ru/api/* (for Russia network restrictions)
+      # Alternative route: app.sleepcore.ru/api/* (for TG Mini App - Russia network restrictions)
       - "traefik.http.routers.api-alt.rule=Host(`app.sleepcore.ru`) && PathPrefix(`/api`)"
       - "traefik.http.routers.api-alt.tls.certresolver=letsencrypt"
       - "traefik.http.routers.api-alt.service=api"
       - "traefik.http.routers.api-alt.priority=100"
+      # Alternative route: vk.sleepcore.ru/api/* (for VK Mini App - Russia network restrictions)
+      - "traefik.http.routers.api-vk.rule=Host(`vk.sleepcore.ru`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api-vk.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api-vk.service=api"
+      - "traefik.http.routers.api-vk.priority=100"
       - "traefik.http.services.api.loadbalancer.server.port=3001"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
@@ -143,7 +148,8 @@ services:
       context: ../vk-mini-app
       dockerfile: Dockerfile.prod
       args:
-        - VITE_API_URL=https://api.sleepcore.ru
+        # Use same-origin API path to bypass RU network restrictions
+        - VITE_API_URL=https://vk.sleepcore.ru/api
         - VITE_VK_APP_ID=${VK_APP_ID}
     container_name: sleepcore-vk-mini-app
     restart: unless-stopped
@@ -154,6 +160,11 @@ services:
       - "traefik.http.routers.vk-app.rule=Host(`vk.sleepcore.ru`)"
       - "traefik.http.routers.vk-app.tls.certresolver=letsencrypt"
       - "traefik.http.services.vk-app.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Grafana
   grafana:
