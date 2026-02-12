@@ -35,12 +35,28 @@ export interface IInlineButton {
  * Command result returned by command handlers
  */
 export interface ICommandResult {
+  /** Whether command executed successfully */
+  success?: boolean;
+  /** Message to send to user */
   message?: string;
+  /** Inline keyboard buttons */
   keyboard?: IInlineButton[][];
+  /** Reply keyboard buttons */
   replyKeyboard?: string[][];
+  /** Remove current keyboard */
   removeKeyboard?: boolean;
+  /** Next step in conversation */
   nextStep?: string;
+  /** Additional data */
   data?: Record<string, unknown>;
+  /** Command metadata */
+  metadata?: {
+    conversationComplete?: boolean;
+    hasCompletedOnboarding?: boolean;
+    conversationData?: Record<string, unknown>;
+    nextStep?: string;
+    [key: string]: unknown;
+  };
 }
 
 /**
@@ -58,7 +74,7 @@ export interface ICommand {
  */
 export interface IConversationCommand extends ICommand {
   steps: string[];
-  handleStep(ctx: unknown, step: string, input: string, data: Record<string, unknown>): Promise<ICommandResult>;
+  handleStep(ctx: unknown, step: string, data: Record<string, unknown>): Promise<ICommandResult>;
   handleCallback(ctx: unknown, callbackData: string, data: Record<string, unknown>): Promise<ICommandResult>;
 }
 

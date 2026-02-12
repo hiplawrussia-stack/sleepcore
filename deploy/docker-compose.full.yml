@@ -120,8 +120,8 @@ services:
   # VK Bot
   vk-bot:
     build:
-      context: ../vk-bot
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: vk-bot/Dockerfile
     container_name: sleepcore-vk-bot
     restart: unless-stopped
     environment:
