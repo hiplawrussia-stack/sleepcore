@@ -13,8 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { VKSleepCoreContext, createVKContext } from '../../src/platform/VKContext';
-import type { VKUser, VKCallbackPayload } from '../../src/platform/types';
-import type { ICommandResult, IInlineButton } from '../../../src/bot/commands/interfaces/ICommand';
+import type { VKUser, VKCallbackPayload, ICommandResult, IInlineButton } from '../../src/platform/types';
 
 // Mock MessageContext from vk-io
 function createMockVKContext(overrides: Partial<{

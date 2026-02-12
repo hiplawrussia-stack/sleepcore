@@ -23,16 +23,36 @@
 
 import { VK, type MessageContext, type MessageEventContext } from 'vk-io';
 import { SessionManager } from '@vk-io/session';
-import type { SleepCoreAPI } from '../../../src/SleepCoreAPI';
 import type {
+  SleepCoreAPI,
   ICommand,
   IConversationCommand,
   ICommandResult,
-} from '../../../src/bot/commands/interfaces/ICommand';
+  VKBotConfig,
+  VKSessionData,
+  VKCallbackPayload,
+} from '../platform/types';
 import { VKSleepCoreContext, createVKContext } from '../platform/VKContext';
 import { serializePayload } from '../platform/VKKeyboard';
-import type { VKBotConfig, VKSessionData, VKCallbackPayload } from '../platform/types';
-import type { ICrisisEvent, ICrisisResponse } from '../../../src/bot/services/CrisisDetectionService';
+
+/**
+ * Crisis event from CrisisDetectionService
+ */
+interface ICrisisEvent {
+  level: number;
+  confidence: number;
+  indicators: string[];
+  timestamp: Date;
+}
+
+/**
+ * Crisis response with resources
+ */
+interface ICrisisResponse {
+  shouldIntervene: boolean;
+  message?: string;
+  resources?: string[];
+}
 
 /**
  * Session context type for vk-io

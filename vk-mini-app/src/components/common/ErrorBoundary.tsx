@@ -40,8 +40,8 @@ import {
 } from '@vkontakte/icons';
 import { vk } from '@/services/vk';
 
-// Check if we're in development mode
-const isDevelopment = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
+// Check if we're in development mode (Vite uses import.meta.env)
+const isDevelopment = import.meta.env?.DEV === true;
 
 /**
  * Get error message from unknown error

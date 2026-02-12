@@ -13,8 +13,14 @@
  */
 
 import { Keyboard, type KeyboardBuilder } from 'vk-io';
-import type { IInlineButton, IReplyButton } from '../../../src/bot/commands/interfaces/ICommand';
-import type { VKKeyboard, VKKeyboardButton, VKCallbackPayload } from './types';
+import type { IInlineButton, VKKeyboard, VKKeyboardButton, VKCallbackPayload } from './types';
+
+/**
+ * Reply button for reply keyboards
+ */
+interface IReplyButton {
+  text: string;
+}
 
 /**
  * Convert SleepCore inline buttons to VK inline keyboard

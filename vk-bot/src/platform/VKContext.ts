@@ -14,14 +14,13 @@
  */
 
 import type { MessageContext, API } from 'vk-io';
-import type { SleepCoreAPI } from '../../../src/SleepCoreAPI';
 import type {
+  SleepCoreAPI,
+  ICommandResult,
   IVKSleepCoreContext,
   VKReplyOptions,
   VKUser,
-  VKSessionData,
 } from './types';
-import type { ICommandResult } from '../../../src/bot/commands/interfaces/ICommand';
 import {
   convertToVKInlineKeyboard,
   convertToVKReplyKeyboard,

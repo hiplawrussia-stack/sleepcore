@@ -9,7 +9,62 @@
  */
 
 import type { MessageContext } from 'vk-io';
-import type { SleepCoreAPI } from '../../../src/SleepCoreAPI';
+
+// ============================================================================
+// Shared Types (copied from main bot for standalone build)
+// ============================================================================
+
+/**
+ * SleepCore API interface (minimal for VK Bot)
+ */
+export interface SleepCoreAPI {
+  // Add methods as needed by VK Bot
+  [key: string]: unknown;
+}
+
+/**
+ * Inline button for keyboards
+ */
+export interface IInlineButton {
+  text: string;
+  callbackData?: string;
+  url?: string;
+}
+
+/**
+ * Command result returned by command handlers
+ */
+export interface ICommandResult {
+  message?: string;
+  keyboard?: IInlineButton[][];
+  replyKeyboard?: string[][];
+  removeKeyboard?: boolean;
+  nextStep?: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * Base command interface
+ */
+export interface ICommand {
+  name: string;
+  description: string;
+  aliases?: string[];
+  execute(ctx: unknown, args?: string): Promise<ICommandResult>;
+}
+
+/**
+ * Conversation command with multi-step flow
+ */
+export interface IConversationCommand extends ICommand {
+  steps: string[];
+  handleStep(ctx: unknown, step: string, input: string, data: Record<string, unknown>): Promise<ICommandResult>;
+  handleCallback(ctx: unknown, callbackData: string, data: Record<string, unknown>): Promise<ICommandResult>;
+}
+
+// ============================================================================
+// VK-specific Types
+// ============================================================================
 
 /**
  * VK user information from API

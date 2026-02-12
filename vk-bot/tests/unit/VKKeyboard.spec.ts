@@ -23,8 +23,11 @@ import {
   keyboardToObject,
   validateKeyboard,
 } from '../../src/platform/VKKeyboard';
-import type { IInlineButton, IReplyButton } from '../../../src/bot/commands/interfaces/ICommand';
-import type { VKCallbackPayload, VKKeyboard } from '../../src/platform/types';
+import type { IInlineButton, VKCallbackPayload, VKKeyboard } from '../../src/platform/types';
+
+interface IReplyButton {
+  text: string;
+}
 
 describe('VK Keyboard Converter', () => {
   describe('parseCallbackData', () => {
