@@ -211,10 +211,10 @@ describe('VK Context', () => {
         });
       });
 
-      it('should include keyboard in options', async () => {
+      it('should include VK keyboard via replyVK', async () => {
         const keyboard = { one_time: false, buttons: [] };
 
-        await context.reply('Выберите:', { keyboard: keyboard as any });
+        await context.replyVK('Выберите:', { keyboard: keyboard as any });
 
         expect(mockVKContext.send).toHaveBeenCalledWith({
           message: 'Выберите:',
@@ -222,8 +222,8 @@ describe('VK Context', () => {
         });
       });
 
-      it('should include attachments', async () => {
-        await context.reply('Смотри фото', {
+      it('should include attachments via replyVK', async () => {
+        await context.replyVK('Смотри фото', {
           attachments: ['photo123_456', 'photo789_012'],
         });
 
@@ -233,8 +233,8 @@ describe('VK Context', () => {
         });
       });
 
-      it('should disable mentions when specified', async () => {
-        await context.reply('Текст', { disableMentions: true });
+      it('should disable mentions via replyVK', async () => {
+        await context.replyVK('Текст', { disableMentions: true });
 
         expect(mockVKContext.send).toHaveBeenCalledWith({
           message: 'Текст',

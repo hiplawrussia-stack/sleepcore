@@ -102,10 +102,12 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
       - BOT_TOKEN=${BOT_TOKEN}
+      # VK Mini Apps sign verification
+      - VK_SECRET_KEY=${VK_SECRET_KEY}
       # PHI Encryption (HIPAA/GDPR Compliance) - REQUIRED
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
       - ENCRYPTION_MASTER_KEY_SALT=${ENCRYPTION_MASTER_KEY_SALT}
-      - CORS_ORIGIN=${CORS_ORIGIN:-https://app.${DOMAIN}}
+      - CORS_ORIGIN=${CORS_ORIGIN:-https://app.${DOMAIN},https://vk.${DOMAIN}}
       - TZ=Europe/Moscow
     networks:
       - sleepcore-network
@@ -114,12 +116,28 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
+      # Primary route: api.domain
       - "traefik.http.routers.api.rule=Host(`api.${DOMAIN}`)"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.api.loadbalancer.server.port=3001"
-      # Security headers
+      - "traefik.http.routers.api.service=api"
       - "traefik.http.routers.api.middlewares=security-headers,rate-limit"
+      # Alternative route: app.domain/api/* (for TG Mini App - Russia network)
+      - "traefik.http.routers.api-tg.rule=Host(`app.${DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api-tg.entrypoints=websecure"
+      - "traefik.http.routers.api-tg.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api-tg.service=api"
+      - "traefik.http.routers.api-tg.priority=100"
+      - "traefik.http.routers.api-tg.middlewares=security-headers,rate-limit"
+      # Alternative route: vk.domain/api/* (for VK Mini App - Russia network)
+      - "traefik.http.routers.api-vk.rule=Host(`vk.${DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api-vk.entrypoints=websecure"
+      - "traefik.http.routers.api-vk.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api-vk.service=api"
+      - "traefik.http.routers.api-vk.priority=100"
+      - "traefik.http.routers.api-vk.middlewares=security-headers,rate-limit"
+      # Service definition
+      - "traefik.http.services.api.loadbalancer.server.port=3001"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
       interval: 30s
@@ -150,6 +168,74 @@ services:
       - "traefik.http.services.mini-app.loadbalancer.server.port=80"
       # Security & caching
       - "traefik.http.routers.mini-app.middlewares=security-headers,compress"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  # ============================================
+  # VK Bot - VK Community Bot
+  # ============================================
+  vk-bot:
+    image: ghcr.io/${GITHUB_REPOSITORY}/vk-bot:${VK_BOT_VERSION:-latest}
+    container_name: sleepcore-vk-bot
+    restart: unless-stopped
+    init: true
+    environment:
+      - NODE_ENV=production
+      - VK_BOT_TOKEN=${VK_BOT_TOKEN}
+      - VK_GROUP_ID=${VK_GROUP_ID}
+      - DATABASE_URL=${DATABASE_URL}
+      # PHI Encryption (HIPAA/GDPR Compliance) - REQUIRED
+      - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
+      - ENCRYPTION_MASTER_KEY_SALT=${ENCRYPTION_MASTER_KEY_SALT}
+      # Crisis escalation admin IDs
+      - ADMIN_VK_USER_IDS=${ADMIN_VK_USER_IDS:-}
+      - TZ=Europe/Moscow
+    volumes:
+      - vk-bot-data:/app/data
+    networks:
+      - sleepcore-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=false"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ============================================
+  # VK Mini App - Static Frontend (Nginx)
+  # ============================================
+  vk-mini-app:
+    image: ghcr.io/${GITHUB_REPOSITORY}/vk-mini-app:${VK_MINIAPP_VERSION:-latest}
+    container_name: sleepcore-vk-mini-app
+    restart: unless-stopped
+    networks:
+      - sleepcore-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vk-mini-app.rule=Host(`vk.${DOMAIN}`)"
+      - "traefik.http.routers.vk-mini-app.entrypoints=websecure"
+      - "traefik.http.routers.vk-mini-app.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vk-mini-app.loadbalancer.server.port=80"
+      # Security & caching
+      - "traefik.http.routers.vk-mini-app.middlewares=security-headers,compress"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
       interval: 30s
@@ -233,3 +319,5 @@ volumes:
     name: sleepcore-redis-data
   bot-data:
     name: sleepcore-bot-data
+  vk-bot-data:
+    name: sleepcore-vk-bot-data

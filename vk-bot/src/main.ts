@@ -14,6 +14,7 @@
  */
 
 import 'dotenv/config';
+import { createServer, type Server } from 'http';
 import { VKBotAdapter } from './adapters/VKBotAdapter';
 import type { VKBotConfig, ISleepCoreAPI, ICommand } from './platform/types';
 
@@ -70,6 +71,8 @@ import { AdminCommand } from '../../src/bot/commands/AdminCommand';
  */
 class VKBotApp {
   private adapter: VKBotAdapter;
+  private healthServer: Server | null = null;
+  private readonly healthPort = parseInt(process.env.HEALTH_PORT || '3002', 10);
 
   constructor() {
     // Validate environment variables
@@ -195,10 +198,37 @@ class VKBotApp {
     console.log('[VK Bot] Initializing SleepCore VK Bot...');
     console.log(`[VK Bot] Group ID: ${this.adapter.groupId}`);
 
+    // Start health check server for Docker/Kubernetes
+    this.startHealthServer();
+
     await this.adapter.start();
 
     // Handle graceful shutdown
     this.setupShutdownHandlers();
+  }
+
+  /**
+   * Start HTTP health check server
+   * Required for Docker HEALTHCHECK and orchestration platforms
+   */
+  private startHealthServer(): void {
+    this.healthServer = createServer((req, res) => {
+      if (req.url === '/health' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          status: 'ok',
+          service: 'vk-bot',
+          timestamp: new Date().toISOString(),
+        }));
+      } else {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+
+    this.healthServer.listen(this.healthPort, () => {
+      console.log(`[VK Bot] Health server listening on port ${this.healthPort}`);
+    });
   }
 
   /**
@@ -207,6 +237,12 @@ class VKBotApp {
   private setupShutdownHandlers(): void {
     const shutdown = async (signal: string) => {
       console.log(`[VK Bot] Received ${signal}, shutting down...`);
+
+      // Close health server
+      if (this.healthServer) {
+        this.healthServer.close();
+      }
+
       await this.adapter.stop();
       process.exit(0);
     };
