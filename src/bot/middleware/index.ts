@@ -50,3 +50,16 @@ export type {
   ISecurityConfig,
   IReplyVerificationResult,
 } from './securityMiddleware';
+
+// ==================== AI Disclosure Middleware (NY Law / CA SB-243) ====================
+export {
+  createAIDisclosureMiddleware,
+  getAIDisclosureService,
+  DEFAULT_DISCLOSURE_MIDDLEWARE_CONFIG,
+} from './aiDisclosureMiddleware';
+
+export type {
+  AIDisclosureSessionData,
+  AIDisclosureContext,
+  IAIDisclosureMiddlewareConfig,
+} from './aiDisclosureMiddleware';

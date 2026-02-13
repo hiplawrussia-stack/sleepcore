@@ -90,6 +90,7 @@ import {
   stopRateLimiter,
   createSecurityMiddleware,
   securityAuditLog,
+  createAIDisclosureMiddleware,
 } from './bot/middleware';
 import {
   createProactiveNotificationService,
@@ -231,6 +232,12 @@ interface SessionData {
 
   /** First activity today (for daily greeting) */
   lastGreetingDate?: string;
+
+  /**
+   * Last AI disclosure timestamp (NY Law / CA SB-243 compliance)
+   * Disclosure required at start + every 3 hours
+   */
+  lastAiDisclosureAt?: Date;
 }
 
 /**
@@ -352,11 +359,18 @@ function createBot(config: BotConfigOutput, options?: CreateBotOptions): Bot<MyC
     storage: options?.sessionStorage,
   }));
 
-  // 4. Rate limiting middleware (OWASP 2025 best practice)
+  // 4. AI Disclosure middleware (NY Law / CA SB-243 compliance)
+  // Mandatory notification every 3 hours that user is interacting with AI
+  bot.use(createAIDisclosureMiddleware({
+    skipCommands: ['/start'], // /start has integrated onboarding disclosure
+    enableLogging: true,
+  }));
+
+  // 5. Rate limiting middleware (OWASP 2025 best practice)
   // Prevents command flooding and protects database from abuse
   bot.use(createRateLimitMiddleware());
 
-  // 5. Security middleware (OWASP 2025)
+  // 6. Security middleware (OWASP 2025)
   // - Session binding verification
   // - Input sanitization
   // - Security event logging

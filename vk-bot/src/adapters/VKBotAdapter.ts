@@ -37,6 +37,7 @@ import type {
 import { VKSleepCoreContext, createVKContext } from '../platform/VKContext';
 import { serializePayload } from '../platform/VKKeyboard';
 import { RedisStorage, createRedisStorage, type ISessionStorage } from '../storage';
+import { AIDisclosureService, createAIDisclosureService } from '../services';
 
 /**
  * Session context type for vk-io
@@ -57,6 +58,7 @@ export class VKBotAdapter {
   private sleepCore: ISleepCoreAPI;
   private config: VKBotConfig;
   private redisStorage: RedisStorage | null = null;
+  private aiDisclosureService: AIDisclosureService;
 
   constructor(config: VKBotConfig, sleepCore: ISleepCoreAPI) {
     this.config = config;
@@ -88,6 +90,12 @@ export class VKBotAdapter {
     }
 
     this.sessionManager = new SessionManager<VKSessionData>(sessionOptions);
+
+    // Initialize AI disclosure service (NY Law / CA SB-243 compliance)
+    this.aiDisclosureService = createAIDisclosureService({
+      defaultLanguage: 'ru',
+      logAllEvents: true,
+    });
   }
 
   /**
@@ -215,6 +223,12 @@ export class VKBotAdapter {
     const ctx = await createVKContext(context, this.sleepCore, this.vk.api);
 
     // =========================================================================
+    // NY LAW / CA SB-243: AI Disclosure (every 3 hours)
+    // Must run before any response to ensure compliance
+    // =========================================================================
+    await this.runAIDisclosure(ctx, session, context);
+
+    // =========================================================================
     // SAFETY FIRST: Crisis Detection (ALWAYS runs - cannot be disabled)
     // Research: Woebot model - show resources, don't block user interaction
     // =========================================================================
@@ -247,6 +261,59 @@ export class VKBotAdapter {
       await ctx.reply(
         'Привет! Я SleepCore бот. Используйте /start для начала или /help для списка команд.'
       );
+    }
+  }
+
+  /**
+   * Run AI disclosure check (NY Law / CA SB-243 compliance)
+   *
+   * Must notify user every 3 hours that they are interacting with AI.
+   * This is a legal requirement effective Nov 5, 2025 (NY) and Jan 1, 2026 (CA).
+   *
+   * Non-fatal: errors are logged but don't block operation.
+   */
+  private async runAIDisclosure(
+    ctx: VKSleepCoreContext,
+    session: VKSessionData,
+    vkContext: MessageContext
+  ): Promise<void> {
+    try {
+      const userId = String(vkContext.senderId || '');
+      const chatId = String(vkContext.peerId || '');
+      const language = session.language || 'ru';
+
+      // Skip for /start command (has its own onboarding disclosure)
+      const text = vkContext.text?.trim() || '';
+      if (text.toLowerCase().startsWith('/start')) {
+        return;
+      }
+
+      // Check if disclosure is needed
+      const checkResult = this.aiDisclosureService.checkDisclosure(
+        session.lastAiDisclosureAt,
+        language
+      );
+
+      if (checkResult.shouldDisclose && checkResult.message) {
+        // Send disclosure message
+        await ctx.reply(checkResult.message);
+
+        // Update session with new disclosure timestamp
+        session.lastAiDisclosureAt = Date.now();
+
+        // Record event for audit trail
+        this.aiDisclosureService.recordDisclosure(
+          userId,
+          chatId,
+          checkResult.reason === 'initial' ? 'initial' : 'periodic',
+          language
+        );
+
+        console.log(`[VK AIDisclosure] Sent ${checkResult.reason} disclosure to user ${userId}`);
+      }
+    } catch (error) {
+      // AI disclosure errors should not block normal operation
+      console.error('[VK AIDisclosure] Error (non-fatal):', error);
     }
   }
 

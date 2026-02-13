@@ -142,6 +142,12 @@ export interface VKSessionData {
 
   /** User's preferred language */
   language: 'ru' | 'en';
+
+  /**
+   * Last AI disclosure timestamp (NY Law / CA SB-243 compliance)
+   * Disclosure required at start + every 3 hours
+   */
+  lastAiDisclosureAt?: number;
 }
 
 /**

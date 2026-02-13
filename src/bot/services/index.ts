@@ -211,6 +211,22 @@ export type {
   IExportAuditEntry,
 } from './AnonymizedDataExportService';
 
+// ==================== AI Disclosure (NY Law / CA SB-243 Compliance) ====================
+export {
+  AIDisclosureService,
+  createAIDisclosureService,
+  aiDisclosureService,
+  DEFAULT_AI_DISCLOSURE_CONFIG,
+  DISCLOSURE_INTERVAL_MS,
+  DISCLOSURE_INTERVAL_HOURS,
+} from './AIDisclosureService';
+
+export type {
+  IAIDisclosureEvent,
+  IAIDisclosureConfig,
+  IDisclosureCheckResult,
+} from './AIDisclosureService';
+
 // ==================== Crisis Detection (Phase 1.4 Safety) ====================
 export {
   CrisisDetectionService,
