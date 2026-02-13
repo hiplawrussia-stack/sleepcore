@@ -15,11 +15,16 @@
 
 import 'dotenv/config';
 import { VKBotAdapter } from './adapters/VKBotAdapter';
-import type { VKBotConfig } from './platform/types';
+import type { VKBotConfig, ISleepCoreAPI, ICommand } from './platform/types';
 
 // Import SleepCore API and commands from main bot
 // These will be resolved via workspace linking
 import { sleepCore } from '../../src/SleepCoreAPI';
+
+// Type assertion helper for commands that use Grammy Context
+// TODO: Phase 3 - Update commands to use platform-independent ISleepCoreContext
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const asCommand = (cmd: any): ICommand => cmd as ICommand;
 
 // Core commands
 import { StartCommand } from '../../src/bot/commands/StartCommand';
@@ -79,7 +84,8 @@ class VKBotApp {
     };
 
     // Initialize adapter
-    this.adapter = new VKBotAdapter(config, sleepCore);
+    // Type assertion: SleepCoreAPI implements ISleepCoreAPI methods
+    this.adapter = new VKBotAdapter(config, sleepCore as unknown as ISleepCoreAPI);
 
     // Register all commands
     this.registerCommands();
@@ -118,44 +124,45 @@ class VKBotApp {
    */
   private registerCommands(): void {
     // ==================== Core Commands (5) ====================
-    this.adapter.register(new StartCommand());
-    this.adapter.register(new HelpCommand());
-    this.adapter.register(new DiaryCommand());
-    this.adapter.register(new TherapyCommand());
-    this.adapter.register(new TodayCommand());
+    // TODO: Phase 3 - Update commands to use platform-independent ISleepCoreContext
+    this.adapter.register(asCommand(new StartCommand()));
+    this.adapter.register(asCommand(new HelpCommand()));
+    this.adapter.register(asCommand(new DiaryCommand()));
+    this.adapter.register(asCommand(new TherapyCommand()));
+    this.adapter.register(asCommand(new TodayCommand()));
 
     // ==================== Gamification Commands (4) ====================
-    this.adapter.register(new BadgeCommand());
-    this.adapter.register(new QuestCommand());
-    this.adapter.register(new EvolutionCommand());
-    this.adapter.register(new ProgressCommand());
+    this.adapter.register(asCommand(new BadgeCommand()));
+    this.adapter.register(asCommand(new QuestCommand()));
+    this.adapter.register(asCommand(new EvolutionCommand()));
+    this.adapter.register(asCommand(new ProgressCommand()));
 
     // ==================== Therapy Commands (5) ====================
-    this.adapter.register(new RelaxCommand());
-    this.adapter.register(new MindfulCommand());
-    this.adapter.register(new SmartTipsCommand());
-    this.adapter.register(new RecallCommand());
-    this.adapter.register(new RehearsalCommand());
+    this.adapter.register(asCommand(new RelaxCommand()));
+    this.adapter.register(asCommand(new MindfulCommand()));
+    this.adapter.register(asCommand(new SmartTipsCommand()));
+    this.adapter.register(asCommand(new RecallCommand()));
+    this.adapter.register(asCommand(new RehearsalCommand()));
 
     // ==================== User Commands (2) ====================
-    this.adapter.register(new ProfileCommand());
-    this.adapter.register(new ChronotypeCommand());
+    this.adapter.register(asCommand(new ProfileCommand()));
+    this.adapter.register(asCommand(new ChronotypeCommand()));
 
     // ==================== AI/ML Commands (5) ====================
-    this.adapter.register(new PredictCommand());
-    this.adapter.register(new TwinCommand());
-    this.adapter.register(new WhatIfCommand());
-    this.adapter.register(new InsightsCommand());
-    this.adapter.register(new ExplainCommand());
+    this.adapter.register(asCommand(new PredictCommand()));
+    this.adapter.register(asCommand(new TwinCommand()));
+    this.adapter.register(asCommand(new WhatIfCommand()));
+    this.adapter.register(asCommand(new InsightsCommand()));
+    this.adapter.register(asCommand(new ExplainCommand()));
 
     // ==================== Safety Commands (3) - CRITICAL ====================
     // These commands MUST always be registered - crisis detection depends on them
-    this.adapter.register(new SosCommand());
-    this.adapter.register(new SafetyCommand());
-    this.adapter.register(new AEReportCommand());
+    this.adapter.register(asCommand(new SosCommand()));
+    this.adapter.register(asCommand(new SafetyCommand()));
+    this.adapter.register(asCommand(new AEReportCommand()));
 
     // ==================== Admin Commands (1) ====================
-    this.adapter.register(new AdminCommand());
+    this.adapter.register(asCommand(new AdminCommand()));
 
     console.log('[VK Bot] Registered commands:', this.adapter['commands'].size);
 

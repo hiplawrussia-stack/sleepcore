@@ -24,35 +24,18 @@
 import { VK, type MessageContext, type MessageEventContext } from 'vk-io';
 import { SessionManager } from '@vk-io/session';
 import type {
-  SleepCoreAPI,
   ICommand,
   IConversationCommand,
   ICommandResult,
+  ICrisisEvent,
+  ICrisisResponse,
+  ISleepCoreAPI,
   VKBotConfig,
   VKSessionData,
   VKCallbackPayload,
 } from '../platform/types';
 import { VKSleepCoreContext, createVKContext } from '../platform/VKContext';
 import { serializePayload } from '../platform/VKKeyboard';
-
-/**
- * Crisis event from CrisisDetectionService
- */
-interface ICrisisEvent {
-  level: number;
-  confidence: number;
-  indicators: string[];
-  timestamp: Date;
-}
-
-/**
- * Crisis response with resources
- */
-interface ICrisisResponse {
-  shouldIntervene: boolean;
-  message?: string;
-  resources?: string[];
-}
 
 /**
  * Session context type for vk-io
@@ -70,10 +53,10 @@ export class VKBotAdapter {
   private sessionManager: SessionManager<VKSessionData>;
   private commands: Map<string, ICommand> = new Map();
   private aliases: Map<string, string> = new Map();
-  private sleepCore: SleepCoreAPI;
+  private sleepCore: ISleepCoreAPI;
   private config: VKBotConfig;
 
-  constructor(config: VKBotConfig, sleepCore: SleepCoreAPI) {
+  constructor(config: VKBotConfig, sleepCore: ISleepCoreAPI) {
     this.config = config;
     this.sleepCore = sleepCore;
 

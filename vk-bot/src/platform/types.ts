@@ -4,79 +4,35 @@
  * Type definitions for VK Bot platform integration.
  * Maps VK concepts to SleepCore abstractions.
  *
+ * Uses @sleepcore/core for shared interfaces.
+ *
  * @packageDocumentation
  * @module @sleepcore/vk-bot/platform
  */
 
 import type { MessageContext } from 'vk-io';
+import type { ISleepCoreContext as CoreSleepCoreContext } from '@sleepcore/core';
 
 // ============================================================================
-// Shared Types (copied from main bot for standalone build)
+// Re-export shared types from @sleepcore/core
 // ============================================================================
 
-/**
- * SleepCore API interface (minimal for VK Bot)
- */
-export interface SleepCoreAPI {
-  // Add methods as needed by VK Bot
-  [key: string]: unknown;
-}
+export type {
+  ICommand,
+  IConversationCommand,
+  ICommandResult,
+  ICommandMetadata,
+  IInlineButton,
+  IReplyButton,
+  IReplyOptions,
+  ISleepCoreAPI,
+  ISleepCoreContext,
+  ICrisisResponse,
+  ICrisisEvent,
+} from '@sleepcore/core';
 
-/**
- * Inline button for keyboards
- */
-export interface IInlineButton {
-  text: string;
-  callbackData?: string;
-  url?: string;
-}
-
-/**
- * Command result returned by command handlers
- */
-export interface ICommandResult {
-  /** Whether command executed successfully */
-  success?: boolean;
-  /** Message to send to user */
-  message?: string;
-  /** Inline keyboard buttons */
-  keyboard?: IInlineButton[][];
-  /** Reply keyboard buttons */
-  replyKeyboard?: string[][];
-  /** Remove current keyboard */
-  removeKeyboard?: boolean;
-  /** Next step in conversation */
-  nextStep?: string;
-  /** Additional data */
-  data?: Record<string, unknown>;
-  /** Command metadata */
-  metadata?: {
-    conversationComplete?: boolean;
-    hasCompletedOnboarding?: boolean;
-    conversationData?: Record<string, unknown>;
-    nextStep?: string;
-    [key: string]: unknown;
-  };
-}
-
-/**
- * Base command interface
- */
-export interface ICommand {
-  name: string;
-  description: string;
-  aliases?: string[];
-  execute(ctx: unknown, args?: string): Promise<ICommandResult>;
-}
-
-/**
- * Conversation command with multi-step flow
- */
-export interface IConversationCommand extends ICommand {
-  steps: string[];
-  handleStep(ctx: unknown, step: string, data: Record<string, unknown>): Promise<ICommandResult>;
-  handleCallback(ctx: unknown, callbackData: string, data: Record<string, unknown>): Promise<ICommandResult>;
-}
+// Alias for backwards compatibility (deprecated)
+export type { ISleepCoreAPI as SleepCoreAPI } from '@sleepcore/core';
 
 // ============================================================================
 // VK-specific Types
@@ -98,31 +54,20 @@ export interface VKUser {
 
 /**
  * Extended VK context for SleepCore commands
- * Platform-agnostic interface matching ISleepCoreContext
+ *
+ * @deprecated Use ISleepCoreContext from @sleepcore/core instead.
+ * VKSleepCoreContext now implements ISleepCoreContext directly.
+ * This interface is kept for backward compatibility only.
  */
-export interface IVKSleepCoreContext {
-  /** User ID (VK user ID as string) */
-  readonly userId: string;
-
-  /** Peer ID (chat/conversation ID) */
-  readonly chatId: number;
-
-  /** User's display name */
-  readonly displayName: string;
-
-  /** User's language code (default 'ru' for VK) */
-  readonly languageCode: string;
-
-  /** SleepCore API instance */
-  readonly sleepCore: SleepCoreAPI;
-
-  /** Original VK context */
+export interface IVKSleepCoreContext extends CoreSleepCoreContext {
+  /** Original VK context (VK-specific extension) */
   readonly vkContext: MessageContext;
 
   /**
-   * Reply to user message
+   * Reply with VK-specific options
+   * @deprecated Use reply(text, IReplyOptions) instead
    */
-  reply(text: string, options?: VKReplyOptions): Promise<void>;
+  replyVK?(text: string, options?: VKReplyOptions): Promise<void>;
 }
 
 /**
