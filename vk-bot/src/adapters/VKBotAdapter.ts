@@ -36,6 +36,7 @@ import type {
 } from '../platform/types';
 import { VKSleepCoreContext, createVKContext } from '../platform/VKContext';
 import { serializePayload } from '../platform/VKKeyboard';
+import { RedisStorage, createRedisStorage, type ISessionStorage } from '../storage';
 
 /**
  * Session context type for vk-io
@@ -55,6 +56,7 @@ export class VKBotAdapter {
   private aliases: Map<string, string> = new Map();
   private sleepCore: ISleepCoreAPI;
   private config: VKBotConfig;
+  private redisStorage: RedisStorage | null = null;
 
   constructor(config: VKBotConfig, sleepCore: ISleepCoreAPI) {
     this.config = config;
@@ -66,10 +68,57 @@ export class VKBotAdapter {
       apiVersion: config.apiVersion || '5.199',
     });
 
-    // Initialize session manager
-    this.sessionManager = new SessionManager<VKSessionData>({
+    // Initialize session storage (Redis with fallback to memory)
+    this.redisStorage = this.initializeRedisStorage();
+
+    // Initialize session manager with storage
+    const sessionOptions: {
+      getStorageKey: (context: MessageContext) => string;
+      storage?: ISessionStorage;
+    } = {
       getStorageKey: (context) => `user_${context.senderId}`,
-    });
+    };
+
+    // Use Redis storage if available
+    if (this.redisStorage) {
+      sessionOptions.storage = this.redisStorage;
+      console.log('[VK Bot] Using Redis for persistent sessions');
+    } else {
+      console.log('[VK Bot] Using in-memory sessions (sessions will be lost on restart)');
+    }
+
+    this.sessionManager = new SessionManager<VKSessionData>(sessionOptions);
+  }
+
+  /**
+   * Initialize Redis storage with graceful fallback
+   * Returns null if Redis is not configured or unavailable
+   */
+  private initializeRedisStorage(): RedisStorage | null {
+    const redisUrl = this.config.redisUrl || process.env.REDIS_URL;
+
+    if (!redisUrl) {
+      console.log('[VK Bot] REDIS_URL not configured, using in-memory sessions');
+      return null;
+    }
+
+    try {
+      const storage = createRedisStorage({
+        url: redisUrl,
+        keyPrefix: 'sleepcore:vk-session:',
+        ttl: 86400, // 24 hours
+      });
+
+      if (storage) {
+        console.log('[VK Bot] Redis storage initialized successfully');
+      }
+
+      return storage;
+    } catch (error) {
+      console.error('[VK Bot] Failed to initialize Redis storage:', error);
+      console.log('[VK Bot] Falling back to in-memory sessions');
+      return null;
+    }
   }
 
   /**
@@ -140,7 +189,15 @@ export class VKBotAdapter {
    */
   async stop(): Promise<void> {
     console.log('[VK Bot] Stopping...');
+
+    // Stop VK updates
     await this.vk.updates.stop();
+
+    // Close Redis connection gracefully
+    if (this.redisStorage) {
+      await this.redisStorage.close();
+    }
+
     console.log('[VK Bot] Stopped');
   }
 

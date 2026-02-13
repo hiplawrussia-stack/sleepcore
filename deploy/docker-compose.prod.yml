@@ -191,6 +191,8 @@ services:
       - VK_BOT_TOKEN=${VK_BOT_TOKEN}
       - VK_GROUP_ID=${VK_GROUP_ID}
       - DATABASE_URL=${DATABASE_URL}
+      # Redis for persistent sessions
+      - REDIS_URL=redis://redis:6379
       # PHI Encryption (HIPAA/GDPR Compliance) - REQUIRED
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
       - ENCRYPTION_MASTER_KEY_SALT=${ENCRYPTION_MASTER_KEY_SALT}

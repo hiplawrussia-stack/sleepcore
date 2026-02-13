@@ -165,4 +165,12 @@ export interface VKBotConfig {
 
   /** Admin VK user IDs for crisis escalation */
   adminUserIds?: number[];
+
+  /**
+   * Redis URL for persistent sessions
+   * If not provided, falls back to REDIS_URL env variable
+   * If neither available, uses in-memory storage
+   * @example 'redis://localhost:6379'
+   */
+  redisUrl?: string;
 }
