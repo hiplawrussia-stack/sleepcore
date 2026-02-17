@@ -162,24 +162,43 @@ function runMigrations(sqlite: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_sync_user_timestamp ON api_sync_log(user_id, timestamp);
     CREATE INDEX IF NOT EXISTS idx_daily_stats_user_date ON api_daily_stats(user_id, date);
 
-    -- Wearable Devices table
+    -- Wearable Link Codes table (RFC 8628 Device Authorization)
+    CREATE TABLE IF NOT EXISTS api_wearable_link_codes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES api_users(id),
+      telegram_id INTEGER NOT NULL,
+      user_code TEXT NOT NULL UNIQUE,
+      device_code TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      used_by_device_id TEXT,
+      attempts INTEGER DEFAULT 0,
+      last_attempt_at TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    -- Wearable Devices table (RFC 8628 compliant)
     CREATE TABLE IF NOT EXISTS api_wearable_devices (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES api_users(id),
       telegram_id INTEGER NOT NULL,
-      device_id TEXT NOT NULL UNIQUE,
+      device_id TEXT NOT NULL,
       device_name TEXT,
       manufacturer TEXT,
       model TEXT,
       os_version TEXT,
       app_version TEXT,
-      device_token TEXT NOT NULL UNIQUE,
-      token_expires_at TEXT,
-      link_code TEXT UNIQUE,
-      link_code_expires_at TEXT,
-      linked_at TEXT,
+      access_token TEXT NOT NULL UNIQUE,
+      access_token_expires_at TEXT NOT NULL,
+      refresh_token TEXT NOT NULL UNIQUE,
+      refresh_token_expires_at TEXT NOT NULL,
+      token_family TEXT NOT NULL,
+      linked_at TEXT NOT NULL,
       is_active INTEGER DEFAULT 1,
+      is_primary INTEGER DEFAULT 0,
       last_sync_at TEXT,
+      deactivated_at TEXT,
+      deactivation_reason TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -234,10 +253,17 @@ function runMigrations(sqlite: Database.Database): void {
       data_to_time TEXT
     );
 
-    -- Wearable indexes
+    -- Wearable Link Codes indexes
+    CREATE INDEX IF NOT EXISTS idx_link_codes_user_id ON api_wearable_link_codes(user_id);
+    CREATE INDEX IF NOT EXISTS idx_link_codes_user_code ON api_wearable_link_codes(user_code);
+    CREATE INDEX IF NOT EXISTS idx_link_codes_device_code ON api_wearable_link_codes(device_code);
+    CREATE INDEX IF NOT EXISTS idx_link_codes_expires_at ON api_wearable_link_codes(expires_at);
+
+    -- Wearable Devices indexes
     CREATE INDEX IF NOT EXISTS idx_wearable_devices_user_id ON api_wearable_devices(user_id);
     CREATE INDEX IF NOT EXISTS idx_wearable_devices_telegram_id ON api_wearable_devices(telegram_id);
-    CREATE INDEX IF NOT EXISTS idx_wearable_devices_link_code ON api_wearable_devices(link_code);
+    CREATE INDEX IF NOT EXISTS idx_wearable_devices_token_family ON api_wearable_devices(token_family);
+    CREATE UNIQUE INDEX IF NOT EXISTS device_user_idx ON api_wearable_devices(device_id, user_id);
     CREATE INDEX IF NOT EXISTS idx_wearable_sessions_user_id ON api_wearable_sleep_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_wearable_sessions_device_id ON api_wearable_sleep_sessions(device_id);
     CREATE INDEX IF NOT EXISTS idx_wearable_sessions_start_time ON api_wearable_sleep_sessions(start_time);
@@ -298,6 +324,81 @@ function runMigrations(sqlite: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_oura_sync_log_connection_id ON api_oura_sync_log(connection_id);
     CREATE INDEX IF NOT EXISTS idx_oura_oauth_states_expires ON api_oura_oauth_states(expires_at);
   `);
+
+  // Migration: Update wearable_devices table to new RFC 8628 schema
+  migrateWearableDevices(sqlite);
+}
+
+/**
+ * Migrate wearable_devices table to RFC 8628 schema
+ */
+function migrateWearableDevices(sqlite: Database.Database): void {
+  // Check if migration is needed by looking for access_token column
+  const tableInfo = sqlite.prepare(`PRAGMA table_info(api_wearable_devices)`).all() as Array<{ name: string }>;
+  const hasAccessToken = tableInfo.some(col => col.name === 'access_token');
+
+  if (hasAccessToken) {
+    // Already migrated
+    return;
+  }
+
+  // Check if old table exists
+  const hasDeviceToken = tableInfo.some(col => col.name === 'device_token');
+
+  if (!hasDeviceToken) {
+    // Table doesn't exist or is empty, nothing to migrate
+    return;
+  }
+
+  console.log('[Migration] Migrating wearable_devices to RFC 8628 schema...');
+
+  // SQLite doesn't support DROP COLUMN or ALTER COLUMN, so we need to recreate the table
+  // Since we're changing to a new auth flow, old devices need to re-link anyway
+
+  sqlite.exec(`
+    -- Create new table with RFC 8628 schema
+    CREATE TABLE IF NOT EXISTS api_wearable_devices_new (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES api_users(id),
+      telegram_id INTEGER NOT NULL,
+      device_id TEXT NOT NULL,
+      device_name TEXT,
+      manufacturer TEXT,
+      model TEXT,
+      os_version TEXT,
+      app_version TEXT,
+      access_token TEXT NOT NULL UNIQUE,
+      access_token_expires_at TEXT NOT NULL,
+      refresh_token TEXT NOT NULL UNIQUE,
+      refresh_token_expires_at TEXT NOT NULL,
+      token_family TEXT NOT NULL,
+      linked_at TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      is_primary INTEGER DEFAULT 0,
+      last_sync_at TEXT,
+      deactivated_at TEXT,
+      deactivation_reason TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    -- Drop old table (devices will need to re-link with new auth flow)
+    DROP TABLE IF EXISTS api_wearable_devices;
+
+    -- Rename new table
+    ALTER TABLE api_wearable_devices_new RENAME TO api_wearable_devices;
+
+    -- Remove old unique index if exists
+    DROP INDEX IF EXISTS idx_wearable_devices_link_code;
+
+    -- Create new indexes
+    CREATE INDEX IF NOT EXISTS idx_wearable_devices_user_id ON api_wearable_devices(user_id);
+    CREATE INDEX IF NOT EXISTS idx_wearable_devices_telegram_id ON api_wearable_devices(telegram_id);
+    CREATE INDEX IF NOT EXISTS idx_wearable_devices_token_family ON api_wearable_devices(token_family);
+    CREATE UNIQUE INDEX IF NOT EXISTS device_user_idx ON api_wearable_devices(device_id, user_id);
+  `);
+
+  console.log('[Migration] wearable_devices migration complete. Devices need to re-link.');
 }
 
 export { schema, wearableSchema };
