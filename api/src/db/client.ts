@@ -80,6 +80,7 @@ function runMigrations(sqlite: Database.Database): void {
   // Run schema migrations BEFORE CREATE TABLE statements
   // This handles updating existing tables that need schema changes
   migrateWearableDevices(sqlite);
+  migrateUsersAddVkId(sqlite);
 
   // Create tables if they don't exist
   sqlite.exec(`
@@ -401,6 +402,23 @@ function migrateWearableDevices(sqlite: Database.Database): void {
   `);
 
   console.log('[Migration] wearable_devices migration complete. Devices need to re-link.');
+}
+
+/**
+ * Add vk_id column to users table if it doesn't exist
+ */
+function migrateUsersAddVkId(sqlite: Database.Database): void {
+  const tableInfo = sqlite.prepare(`PRAGMA table_info(api_users)`).all() as Array<{ name: string }>;
+  const hasVkId = tableInfo.some(col => col.name === 'vk_id');
+
+  if (hasVkId || tableInfo.length === 0) {
+    // Already has vk_id or table doesn't exist yet
+    return;
+  }
+
+  console.log('[Migration] Adding vk_id column to api_users...');
+  sqlite.exec(`ALTER TABLE api_users ADD COLUMN vk_id INTEGER UNIQUE`);
+  console.log('[Migration] vk_id column added.');
 }
 
 export { schema, wearableSchema };
