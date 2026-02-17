@@ -11,3 +11,4 @@ export { default as syncRoutes } from './sync.js';
 export { default as healthRoutes, setInitialized } from './health.js';
 export { default as wearableRoutes } from './wearable.js';
 export { default as leaderboardRoutes } from './leaderboard.js';
+export { ouraRoutes } from '../integrations/oura/index.js';

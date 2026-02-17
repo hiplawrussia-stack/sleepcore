@@ -8,9 +8,10 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema.js';
 import * as wearableSchema from './wearable-schema.js';
+import * as ouraSchema from '../integrations/oura/schema.js';
 
 // Combined schema for Drizzle query builder
-const combinedSchema = { ...schema, ...wearableSchema };
+const combinedSchema = { ...schema, ...wearableSchema, ...ouraSchema };
 
 let db: ReturnType<typeof drizzle<typeof combinedSchema>> | null = null;
 let sqlite: Database.Database | null = null;
@@ -241,6 +242,61 @@ function runMigrations(sqlite: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_wearable_sessions_device_id ON api_wearable_sleep_sessions(device_id);
     CREATE INDEX IF NOT EXISTS idx_wearable_sessions_start_time ON api_wearable_sleep_sessions(start_time);
     CREATE INDEX IF NOT EXISTS idx_wearable_sync_log_device_id ON api_wearable_sync_log(device_id);
+
+    -- Oura Ring Connections table
+    CREATE TABLE IF NOT EXISTS api_oura_connections (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE REFERENCES api_users(id),
+      telegram_id INTEGER NOT NULL,
+      oura_user_id TEXT,
+      oura_email TEXT,
+      access_token TEXT NOT NULL,
+      refresh_token TEXT NOT NULL,
+      token_expires_at TEXT NOT NULL,
+      scopes_granted TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      last_sync_at TEXT,
+      last_sync_status TEXT,
+      last_sync_error TEXT,
+      sync_enabled INTEGER DEFAULT 1,
+      last_synced_date TEXT,
+      connected_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    -- Oura Sync Log table
+    CREATE TABLE IF NOT EXISTS api_oura_sync_log (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES api_users(id),
+      connection_id TEXT NOT NULL REFERENCES api_oura_connections(id),
+      sync_type TEXT NOT NULL,
+      date_range_start TEXT NOT NULL,
+      date_range_end TEXT NOT NULL,
+      sessions_received INTEGER DEFAULT 0,
+      sessions_processed INTEGER DEFAULT 0,
+      sessions_skipped INTEGER DEFAULT 0,
+      sync_started_at TEXT NOT NULL,
+      sync_completed_at TEXT,
+      duration_ms INTEGER,
+      status TEXT DEFAULT 'pending',
+      error_message TEXT,
+      errors_json TEXT
+    );
+
+    -- Oura OAuth States table (temporary, for CSRF protection)
+    CREATE TABLE IF NOT EXISTS api_oura_oauth_states (
+      state TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES api_users(id),
+      telegram_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+
+    -- Oura indexes
+    CREATE INDEX IF NOT EXISTS idx_oura_connections_user_id ON api_oura_connections(user_id);
+    CREATE INDEX IF NOT EXISTS idx_oura_sync_log_user_id ON api_oura_sync_log(user_id);
+    CREATE INDEX IF NOT EXISTS idx_oura_sync_log_connection_id ON api_oura_sync_log(connection_id);
+    CREATE INDEX IF NOT EXISTS idx_oura_oauth_states_expires ON api_oura_oauth_states(expires_at);
   `);
 }
 

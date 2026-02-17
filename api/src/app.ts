@@ -34,6 +34,7 @@ import {
   healthRoutes,
   wearableRoutes,
   leaderboardRoutes,
+  ouraRoutes,
 } from './routes/index.js';
 
 export interface AppConfig {
@@ -154,6 +155,7 @@ export function createApp(config: AppConfig): Hono {
   app.route('/api/sync', syncRoutes);
   app.route('/api/wearable', wearableRoutes);
   app.route('/api/leaderboard', leaderboardRoutes);
+  app.route('/api/oura', ouraRoutes);
 
   // Root endpoint
   app.get('/', (c) => {
