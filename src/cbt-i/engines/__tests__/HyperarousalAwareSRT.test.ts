@@ -329,7 +329,8 @@ describe('HyperarousalAwareSRT', () => {
 
     it('should add somatic therapies for somatic arousal', () => {
       const sleepHistory = createSleepHistory(7);
-      const psasScores = { cognitive: 15, somatic: 28 };
+      // cognitive=12, somatic=35 → total=47 (high), somNorm=2.5 > cogNorm=0.6 → somatic dominant
+      const psasScores = { cognitive: 12, somatic: 35 };
       const screening = srt.screenForEligibility({});
       const profile = srt.createHyperarousalProfile(psasScores, sleepHistory);
 

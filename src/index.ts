@@ -88,6 +88,18 @@ export type {
 // ============= CBT-I Engines =============
 export { CBTIEngine } from './cbt-i/engines/CBTIEngine';
 export { SleepRestrictionEngine } from './cbt-i/engines/SleepRestrictionEngine';
+export {
+  HyperarousalAwareSRT,
+  createHyperarousalAwareSRT,
+  DEFAULT_HYPERAROUSAL_SRT_CONFIG,
+  type IHyperarousalSRTConfig,
+  type ISRTScreeningResult,
+  type IHyperarousalProfile,
+  type IHyperarousalAwarePrescription,
+  type InsomniaPhenotype,
+  type HyperarousalLevel,
+  type SRTContraindication,
+} from './cbt-i/engines/HyperarousalAwareSRT';
 export { StimulusControlEngine } from './cbt-i/engines/StimulusControlEngine';
 export { CognitiveRestructuringEngine } from './cbt-i/engines/CognitiveRestructuringEngine';
 export { SleepHygieneEngine } from './cbt-i/engines/SleepHygieneEngine';

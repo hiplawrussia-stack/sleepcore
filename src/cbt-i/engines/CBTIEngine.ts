@@ -42,6 +42,10 @@ import { CognitiveRestructuringEngine } from './CognitiveRestructuringEngine';
 import { SleepHygieneEngine } from './SleepHygieneEngine';
 import { RelaxationEngine } from './RelaxationEngine';
 import {
+  HyperarousalAwareSRT,
+  createHyperarousalAwareSRT,
+} from './HyperarousalAwareSRT';
+import {
   SleepCoreAdapter,
   createSleepCoreAdapter,
   type ISleepInterventionSelection,
@@ -106,6 +110,7 @@ export interface ICBTIEngineConfig {
  */
 export class CBTIEngine implements ICBTIEngine {
   private readonly sleepRestriction: SleepRestrictionEngine;
+  private readonly hyperarousalAwareSRT: HyperarousalAwareSRT;
   private readonly stimulusControl: StimulusControlEngine;
   private readonly cognitiveRestructuring: CognitiveRestructuringEngine;
   private readonly sleepHygiene: SleepHygieneEngine;
@@ -128,6 +133,7 @@ export class CBTIEngine implements ICBTIEngine {
     };
 
     this.sleepRestriction = new SleepRestrictionEngine();
+    this.hyperarousalAwareSRT = createHyperarousalAwareSRT();
     this.stimulusControl = new StimulusControlEngine();
     this.cognitiveRestructuring = new CognitiveRestructuringEngine();
     this.sleepHygiene = new SleepHygieneEngine();
@@ -191,6 +197,21 @@ export class CBTIEngine implements ICBTIEngine {
    */
   getSleepRestrictionEngine(): SleepRestrictionEngine {
     return this.sleepRestriction;
+  }
+
+  /**
+   * Get Hyperarousal-Aware SRT Engine for patients with high arousal
+   *
+   * Use this engine when:
+   * - PSAS cognitive ≥ 20 or somatic ≥ 14
+   * - HRV indicates high sympathetic activation (low RMSSD)
+   * - Patient has ISSD phenotype (TST < 6h)
+   * - Bipolar disorder requires TIB ≥ 6.5h (Harvey CBT-iBD)
+   *
+   * Research basis: Riemann 2024-2025, Spiegelhalder et al. 2024
+   */
+  getHyperarousalAwareSRTEngine(): HyperarousalAwareSRT {
+    return this.hyperarousalAwareSRT;
   }
 
   /**

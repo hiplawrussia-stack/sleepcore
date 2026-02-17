@@ -536,7 +536,7 @@ export class HyperarousalAwareSRT {
       minimumTIB: screening.minimumTIB,
       hyperarousalProfile: profile,
       appliedModifications,
-      complementaryTherapies: [...new Set(complementaryTherapies)], // Dedupe
+      complementaryTherapies: Array.from(new Set(complementaryTherapies)), // Dedupe
       safetyWarnings,
     };
   }

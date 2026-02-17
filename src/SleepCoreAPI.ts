@@ -1815,6 +1815,21 @@ export class SleepCoreAPI {
     return arousalAssessmentService.estimateArousalProfile(sleepHistory);
   }
 
+  /**
+   * Get HyperarousalAwareSRT engine for patients with high arousal
+   *
+   * Use for:
+   * - PSAS cognitive ≥ 20 or somatic ≥ 14
+   * - ISSD phenotype (TST < 6h)
+   * - Bipolar disorder (TIB ≥ 6.5h per Harvey CBT-iBD)
+   * - HRV indicating high sympathetic activation
+   *
+   * Research: Riemann 2024-2025, Spiegelhalder et al. 2024
+   */
+  getHyperarousalAwareSRTEngine() {
+    return this.cbtiEngine.getHyperarousalAwareSRTEngine();
+  }
+
   // ============= Wave 3: CrisisDetection + CrisisEscalation (IEC 62304 Class C) =============
 
   /**
