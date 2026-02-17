@@ -3120,40 +3120,68 @@ async function main(): Promise<void> {
     console.warn('[Bot] Command registration failed:', error);
   }
 
-  // Graceful shutdown
+  // Graceful shutdown with timeout protection
+  // 2025/2026 Best Practice: Prevent double-shutdown and force exit on timeout
+  let isShuttingDown = false;
+  const SHUTDOWN_TIMEOUT_MS = 10000; // 10 seconds max for graceful shutdown
+
   const shutdown = async (signal: string) => {
-    console.log(`\n[Bot] ${signal} - shutting down...`);
-
-    // Stop proactive notifications
-    notificationService.stop();
-    console.log("[Notifications] Service stopped");
-
-    // Stop ISI scheduling service
-    isiSchedulingService.stop();
-    console.log("[ISI Schedule] Service stopped");
-
-    // Stop session adapter cleanup timer
-    if (sessionAdapter) {
-      sessionAdapter.stop();
-      console.log("[DB] Session adapter stopped");
+    if (isShuttingDown) {
+      console.log(`[Bot] ${signal} - already shutting down, ignoring...`);
+      return;
     }
+    isShuttingDown = true;
 
-    // Close database connection
-    if (db) {
-      await db.close();
-      console.log("[DB] Database closed");
+    console.log(`\n[Bot] ${signal} - shutting down gracefully (timeout: ${SHUTDOWN_TIMEOUT_MS}ms)...`);
+
+    // Force exit after timeout
+    const forceExitTimer = setTimeout(() => {
+      console.error('[Bot] Graceful shutdown timeout exceeded, forcing exit...');
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+
+    try {
+      // Stop bot first to stop receiving new updates
+      console.log("[Bot] Stopping polling...");
+      await bot.stop();
+      console.log("[Bot] Polling stopped");
+
+      // Stop proactive notifications
+      notificationService.stop();
+      console.log("[Notifications] Service stopped");
+
+      // Stop ISI scheduling service
+      isiSchedulingService.stop();
+      console.log("[ISI Schedule] Service stopped");
+
+      // Stop session adapter cleanup timer
+      if (sessionAdapter) {
+        sessionAdapter.stop();
+        console.log("[DB] Session adapter stopped");
+      }
+
+      // Close database connection
+      if (db) {
+        await db.close();
+        console.log("[DB] Database closed");
+      }
+
+      // Stop rate limiter cleanup timer
+      stopRateLimiter();
+      console.log("[RateLimiter] Service stopped");
+
+      // Flush Sentry events before exit (2025 best practice)
+      await sentryService.flush(2000);
+      console.log("[Sentry] Events flushed");
+
+      clearTimeout(forceExitTimer);
+      console.log("[Bot] Graceful shutdown complete");
+      process.exit(0);
+    } catch (error) {
+      console.error('[Bot] Error during shutdown:', error);
+      clearTimeout(forceExitTimer);
+      process.exit(1);
     }
-
-    // Stop rate limiter cleanup timer
-    stopRateLimiter();
-    console.log("[RateLimiter] Service stopped");
-
-    // Flush Sentry events before exit (2025 best practice)
-    await sentryService.flush(2000);
-    console.log("[Sentry] Events flushed");
-
-    await bot.stop();
-    process.exit(0);
   };
 
   process.on('SIGINT', () => shutdown('SIGINT'));
@@ -3161,8 +3189,26 @@ async function main(): Promise<void> {
 
   // Start polling
   console.log('[Bot] Starting...');
+
+  // 2025/2026 Best Practice: Clear any existing webhook/polling state before starting
+  // This prevents 409 Conflict errors when container restarts
+  // Research: grammY docs, Telegram Bot API best practices
+  const isProd = process.env.NODE_ENV === 'production';
+  const shouldDropUpdates = botConfig.polling?.dropPendingUpdates ?? isProd;
+
+  console.log(`[Bot] Clearing previous session state (drop_pending_updates: ${shouldDropUpdates})...`);
+  try {
+    await bot.api.deleteWebhook({ drop_pending_updates: shouldDropUpdates });
+    console.log('[Bot] Previous session state cleared');
+  } catch (clearError) {
+    console.warn('[Bot] Could not clear previous session (non-fatal):', clearError);
+  }
+
+  // Small delay to ensure Telegram's side has processed the cleanup
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
   await bot.start({
-    drop_pending_updates: botConfig.polling?.dropPendingUpdates || false,
+    drop_pending_updates: shouldDropUpdates,
     onStart: (info) => {
       console.log(`[Bot] @${info.username} ready`);
       console.log(`[Bot] Session storage: ${sessionAdapter ? "SQLite" : "Memory"}`);
