@@ -3059,12 +3059,13 @@ _d ≥ 0.8 = большой эффект, 0.5-0.8 = средний, 0.2-0.5 = м
 
   /**
    * Get personalized Sleep Restriction content from treatment plan
-   * Uses SleepRestrictionEngine calculations via SleepCoreAPI
+   * Uses SleepRestrictionEngine + HyperarousalAwareSRT via SleepCoreAPI
    *
    * Research basis (2025-2026):
    * - Initial TIB = Average TST (min 5-5.5h) [AASM 2021, HIGH confidence]
    * - Weekly titration: SE ≥90% → +15min, SE <85% → -15min [HIGH confidence]
    * - Fixed wake time as anchor [Bootzin, HIGH confidence]
+   * - Hyperarousal-aware SRT for ISSD/high-PSAS patients [Riemann 2024, HIGH confidence]
    *
    * @param ctx - Sleep core context with user session
    * @returns Personalized SRT content or null if no plan
@@ -3106,6 +3107,42 @@ _d ≥ 0.8 = большой эффект, 0.5-0.8 = средний, 0.2-0.5 = м
       titrationAdvice = 'Титрация будет доступна после недели данных';
     }
 
+    // =========================================================================
+    // HyperarousalAwareSRT Integration (Riemann 2024-2025)
+    // Assess arousal profile and provide phenotype-specific recommendations
+    // =========================================================================
+    let arousalSection = '';
+    try {
+      const sleepHistory = ctx.sleepCore.getSleepStates?.(ctx.userId, 7);
+      if (sleepHistory && sleepHistory.length >= 5) {
+        const hyperarousalSRT = ctx.sleepCore.getHyperarousalAwareSRTEngine();
+        const arousalProfile = hyperarousalSRT.createHyperarousalProfile(
+          undefined, // No PSAS scores yet - estimate from sleep metrics
+          sleepHistory.map(s => s.metrics)
+        );
+
+        // Add phenotype-specific guidance
+        if (arousalProfile.phenotype !== 'unknown') {
+          const phenotypeRecs = hyperarousalSRT.getPhenotypeRecommendations(arousalProfile.phenotype);
+
+          arousalSection = `
+${formatter.divider()}
+
+*Ваш профиль гиперарауза:*
+• Фенотип: ${arousalProfile.phenotype === 'ISSD' ? 'ISSD (короткий сон)' : 'INSD (нормальный сон)'}
+• Уровень возбуждения: ${this.formatArousalLevel(arousalProfile.level)}
+• Тип: ${this.formatDominantType(arousalProfile.dominantType)}
+
+${arousalProfile.level === 'high' || arousalProfile.level === 'very_high' ? `
+⚡ *Рекомендации при высоком возбуждении:*
+${phenotypeRecs.complementaryInterventions.slice(0, 2).map(i => `• ${i}`).join('\n')}
+` : ''}`;
+        }
+      }
+    } catch {
+      // Silently fail if arousal assessment unavailable
+    }
+
     return `
 ${formatter.header('Ваш персональный режим сна')}
 
@@ -3119,9 +3156,34 @@ ${formatter.divider()}
 
 *Рекомендация по титрации:*
 ${titrationAdvice}
-
-⚠️ *Важно:* Минимальный безопасный TIB = 5.5 часов
+${arousalSection}
+⚠️ *Важно:* Минимальный безопасный TIB = 5 часов
     `.trim();
+  }
+
+  /**
+   * Format arousal level for display
+   */
+  private formatArousalLevel(level: string): string {
+    const levels: Record<string, string> = {
+      low: '🟢 низкий',
+      moderate: '🟡 умеренный',
+      high: '🟠 высокий',
+      very_high: '🔴 очень высокий',
+    };
+    return levels[level] || level;
+  }
+
+  /**
+   * Format dominant arousal type for display
+   */
+  private formatDominantType(type: string): string {
+    const types: Record<string, string> = {
+      cognitive: 'когнитивный (мысли)',
+      somatic: 'соматический (тело)',
+      balanced: 'смешанный',
+    };
+    return types[type] || type;
   }
 
   /**
