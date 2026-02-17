@@ -83,6 +83,9 @@ export { ExplainCommand, explainCommand } from './ExplainCommand';
 export { SafetyCommand, safetyCommand } from './SafetyCommand';
 export { TwinCommand, twinCommand } from './TwinCommand';
 
+// Wearable Integration (Galaxy Watch, Health Connect)
+export { LinkCommand, linkCommand } from './LinkCommand';
+
 // ==================== Handler ====================
 export { CommandHandler, createCommandHandler } from './CommandHandler';
 
@@ -135,6 +138,8 @@ import { insightsCommand } from './InsightsCommand';
 import { explainCommand } from './ExplainCommand';
 import { safetyCommand } from './SafetyCommand';
 import { twinCommand } from './TwinCommand';
+// Wearable Integration
+import { linkCommand } from './LinkCommand';
 
 /**
  * All registered commands
@@ -172,6 +177,8 @@ export const allCommands = [
   explainCommand,
   safetyCommand,
   twinCommand,
+  // Wearable Integration
+  linkCommand,
 ] as const;
 
 /**

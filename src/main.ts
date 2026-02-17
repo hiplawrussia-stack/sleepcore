@@ -65,6 +65,7 @@ import {
   safetyCommand,
   twinCommand,
   smartTipsCommand,
+  linkCommand,
   type ICommandResult,
   type ISleepCoreContext,
   type IConversationCommand,
@@ -996,6 +997,16 @@ function setupCommands(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCom
     const result = await therapyCommand.execute(sleepCoreCtx as ISleepCoreContext);
     await sendResultWithKeyboard(ctx, result);
   });
+
+  // /link command - Wearable device linking (Galaxy Watch, Health Connect)
+  bot.command(['link', 'connect', 'wearable', 'watch', 'часы'], async (ctx) => {
+    console.log('[Command] /link received from', ctx.from?.id);
+    const sleepCoreCtx = extendContext(ctx, api);
+    ctx.session.lastActivityAt = new Date();
+    const args = ctx.message?.text?.split(' ').slice(1).join(' ');
+    const result = await linkCommand.execute(sleepCoreCtx as ISleepCoreContext, args);
+    await sendResultWithKeyboard(ctx, result);
+  });
 }
 
 // ============================================================================
@@ -1076,7 +1087,7 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
       'noop', 'streak', 'checkin', 'sleep_quality', 'mood', 'cogtest',
       'admin', 'insight', 'explain', 'predict', 'safety', 'twin',
       'chronotype', 'profile', 'ae_report', 'whatif', 'smart_tips',
-      'mcq30', 'arousal', 'dm', 'worry', 'att', 'voice'
+      'mcq30', 'arousal', 'dm', 'worry', 'att', 'voice', 'link'
     ];
 
     const [command, action] = data.split(':');
@@ -1456,6 +1467,13 @@ function setupCallbacks(bot: Bot<MyContext>, api: SleepCoreAPI, options: SetupCa
         case 'chronotype':
           if ('handleCallback' in chronotypeCommand) {
             result = await (chronotypeCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
+          }
+          break;
+
+        // Wearable device linking (Galaxy Watch, Health Connect)
+        case 'link':
+          if ('handleCallback' in linkCommand) {
+            result = await (linkCommand as IConversationCommand).handleCallback(sleepCoreCtx as ISleepCoreContext, data, {});
           }
           break;
 

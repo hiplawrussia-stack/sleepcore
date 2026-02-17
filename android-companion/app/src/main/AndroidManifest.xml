@@ -9,7 +9,8 @@
   - Resting Heart Rate (READ)
   - Background read (Android 15+) for periodic sync
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Internet for API communication -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -109,11 +110,6 @@
             android:name="health_connect_opt_in_enabled"
             android:value="true" />
 
-        <!-- Hilt WorkManager initialization -->
-        <provider
-            android:name="androidx.hilt.work.HiltWorkerFactory"
-            android:authorities="${applicationId}.hilt.work"
-            android:exported="false" />
 
     </application>
 
