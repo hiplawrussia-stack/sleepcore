@@ -67,6 +67,7 @@ export class UserInteractionRepository {
   private interactions: Map<string, IUserInteraction[]> = new Map();
   private readonly maxInteractionsPerUser = 500;
   private readonly maxAgeDays = 30;
+  private static idCounter = 0;
 
   /**
    * Record a new interaction
@@ -83,7 +84,7 @@ export class UserInteractionRepository {
     }
   ): Promise<IUserInteraction> {
     const interaction: IUserInteraction = {
-      id: Date.now(),
+      id: Date.now() * 1000 + (UserInteractionRepository.idCounter++ % 1000),
       userId,
       command,
       timestamp: new Date(),
