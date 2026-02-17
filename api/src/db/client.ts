@@ -77,6 +77,10 @@ export function isDatabaseHealthy(): boolean {
  * Run database migrations
  */
 function runMigrations(sqlite: Database.Database): void {
+  // Run schema migrations BEFORE CREATE TABLE statements
+  // This handles updating existing tables that need schema changes
+  migrateWearableDevices(sqlite);
+
   // Create tables if they don't exist
   sqlite.exec(`
     -- Users table
@@ -324,9 +328,6 @@ function runMigrations(sqlite: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_oura_sync_log_connection_id ON api_oura_sync_log(connection_id);
     CREATE INDEX IF NOT EXISTS idx_oura_oauth_states_expires ON api_oura_oauth_states(expires_at);
   `);
-
-  // Migration: Update wearable_devices table to new RFC 8628 schema
-  migrateWearableDevices(sqlite);
 }
 
 /**
