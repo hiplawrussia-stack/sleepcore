@@ -5,6 +5,41 @@
 # 1. Create .env file from .env.prod.example
 # 2. Create acme.json: touch traefik/acme.json && chmod 600 traefik/acme.json
 # 3. Create Docker network: docker network create sleepcore-network
+#
+# =============================================================================
+# PORT ARCHITECTURE (2025/2026 Best Practice)
+# =============================================================================
+# Based on research: Docker microservices, Traefik, Node.js health checks
+#
+# PUBLIC PORTS (via Traefik reverse proxy):
+#   80/443    → traefik (SSL termination, routing)
+#
+# INTERNAL PORTS (Docker network only, NOT exposed):
+#   API/Backend:
+#     3001    → sleepcore-api (REST API + health)
+#
+#   Bots (health check servers only, bots use long-polling):
+#     3010    → sleepcore-bot (Telegram bot health)
+#     3011    → sleepcore-vk-bot (VK bot health)
+#
+#   Frontend (nginx static):
+#     80      → mini-app, vk-mini-app (internal nginx)
+#
+#   Databases:
+#     5432    → postgres
+#     6379    → redis
+#
+#   Monitoring:
+#     9090    → prometheus
+#     3000    → grafana
+#     9100    → node-exporter
+#
+# RATIONALE:
+# - API on 3001: Standard Node.js port range (3001-3009)
+# - Bots on 3010-3019: Dedicated bot health range, avoids API conflict
+# - Monitoring on 9xxx: Industry standard (Prometheus ecosystem)
+# - No ports exposed except 80/443: Security best practice
+# =============================================================================
 
 name: sleepcore-prod
 
@@ -49,6 +84,11 @@ services:
   # ============================================
   # SleepCore Bot - Telegram Bot
   # ============================================
+  # Port Architecture (2025/2026 Best Practice):
+  # - Bot is a long-polling service, NOT an HTTP server
+  # - Health check runs on separate port 3010 (dedicated bot health range: 3010-3019)
+  # - API uses port 3001 (standard Node.js API range: 3001-3009)
+  # - This prevents port confusion and follows microservices conventions
   bot:
     image: ghcr.io/${GITHUB_REPOSITORY}/bot:${BOT_VERSION:-latest}
     container_name: sleepcore-bot
@@ -58,6 +98,8 @@ services:
       - NODE_ENV=production
       - BOT_TOKEN=${BOT_TOKEN}
       - DATABASE_URL=${DATABASE_URL}
+      # Health check port (separate from API to avoid conflicts)
+      - HEALTH_PORT=3010
       # PHI Encryption (HIPAA/GDPR Compliance) - REQUIRED
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
       - ENCRYPTION_MASTER_KEY_SALT=${ENCRYPTION_MASTER_KEY_SALT}
@@ -78,7 +120,8 @@ services:
     healthcheck:
       # 2025/2026 Best Practice: Longer start_period for bot initialization
       # Bot needs time for: DB connection, session loading, API verification
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
+      # Port 3010 = dedicated bot health check port
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3010/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -183,6 +226,9 @@ services:
   # ============================================
   # VK Bot - VK Community Bot
   # ============================================
+  # Port Architecture (2025/2026 Best Practice):
+  # - VK Bot is a long-polling service, NOT an HTTP server
+  # - Health check runs on separate port 3011 (dedicated bot health range: 3010-3019)
   vk-bot:
     image: ghcr.io/${GITHUB_REPOSITORY}/vk-bot:${VK_BOT_VERSION:-latest}
     container_name: sleepcore-vk-bot
@@ -193,6 +239,8 @@ services:
       - VK_BOT_TOKEN=${VK_BOT_TOKEN}
       - VK_GROUP_ID=${VK_GROUP_ID}
       - DATABASE_URL=${DATABASE_URL}
+      # Health check port (separate from API to avoid conflicts)
+      - HEALTH_PORT=3011
       # Redis for persistent sessions
       - REDIS_URL=redis://redis:6379
       # PHI Encryption (HIPAA/GDPR Compliance) - REQUIRED
@@ -211,11 +259,12 @@ services:
     labels:
       - "traefik.enable=false"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3002/health"]
+      # Port 3011 = dedicated VK bot health check port
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3011/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 60s
     deploy:
       resources:
         limits:
