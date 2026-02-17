@@ -45,6 +45,7 @@ services:
       - ADMIN_USER_IDS=${ADMIN_USER_IDS}
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
       - MINIAPP_URL=https://app.sleepcore.ru/
+      - API_URL=http://api:3001
     volumes:
       - bot-data:/app/data
     networks:
