@@ -17,6 +17,9 @@ http:
         customResponseHeaders:
           X-Robots-Tag: "noindex, nofollow"
           server: ""
+          # 2025/2026 Best Practice: Content Security Policy (OWASP)
+          Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://*.sleepcore.app wss://*.sleepcore.app https://api.telegram.org; frame-ancestors 'self' https://web.telegram.org https://telegram.org;"
+          Permissions-Policy: "geolocation=(), microphone=(), camera=()"
 
     # Rate Limiting
     rate-limit:
@@ -46,7 +49,9 @@ http:
           - X-Telegram-Init-Data
         accessControlAllowOriginList:
           - https://app.sleepcore.app
+          - https://vk.sleepcore.app
           - https://web.telegram.org
+          - https://vk.com
         accessControlMaxAge: 86400
         addVaryHeader: true
 

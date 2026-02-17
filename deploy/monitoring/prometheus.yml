@@ -45,9 +45,10 @@ scrape_configs:
       - targets: ['traefik:8080']
 
   # SleepCore Bot
+  # 2025/2026 Best Practice: Bot health check on dedicated port (3010-3019 range)
   - job_name: 'sleepcore-bot'
     static_configs:
-      - targets: ['bot:3001']
+      - targets: ['bot:3010']
     metrics_path: /health
     scrape_interval: 30s
 
@@ -56,6 +57,14 @@ scrape_configs:
     static_configs:
       - targets: ['api:3001']
     metrics_path: /metrics
+    scrape_interval: 30s
+
+  # SleepCore VK Bot
+  # 2025/2026 Best Practice: VK Bot health check on dedicated port 3011
+  - job_name: 'sleepcore-vk-bot'
+    static_configs:
+      - targets: ['vk-bot:3011']
+    metrics_path: /health
     scrape_interval: 30s
 
   # PostgreSQL (if using postgres_exporter)

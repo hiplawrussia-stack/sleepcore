@@ -60,11 +60,13 @@ RUN mkdir -p /app/data && chown -R node:node /app
 USER node
 
 # Expose port for health checks
-EXPOSE 3001
+# 2025/2026 Best Practice: Bot health on dedicated port (3010-3019 range)
+# API uses 3001, bots use 3010+
+EXPOSE 3010
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget --spider -q http://localhost:3001/health || exit 1
+  CMD wget --spider -q http://localhost:3010/health || exit 1
 
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]

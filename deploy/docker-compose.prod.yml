@@ -241,8 +241,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       # Health check port (separate from API to avoid conflicts)
       - HEALTH_PORT=3011
-      # Redis for persistent sessions
-      - REDIS_URL=redis://redis:6379
+      # Redis for persistent sessions (with auth)
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-sleepcore-redis-default}@redis:6379
       # PHI Encryption (HIPAA/GDPR Compliance) - REQUIRED
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
       - ENCRYPTION_MASTER_KEY_SALT=${ENCRYPTION_MASTER_KEY_SALT}
@@ -361,7 +361,8 @@ services:
     image: redis:7-alpine
     container_name: sleepcore-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    # 2025/2026 Best Practice: Always use password in production
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-sleepcore-redis-default}
     volumes:
       - redis-data:/data
     networks:
