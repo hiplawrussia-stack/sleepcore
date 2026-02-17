@@ -1,14 +1,19 @@
 /**
- * Wearable Routes
- * ===============
+ * Wearable Routes (RFC 8628 Device Authorization)
+ * ================================================
  * API endpoints for Android Companion App integration.
  *
- * Endpoints:
- * - POST /api/wearable/link/generate - Generate link code (from bot)
- * - POST /api/wearable/link - Link device using code (from Android app)
- * - POST /api/wearable/sync - Sync wearable data
- * - GET /api/wearable/status - Get sync status
+ * Architecture based on RFC 8628 (OAuth 2.0 Device Authorization Grant):
+ * - POST /device/authorize - Generate user_code + device_code
+ * - POST /device/token     - Exchange device_code for access + refresh tokens
+ * - POST /device/refresh   - Refresh tokens with rotation
+ * - DELETE /device/revoke  - Revoke token family
  *
+ * Data endpoints:
+ * - POST /sync    - Sync wearable data
+ * - GET /status   - Get sync status
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc8628
  * @packageDocumentation
  * @module api/routes
  */
@@ -17,16 +22,23 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
-import { eq, and, desc, gte } from 'drizzle-orm';
+import { eq, and, desc, gte, lt, isNull } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
 import { getDatabase, users } from '../db/index.js';
 import {
+  wearableLinkCodes,
   wearableDevices,
   wearableSleepSessions,
   wearableSyncLog,
 } from '../db/wearable-schema.js';
-// Note: authMiddleware not used here - using deviceAuthMiddleware instead
-import { generateDeviceToken, verifyDeviceToken } from '../utils/wearable-auth.js';
+import {
+  generateLinkCodes,
+  generateTokenPair,
+  verifyAccessToken,
+  verifyRefreshToken,
+  MAX_LINK_CODE_ATTEMPTS,
+  type AccessTokenPayload,
+} from '../utils/wearable-auth.js';
 import { getEncryptionService, isEncryptionAvailable } from '../utils/encryption.js';
 import type { ApiResponse } from '../types/index.js';
 
@@ -36,15 +48,16 @@ const wearable = new Hono();
 // Validation Schemas
 // ============================================================================
 
-const generateLinkCodeSchema = z.object({
+const authorizeSchema = z.object({
   telegramId: z.number().int().positive(),
   firstName: z.string().min(1),
   lastName: z.string().optional(),
   username: z.string().optional(),
 });
 
-const linkDeviceSchema = z.object({
-  linkCode: z.string().length(6),
+const tokenSchema = z.object({
+  grantType: z.literal('urn:ietf:params:oauth:grant-type:device_code'),
+  deviceCode: z.string().min(1),
   device: z.object({
     id: z.string().min(1),
     name: z.string().optional(),
@@ -53,6 +66,11 @@ const linkDeviceSchema = z.object({
     osVersion: z.string().optional(),
     appVersion: z.string().optional(),
   }),
+});
+
+const refreshSchema = z.object({
+  grantType: z.literal('refresh_token'),
+  refreshToken: z.string().min(1),
 });
 
 const syncDataSchema = z.object({
@@ -65,33 +83,21 @@ const syncDataSchema = z.object({
       startTime: z.string(),
       endTime: z.string(),
       notes: z.string().optional(),
-      stages: z
-        .array(
-          z.object({
-            type: z.string(),
-            startTime: z.string(),
-            endTime: z.string(),
-          })
-        )
-        .optional(),
-      hrv: z
-        .array(
-          z.object({
-            timestamp: z.string(),
-            rmssd: z.number(),
-            sdnn: z.number().optional(),
-            quality: z.number().optional(),
-          })
-        )
-        .optional(),
-      heartRate: z
-        .array(
-          z.object({
-            timestamp: z.string(),
-            bpm: z.number(),
-          })
-        )
-        .optional(),
+      stages: z.array(z.object({
+        type: z.string(),
+        startTime: z.string(),
+        endTime: z.string(),
+      })).optional(),
+      hrv: z.array(z.object({
+        timestamp: z.string(),
+        rmssd: z.number(),
+        sdnn: z.number().optional(),
+        quality: z.number().optional(),
+      })).optional(),
+      heartRate: z.array(z.object({
+        timestamp: z.string(),
+        bpm: z.number(),
+      })).optional(),
       restingHeartRate: z.number().optional(),
     })
   ),
@@ -100,18 +106,6 @@ const syncDataSchema = z.object({
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/**
- * Generate a 6-character alphanumeric link code
- */
-function generateLinkCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluding confusing chars
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
 
 /**
  * Calculate sleep metrics from session data
@@ -153,31 +147,19 @@ function calculateSleepMetrics(session: {
       const stageEnd = new Date(stage.endTime);
       const durationMinutes = (stageEnd.getTime() - stageStart.getTime()) / (1000 * 60);
 
-      const isWake =
-        stage.type === 'awake' ||
-        stage.type === 'awake_in_bed' ||
-        stage.type === 'out_of_bed';
+      const isWake = stage.type === 'awake' || stage.type === 'awake_in_bed' || stage.type === 'out_of_bed';
 
       if (isWake) {
         wakeMinutes += durationMinutes;
-        if (wasAsleep) {
-          awakenings++;
-        }
+        if (wasAsleep) awakenings++;
         wasAsleep = false;
       } else {
         wasAsleep = true;
         switch (stage.type) {
-          case 'light':
-            lightMinutes += durationMinutes;
-            break;
-          case 'deep':
-            deepMinutes += durationMinutes;
-            break;
-          case 'rem':
-            remMinutes += durationMinutes;
-            break;
-          default:
-            lightMinutes += durationMinutes; // Default to light
+          case 'light': lightMinutes += durationMinutes; break;
+          case 'deep': deepMinutes += durationMinutes; break;
+          case 'rem': remMinutes += durationMinutes; break;
+          default: lightMinutes += durationMinutes;
         }
       }
     }
@@ -187,7 +169,6 @@ function calculateSleepMetrics(session: {
   const totalStaged = tstMinutes + wakeMinutes;
   const se = tibMinutes > 0 ? (tstMinutes / tibMinutes) * 100 : 0;
 
-  // Stage distribution (percentages)
   let stageWake: number | null = null;
   let stageLight: number | null = null;
   let stageDeep: number | null = null;
@@ -200,7 +181,6 @@ function calculateSleepMetrics(session: {
     stageRem = (remMinutes / totalStaged) * 100;
   }
 
-  // HRV metrics
   let hrvMeanRmssd: number | null = null;
   let hrvSdRmssd: number | null = null;
   let hrvSampleCount: number | null = null;
@@ -209,11 +189,8 @@ function calculateSleepMetrics(session: {
     const validHrv = session.hrv.filter((h) => h.rmssd >= 10 && h.rmssd <= 200);
     if (validHrv.length > 0) {
       hrvSampleCount = validHrv.length;
-      hrvMeanRmssd =
-        validHrv.reduce((sum, h) => sum + h.rmssd, 0) / validHrv.length;
-      const variance =
-        validHrv.reduce((sum, h) => sum + Math.pow(h.rmssd - hrvMeanRmssd!, 2), 0) /
-        validHrv.length;
+      hrvMeanRmssd = validHrv.reduce((sum, h) => sum + h.rmssd, 0) / validHrv.length;
+      const variance = validHrv.reduce((sum, h) => sum + Math.pow(h.rmssd - hrvMeanRmssd!, 2), 0) / validHrv.length;
       hrvSdRmssd = Math.sqrt(variance);
     }
   }
@@ -223,7 +200,7 @@ function calculateSleepMetrics(session: {
     tib: Math.round(tibMinutes),
     se: Math.round(se * 10) / 10,
     waso: Math.round(wakeMinutes),
-    sol: 0, // Cannot calculate without first-sleep detection
+    sol: 0,
     awakenings,
     stageWake: stageWake !== null ? Math.round(stageWake * 10) / 10 : null,
     stageLight: stageLight !== null ? Math.round(stageLight * 10) / 10 : null,
@@ -236,11 +213,11 @@ function calculateSleepMetrics(session: {
 }
 
 // ============================================================================
-// Device Authentication Middleware
+// Device Auth Middleware
 // ============================================================================
 
 /**
- * Middleware to verify device token
+ * Middleware to verify access token
  */
 async function deviceAuthMiddleware(
   c: Parameters<Parameters<typeof wearable.use>[1]>[0],
@@ -249,16 +226,16 @@ async function deviceAuthMiddleware(
   const authHeader = c.req.header('Authorization');
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new HTTPException(401, { message: 'Missing device token' });
+    throw new HTTPException(401, { message: 'Missing access token' });
   }
 
   const token = authHeader.slice(7);
   const jwtSecret = c.get('jwtSecret');
 
-  const result = await verifyDeviceToken(token, jwtSecret);
+  const result = await verifyAccessToken(token, jwtSecret);
 
   if (!result.valid || !result.payload) {
-    throw new HTTPException(401, { message: result.error || 'Invalid device token' });
+    throw new HTTPException(401, { message: result.error || 'Invalid access token' });
   }
 
   // Verify device is still active
@@ -266,6 +243,7 @@ async function deviceAuthMiddleware(
   const device = await db.query.wearableDevices.findFirst({
     where: and(
       eq(wearableDevices.deviceId, result.payload.deviceId),
+      eq(wearableDevices.userId, result.payload.userId),
       eq(wearableDevices.isActive, true)
     ),
   });
@@ -274,426 +252,803 @@ async function deviceAuthMiddleware(
     throw new HTTPException(401, { message: 'Device not linked or deactivated' });
   }
 
-  // Add device info to context
-  // @ts-expect-error - Custom context variables for device auth
+  // Verify token matches stored token
+  if (device.accessToken !== token) {
+    throw new HTTPException(401, { message: 'Token has been revoked' });
+  }
+
+  // @ts-expect-error - Custom context
   c.set('device', device);
-  // @ts-expect-error - Custom context variables for device auth
-  c.set('devicePayload', result.payload);
+  // @ts-expect-error - Custom context
+  c.set('tokenPayload', result.payload);
 
   await next();
 }
 
 // ============================================================================
-// Routes
+// RFC 8628: Device Authorization Endpoints
 // ============================================================================
 
 /**
- * POST /api/wearable/link/generate
- * Generate a link code for the user (called from Telegram bot)
+ * POST /device/authorize
+ * Generate link codes for device authorization (called from Telegram bot)
  *
- * Requires: JWT auth (from Mini App) or internal API key
+ * RFC 8628 Step 1: Device Authorization Request
  */
-wearable.post(
-  '/link/generate',
-  zValidator('json', generateLinkCodeSchema),
-  async (c) => {
-    const { telegramId, firstName, lastName, username } = c.req.valid('json');
-    const db = getDatabase();
-    const now = new Date().toISOString();
+wearable.post('/device/authorize', zValidator('json', authorizeSchema), async (c) => {
+  const { telegramId, firstName, lastName, username } = c.req.valid('json');
+  const db = getDatabase();
+  const now = new Date().toISOString();
 
-    // Find or create user
-    let user = await db.query.users.findFirst({
-      where: eq(users.telegramId, telegramId),
+  // Find or create user
+  let user = await db.query.users.findFirst({
+    where: eq(users.telegramId, telegramId),
+  });
+
+  if (!user) {
+    const userId = nanoid();
+    await db.insert(users).values({
+      id: userId,
+      telegramId,
+      firstName,
+      lastName: lastName ?? null,
+      username: username ?? null,
+      createdAt: now,
+      updatedAt: now,
     });
-
-    if (!user) {
-      const userId = nanoid();
-      await db.insert(users).values({
-        id: userId,
-        telegramId,
-        firstName,
-        lastName: lastName ?? null,
-        username: username ?? null,
-        createdAt: now,
-        updatedAt: now,
-      });
-      user = await db.query.users.findFirst({
-        where: eq(users.id, userId),
-      });
-    }
-
-    if (!user) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: 'Failed to create user',
-        timestamp: Date.now(),
-      };
-      return c.json(response, 500);
-    }
-
-    // Generate link code
-    const linkCode = generateLinkCode();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes
-
-    // Check for existing pending device (reuse or create new)
-    const existingDevice = await db.query.wearableDevices.findFirst({
-      where: and(
-        eq(wearableDevices.userId, user.id),
-        eq(wearableDevices.linkedAt, '')
-      ),
-    });
-
-    const deviceId = existingDevice?.id || nanoid();
-
-    if (existingDevice) {
-      // Update existing pending device
-      await db
-        .update(wearableDevices)
-        .set({
-          linkCode,
-          linkCodeExpiresAt: expiresAt,
-          updatedAt: now,
-        })
-        .where(eq(wearableDevices.id, existingDevice.id));
-    } else {
-      // Create new pending device entry
-      await db.insert(wearableDevices).values({
-        id: deviceId,
-        userId: user.id,
-        telegramId,
-        deviceId: `pending_${nanoid(8)}`,
-        deviceToken: `pending_${nanoid(32)}`,
-        linkCode,
-        linkCodeExpiresAt: expiresAt,
-        linkedAt: '',
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-
-    const response: ApiResponse<{
-      linkCode: string;
-      expiresAt: string;
-      expiresInSeconds: number;
-    }> = {
-      success: true,
-      data: {
-        linkCode,
-        expiresAt,
-        expiresInSeconds: 15 * 60,
-      },
-      timestamp: Date.now(),
-    };
-
-    return c.json(response, 200);
+    user = await db.query.users.findFirst({ where: eq(users.id, userId) });
   }
-);
+
+  if (!user) {
+    return c.json<ApiResponse<null>>({
+      success: false,
+      error: 'Failed to create user',
+      timestamp: Date.now(),
+    }, 500);
+  }
+
+  // Invalidate all previous unused link codes for this user
+  await db.update(wearableLinkCodes)
+    .set({ usedAt: now }) // Mark as used (invalidated)
+    .where(and(
+      eq(wearableLinkCodes.userId, user.id),
+      isNull(wearableLinkCodes.usedAt)
+    ));
+
+  // Generate new link codes
+  const codes = generateLinkCodes();
+
+  // Store link code
+  await db.insert(wearableLinkCodes).values({
+    id: nanoid(),
+    userId: user.id,
+    telegramId,
+    userCode: codes.userCode,
+    deviceCode: codes.deviceCode,
+    expiresAt: codes.expiresAt,
+    createdAt: now,
+  });
+
+  // RFC 8628 Response
+  return c.json<ApiResponse<{
+    userCode: string;
+    deviceCode: string;
+    verificationUri: string;
+    expiresIn: number;
+    interval: number;
+  }>>({
+    success: true,
+    data: {
+      userCode: codes.userCode,
+      deviceCode: codes.deviceCode,
+      verificationUri: 'sleepcore://link', // Deep link for app
+      expiresIn: codes.expiresInSeconds,
+      interval: 5, // RFC 8628: polling interval in seconds
+    },
+    timestamp: Date.now(),
+  });
+});
 
 /**
- * POST /api/wearable/link
- * Link Android device using link code
+ * POST /device/token
+ * Exchange device_code for tokens (called from Android app)
  *
- * Called from Android Companion App
+ * RFC 8628 Step 2: Device Access Token Request
  */
-wearable.post('/link', zValidator('json', linkDeviceSchema), async (c) => {
-  const { linkCode, device } = c.req.valid('json');
+wearable.post('/device/token', zValidator('json', tokenSchema), async (c) => {
+  const { deviceCode, device } = c.req.valid('json');
   const jwtSecret = c.get('jwtSecret');
   const db = getDatabase();
   const now = new Date().toISOString();
 
-  // Find pending device with this link code
-  const pendingDevice = await db.query.wearableDevices.findFirst({
-    where: and(
-      eq(wearableDevices.linkCode, linkCode.toUpperCase()),
-      eq(wearableDevices.linkedAt, '')
-    ),
+  // Find link code
+  const linkCode = await db.query.wearableLinkCodes.findFirst({
+    where: eq(wearableLinkCodes.deviceCode, deviceCode),
   });
 
-  if (!pendingDevice) {
-    const response: ApiResponse<null> = {
+  if (!linkCode) {
+    // RFC 8628: invalid_grant
+    return c.json<ApiResponse<null>>({
       success: false,
-      error: 'Invalid or expired link code',
+      error: 'invalid_grant',
       timestamp: Date.now(),
-    };
-    return c.json(response, 400);
+    }, 400);
+  }
+
+  // Check if already used
+  if (linkCode.usedAt) {
+    return c.json<ApiResponse<null>>({
+      success: false,
+      error: 'invalid_grant',
+      timestamp: Date.now(),
+    }, 400);
   }
 
   // Check expiration
-  if (
-    pendingDevice.linkCodeExpiresAt &&
-    new Date(pendingDevice.linkCodeExpiresAt) < new Date()
-  ) {
-    const response: ApiResponse<null> = {
+  if (new Date(linkCode.expiresAt) < new Date()) {
+    // RFC 8628: expired_token
+    return c.json<ApiResponse<null>>({
       success: false,
-      error: 'Link code has expired',
+      error: 'expired_token',
       timestamp: Date.now(),
-    };
-    return c.json(response, 400);
+    }, 400);
   }
 
-  // Generate device token (long-lived)
-  const tokenResult = await generateDeviceToken(
+  // Rate limiting: check attempts
+  if ((linkCode.attempts || 0) >= MAX_LINK_CODE_ATTEMPTS) {
+    return c.json<ApiResponse<null>>({
+      success: false,
+      error: 'slow_down',
+      timestamp: Date.now(),
+    }, 400);
+  }
+
+  // Increment attempts
+  await db.update(wearableLinkCodes)
+    .set({
+      attempts: (linkCode.attempts || 0) + 1,
+      lastAttemptAt: now,
+    })
+    .where(eq(wearableLinkCodes.id, linkCode.id));
+
+  // Check if device is already linked to another user
+  const existingDeviceOtherUser = await db.query.wearableDevices.findFirst({
+    where: and(
+      eq(wearableDevices.deviceId, device.id),
+      eq(wearableDevices.isActive, true)
+    ),
+  });
+
+  if (existingDeviceOtherUser && existingDeviceOtherUser.userId !== linkCode.userId) {
+    // Device linked to different user - conflict
+    return c.json<ApiResponse<null>>({
+      success: false,
+      error: 'device_already_linked',
+      timestamp: Date.now(),
+    }, 409);
+  }
+
+  // Check if device already linked to this user (re-link scenario)
+  const existingDevice = await db.query.wearableDevices.findFirst({
+    where: and(
+      eq(wearableDevices.deviceId, device.id),
+      eq(wearableDevices.userId, linkCode.userId)
+    ),
+  });
+
+  // Generate token pair
+  const tokens = await generateTokenPair(
     {
       deviceId: device.id,
-      userId: pendingDevice.userId,
-      telegramId: pendingDevice.telegramId,
+      userId: linkCode.userId,
+      telegramId: linkCode.telegramId,
     },
-    jwtSecret
+    jwtSecret,
+    existingDevice?.tokenFamily // Reuse family for re-link
   );
 
-  // Update device record
-  await db
-    .update(wearableDevices)
-    .set({
+  if (existingDevice) {
+    // RE-LINK: Update existing device
+    await db.update(wearableDevices)
+      .set({
+        deviceName: device.name ?? null,
+        manufacturer: device.manufacturer ?? null,
+        model: device.model ?? null,
+        osVersion: device.osVersion ?? null,
+        appVersion: device.appVersion ?? null,
+        accessToken: tokens.accessToken,
+        accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+        refreshToken: tokens.refreshToken,
+        refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+        isActive: true,
+        deactivatedAt: null,
+        deactivationReason: null,
+        updatedAt: now,
+      })
+      .where(eq(wearableDevices.id, existingDevice.id));
+  } else {
+    // NEW DEVICE: Create record
+    await db.insert(wearableDevices).values({
+      id: nanoid(),
+      userId: linkCode.userId,
+      telegramId: linkCode.telegramId,
       deviceId: device.id,
       deviceName: device.name ?? null,
       manufacturer: device.manufacturer ?? null,
       model: device.model ?? null,
       osVersion: device.osVersion ?? null,
       appVersion: device.appVersion ?? null,
-      deviceToken: tokenResult.token,
-      tokenExpiresAt: tokenResult.expiresAt,
-      linkCode: null,
-      linkCodeExpiresAt: null,
+      accessToken: tokens.accessToken,
+      accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+      refreshToken: tokens.refreshToken,
+      refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+      tokenFamily: tokens.tokenFamily,
       linkedAt: now,
-      isActive: true,
+      createdAt: now,
       updatedAt: now,
+    });
+  }
+
+  // Mark link code as used
+  await db.update(wearableLinkCodes)
+    .set({
+      usedAt: now,
+      usedByDeviceId: device.id,
     })
-    .where(eq(wearableDevices.id, pendingDevice.id));
+    .where(eq(wearableLinkCodes.id, linkCode.id));
 
   // Get user info
   const user = await db.query.users.findFirst({
-    where: eq(users.id, pendingDevice.userId),
+    where: eq(users.id, linkCode.userId),
   });
 
-  const response: ApiResponse<{
-    token: string;
-    expiresAt: string;
-    user: {
-      id: string;
-      telegramId: number;
-      firstName: string;
-    };
-  }> = {
+  return c.json<ApiResponse<{
+    accessToken: string;
+    tokenType: string;
+    expiresIn: number;
+    refreshToken: string;
+    user: { id: string; telegramId: number; firstName: string };
+  }>>({
     success: true,
     data: {
-      token: tokenResult.token,
-      expiresAt: tokenResult.expiresAt,
+      accessToken: tokens.accessToken,
+      tokenType: 'Bearer',
+      expiresIn: 3600, // 1 hour in seconds
+      refreshToken: tokens.refreshToken,
       user: {
-        id: pendingDevice.userId,
-        telegramId: pendingDevice.telegramId,
+        id: linkCode.userId,
+        telegramId: linkCode.telegramId,
         firstName: user?.firstName || 'User',
       },
     },
     timestamp: Date.now(),
-  };
-
-  return c.json(response, 200);
+  });
 });
 
 /**
- * POST /api/wearable/sync
- * Sync wearable data from Android Companion App
- *
- * Requires: Device token authentication
+ * POST /device/refresh
+ * Refresh tokens with rotation (called from Android app)
  */
-wearable.post(
-  '/sync',
-  deviceAuthMiddleware,
-  zValidator('json', syncDataSchema),
-  async (c) => {
-    const payload = c.req.valid('json');
-    const device = c.get('device' as never) as typeof wearableDevices.$inferSelect;
-    const db = getDatabase();
-    const now = new Date().toISOString();
+wearable.post('/device/refresh', zValidator('json', refreshSchema), async (c) => {
+  const { refreshToken } = c.req.valid('json');
+  const jwtSecret = c.get('jwtSecret');
+  const db = getDatabase();
+  const now = new Date().toISOString();
 
-    // Create sync log entry
-    const syncLogId = nanoid();
-    await db.insert(wearableSyncLog).values({
-      id: syncLogId,
-      userId: device.userId,
-      deviceId: device.id,
-      syncType: payload.syncType,
-      sessionsReceived: payload.sleepSessions.length,
-      syncStartedAt: now,
-      status: 'processing',
-      dataFromTime: payload.lastSyncTime ?? null,
-      dataToTime: now,
+  // Verify refresh token
+  const verification = await verifyRefreshToken(refreshToken, jwtSecret);
+
+  if (!verification.valid || !verification.payload) {
+    return c.json<ApiResponse<null>>({
+      success: false,
+      error: verification.error || 'invalid_grant',
+      timestamp: Date.now(),
+    }, 400);
+  }
+
+  // Find device with this refresh token
+  const device = await db.query.wearableDevices.findFirst({
+    where: and(
+      eq(wearableDevices.refreshToken, refreshToken),
+      eq(wearableDevices.isActive, true)
+    ),
+  });
+
+  if (!device) {
+    // Token reuse detection: if token family exists but refresh doesn't match,
+    // this could be a stolen token replay attack
+    const familyDevice = await db.query.wearableDevices.findFirst({
+      where: eq(wearableDevices.tokenFamily, verification.payload.family),
     });
 
-    // Process sessions
-    let processed = 0;
-    let skipped = 0;
-    const errors: Array<{ sessionId: string; error: string }> = [];
+    if (familyDevice) {
+      // SECURITY: Revoke entire token family
+      await db.update(wearableDevices)
+        .set({
+          isActive: false,
+          deactivatedAt: now,
+          deactivationReason: 'token_reuse',
+          updatedAt: now,
+        })
+        .where(eq(wearableDevices.tokenFamily, verification.payload.family));
 
-    for (const session of payload.sleepSessions) {
-      try {
-        // Check for duplicate
-        const existing = await db.query.wearableSleepSessions.findFirst({
-          where: and(
-            eq(wearableSleepSessions.userId, device.userId),
-            eq(wearableSleepSessions.sourceSessionId, session.sessionId)
-          ),
-        });
-
-        if (existing) {
-          skipped++;
-          continue;
-        }
-
-        // Calculate metrics
-        const metrics = calculateSleepMetrics(session);
-
-        // Encrypt PHI fields (HIPAA compliance)
-        // @see CLAUDE.md §2.2 — PHI encryption requirements
-        let stagesJsonEncrypted: string | null = null;
-        let hrvJsonEncrypted: string | null = null;
-        let heartRateJsonEncrypted: string | null = null;
-
-        if (isEncryptionAvailable()) {
-          const encryption = getEncryptionService();
-          if (session.stages) {
-            stagesJsonEncrypted = encryption.encrypt(JSON.stringify(session.stages));
-          }
-          if (session.hrv) {
-            hrvJsonEncrypted = encryption.encrypt(JSON.stringify(session.hrv));
-          }
-          if (session.heartRate) {
-            heartRateJsonEncrypted = encryption.encrypt(JSON.stringify(session.heartRate));
-          }
-        } else {
-          // Fallback to unencrypted (development only)
-          // Production MUST have encryption configured
-          if (process.env.NODE_ENV === 'production') {
-            throw new HTTPException(500, {
-              message: 'PHI encryption is required in production',
-            });
-          }
-          stagesJsonEncrypted = session.stages ? JSON.stringify(session.stages) : null;
-          hrvJsonEncrypted = session.hrv ? JSON.stringify(session.hrv) : null;
-          heartRateJsonEncrypted = session.heartRate ? JSON.stringify(session.heartRate) : null;
-        }
-
-        // Insert session with encrypted PHI
-        await db.insert(wearableSleepSessions).values({
-          id: nanoid(),
-          userId: device.userId,
-          deviceId: device.id,
-          sourceSessionId: session.sessionId,
-          source: session.source,
-          startTime: session.startTime,
-          endTime: session.endTime,
-          tst: metrics.tst,
-          tib: metrics.tib,
-          se: metrics.se,
-          waso: metrics.waso,
-          sol: metrics.sol,
-          awakenings: metrics.awakenings,
-          stageWake: metrics.stageWake,
-          stageLight: metrics.stageLight,
-          stageDeep: metrics.stageDeep,
-          stageRem: metrics.stageRem,
-          hrvMeanRmssd: metrics.hrvMeanRmssd,
-          hrvSdRmssd: metrics.hrvSdRmssd,
-          hrvSampleCount: metrics.hrvSampleCount,
-          restingHeartRate: session.restingHeartRate ?? null,
-          stagesJson: stagesJsonEncrypted,
-          hrvJson: hrvJsonEncrypted,
-          heartRateJson: heartRateJsonEncrypted,
-          notes: session.notes ?? null,
-          processedAt: now,
-          syncedAt: now,
-        });
-
-        processed++;
-      } catch (err) {
-        errors.push({
-          sessionId: session.sessionId,
-          error: err instanceof Error ? err.message : 'Unknown error',
-        });
-      }
+      console.error(`[Security] Token reuse detected for family ${verification.payload.family}`);
     }
 
-    // Update sync log
-    const syncEndTime = new Date().toISOString();
-    const syncStartMs = new Date(now).getTime();
-    const syncEndMs = new Date(syncEndTime).getTime();
-
-    await db
-      .update(wearableSyncLog)
-      .set({
-        sessionsProcessed: processed,
-        sessionsSkipped: skipped,
-        syncCompletedAt: syncEndTime,
-        durationMs: syncEndMs - syncStartMs,
-        status: errors.length > 0 ? 'completed' : 'completed',
-        errorsJson: errors.length > 0 ? JSON.stringify(errors) : null,
-      })
-      .where(eq(wearableSyncLog.id, syncLogId));
-
-    // Update device last sync time
-    await db
-      .update(wearableDevices)
-      .set({
-        lastSyncAt: syncEndTime,
-        updatedAt: syncEndTime,
-      })
-      .where(eq(wearableDevices.id, device.id));
-
-    const response: ApiResponse<{
-      processed: number;
-      skipped: number;
-      errors: Array<{ sessionId: string; error: string }>;
-      syncId: string;
-      nextSyncRecommended: string;
-    }> = {
-      success: true,
-      data: {
-        processed,
-        skipped,
-        errors,
-        syncId: syncLogId,
-        nextSyncRecommended: 'PT15M', // ISO 8601 duration: 15 minutes
-      },
+    return c.json<ApiResponse<null>>({
+      success: false,
+      error: 'invalid_grant',
       timestamp: Date.now(),
-    };
-
-    return c.json(response, 200);
+    }, 400);
   }
-);
+
+  // Generate new token pair (rotation)
+  const tokens = await generateTokenPair(
+    {
+      deviceId: device.deviceId,
+      userId: device.userId,
+      telegramId: device.telegramId,
+    },
+    jwtSecret,
+    device.tokenFamily // Keep same family
+  );
+
+  // Update device with new tokens
+  await db.update(wearableDevices)
+    .set({
+      accessToken: tokens.accessToken,
+      accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+      refreshToken: tokens.refreshToken,
+      refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+      updatedAt: now,
+    })
+    .where(eq(wearableDevices.id, device.id));
+
+  return c.json<ApiResponse<{
+    accessToken: string;
+    tokenType: string;
+    expiresIn: number;
+    refreshToken: string;
+  }>>({
+    success: true,
+    data: {
+      accessToken: tokens.accessToken,
+      tokenType: 'Bearer',
+      expiresIn: 3600,
+      refreshToken: tokens.refreshToken,
+    },
+    timestamp: Date.now(),
+  });
+});
 
 /**
- * GET /api/wearable/status
+ * DELETE /device/revoke
+ * Revoke device tokens (logout)
+ */
+wearable.delete('/device/revoke', deviceAuthMiddleware, async (c) => {
+  const device = c.get('device' as never) as typeof wearableDevices.$inferSelect;
+  const db = getDatabase();
+  const now = new Date().toISOString();
+
+  // Deactivate device (soft delete)
+  await db.update(wearableDevices)
+    .set({
+      isActive: false,
+      deactivatedAt: now,
+      deactivationReason: 'user_request',
+      updatedAt: now,
+    })
+    .where(eq(wearableDevices.id, device.id));
+
+  return c.json<ApiResponse<{ revoked: boolean }>>({
+    success: true,
+    data: { revoked: true },
+    timestamp: Date.now(),
+  });
+});
+
+// ============================================================================
+// Legacy Endpoints (backward compatibility)
+// ============================================================================
+
+/**
+ * POST /link/generate (LEGACY)
+ * @deprecated Use POST /device/authorize instead
+ */
+wearable.post('/link/generate', zValidator('json', authorizeSchema), async (c) => {
+  const { telegramId, firstName, lastName, username } = c.req.valid('json');
+  const db = getDatabase();
+  const now = new Date().toISOString();
+
+  // Find or create user
+  let user = await db.query.users.findFirst({
+    where: eq(users.telegramId, telegramId),
+  });
+
+  if (!user) {
+    const userId = nanoid();
+    await db.insert(users).values({
+      id: userId,
+      telegramId,
+      firstName,
+      lastName: lastName ?? null,
+      username: username ?? null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  }
+
+  if (!user) {
+    return c.json<ApiResponse<null>>({
+      success: false,
+      error: 'Failed to create user',
+      timestamp: Date.now(),
+    }, 500);
+  }
+
+  // Invalidate previous codes
+  await db.update(wearableLinkCodes)
+    .set({ usedAt: now })
+    .where(and(
+      eq(wearableLinkCodes.userId, user.id),
+      isNull(wearableLinkCodes.usedAt)
+    ));
+
+  // Generate codes
+  const codes = generateLinkCodes();
+
+  await db.insert(wearableLinkCodes).values({
+    id: nanoid(),
+    userId: user.id,
+    telegramId,
+    userCode: codes.userCode,
+    deviceCode: codes.deviceCode,
+    expiresAt: codes.expiresAt,
+    createdAt: now,
+  });
+
+  // Legacy response format
+  return c.json<ApiResponse<{
+    linkCode: string;
+    expiresAt: string;
+    expiresInSeconds: number;
+  }>>({
+    success: true,
+    data: {
+      linkCode: codes.userCode, // Legacy: userCode was called linkCode
+      expiresAt: codes.expiresAt,
+      expiresInSeconds: codes.expiresInSeconds,
+    },
+    timestamp: Date.now(),
+  });
+});
+
+/**
+ * POST /link (LEGACY)
+ * @deprecated Use POST /device/token instead
+ */
+wearable.post('/link', zValidator('json', z.object({
+  linkCode: z.string().length(6),
+  device: z.object({
+    id: z.string().min(1),
+    name: z.string().optional(),
+    manufacturer: z.string().optional(),
+    model: z.string().optional(),
+    osVersion: z.string().optional(),
+    appVersion: z.string().optional(),
+  }),
+})), async (c) => {
+  const { linkCode, device } = c.req.valid('json');
+  const jwtSecret = c.get('jwtSecret');
+  const db = getDatabase();
+  const now = new Date().toISOString();
+
+  // Find by userCode (legacy: linkCode = userCode)
+  const code = await db.query.wearableLinkCodes.findFirst({
+    where: eq(wearableLinkCodes.userCode, linkCode.toUpperCase()),
+  });
+
+  if (!code || code.usedAt) {
+    return c.json<ApiResponse<null>>({
+      success: false,
+      error: 'Invalid or expired link code',
+      timestamp: Date.now(),
+    }, 400);
+  }
+
+  if (new Date(code.expiresAt) < new Date()) {
+    return c.json<ApiResponse<null>>({
+      success: false,
+      error: 'Link code has expired',
+      timestamp: Date.now(),
+    }, 400);
+  }
+
+  // Rate limiting
+  if ((code.attempts || 0) >= MAX_LINK_CODE_ATTEMPTS) {
+    return c.json<ApiResponse<null>>({
+      success: false,
+      error: 'Too many attempts',
+      timestamp: Date.now(),
+    }, 429);
+  }
+
+  await db.update(wearableLinkCodes)
+    .set({ attempts: (code.attempts || 0) + 1, lastAttemptAt: now })
+    .where(eq(wearableLinkCodes.id, code.id));
+
+  // Check for existing device (same user)
+  const existingDevice = await db.query.wearableDevices.findFirst({
+    where: and(
+      eq(wearableDevices.deviceId, device.id),
+      eq(wearableDevices.userId, code.userId)
+    ),
+  });
+
+  // Check for device linked to other user
+  const otherUserDevice = await db.query.wearableDevices.findFirst({
+    where: and(
+      eq(wearableDevices.deviceId, device.id),
+      eq(wearableDevices.isActive, true)
+    ),
+  });
+
+  if (otherUserDevice && otherUserDevice.userId !== code.userId) {
+    return c.json<ApiResponse<null>>({
+      success: false,
+      error: 'Device is linked to another account',
+      timestamp: Date.now(),
+    }, 409);
+  }
+
+  // Generate tokens
+  const tokens = await generateTokenPair(
+    { deviceId: device.id, userId: code.userId, telegramId: code.telegramId },
+    jwtSecret,
+    existingDevice?.tokenFamily
+  );
+
+  if (existingDevice) {
+    await db.update(wearableDevices)
+      .set({
+        deviceName: device.name ?? null,
+        manufacturer: device.manufacturer ?? null,
+        model: device.model ?? null,
+        osVersion: device.osVersion ?? null,
+        appVersion: device.appVersion ?? null,
+        accessToken: tokens.accessToken,
+        accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+        refreshToken: tokens.refreshToken,
+        refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+        isActive: true,
+        deactivatedAt: null,
+        deactivationReason: null,
+        updatedAt: now,
+      })
+      .where(eq(wearableDevices.id, existingDevice.id));
+  } else {
+    await db.insert(wearableDevices).values({
+      id: nanoid(),
+      userId: code.userId,
+      telegramId: code.telegramId,
+      deviceId: device.id,
+      deviceName: device.name ?? null,
+      manufacturer: device.manufacturer ?? null,
+      model: device.model ?? null,
+      osVersion: device.osVersion ?? null,
+      appVersion: device.appVersion ?? null,
+      accessToken: tokens.accessToken,
+      accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+      refreshToken: tokens.refreshToken,
+      refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+      tokenFamily: tokens.tokenFamily,
+      linkedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  await db.update(wearableLinkCodes)
+    .set({ usedAt: now, usedByDeviceId: device.id })
+    .where(eq(wearableLinkCodes.id, code.id));
+
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, code.userId),
+  });
+
+  // Legacy response format
+  return c.json<ApiResponse<{
+    token: string;
+    expiresAt: string;
+    user: { id: string; telegramId: number; firstName: string };
+  }>>({
+    success: true,
+    data: {
+      token: tokens.accessToken, // Legacy: single token
+      expiresAt: tokens.accessTokenExpiresAt,
+      user: {
+        id: code.userId,
+        telegramId: code.telegramId,
+        firstName: user?.firstName || 'User',
+      },
+    },
+    timestamp: Date.now(),
+  });
+});
+
+// ============================================================================
+// Data Sync Endpoints
+// ============================================================================
+
+/**
+ * POST /sync
+ * Sync wearable data from Android Companion App
+ */
+wearable.post('/sync', deviceAuthMiddleware, zValidator('json', syncDataSchema), async (c) => {
+  const payload = c.req.valid('json');
+  const device = c.get('device' as never) as typeof wearableDevices.$inferSelect;
+  const db = getDatabase();
+  const now = new Date().toISOString();
+
+  const syncLogId = nanoid();
+  await db.insert(wearableSyncLog).values({
+    id: syncLogId,
+    userId: device.userId,
+    deviceId: device.id,
+    syncType: payload.syncType,
+    sessionsReceived: payload.sleepSessions.length,
+    syncStartedAt: now,
+    status: 'processing',
+    dataFromTime: payload.lastSyncTime ?? null,
+    dataToTime: now,
+  });
+
+  let processed = 0;
+  let skipped = 0;
+  const errors: Array<{ sessionId: string; error: string }> = [];
+
+  for (const session of payload.sleepSessions) {
+    try {
+      const existing = await db.query.wearableSleepSessions.findFirst({
+        where: and(
+          eq(wearableSleepSessions.userId, device.userId),
+          eq(wearableSleepSessions.sourceSessionId, session.sessionId)
+        ),
+      });
+
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      const metrics = calculateSleepMetrics(session);
+
+      let stagesJsonEncrypted: string | null = null;
+      let hrvJsonEncrypted: string | null = null;
+      let heartRateJsonEncrypted: string | null = null;
+
+      if (isEncryptionAvailable()) {
+        const encryption = getEncryptionService();
+        if (session.stages) stagesJsonEncrypted = encryption.encrypt(JSON.stringify(session.stages));
+        if (session.hrv) hrvJsonEncrypted = encryption.encrypt(JSON.stringify(session.hrv));
+        if (session.heartRate) heartRateJsonEncrypted = encryption.encrypt(JSON.stringify(session.heartRate));
+      } else {
+        if (process.env.NODE_ENV === 'production') {
+          throw new HTTPException(500, { message: 'PHI encryption is required in production' });
+        }
+        stagesJsonEncrypted = session.stages ? JSON.stringify(session.stages) : null;
+        hrvJsonEncrypted = session.hrv ? JSON.stringify(session.hrv) : null;
+        heartRateJsonEncrypted = session.heartRate ? JSON.stringify(session.heartRate) : null;
+      }
+
+      await db.insert(wearableSleepSessions).values({
+        id: nanoid(),
+        userId: device.userId,
+        deviceId: device.id,
+        sourceSessionId: session.sessionId,
+        source: session.source,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        tst: metrics.tst,
+        tib: metrics.tib,
+        se: metrics.se,
+        waso: metrics.waso,
+        sol: metrics.sol,
+        awakenings: metrics.awakenings,
+        stageWake: metrics.stageWake,
+        stageLight: metrics.stageLight,
+        stageDeep: metrics.stageDeep,
+        stageRem: metrics.stageRem,
+        hrvMeanRmssd: metrics.hrvMeanRmssd,
+        hrvSdRmssd: metrics.hrvSdRmssd,
+        hrvSampleCount: metrics.hrvSampleCount,
+        restingHeartRate: session.restingHeartRate ?? null,
+        stagesJson: stagesJsonEncrypted,
+        hrvJson: hrvJsonEncrypted,
+        heartRateJson: heartRateJsonEncrypted,
+        notes: session.notes ?? null,
+        processedAt: now,
+        syncedAt: now,
+      });
+
+      processed++;
+    } catch (err) {
+      errors.push({
+        sessionId: session.sessionId,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
+  }
+
+  const syncEndTime = new Date().toISOString();
+  const durationMs = new Date(syncEndTime).getTime() - new Date(now).getTime();
+
+  await db.update(wearableSyncLog)
+    .set({
+      sessionsProcessed: processed,
+      sessionsSkipped: skipped,
+      syncCompletedAt: syncEndTime,
+      durationMs,
+      status: errors.length > 0 ? 'completed_with_errors' : 'completed',
+      errorsJson: errors.length > 0 ? JSON.stringify(errors) : null,
+    })
+    .where(eq(wearableSyncLog.id, syncLogId));
+
+  await db.update(wearableDevices)
+    .set({ lastSyncAt: syncEndTime, updatedAt: syncEndTime })
+    .where(eq(wearableDevices.id, device.id));
+
+  return c.json<ApiResponse<{
+    processed: number;
+    skipped: number;
+    errors: Array<{ sessionId: string; error: string }>;
+    syncId: string;
+    nextSyncRecommended: string;
+  }>>({
+    success: true,
+    data: {
+      processed,
+      skipped,
+      errors,
+      syncId: syncLogId,
+      nextSyncRecommended: 'PT15M',
+    },
+    timestamp: Date.now(),
+  });
+});
+
+/**
+ * GET /status
  * Get wearable sync status
- *
- * Requires: Device token authentication
  */
 wearable.get('/status', deviceAuthMiddleware, async (c) => {
   const device = c.get('device' as never) as typeof wearableDevices.$inferSelect;
   const db = getDatabase();
 
-  // Get recent sync logs
   const recentSyncs = await db.query.wearableSyncLog.findMany({
     where: eq(wearableSyncLog.deviceId, device.id),
     orderBy: [desc(wearableSyncLog.syncStartedAt)],
     limit: 5,
   });
 
-  // Get session count
-  const sessions = await db.query.wearableSleepSessions.findMany({
+  // Use COUNT instead of loading all sessions
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const allSessions = await db.query.wearableSleepSessions.findMany({
     where: eq(wearableSleepSessions.deviceId, device.id),
+    columns: { id: true },
   });
 
-  // Get sessions from last 7 days
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const recentSessions = await db.query.wearableSleepSessions.findMany({
     where: and(
       eq(wearableSleepSessions.deviceId, device.id),
       gte(wearableSleepSessions.syncedAt, weekAgo)
     ),
+    columns: { id: true },
   });
 
-  const response: ApiResponse<{
+  return c.json<ApiResponse<{
     device: {
       id: string;
       name: string | null;
@@ -714,7 +1069,7 @@ wearable.get('/status', deviceAuthMiddleware, async (c) => {
       status: string | null;
       completedAt: string | null;
     }>;
-  }> = {
+  }>>({
     success: true,
     data: {
       device: {
@@ -726,11 +1081,11 @@ wearable.get('/status', deviceAuthMiddleware, async (c) => {
         lastSyncAt: device.lastSyncAt,
       },
       stats: {
-        totalSessions: sessions.length,
+        totalSessions: allSessions.length,
         sessionsLast7Days: recentSessions.length,
         lastSyncStatus: recentSyncs[0]?.status ?? null,
       },
-      recentSyncs: recentSyncs.map((s: typeof wearableSyncLog.$inferSelect) => ({
+      recentSyncs: recentSyncs.map((s) => ({
         id: s.id,
         type: s.syncType,
         processed: s.sessionsProcessed ?? 0,
@@ -739,38 +1094,32 @@ wearable.get('/status', deviceAuthMiddleware, async (c) => {
       })),
     },
     timestamp: Date.now(),
-  };
-
-  return c.json(response, 200);
+  });
 });
 
 /**
- * DELETE /api/wearable/unlink
- * Unlink device
- *
- * Requires: Device token authentication
+ * DELETE /unlink (LEGACY)
+ * @deprecated Use DELETE /device/revoke instead
  */
 wearable.delete('/unlink', deviceAuthMiddleware, async (c) => {
   const device = c.get('device' as never) as typeof wearableDevices.$inferSelect;
   const db = getDatabase();
   const now = new Date().toISOString();
 
-  // Deactivate device (soft delete)
-  await db
-    .update(wearableDevices)
+  await db.update(wearableDevices)
     .set({
       isActive: false,
+      deactivatedAt: now,
+      deactivationReason: 'user_request',
       updatedAt: now,
     })
     .where(eq(wearableDevices.id, device.id));
 
-  const response: ApiResponse<{ unlinked: boolean }> = {
+  return c.json<ApiResponse<{ unlinked: boolean }>>({
     success: true,
     data: { unlinked: true },
     timestamp: Date.now(),
-  };
-
-  return c.json(response, 200);
+  });
 });
 
 export default wearable;

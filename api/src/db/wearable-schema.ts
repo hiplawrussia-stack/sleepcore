@@ -3,16 +3,65 @@
  * ========================
  * Drizzle ORM schema for wearable device linking and data sync.
  *
+ * Architecture based on RFC 8628 (OAuth 2.0 Device Authorization Grant):
+ * - Separate link_codes table for authorization flow
+ * - Access + Refresh token architecture
+ * - Token rotation on refresh
+ * - Rate limiting via attempts counter
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc8628
  * @packageDocumentation
  * @module api/db
  */
 
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { users } from './schema.js';
+
+/**
+ * Device Link Codes table (RFC 8628)
+ * Temporary codes for device authorization flow
+ *
+ * Flow:
+ * 1. Bot calls /device/authorize → creates link code
+ * 2. User enters code in Android app
+ * 3. App calls /device/token → exchanges code for tokens
+ * 4. Code is marked as used
+ */
+export const wearableLinkCodes = sqliteTable('api_wearable_link_codes', {
+  id: text('id').primaryKey(),
+
+  // User reference
+  userId: text('user_id').notNull().references(() => users.id),
+  telegramId: integer('telegram_id').notNull(),
+
+  // RFC 8628: user_code (displayed to user, 6 chars)
+  userCode: text('user_code').notNull().unique(),
+
+  // RFC 8628: device_code (high entropy, used by app for polling)
+  deviceCode: text('device_code').notNull().unique(),
+
+  // Expiration (RFC 8628: typically 900 seconds / 15 minutes)
+  expiresAt: text('expires_at').notNull(),
+
+  // Usage tracking
+  usedAt: text('used_at'), // NULL = not used, timestamp = used
+  usedByDeviceId: text('used_by_device_id'), // Which device used this code
+
+  // Rate limiting (RFC 8628 §5.2: SHOULD rate-limit)
+  attempts: integer('attempts').default(0),
+  lastAttemptAt: text('last_attempt_at'),
+
+  // Timestamps
+  createdAt: text('created_at').notNull(),
+});
 
 /**
  * Wearable Devices table
  * Stores linked Android companion app devices
+ *
+ * Note: deviceId is NOT globally unique - same physical device
+ * can be linked to different users (device replacement scenario).
+ * Uniqueness is enforced on (deviceId, userId) pair.
  */
 export const wearableDevices = sqliteTable('api_wearable_devices', {
   id: text('id').primaryKey(),
@@ -21,31 +70,44 @@ export const wearableDevices = sqliteTable('api_wearable_devices', {
   userId: text('user_id').notNull().references(() => users.id),
   telegramId: integer('telegram_id').notNull(),
 
-  // Device info
-  deviceId: text('device_id').notNull().unique(),
+  // Device info (deviceId = Android device ID)
+  deviceId: text('device_id').notNull(),
   deviceName: text('device_name'),
   manufacturer: text('manufacturer'),
   model: text('model'),
   osVersion: text('os_version'),
   appVersion: text('app_version'),
 
-  // Authentication
-  deviceToken: text('device_token').notNull().unique(),
-  tokenExpiresAt: text('token_expires_at'),
+  // Access Token (short-lived: 1 hour)
+  accessToken: text('access_token').notNull().unique(),
+  accessTokenExpiresAt: text('access_token_expires_at').notNull(),
 
-  // Linking
-  linkCode: text('link_code').unique(),
-  linkCodeExpiresAt: text('link_code_expires_at'),
-  linkedAt: text('linked_at'),
+  // Refresh Token (longer-lived: 30 days, rotated on use)
+  refreshToken: text('refresh_token').notNull().unique(),
+  refreshTokenExpiresAt: text('refresh_token_expires_at').notNull(),
+
+  // Token family for rotation detection (RFC 6749)
+  tokenFamily: text('token_family').notNull(),
+
+  // Linking info
+  linkedAt: text('linked_at').notNull(),
 
   // Status
   isActive: integer('is_active', { mode: 'boolean' }).default(true),
+  isPrimary: integer('is_primary', { mode: 'boolean' }).default(false),
   lastSyncAt: text('last_sync_at'),
+
+  // Deactivation tracking (audit trail)
+  deactivatedAt: text('deactivated_at'),
+  deactivationReason: text('deactivation_reason'), // 'replaced', 'user_request', 'admin', 'token_reuse'
 
   // Timestamps
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
-});
+}, (table) => ({
+  // Composite unique: same device can only be linked once per user
+  deviceUserIdx: uniqueIndex('device_user_idx').on(table.deviceId, table.userId),
+}));
 
 /**
  * Wearable Sleep Sessions table
@@ -132,6 +194,8 @@ export const wearableSyncLog = sqliteTable('api_wearable_sync_log', {
 });
 
 // Type exports
+export type WearableLinkCode = typeof wearableLinkCodes.$inferSelect;
+export type NewWearableLinkCode = typeof wearableLinkCodes.$inferInsert;
 export type WearableDevice = typeof wearableDevices.$inferSelect;
 export type NewWearableDevice = typeof wearableDevices.$inferInsert;
 export type WearableSleepSession = typeof wearableSleepSessions.$inferSelect;
