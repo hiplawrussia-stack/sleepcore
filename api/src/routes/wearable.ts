@@ -22,7 +22,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
-import { eq, and, desc, gte, lt, isNull } from 'drizzle-orm';
+import { eq, and, desc, gte, isNull } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
 import { getDatabase, users } from '../db/index.js';
 import {
@@ -37,7 +37,6 @@ import {
   verifyAccessToken,
   verifyRefreshToken,
   MAX_LINK_CODE_ATTEMPTS,
-  type AccessTokenPayload,
 } from '../utils/wearable-auth.js';
 import { getEncryptionService, isEncryptionAvailable } from '../utils/encryption.js';
 import type { ApiResponse } from '../types/index.js';
