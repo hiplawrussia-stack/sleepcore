@@ -417,7 +417,9 @@ function migrateUsersAddVkId(sqlite: Database.Database): void {
   }
 
   console.log('[Migration] Adding vk_id column to api_users...');
-  sqlite.exec(`ALTER TABLE api_users ADD COLUMN vk_id INTEGER UNIQUE`);
+  // SQLite doesn't support adding UNIQUE column directly, so add column first, then create index
+  sqlite.exec(`ALTER TABLE api_users ADD COLUMN vk_id INTEGER`);
+  sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_vk_id ON api_users(vk_id)`);
   console.log('[Migration] vk_id column added.');
 }
 
