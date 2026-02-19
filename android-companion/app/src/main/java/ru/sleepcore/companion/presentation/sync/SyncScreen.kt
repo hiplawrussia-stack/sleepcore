@@ -193,7 +193,7 @@ fun SyncScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         TextButton(
                             onClick = {
-                                uriHandler.open("https://us.community.samsung.com/t5/Galaxy-Watch/Galaxy-Watch-7-Ultra-inaccurate-sleep-tracking/td-p/3057389")
+                                uriHandler.openUri("https://us.community.samsung.com/t5/Galaxy-Watch/Galaxy-Watch-7-Ultra-inaccurate-sleep-tracking/td-p/3057389")
                             },
                             modifier = Modifier.align(Alignment.End)
                         ) {

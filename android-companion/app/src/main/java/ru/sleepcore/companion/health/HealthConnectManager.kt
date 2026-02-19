@@ -476,13 +476,15 @@ class HealthConnectManager @Inject constructor(
                     ?.takeIf { !it.isNaN() }
 
                 // NEW (2025-02): Get skin temperature deviation for this session
+                // SkinTemperatureRecord is an IntervalRecord with startTime/endTime
                 val skinTemperature = skinTempResponse?.records
-                    ?.filter { it.time >= sessionStart && it.time <= sessionEnd }
-                    ?.map { it.baseline?.inCelsius?.let { baseline ->
-                        it.deltas.firstOrNull()?.delta?.inCelsius ?: 0.0
-                    } ?: 0.0 }
+                    ?.filter { it.startTime >= sessionStart && it.endTime <= sessionEnd }
+                    ?.mapNotNull { record ->
+                        // Get the first delta value (deviation from baseline)
+                        record.deltas.firstOrNull()?.delta?.inCelsius
+                    }
                     ?.average()
-                    ?.takeIf { !it.isNaN() && it != 0.0 }
+                    ?.takeIf { !it.isNaN() }
 
                 // Map stages
                 val stages = record.stages.map { stage ->
