@@ -2,6 +2,14 @@
  * Sync ViewModel
  * ================
  * Manages sync dashboard state and operations.
+ *
+ * Updated (February 2026):
+ * - Added retry logic with exponential backoff for network operations
+ * - Integrated centralized error logging
+ *
+ * Sources:
+ * - developer.android.com/topic/libraries/architecture/workmanager
+ * - medium.com/@hiren6997/workmanager-in-2025-5-patterns-that-actually-work-in-production
  */
 
 package ru.sleepcore.companion.presentation.sync
@@ -18,6 +26,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.sleepcore.companion.data.repository.SleepRepository
 import ru.sleepcore.companion.health.HealthConnectManager
+import ru.sleepcore.companion.util.ErrorContext
+import ru.sleepcore.companion.util.ErrorLogger
+import ru.sleepcore.companion.util.ErrorSeverity
+import ru.sleepcore.companion.util.RetryHelper
+import ru.sleepcore.companion.util.RetryResult
 import ru.sleepcore.companion.worker.SyncWorker
 import java.time.Instant
 import javax.inject.Inject
@@ -95,7 +108,23 @@ class SyncViewModel @Inject constructor(
 
     fun refreshStatus() {
         viewModelScope.launch {
-            val result = sleepRepository.getSyncStatus()
+            // Use retry helper for network resilience
+            val result = RetryHelper.withRetryResult(
+                config = RetryHelper.NETWORK_CONFIG.copy(maxAttempts = 2), // Fewer retries for status
+                onRetry = { attempt, delayMs, error ->
+                    ErrorLogger.logNetworkError(
+                        tag = TAG,
+                        operation = "refreshStatus",
+                        attempt = attempt,
+                        maxAttempts = 2,
+                        delayMs = delayMs,
+                        throwable = error
+                    )
+                }
+            ) {
+                sleepRepository.getSyncStatus()
+            }
+
             result.onSuccess { status ->
                 _uiState.update {
                     it.copy(
@@ -105,6 +134,13 @@ class SyncViewModel @Inject constructor(
                         lastSyncStatus = status.stats.lastSyncStatus
                     )
                 }
+            }.onFailure { error ->
+                ErrorLogger.log(
+                    severity = ErrorSeverity.WARNING,
+                    context = ErrorContext(TAG, "refreshStatus"),
+                    message = "Failed to refresh status",
+                    throwable = error
+                )
             }
         }
     }
@@ -119,9 +155,28 @@ class SyncViewModel @Inject constructor(
                 )
             }
 
-            val result = sleepRepository.syncSessions(syncType = "manual")
+            // Use retry helper with exponential backoff for network resilience
+            val retryResult = RetryHelper.withRetryResult(
+                config = RetryHelper.NETWORK_CONFIG,
+                onRetry = { attempt, delayMs, error ->
+                    ErrorLogger.logNetworkError(
+                        tag = TAG,
+                        operation = "syncNow",
+                        attempt = attempt,
+                        maxAttempts = RetryHelper.NETWORK_CONFIG.maxAttempts,
+                        delayMs = delayMs,
+                        throwable = error
+                    )
+                    // Update UI to show retry status
+                    _uiState.update {
+                        it.copy(syncMessage = "Retrying... (attempt $attempt)")
+                    }
+                }
+            ) {
+                sleepRepository.syncSessions(syncType = "manual")
+            }
 
-            result.fold(
+            retryResult.fold(
                 onSuccess = { syncResult ->
                     val message = when {
                         syncResult.processed > 0 ->
@@ -138,6 +193,12 @@ class SyncViewModel @Inject constructor(
                             syncError = false
                         )
                     }
+                    ErrorLogger.logSync(
+                        success = true,
+                        operation = "manual",
+                        processed = syncResult.processed,
+                        skipped = syncResult.skipped
+                    )
                     refreshStatus()
                 },
                 onFailure = { exception ->
@@ -153,9 +214,19 @@ class SyncViewModel @Inject constructor(
                             syncError = exception.message != "NO_NEW_DATA"
                         )
                     }
+                    ErrorLogger.logSync(
+                        success = false,
+                        operation = "manual",
+                        error = exception.message,
+                        throwable = exception
+                    )
                 }
             )
         }
+    }
+
+    companion object {
+        private const val TAG = "SyncViewModel"
     }
 
     fun toggleBackgroundSync(enabled: Boolean) {

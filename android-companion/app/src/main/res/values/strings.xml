@@ -45,7 +45,10 @@
         • Sleep sessions (duration, stages)\n
         • Heart Rate Variability (HRV)\n
         • Heart Rate during sleep\n
-        • Resting Heart Rate\n\n
+        • Resting Heart Rate\n
+        • Blood Oxygen (SpO2)\n
+        • Respiratory Rate\n
+        • Skin Temperature\n\n
         Your data is:\n
         • Encrypted in transit (TLS 1.3)\n
         • Stored securely on our servers\n
@@ -53,4 +56,36 @@
         • Used only for your sleep therapy\n\n
         You can delete your data at any time by unlinking the device.
     </string>
+
+    <!-- Sync Messages -->
+    <string name="sync_success_processed">Synced %d session(s)</string>
+    <string name="sync_success_skipped">%d session(s) already synced</string>
+    <string name="sync_success_complete">Sync complete</string>
+    <string name="sync_no_new_data">No new sleep data to sync</string>
+    <string name="sync_token_expired">Session expired. Please re-link device.</string>
+    <string name="sync_failed">Sync failed: %s</string>
+    <string name="sync_retrying">Retrying… (attempt %d)</string>
+
+    <!-- Errors -->
+    <string name="error_network">Network error. Check your internet connection.</string>
+    <string name="error_server">Server error. Please try again later.</string>
+    <string name="error_invalid_code">Invalid code. Check the code and try again.</string>
+    <string name="error_expired_code">Code expired. Request a new code from the Telegram bot.</string>
+    <string name="error_unknown">Unknown error. Please try again later.</string>
+
+    <!-- Accessibility (WCAG 2.1 AA compliance) -->
+    <string name="content_description_refresh">Refresh</string>
+    <string name="content_description_unlink">Unlink device</string>
+    <string name="content_description_sync_success">Sync completed successfully</string>
+    <string name="content_description_sync_in_progress">Sync in progress</string>
+    <string name="content_description_sync_failed">Sync failed</string>
+    <string name="content_description_back">Go back</string>
+
+    <!-- Readiness Score -->
+    <string name="readiness_score_title">Readiness Score</string>
+    <string name="readiness_score_description">A comprehensive assessment of your readiness for the day based on sleep quality, HRV, and recovery.</string>
+    <string name="readiness_optimal">Optimal</string>
+    <string name="readiness_good">Good</string>
+    <string name="readiness_fair">Fair</string>
+    <string name="readiness_low">Low</string>
 </resources>

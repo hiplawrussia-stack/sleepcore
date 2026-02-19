@@ -66,7 +66,29 @@
 
 # Security Crypto - EncryptedSharedPreferences
 -keep class androidx.security.crypto.** { *; }
+
+# Google Tink - Encryption Library (Feb 2026)
+# Based on research: R8 stripping issue with Tink + Protobuf
+# Source: docs.sentry.io/platforms/android/troubleshooting/
+# Confidence: HIGH
 -keep class com.google.crypto.tink.** { *; }
+-keepclassmembers class com.google.crypto.tink.** { *; }
+-dontwarn com.google.crypto.tink.**
+
+# Tink uses shaded Protobuf (since 1.10.0) - keep these classes
+-keep class com.google.crypto.tink.shaded.protobuf.** { *; }
+-keepclassmembers class com.google.crypto.tink.shaded.protobuf.** { *; }
+
+# Tink KeysetHandle and related classes
+-keep class * extends com.google.crypto.tink.KeyManager { *; }
+-keep class * extends com.google.crypto.tink.KeyTypeManager { *; }
+-keep class * implements com.google.crypto.tink.PrimitiveWrapper { *; }
+
+# Tink Aead, Mac, and other primitives
+-keep class * implements com.google.crypto.tink.Aead { *; }
+-keep class * implements com.google.crypto.tink.Mac { *; }
+-keep class * implements com.google.crypto.tink.StreamingAead { *; }
+-keep class * implements com.google.crypto.tink.DeterministicAead { *; }
 
 # Remove logging in release
 -assumenosideeffects class android.util.Log {

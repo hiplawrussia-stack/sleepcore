@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Russian Localization (values-ru/strings.xml)
+  =============================================
+  Based on research (February 2026):
+  - Android localization best practices
+  - RTL support not needed for Russian (LTR language)
+  - Use stringResource() in Compose
+
+  Sources:
+  - developer.android.com/guide/topics/resources/localization
+  - developer.android.com/develop/ui/compose/accessibility
+
+  Confidence: HIGH
+-->
+<resources>
+    <string name="app_name">SleepCore</string>
+
+    <!-- Link Screen -->
+    <string name="link_title">Подключить устройство</string>
+    <string name="link_instructions">Введите 6-значный код из Telegram-бота SleepCore, чтобы связать это устройство.</string>
+    <string name="link_code_label">Код привязки</string>
+    <string name="link_button">Подключить</string>
+    <string name="health_connect_unavailable">Health Connect недоступен на этом устройстве. Пожалуйста, установите или обновите его через Google Play.</string>
+
+    <!-- Sync Screen -->
+    <string name="sync_title">Синхронизация сна</string>
+    <string name="sync_connected_via_telegram">Подключено через Telegram</string>
+    <string name="sync_permissions_required">Разрешения Health Connect</string>
+    <string name="sync_permissions_description">Для синхронизации данных о сне предоставьте доступ к Health Connect. Мы будем читать данные о сне, пульсе и вариабельности сердечного ритма.</string>
+    <string name="sync_grant_permissions">Предоставить разрешения</string>
+    <string name="sync_statistics">Статистика</string>
+    <string name="sync_total_sessions">Всего сессий</string>
+    <string name="sync_last_7_days">За 7 дней</string>
+    <string name="sync_last_sync">Последняя синхронизация</string>
+    <string name="sync_never">Ещё не синхронизировано</string>
+    <string name="sync_now">Синхронизировать</string>
+    <string name="sync_syncing">Синхронизация…</string>
+    <string name="sync_background_sync">Фоновая синхронизация</string>
+    <string name="sync_background_description">Автоматическая синхронизация данных каждые 15 минут</string>
+
+    <!-- Sync Messages -->
+    <string name="sync_success_processed">Синхронизировано сессий: %d</string>
+    <string name="sync_success_skipped">Уже синхронизировано: %d</string>
+    <string name="sync_success_complete">Синхронизация завершена</string>
+    <string name="sync_no_new_data">Нет новых данных для синхронизации</string>
+    <string name="sync_token_expired">Сессия истекла. Переподключите устройство.</string>
+    <string name="sync_failed">Ошибка синхронизации: %s</string>
+    <string name="sync_retrying">Повторная попытка… (%d)</string>
+
+    <!-- Samsung Accuracy Disclaimer -->
+    <string name="samsung_disclaimer_title">Уведомление для Samsung Galaxy Watch</string>
+    <string name="samsung_disclaimer_message">Некоторые модели Samsung Galaxy Watch (особенно Galaxy Watch 7/Ultra с One UI 8) могут неточно определять фазы сна. Если вы заметили значительные расхождения между вашим реальным сном и записанными данными, используйте субъективный дневник сна как основной источник данных.</string>
+    <string name="samsung_disclaimer_learn_more">Подробнее</string>
+
+    <!-- Unlink Dialog -->
+    <string name="unlink_title">Отвязать устройство?</string>
+    <string name="unlink_message">Это отключит ваше устройство от SleepCore. Для синхронизации данных о сне потребуется повторная привязка.</string>
+    <string name="unlink_confirm">Отвязать</string>
+    <string name="cancel">Отмена</string>
+
+    <!-- Privacy Policy -->
+    <string name="privacy_policy_title">Политика конфиденциальности</string>
+    <string name="privacy_policy_content">
+        Политика конфиденциальности приложения SleepCore Companion\n\n
+        Мы собираем данные о сне из Health Connect для предоставления персонализированных рекомендаций по терапии сна.\n\n
+        Собираемые данные:\n
+        • Сессии сна (продолжительность, фазы)\n
+        • Вариабельность сердечного ритма (ВСР)\n
+        • Частота пульса во время сна\n
+        • Пульс в покое\n
+        • Насыщение крови кислородом (SpO2)\n
+        • Частота дыхания\n
+        • Температура кожи\n\n
+        Ваши данные:\n
+        • Шифруются при передаче (TLS 1.3)\n
+        • Хранятся безопасно на наших серверах\n
+        • Никогда не передаются третьим лицам\n
+        • Используются только для вашей терапии сна\n\n
+        Вы можете удалить свои данные в любое время, отвязав устройство.
+    </string>
+
+    <!-- Errors -->
+    <string name="error_network">Ошибка сети. Проверьте подключение к интернету.</string>
+    <string name="error_server">Ошибка сервера. Попробуйте позже.</string>
+    <string name="error_invalid_code">Неверный код. Проверьте код и попробуйте снова.</string>
+    <string name="error_expired_code">Код истёк. Запросите новый код в Telegram-боте.</string>
+    <string name="error_unknown">Неизвестная ошибка. Попробуйте позже.</string>
+
+    <!-- Accessibility -->
+    <string name="content_description_refresh">Обновить</string>
+    <string name="content_description_unlink">Отвязать устройство</string>
+    <string name="content_description_sync_success">Синхронизация успешна</string>
+    <string name="content_description_sync_in_progress">Синхронизация выполняется</string>
+    <string name="content_description_sync_failed">Синхронизация не удалась</string>
+    <string name="content_description_back">Назад</string>
+
+    <!-- Readiness Score (from wearable feature) -->
+    <string name="readiness_score_title">Оценка готовности</string>
+    <string name="readiness_score_description">Комплексная оценка вашей готовности к новому дню на основе качества сна, ВСР и восстановления.</string>
+    <string name="readiness_optimal">Оптимальная</string>
+    <string name="readiness_good">Хорошая</string>
+    <string name="readiness_fair">Средняя</string>
+    <string name="readiness_low">Низкая</string>
+</resources>

@@ -7,6 +7,7 @@
 package ru.sleepcore.companion.presentation.sync
 
 import android.os.Build
+import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -18,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalUriHandler
@@ -41,6 +43,7 @@ fun SyncScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val view = LocalView.current  // For haptic feedback
 
     // Detect Samsung device for accuracy disclaimer
     val isSamsungDevice = remember {
@@ -69,11 +72,27 @@ fun SyncScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.sync_title)) },
                 actions = {
-                    IconButton(onClick = { viewModel.refreshStatus() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    IconButton(
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            viewModel.refreshStatus()
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = stringResource(R.string.content_description_refresh)
+                        )
                     }
-                    IconButton(onClick = { viewModel.showUnlinkDialog() }) {
-                        Icon(Icons.Default.LinkOff, contentDescription = "Unlink")
+                    IconButton(
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            viewModel.showUnlinkDialog()
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.LinkOff,
+                            contentDescription = stringResource(R.string.content_description_unlink)
+                        )
                     }
                 }
             )
@@ -258,9 +277,12 @@ fun SyncScreen(
                 }
             }
 
-            // Sync button
+            // Sync button with haptic feedback
             Button(
-                onClick = { viewModel.syncNow() },
+                onClick = {
+                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    viewModel.syncNow()
+                },
                 enabled = uiState.hasPermissions && !uiState.isSyncing,
                 modifier = Modifier.fillMaxWidth()
             ) {

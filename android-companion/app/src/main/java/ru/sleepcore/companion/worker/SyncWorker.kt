@@ -7,16 +7,21 @@
  * - WorkManager minimum interval: 15 minutes
  * - Respects Doze mode and battery optimization
  * - Uses constraints for network and battery
+ * - CoroutineWorker preferred over Worker for Kotlin
+ * - Automatic cancellation handling via coroutines
  *
  * Android 15+ enables background Health Connect reads.
  *
- * Source: developer.android.com/topic/libraries/architecture/workmanager
+ * Sources:
+ * - developer.android.com/topic/libraries/architecture/workmanager
+ * - medium.com/@hiren6997/workmanager-in-2025-5-patterns-that-actually-work-in-production
+ *
+ * Confidence: HIGH
  */
 
 package ru.sleepcore.companion.worker
 
 import android.content.Context
-import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import dagger.assisted.Assisted
@@ -24,6 +29,9 @@ import dagger.assisted.AssistedInject
 import ru.sleepcore.companion.data.repository.SleepRepository
 import ru.sleepcore.companion.health.HealthConnectAvailability
 import ru.sleepcore.companion.health.HealthConnectManager
+import ru.sleepcore.companion.util.ErrorContext
+import ru.sleepcore.companion.util.ErrorLogger
+import ru.sleepcore.companion.util.ErrorSeverity
 import java.util.concurrent.TimeUnit
 
 @HiltWorker
@@ -90,7 +98,11 @@ class SyncWorker @AssistedInject constructor(
                     ExistingPeriodicWorkPolicy.KEEP,
                     createPeriodicWorkRequest()
                 )
-            Log.i(TAG, "Periodic sync scheduled (every $SYNC_INTERVAL_MINUTES minutes)")
+            ErrorLogger.log(
+                severity = ErrorSeverity.INFO,
+                context = ErrorContext(TAG, "schedulePeriodicSync"),
+                message = "Periodic sync scheduled (every $SYNC_INTERVAL_MINUTES minutes)"
+            )
         }
 
         /**
@@ -99,7 +111,11 @@ class SyncWorker @AssistedInject constructor(
         fun cancelPeriodicSync(context: Context) {
             WorkManager.getInstance(context)
                 .cancelUniqueWork(WORK_NAME)
-            Log.i(TAG, "Periodic sync cancelled")
+            ErrorLogger.log(
+                severity = ErrorSeverity.INFO,
+                context = ErrorContext(TAG, "cancelPeriodicSync"),
+                message = "Periodic sync cancelled"
+            )
         }
 
         /**
@@ -108,16 +124,28 @@ class SyncWorker @AssistedInject constructor(
         fun triggerImmediateSync(context: Context) {
             WorkManager.getInstance(context)
                 .enqueue(createOneTimeSyncRequest())
-            Log.i(TAG, "Immediate sync triggered")
+            ErrorLogger.log(
+                severity = ErrorSeverity.INFO,
+                context = ErrorContext(TAG, "triggerImmediateSync"),
+                message = "Immediate sync triggered"
+            )
         }
     }
 
     override suspend fun doWork(): Result {
-        Log.d(TAG, "Starting sync work")
+        ErrorLogger.log(
+            severity = ErrorSeverity.DEBUG,
+            context = ErrorContext(TAG, "doWork"),
+            message = "Starting background sync work"
+        )
 
         // Check if linked
         if (!sleepRepository.isLinked()) {
-            Log.w(TAG, "Device not linked, skipping sync")
+            ErrorLogger.log(
+                severity = ErrorSeverity.DEBUG,
+                context = ErrorContext(TAG, "doWork"),
+                message = "Device not linked, skipping sync"
+            )
             return Result.success()
         }
 
@@ -127,7 +155,11 @@ class SyncWorker @AssistedInject constructor(
                 // OK
             }
             else -> {
-                Log.w(TAG, "Health Connect not available")
+                ErrorLogger.log(
+                    severity = ErrorSeverity.WARNING,
+                    context = ErrorContext(TAG, "doWork"),
+                    message = "Health Connect not available, will retry"
+                )
                 return Result.retry()
             }
         }
@@ -135,7 +167,11 @@ class SyncWorker @AssistedInject constructor(
         // Check permissions
         val permissions = healthConnectManager.checkPermissions()
         if (!permissions.hasMinimumPermissions) {
-            Log.w(TAG, "Missing Health Connect permissions")
+            ErrorLogger.logPermissions(
+                granted = false,
+                permissionType = "minimum",
+                details = "User needs to grant permissions manually"
+            )
             return Result.success()  // Don't retry - user needs to grant permissions
         }
 
@@ -145,18 +181,29 @@ class SyncWorker @AssistedInject constructor(
         return when {
             syncResult.isSuccess -> {
                 val data = syncResult.getOrThrow()
-                Log.i(TAG, "Sync completed: processed=${data.processed}, skipped=${data.skipped}")
+                ErrorLogger.logSync(
+                    success = true,
+                    operation = "background",
+                    processed = data.processed,
+                    skipped = data.skipped
+                )
                 Result.success()
             }
             else -> {
-                val error = syncResult.exceptionOrNull()?.message ?: "Unknown error"
-                Log.e(TAG, "Sync failed: $error")
+                val exception = syncResult.exceptionOrNull()
+                val error = exception?.message ?: "Unknown error"
+                ErrorLogger.logSync(
+                    success = false,
+                    operation = "background",
+                    error = error,
+                    throwable = exception
+                )
 
                 when (error) {
                     "NO_NEW_DATA" -> Result.success()  // No data is OK
                     "TOKEN_EXPIRED" -> Result.failure()  // Need re-auth
                     "NOT_LINKED" -> Result.success()  // Not linked is OK
-                    else -> Result.retry()  // Retry on other errors
+                    else -> Result.retry()  // Retry on other errors (with exponential backoff)
                 }
             }
         }

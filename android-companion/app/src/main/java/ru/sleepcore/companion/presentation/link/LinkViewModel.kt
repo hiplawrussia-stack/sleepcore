@@ -2,6 +2,10 @@
  * Link ViewModel
  * ================
  * Manages device linking state and logic.
+ *
+ * Updated (February 2026):
+ * - Added retry logic with exponential backoff for linking
+ * - Integrated centralized error logging
  */
 
 package ru.sleepcore.companion.presentation.link
@@ -19,6 +23,10 @@ import ru.sleepcore.companion.data.repository.SleepRepository
 import ru.sleepcore.companion.health.HealthConnectAvailability
 import ru.sleepcore.companion.health.HealthConnectManager
 import ru.sleepcore.companion.util.DeviceUtils
+import ru.sleepcore.companion.util.ErrorContext
+import ru.sleepcore.companion.util.ErrorLogger
+import ru.sleepcore.companion.util.ErrorSeverity
+import ru.sleepcore.companion.util.RetryHelper
 import javax.inject.Inject
 
 data class LinkUiState(
@@ -85,10 +93,31 @@ class LinkViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             val deviceInfo = DeviceUtils.getDeviceInfo(context)
-            val result = sleepRepository.linkDevice(code, deviceInfo)
+
+            // Use retry helper for network resilience
+            val result = RetryHelper.withRetryResult(
+                config = RetryHelper.NETWORK_CONFIG,
+                onRetry = { attempt, delayMs, error ->
+                    ErrorLogger.logNetworkError(
+                        tag = TAG,
+                        operation = "linkDevice",
+                        attempt = attempt,
+                        maxAttempts = RetryHelper.NETWORK_CONFIG.maxAttempts,
+                        delayMs = delayMs,
+                        throwable = error
+                    )
+                }
+            ) {
+                sleepRepository.linkDevice(code, deviceInfo)
+            }
 
             result.fold(
                 onSuccess = { linkResult ->
+                    ErrorLogger.log(
+                        severity = ErrorSeverity.INFO,
+                        context = ErrorContext(TAG, "linkDevice"),
+                        message = "Device linked successfully for user: ${linkResult.user.firstName}"
+                    )
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -98,6 +127,12 @@ class LinkViewModel @Inject constructor(
                     }
                 },
                 onFailure = { exception ->
+                    ErrorLogger.log(
+                        severity = ErrorSeverity.ERROR,
+                        context = ErrorContext(TAG, "linkDevice"),
+                        message = "Link failed: ${exception.message}",
+                        throwable = exception
+                    )
                     val errorMessage = when (exception.message) {
                         "INVALID_CODE" -> "Invalid link code. Please check and try again."
                         "EXPIRED_CODE" -> "Link code has expired. Please generate a new one."
@@ -112,5 +147,9 @@ class LinkViewModel @Inject constructor(
                 }
             )
         }
+    }
+
+    companion object {
+        private const val TAG = "LinkViewModel"
     }
 }
