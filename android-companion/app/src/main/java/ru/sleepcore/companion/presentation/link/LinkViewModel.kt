@@ -45,7 +45,10 @@ class LinkViewModel @Inject constructor(
     private var deviceContext: Context? = null
 
     fun initialize(context: Context) {
-        deviceContext = context
+        // BUG-02 FIX: Use applicationContext to prevent Activity memory leak
+        // Storing Activity context in ViewModel causes memory leak because ViewModel survives configuration changes
+        // Source: developer.android.com/topic/libraries/architecture/viewmodel (2025)
+        deviceContext = context.applicationContext
         checkHealthConnect()
     }
 

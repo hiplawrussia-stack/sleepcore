@@ -34,15 +34,19 @@ import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.crypto.tink.integration.android.AndroidKeysetManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.security.GeneralSecurityException
 import java.time.Instant
 import javax.inject.Inject
@@ -52,6 +56,27 @@ import javax.inject.Singleton
 private val Context.tokenDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "sleepcore_secure_datastore"
 )
+
+/**
+ * Storage initialization state
+ *
+ * Prevents race conditions by exposing initialization status.
+ * UI should observe this state to avoid flickering.
+ *
+ * Pattern based on:
+ * - Android Developers: UI State Production (2025)
+ * - Kotlin Docs: CompletableDeferred for await
+ */
+sealed class StorageInitState {
+    /** Storage is initializing (Tink, migration, loading credentials) */
+    data object Initializing : StorageInitState()
+
+    /** Storage is ready to use */
+    data object Ready : StorageInitState()
+
+    /** Initialization failed - storage unavailable */
+    data class Failed(val error: Throwable) : StorageInitState()
+}
 
 /**
  * Stored credentials with refresh token support
@@ -100,6 +125,12 @@ class TokenStorage @Inject constructor(
     companion object {
         private const val TAG = "TokenStorage"
 
+        /**
+         * Initialization timeout in milliseconds
+         * Prevents infinite blocking if Tink fails
+         */
+        private const val INIT_TIMEOUT_MS = 5000L
+
         // DataStore keys
         private val KEY_TOKEN = stringPreferencesKey("device_token")
         private val KEY_REFRESH_TOKEN = stringPreferencesKey("refresh_token")  // Added Feb 2026
@@ -129,6 +160,23 @@ class TokenStorage @Inject constructor(
     private var aead: Aead? = null
     private var initializationError: Exception? = null
 
+    /**
+     * Initialization state for UI observation
+     *
+     * UI should check this before calling sync methods like isLinked().
+     * Pattern: Android Developers UI State Production (2025)
+     */
+    private val _initState = MutableStateFlow<StorageInitState>(StorageInitState.Initializing)
+    val initState: StateFlow<StorageInitState> = _initState.asStateFlow()
+
+    /**
+     * CompletableDeferred for awaiting initialization
+     *
+     * Sync methods can use this to block until ready.
+     * Pattern: Kotlin Docs CompletableDeferred (2025)
+     */
+    private val initCompleted = CompletableDeferred<Unit>()
+
     init {
         // Initialize Tink and migrate in background
         CoroutineScope(Dispatchers.IO).launch {
@@ -136,10 +184,54 @@ class TokenStorage @Inject constructor(
                 initializeTink()
                 migrateFromEncryptedSharedPreferences()
                 loadCredentialsAsync()
+
+                // Signal initialization complete
+                _initState.value = StorageInitState.Ready
+                initCompleted.complete(Unit)
+                Log.d(TAG, "TokenStorage initialization completed")
             } catch (e: Exception) {
                 Log.e(TAG, "Initialization failed", e)
                 initializationError = e
+                _initState.value = StorageInitState.Failed(e)
+                initCompleted.completeExceptionally(e)
             }
+        }
+    }
+
+    /**
+     * Await initialization (suspend version)
+     *
+     * Use this in coroutines before accessing credentials.
+     */
+    suspend fun awaitInitialization(): Boolean {
+        return try {
+            initCompleted.await()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Initialization await failed", e)
+            false
+        }
+    }
+
+    /**
+     * Wait for initialization with timeout (blocking version)
+     *
+     * For sync methods that need to ensure initialization.
+     * Returns true if initialized, false if timeout/failed.
+     */
+    private fun awaitInitializationBlocking(): Boolean {
+        if (initCompleted.isCompleted) return !initCompleted.isCompletedExceptionally
+
+        return try {
+            runBlocking {
+                withTimeoutOrNull(INIT_TIMEOUT_MS) {
+                    initCompleted.await()
+                    true
+                } ?: false
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Blocking init await failed", e)
+            false
         }
     }
 
@@ -438,21 +530,34 @@ class TokenStorage @Inject constructor(
     /**
      * Get refresh token for token renewal
      */
+    /**
+     * Get refresh token for token renewal
+     *
+     * Waits for initialization to complete before returning.
+     */
     fun getRefreshToken(): String? {
+        awaitInitializationBlocking()
         return _credentialsFlow.value?.refreshToken
     }
 
     /**
      * Load stored credentials (sync version for compatibility)
+     *
+     * Waits for initialization to complete before returning.
+     * For non-blocking access, use credentialsFlow.
      */
     fun loadCredentials(): StoredCredentials? {
+        awaitInitializationBlocking()
         return _credentialsFlow.value
     }
 
     /**
      * Get bearer token header value
+     *
+     * Waits for initialization to complete before returning.
      */
     fun getBearerToken(): String? {
+        awaitInitializationBlocking()
         val credentials = _credentialsFlow.value
         if (credentials == null || credentials.isExpired) return null
         return "Bearer ${credentials.token}"
@@ -460,8 +565,12 @@ class TokenStorage @Inject constructor(
 
     /**
      * Check if device is linked
+     *
+     * Waits for initialization to complete before returning.
+     * For non-blocking check, observe initState and credentialsFlow.
      */
     fun isLinked(): Boolean {
+        awaitInitializationBlocking()
         val credentials = _credentialsFlow.value
         return credentials != null && !credentials.isExpired
     }
@@ -518,7 +627,12 @@ class TokenStorage @Inject constructor(
     /**
      * Check if storage is available and initialized
      */
-    fun isStorageAvailable(): Boolean = aead != null && initializationError == null
+    /**
+     * Check if storage is available and initialized
+     */
+    fun isStorageAvailable(): Boolean = initCompleted.isCompleted &&
+        !initCompleted.isCompletedExceptionally &&
+        aead != null
 
     /**
      * Observe credentials as Flow

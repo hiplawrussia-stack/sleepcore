@@ -162,6 +162,124 @@ class HealthConnectManagerTest {
         assertFalse(permissions.historyRead)
     }
 
+    // ========== Background/History Permission Tests ==========
+
+    @Test
+    fun `HealthConnectPermissions hasAllPermissions true when all permissions granted`() {
+        val permissions = HealthConnectPermissions(
+            sleepRead = true,
+            hrvRead = true,
+            heartRateRead = true,
+            restingHeartRateRead = true,
+            backgroundRead = true,
+            historyRead = true
+        )
+
+        assertTrue(permissions.hasAllPermissions)
+    }
+
+    @Test
+    fun `HealthConnectPermissions hasAllPermissions false when background missing`() {
+        val permissions = HealthConnectPermissions(
+            sleepRead = true,
+            hrvRead = true,
+            heartRateRead = true,
+            restingHeartRateRead = true,
+            backgroundRead = false,
+            historyRead = true
+        )
+
+        assertFalse(permissions.hasAllPermissions)
+    }
+
+    @Test
+    fun `HealthConnectPermissions hasAllPermissions false when history missing`() {
+        val permissions = HealthConnectPermissions(
+            sleepRead = true,
+            hrvRead = true,
+            heartRateRead = true,
+            restingHeartRateRead = true,
+            backgroundRead = true,
+            historyRead = false
+        )
+
+        assertFalse(permissions.hasAllPermissions)
+    }
+
+    @Test
+    fun `HealthConnectPermissions canSyncInBackground true when sleep and background granted`() {
+        val permissions = HealthConnectPermissions(
+            sleepRead = true,
+            hrvRead = false,
+            heartRateRead = false,
+            restingHeartRateRead = false,
+            backgroundRead = true,
+            historyRead = false
+        )
+
+        assertTrue(permissions.canSyncInBackground)
+    }
+
+    @Test
+    fun `HealthConnectPermissions canSyncInBackground false when background missing`() {
+        val permissions = HealthConnectPermissions(
+            sleepRead = true,
+            hrvRead = true,
+            heartRateRead = true,
+            restingHeartRateRead = true,
+            backgroundRead = false,
+            historyRead = true
+        )
+
+        assertFalse(permissions.canSyncInBackground)
+    }
+
+    @Test
+    fun `HealthConnectPermissions canSyncInBackground false when sleep missing`() {
+        val permissions = HealthConnectPermissions(
+            sleepRead = false,
+            hrvRead = true,
+            heartRateRead = true,
+            restingHeartRateRead = true,
+            backgroundRead = true,
+            historyRead = true
+        )
+
+        assertFalse(permissions.canSyncInBackground)
+    }
+
+    @Test
+    fun `HealthConnectPermissions missingOptionalPermissions returns correct set`() {
+        val permissions = HealthConnectPermissions(
+            sleepRead = true,
+            hrvRead = true,
+            heartRateRead = true,
+            restingHeartRateRead = true,
+            backgroundRead = false,
+            historyRead = false
+        )
+
+        val missing = permissions.missingOptionalPermissions
+
+        assertEquals(2, missing.size)
+        assertTrue(missing.any { it.contains("BACKGROUND") })
+        assertTrue(missing.any { it.contains("HISTORY") })
+    }
+
+    @Test
+    fun `HealthConnectPermissions missingOptionalPermissions empty when all granted`() {
+        val permissions = HealthConnectPermissions(
+            sleepRead = true,
+            hrvRead = true,
+            heartRateRead = true,
+            restingHeartRateRead = true,
+            backgroundRead = true,
+            historyRead = true
+        )
+
+        assertTrue(permissions.missingOptionalPermissions.isEmpty())
+    }
+
     // ========== SleepStageType Mapping Tests ==========
 
     @Test
@@ -199,5 +317,63 @@ class HealthConnectManagerTest {
     @Test
     fun `MINIMUM_PERMISSIONS contains only sleep permission`() {
         assertEquals(1, HealthConnectManager.MINIMUM_PERMISSIONS.size)
+    }
+
+    @Test
+    fun `EXTENDED_PERMISSIONS contains all 9 permissions`() {
+        // 4 required + 3 enhanced metrics + background + history
+        assertEquals(9, HealthConnectManager.EXTENDED_PERMISSIONS.size)
+    }
+
+    @Test
+    fun `EXTENDED_PERMISSIONS includes REQUIRED_PERMISSIONS`() {
+        assertTrue(
+            HealthConnectManager.EXTENDED_PERMISSIONS.containsAll(
+                HealthConnectManager.REQUIRED_PERMISSIONS
+            )
+        )
+    }
+
+    @Test
+    fun `EXTENDED_PERMISSIONS includes ENHANCED_METRICS_PERMISSIONS`() {
+        assertTrue(
+            HealthConnectManager.EXTENDED_PERMISSIONS.containsAll(
+                HealthConnectManager.ENHANCED_METRICS_PERMISSIONS
+            )
+        )
+    }
+
+    @Test
+    fun `ENHANCED_METRICS_PERMISSIONS contains 3 permissions`() {
+        // SpO2, respirationRate, skinTemperature
+        assertEquals(3, HealthConnectManager.ENHANCED_METRICS_PERMISSIONS.size)
+    }
+
+    @Test
+    fun `EXTENDED_PERMISSIONS includes BACKGROUND_READ_PERMISSION`() {
+        assertTrue(
+            HealthConnectManager.EXTENDED_PERMISSIONS.contains(
+                HealthConnectManager.BACKGROUND_READ_PERMISSION
+            )
+        )
+    }
+
+    @Test
+    fun `EXTENDED_PERMISSIONS includes HISTORY_READ_PERMISSION`() {
+        assertTrue(
+            HealthConnectManager.EXTENDED_PERMISSIONS.contains(
+                HealthConnectManager.HISTORY_READ_PERMISSION
+            )
+        )
+    }
+
+    @Test
+    fun `BACKGROUND_READ_PERMISSION is not null`() {
+        assertNotNull(HealthConnectManager.BACKGROUND_READ_PERMISSION)
+    }
+
+    @Test
+    fun `HISTORY_READ_PERMISSION is not null`() {
+        assertNotNull(HealthConnectManager.HISTORY_READ_PERMISSION)
     }
 }

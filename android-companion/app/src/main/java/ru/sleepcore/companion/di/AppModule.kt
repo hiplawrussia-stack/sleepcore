@@ -18,7 +18,6 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.serialization.json.Json
-import okhttp3.CertificatePinner
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -58,14 +57,10 @@ object AppModule {
             builder.addInterceptor(loggingInterceptor)
         }
 
-        // Certificate pinning for production
-        // Based on research: Certificate pinning is mandatory for health apps
-        if (!BuildConfig.DEBUG) {
-            val certificatePinner = CertificatePinner.Builder()
-                .add("api.sleepcore.ru", "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")  // TODO: Add real pin
-                .build()
-            builder.certificatePinner(certificatePinner)
-        }
+        // Certificate pinning: Removed hardcoded pins per Google's recommendation
+        // TLS validation is handled by Android's Network Security Config (res/xml/network_security_config.xml)
+        // which provides flexible pin management without app updates
+        // Source: developer.android.com/privacy-and-security/security-config (2025-2026)
 
         return builder.build()
     }
