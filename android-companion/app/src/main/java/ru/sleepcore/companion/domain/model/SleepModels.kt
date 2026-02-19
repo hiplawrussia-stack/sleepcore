@@ -69,9 +69,59 @@ data class HeartRateSample(
     val bpm: Int
 )
 
+// ============================================================================
+// NEW METRICS (2025-02 Wearable Trends)
+// ============================================================================
+
+/**
+ * SpO2 (Blood Oxygen Saturation) sample
+ *
+ * FDA-cleared for sleep apnea screening on Apple Watch/Samsung (2024)
+ * Reference: FDA 510(k) K240929
+ *
+ * @since 2025-02
+ */
+data class SpO2Sample(
+    val timestamp: Instant,
+    /** Blood oxygen saturation percentage (70-100%) */
+    val percentage: Double
+) {
+    /**
+     * Clinically significant desaturation is below 90%
+     */
+    val isDesaturated: Boolean
+        get() = percentage < 90.0
+}
+
+/**
+ * Breathing disturbance event
+ *
+ * @since 2025-02
+ */
+data class BreathingDisturbance(
+    val timestamp: Instant,
+    /** Duration of the disturbance in seconds */
+    val durationSeconds: Int? = null
+)
+
+/**
+ * Skin temperature sample
+ *
+ * Used for circadian rhythm tracking
+ * Reference: Chronobiology in Medicine 2025, DOI: 10.33069/cim.2025.0011
+ *
+ * @since 2025-02
+ */
+data class SkinTemperatureSample(
+    val timestamp: Instant,
+    /** Temperature deviation from personal baseline in °C */
+    val deviationCelsius: Double
+)
+
 /**
  * Complete sleep session from Health Connect
  * Includes all World Sleep Society 2025 Fundamental Sleep Measures
+ * Updated 2025-02 with SpO2, breathing, and temperature metrics
  */
 data class SleepSession(
     val id: String,
@@ -82,7 +132,17 @@ data class SleepSession(
     val hrvSamples: List<HrvSample> = emptyList(),
     val heartRateSamples: List<HeartRateSample> = emptyList(),
     val restingHeartRate: Int? = null,
-    val notes: String? = null
+    val notes: String? = null,
+
+    // NEW (2025-02): SpO2 / Blood Oxygen
+    val spo2Samples: List<SpO2Sample> = emptyList(),
+
+    // NEW (2025-02): Breathing metrics
+    val breathingDisturbances: List<BreathingDisturbance> = emptyList(),
+    val respirationRate: Double? = null,  // Mean breaths/min
+
+    // NEW (2025-02): Skin Temperature
+    val skinTemperature: Double? = null  // Deviation from baseline in °C
 ) {
     /**
      * Time In Bed (TIB) - Fundamental Sleep Measure
@@ -154,6 +214,65 @@ data class SleepSession(
                 .mapValues { (_, stages) ->
                     (stages.sumOf { it.durationMinutes } / totalStagedMinutes) * 100
                 }
+        }
+
+    // ========================================
+    // NEW (2025-02): SpO2 / Blood Oxygen Metrics
+    // ========================================
+
+    /**
+     * Mean SpO2 during sleep
+     * Normal: 95-100%, Below 90% indicates desaturation
+     */
+    val meanSpo2: Double?
+        get() = if (spo2Samples.isNotEmpty()) {
+            spo2Samples.map { it.percentage }.average()
+        } else null
+
+    /**
+     * Minimum SpO2 during sleep
+     * Clinically significant if < 90%
+     */
+    val minSpo2: Double?
+        get() = spo2Samples.minOfOrNull { it.percentage }
+
+    /**
+     * Number of desaturation events (SpO2 drops below 90%)
+     */
+    val desaturationEvents: Int
+        get() = spo2Samples.count { it.isDesaturated }
+
+    /**
+     * Breathing Disturbance Index (events per hour)
+     *
+     * Clinical interpretation (proxy for AHI):
+     * - < 5: Normal
+     * - 5-15: Mild sleep apnea indicator
+     * - 15-30: Moderate sleep apnea indicator
+     * - > 30: Severe sleep apnea indicator
+     *
+     * Note: NOT a diagnosis. Suggests clinical evaluation if elevated.
+     */
+    val breathingDisturbanceIndex: Double?
+        get() {
+            val sleepHours = tibMinutes / 60.0
+            return if (sleepHours > 0 && breathingDisturbances.isNotEmpty()) {
+                breathingDisturbances.size / sleepHours
+            } else null
+        }
+
+    /**
+     * Whether SpO2 data suggests potential sleep apnea
+     * Based on FDA-cleared thresholds (Apple Watch/Samsung 2024)
+     *
+     * This is a screening indicator, NOT a diagnosis.
+     * Users with positive results should consult a healthcare provider.
+     */
+    val hasPotentialSleepApneaIndicator: Boolean
+        get() {
+            val bdi = breathingDisturbanceIndex
+            val minO2 = minSpo2
+            return (bdi != null && bdi >= 5) || (minO2 != null && minO2 < 88)
         }
 }
 

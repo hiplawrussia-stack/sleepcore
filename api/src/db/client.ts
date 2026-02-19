@@ -81,6 +81,7 @@ function runMigrations(sqlite: Database.Database): void {
   // This handles updating existing tables that need schema changes
   migrateWearableDevices(sqlite);
   migrateUsersAddVkId(sqlite);
+  migrateWearableSleepSessionsAddSpO2(sqlite);
 
   // Create tables if they don't exist
   sqlite.exec(`
@@ -232,9 +233,21 @@ function runMigrations(sqlite: Database.Database): void {
       hrv_sd_rmssd REAL,
       hrv_sample_count INTEGER,
       resting_heart_rate INTEGER,
+      -- SpO2 / Blood Oxygen (2025-02, FDA-cleared Apple/Samsung)
+      spo2_mean REAL,
+      spo2_min REAL,
+      spo2_time_below_90 INTEGER,
+      spo2_desaturation_events INTEGER,
+      -- Breathing / Respiratory (2025-02)
+      breathing_disturbances REAL,
+      respiration_rate REAL,
+      -- Skin Temperature (2025-02, circadian rhythm)
+      skin_temperature REAL,
+      -- Raw data JSON
       stages_json TEXT,
       hrv_json TEXT,
       heart_rate_json TEXT,
+      spo2_json TEXT,
       notes TEXT,
       processed_at TEXT,
       synced_at TEXT NOT NULL
@@ -421,6 +434,44 @@ function migrateUsersAddVkId(sqlite: Database.Database): void {
   sqlite.exec(`ALTER TABLE api_users ADD COLUMN vk_id INTEGER`);
   sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_vk_id ON api_users(vk_id)`);
   console.log('[Migration] vk_id column added.');
+}
+
+/**
+ * Add SpO2, breathing, and skin temperature columns to wearable_sleep_sessions
+ * Migration for 2025-02 wearable trends (FDA-cleared sleep apnea screening)
+ *
+ * @since 2025-02
+ */
+function migrateWearableSleepSessionsAddSpO2(sqlite: Database.Database): void {
+  const tableInfo = sqlite.prepare(`PRAGMA table_info(api_wearable_sleep_sessions)`).all() as Array<{ name: string }>;
+
+  // Check if migration already done
+  const hasSpo2Mean = tableInfo.some(col => col.name === 'spo2_mean');
+
+  if (hasSpo2Mean || tableInfo.length === 0) {
+    // Already migrated or table doesn't exist yet
+    return;
+  }
+
+  console.log('[Migration] Adding SpO2/breathing/temperature columns to api_wearable_sleep_sessions...');
+
+  // Add new columns for SpO2 (FDA-cleared Apple/Samsung 2024)
+  sqlite.exec(`ALTER TABLE api_wearable_sleep_sessions ADD COLUMN spo2_mean REAL`);
+  sqlite.exec(`ALTER TABLE api_wearable_sleep_sessions ADD COLUMN spo2_min REAL`);
+  sqlite.exec(`ALTER TABLE api_wearable_sleep_sessions ADD COLUMN spo2_time_below_90 INTEGER`);
+  sqlite.exec(`ALTER TABLE api_wearable_sleep_sessions ADD COLUMN spo2_desaturation_events INTEGER`);
+
+  // Add breathing/respiratory columns
+  sqlite.exec(`ALTER TABLE api_wearable_sleep_sessions ADD COLUMN breathing_disturbances REAL`);
+  sqlite.exec(`ALTER TABLE api_wearable_sleep_sessions ADD COLUMN respiration_rate REAL`);
+
+  // Add skin temperature (circadian rhythm)
+  sqlite.exec(`ALTER TABLE api_wearable_sleep_sessions ADD COLUMN skin_temperature REAL`);
+
+  // Add SpO2 raw data JSON
+  sqlite.exec(`ALTER TABLE api_wearable_sleep_sessions ADD COLUMN spo2_json TEXT`);
+
+  console.log('[Migration] SpO2/breathing/temperature columns added successfully.');
 }
 
 export { schema, wearableSchema };

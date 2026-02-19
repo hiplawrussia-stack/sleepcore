@@ -172,6 +172,80 @@ export interface IWearableSleepData {
    * Daily RHR computed by wearable
    */
   restingHeartRate?: number;
+
+  // ============================================================================
+  // NEW METRICS (2025-2026 Trends)
+  // ============================================================================
+
+  /**
+   * Blood Oxygen Saturation (SpO2) average (optional)
+   *
+   * Valid range: 70-100%
+   * Used for sleep apnea screening (FDA-cleared Apple Watch/Samsung 2024)
+   *
+   * Reference: FDA 510(k) K240929 (Apple Sleep Apnea Notification)
+   * Sensitivity: 66.3%, Specificity: 98.5% for moderate-to-severe OSA
+   *
+   * @since 2025-02
+   */
+  spo2?: number;
+
+  /**
+   * SpO2 minimum during sleep (optional)
+   *
+   * Clinically significant if < 90% (desaturation events)
+   *
+   * @since 2025-02
+   */
+  spo2Min?: number;
+
+  /**
+   * Breathing Disturbance Index (optional)
+   *
+   * Number of breathing disturbances per hour of sleep.
+   * Apple Watch provides this metric via Health Connect.
+   *
+   * Clinical interpretation:
+   * - < 5: Normal
+   * - 5-15: Mild sleep apnea indicator
+   * - 15-30: Moderate sleep apnea indicator
+   * - > 30: Severe sleep apnea indicator
+   *
+   * Note: NOT a diagnosis. Suggests clinical evaluation if elevated.
+   *
+   * @since 2025-02
+   */
+  breathingDisturbances?: number;
+
+  /**
+   * Skin Temperature deviation from baseline (optional)
+   *
+   * Measured in °C (delta from personal baseline)
+   * Used for circadian rhythm tracking.
+   *
+   * - Negative = body cooling (normal during sleep onset)
+   * - Positive = elevated (may indicate illness, hormonal changes)
+   *
+   * Available on: Oura Ring, Galaxy Watch 7, Apple Watch Ultra
+   *
+   * Reference: Chronobiology in Medicine 2025
+   * DOI: 10.33069/cim.2025.0011
+   *
+   * @since 2025-02
+   */
+  skinTemperature?: number;
+
+  /**
+   * Respiration Rate average (optional)
+   *
+   * Breaths per minute during sleep.
+   * Normal adult range: 12-20 breaths/min
+   *
+   * Available on: Oura, Apple Watch, Fitbit, Garmin
+   *
+   * @since 2025-02
+   */
+  respirationRate?: number;
 }
 
 /**
@@ -201,6 +275,28 @@ export interface IWearableSleepMetrics {
 
   /** Sleep stage distribution (if stages available) */
   stageDistribution?: IWearableStageDistribution;
+
+  // ============================================================================
+  // NEW METRICS (2025-2026 Trends)
+  // ============================================================================
+
+  /**
+   * Blood oxygen metrics (if SpO2 data available)
+   * @since 2025-02
+   */
+  spo2Metrics?: IWearableSpO2Metrics;
+
+  /**
+   * Respiratory metrics (if breathing data available)
+   * @since 2025-02
+   */
+  respiratoryMetrics?: IWearableRespiratoryMetrics;
+
+  /**
+   * Temperature metrics (if skin temperature available)
+   * @since 2025-02
+   */
+  temperatureMetrics?: IWearableTemperatureMetrics;
 }
 
 /**
@@ -245,6 +341,88 @@ export interface IWearableStageDistribution {
 
   /** Percentage in REM sleep */
   rem: number;
+}
+
+// ============================================================================
+// NEW METRIC INTERFACES (2025-2026 Trends)
+// ============================================================================
+
+/**
+ * SpO2 metrics calculated from wearable data
+ *
+ * Used for sleep apnea screening (NOT diagnosis)
+ * FDA-cleared on Apple Watch Series 9/10, Samsung Galaxy Watch (2024)
+ *
+ * @since 2025-02
+ */
+export interface IWearableSpO2Metrics {
+  /** Mean SpO2 during sleep (%) */
+  meanSpO2: number;
+
+  /** Minimum SpO2 during sleep (%) */
+  minSpO2: number;
+
+  /** Time below 90% SpO2 (minutes) */
+  timeBelow90: number;
+
+  /**
+   * Number of desaturation events (SpO2 drops ≥4%)
+   *
+   * Correlates with Oxygen Desaturation Index (ODI)
+   */
+  desaturationEvents: number;
+
+  /** Number of valid samples */
+  sampleCount: number;
+}
+
+/**
+ * Respiratory metrics from wearable data
+ *
+ * @since 2025-02
+ */
+export interface IWearableRespiratoryMetrics {
+  /** Mean respiration rate (breaths/min) */
+  meanRespirationRate: number;
+
+  /** Min respiration rate */
+  minRespirationRate: number;
+
+  /** Max respiration rate */
+  maxRespirationRate: number;
+
+  /**
+   * Breathing Disturbance Index (events/hour)
+   *
+   * Proxy for AHI (Apnea-Hypopnea Index)
+   */
+  breathingDisturbanceIndex?: number;
+
+  /** Number of valid samples */
+  sampleCount: number;
+}
+
+/**
+ * Temperature metrics from wearable data
+ *
+ * Used for circadian rhythm analysis
+ *
+ * @since 2025-02
+ */
+export interface IWearableTemperatureMetrics {
+  /**
+   * Skin temperature deviation from personal baseline (°C)
+   *
+   * Negative = cooling (normal during sleep)
+   * Positive = elevated (may indicate illness)
+   */
+  deviation: number;
+
+  /** Average skin temperature during sleep (°C) */
+  meanTemperature?: number;
+
+  /** Temperature trend throughout night */
+  trend?: 'cooling' | 'stable' | 'warming';
 }
 
 /**
@@ -344,6 +522,12 @@ export interface IWearableConnectionStatus {
     sleep: boolean;
     heartRate: boolean;
     hrv: boolean;
+    /** SpO2 permission (Health Connect: OXYGEN_SATURATION) @since 2025-02 */
+    spo2?: boolean;
+    /** Respiration permission (Health Connect: RESPIRATORY_RATE) @since 2025-02 */
+    respiration?: boolean;
+    /** Temperature permission (Health Connect: SKIN_TEMPERATURE) @since 2025-02 */
+    skinTemperature?: boolean;
   };
 
   /** Any connection errors */

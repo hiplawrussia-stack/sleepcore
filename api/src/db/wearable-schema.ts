@@ -150,10 +150,29 @@ export const wearableSleepSessions = sqliteTable('api_wearable_sleep_sessions', 
   // Heart rate
   restingHeartRate: integer('resting_heart_rate'),
 
+  // ============================================================================
+  // NEW METRICS (2025-2026 Trends)
+  // Added: 2025-02
+  // ============================================================================
+
+  // SpO2 / Blood Oxygen (FDA-cleared Apple/Samsung 2024)
+  spo2Mean: real('spo2_mean'),             // Mean SpO2 (%)
+  spo2Min: real('spo2_min'),               // Min SpO2 (%)
+  spo2TimeBelow90: integer('spo2_time_below_90'), // Minutes below 90%
+  spo2DesaturationEvents: integer('spo2_desaturation_events'), // Count of ≥4% drops
+
+  // Breathing / Respiratory
+  breathingDisturbances: real('breathing_disturbances'), // Disturbances per hour
+  respirationRate: real('respiration_rate'), // Mean breaths/min
+
+  // Skin Temperature (Circadian rhythm)
+  skinTemperature: real('skin_temperature'), // Deviation from baseline (°C)
+
   // Raw data (JSON)
   stagesJson: text('stages_json'),    // Full stage data
   hrvJson: text('hrv_json'),          // Full HRV data
   heartRateJson: text('heart_rate_json'), // Full HR data
+  spo2Json: text('spo2_json'),        // Full SpO2 data (2025-02)
 
   // Metadata
   notes: text('notes'),

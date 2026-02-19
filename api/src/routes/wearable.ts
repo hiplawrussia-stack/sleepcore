@@ -98,6 +98,25 @@ const syncDataSchema = z.object({
         bpm: z.number(),
       })).optional(),
       restingHeartRate: z.number().optional(),
+
+      // ========================================
+      // NEW METRICS (2025-2026 Trends)
+      // ========================================
+
+      // SpO2 / Blood Oxygen (FDA-cleared Apple/Samsung 2024)
+      spo2: z.number().min(70).max(100).optional(),       // Mean SpO2 (%)
+      spo2Min: z.number().min(50).max(100).optional(),    // Min SpO2 (%)
+      spo2Data: z.array(z.object({
+        timestamp: z.string(),
+        value: z.number().min(50).max(100),
+      })).optional(),
+
+      // Breathing / Respiratory
+      breathingDisturbances: z.number().min(0).optional(), // Disturbances per hour
+      respirationRate: z.number().min(5).max(60).optional(), // Breaths/min
+
+      // Skin Temperature
+      skinTemperature: z.number().min(-5).max(5).optional(), // Deviation from baseline (°C)
     })
   ),
 });
@@ -114,6 +133,13 @@ function calculateSleepMetrics(session: {
   endTime: string;
   stages?: Array<{ type: string; startTime: string; endTime: string }>;
   hrv?: Array<{ rmssd: number }>;
+  // NEW (2025-02)
+  spo2?: number;
+  spo2Min?: number;
+  spo2Data?: Array<{ timestamp: string; value: number }>;
+  breathingDisturbances?: number;
+  respirationRate?: number;
+  skinTemperature?: number;
 }): {
   tst: number;
   tib: number;
@@ -128,6 +154,14 @@ function calculateSleepMetrics(session: {
   hrvMeanRmssd: number | null;
   hrvSdRmssd: number | null;
   hrvSampleCount: number | null;
+  // NEW (2025-02)
+  spo2Mean: number | null;
+  spo2Min: number | null;
+  spo2TimeBelow90: number | null;
+  spo2DesaturationEvents: number | null;
+  breathingDisturbances: number | null;
+  respirationRate: number | null;
+  skinTemperature: number | null;
 } {
   const start = new Date(session.startTime);
   const end = new Date(session.endTime);
@@ -194,6 +228,39 @@ function calculateSleepMetrics(session: {
     }
   }
 
+  // ========================================
+  // NEW: SpO2 metrics calculation (2025-02)
+  // ========================================
+  let spo2Mean: number | null = session.spo2 ?? null;
+  let spo2Min: number | null = session.spo2Min ?? null;
+  let spo2TimeBelow90: number | null = null;
+  let spo2DesaturationEvents: number | null = null;
+
+  if (session.spo2Data && session.spo2Data.length > 0) {
+    // Calculate mean if not provided
+    if (spo2Mean === null) {
+      spo2Mean = session.spo2Data.reduce((sum, d) => sum + d.value, 0) / session.spo2Data.length;
+    }
+    // Calculate min
+    if (spo2Min === null) {
+      spo2Min = Math.min(...session.spo2Data.map(d => d.value));
+    }
+    // Calculate time below 90%
+    const samplesBelow90 = session.spo2Data.filter(d => d.value < 90).length;
+    // Assume ~1 minute per sample (typical wearable sampling rate)
+    spo2TimeBelow90 = samplesBelow90;
+
+    // Calculate desaturation events (≥4% drops)
+    let desatEvents = 0;
+    for (let i = 1; i < session.spo2Data.length; i++) {
+      const drop = session.spo2Data[i - 1].value - session.spo2Data[i].value;
+      if (drop >= 4) {
+        desatEvents++;
+      }
+    }
+    spo2DesaturationEvents = desatEvents;
+  }
+
   return {
     tst: Math.round(tstMinutes),
     tib: Math.round(tibMinutes),
@@ -208,6 +275,20 @@ function calculateSleepMetrics(session: {
     hrvMeanRmssd: hrvMeanRmssd !== null ? Math.round(hrvMeanRmssd * 10) / 10 : null,
     hrvSdRmssd: hrvSdRmssd !== null ? Math.round(hrvSdRmssd * 10) / 10 : null,
     hrvSampleCount,
+    // NEW (2025-02)
+    spo2Mean: spo2Mean !== null ? Math.round(spo2Mean * 10) / 10 : null,
+    spo2Min: spo2Min !== null ? Math.round(spo2Min * 10) / 10 : null,
+    spo2TimeBelow90,
+    spo2DesaturationEvents,
+    breathingDisturbances: session.breathingDisturbances !== undefined
+      ? Math.round(session.breathingDisturbances * 10) / 10
+      : null,
+    respirationRate: session.respirationRate !== undefined
+      ? Math.round(session.respirationRate * 10) / 10
+      : null,
+    skinTemperature: session.skinTemperature !== undefined
+      ? Math.round(session.skinTemperature * 100) / 100
+      : null,
   };
 }
 
@@ -926,12 +1007,14 @@ wearable.post('/sync', deviceAuthMiddleware, zValidator('json', syncDataSchema),
       let stagesJsonEncrypted: string | null = null;
       let hrvJsonEncrypted: string | null = null;
       let heartRateJsonEncrypted: string | null = null;
+      let spo2JsonEncrypted: string | null = null;
 
       if (isEncryptionAvailable()) {
         const encryption = getEncryptionService();
         if (session.stages) stagesJsonEncrypted = encryption.encrypt(JSON.stringify(session.stages));
         if (session.hrv) hrvJsonEncrypted = encryption.encrypt(JSON.stringify(session.hrv));
         if (session.heartRate) heartRateJsonEncrypted = encryption.encrypt(JSON.stringify(session.heartRate));
+        if (session.spo2Data) spo2JsonEncrypted = encryption.encrypt(JSON.stringify(session.spo2Data));
       } else {
         if (process.env.NODE_ENV === 'production') {
           throw new HTTPException(500, { message: 'PHI encryption is required in production' });
@@ -939,6 +1022,7 @@ wearable.post('/sync', deviceAuthMiddleware, zValidator('json', syncDataSchema),
         stagesJsonEncrypted = session.stages ? JSON.stringify(session.stages) : null;
         hrvJsonEncrypted = session.hrv ? JSON.stringify(session.hrv) : null;
         heartRateJsonEncrypted = session.heartRate ? JSON.stringify(session.heartRate) : null;
+        spo2JsonEncrypted = session.spo2Data ? JSON.stringify(session.spo2Data) : null;
       }
 
       await db.insert(wearableSleepSessions).values({
@@ -963,9 +1047,19 @@ wearable.post('/sync', deviceAuthMiddleware, zValidator('json', syncDataSchema),
         hrvSdRmssd: metrics.hrvSdRmssd,
         hrvSampleCount: metrics.hrvSampleCount,
         restingHeartRate: session.restingHeartRate ?? null,
+        // NEW (2025-02)
+        spo2Mean: metrics.spo2Mean,
+        spo2Min: metrics.spo2Min,
+        spo2TimeBelow90: metrics.spo2TimeBelow90,
+        spo2DesaturationEvents: metrics.spo2DesaturationEvents,
+        breathingDisturbances: metrics.breathingDisturbances,
+        respirationRate: metrics.respirationRate,
+        skinTemperature: metrics.skinTemperature,
+        // Raw data
         stagesJson: stagesJsonEncrypted,
         hrvJson: hrvJsonEncrypted,
         heartRateJson: heartRateJsonEncrypted,
+        spo2Json: spo2JsonEncrypted,
         notes: session.notes ?? null,
         processedAt: now,
         syncedAt: now,
