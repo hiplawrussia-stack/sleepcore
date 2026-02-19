@@ -49,8 +49,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
-# Create data directory and set ownership
-RUN mkdir -p /app/data && chown -R node:node /app
+# Create data and assets directories
+# Assets directory is mounted via docker-compose volume
+RUN mkdir -p /app/data /app/assets && chown -R node:node /app
 
 # Use non-root user
 USER node

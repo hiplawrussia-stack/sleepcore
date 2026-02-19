@@ -183,6 +183,9 @@ services:
       - "traefik.http.routers.api-vk.middlewares=security-headers,rate-limit"
       # Service definition
       - "traefik.http.services.api.loadbalancer.server.port=3001"
+    volumes:
+      # Static assets (APK for download, etc.)
+      - ./assets:/app/assets:ro
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
       interval: 30s

@@ -71,8 +71,8 @@ class SleepRepository @Inject constructor(
 
                 // Save credentials (with refresh token if available)
                 tokenStorage.saveCredentials(
-                    token = data.getAccessToken(),
-                    expiresAt = data.getAccessTokenExpiresAt(),
+                    token = data.resolveAccessToken(),
+                    expiresAt = data.resolveExpiresAt(),
                     userId = data.user.id,
                     telegramId = data.user.telegramId,
                     userName = data.user.firstName,

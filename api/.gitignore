@@ -29,3 +29,6 @@ npm-debug.log*
 
 # Test coverage
 coverage/
+
+# Static assets (APK, large files - use volume mount in Docker)
+assets/

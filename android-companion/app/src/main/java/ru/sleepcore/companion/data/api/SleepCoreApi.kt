@@ -65,14 +65,14 @@ data class LinkResponseDto(
     val expiresIn: Int? = null
 ) {
     /**
-     * Get the access token, preferring new format over legacy
+     * Resolve the access token, preferring new format over legacy
      */
-    fun getAccessToken(): String = accessToken ?: token
+    fun resolveAccessToken(): String = accessToken ?: token
 
     /**
-     * Get the access token expiry time
+     * Resolve the access token expiry time
      */
-    fun getAccessTokenExpiresAt(): String = expiresAt
+    fun resolveExpiresAt(): String = expiresAt
 }
 
 /**
