@@ -26,6 +26,13 @@ export * from './types';
 export { WearableIngestionService } from './WearableIngestionService';
 export type { IWearableIngestionConfig } from './WearableIngestionService';
 
+// Readiness Score Calculator (2025-02)
+export {
+  calculateReadinessScore,
+  getReadinessCategory,
+} from './ReadinessScoreCalculator';
+export type { IReadinessScoreConfig } from './ReadinessScoreCalculator';
+
 // PAT Integration
 export {
   WearablePATIntegration,

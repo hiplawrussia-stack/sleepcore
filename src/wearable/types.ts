@@ -425,6 +425,82 @@ export interface IWearableTemperatureMetrics {
   trend?: 'cooling' | 'stable' | 'warming';
 }
 
+// ============================================================================
+// COMPOSITE SCORES (2025-02)
+// Similar to Oura Readiness, WHOOP Recovery, Garmin Body Battery
+// ============================================================================
+
+/**
+ * Readiness/Recovery score computed from wearable data
+ *
+ * Composite metric indicating physical readiness for the day.
+ * Based on research from:
+ * - Oura Ring validation studies (2024)
+ * - WHOOP Recovery Score methodology
+ * - Garmin Body Battery algorithm
+ *
+ * @since 2025-02
+ */
+export interface IWearableReadinessScore {
+  /**
+   * Overall readiness score (0-100)
+   *
+   * Interpretation:
+   * - 0-30: Poor recovery, rest recommended
+   * - 31-60: Moderate recovery, light activity OK
+   * - 61-80: Good recovery, normal activity
+   * - 81-100: Excellent recovery, high intensity OK
+   */
+  overall: number;
+
+  /**
+   * Component scores (0-100 each)
+   *
+   * Each component is normalized to 0-100 and weighted
+   */
+  components: {
+    /** HRV component (based on RMSSD vs personal baseline) */
+    hrv: number;
+
+    /** Sleep quality component (SE, stages) */
+    sleepQuality: number;
+
+    /** Sleep duration component (TST vs optimal 7-9h) */
+    sleepDuration: number;
+
+    /** Recovery component (deep + REM %) */
+    recovery: number;
+
+    /** Respiratory component (SpO2, breathing) */
+    respiratory?: number;
+  };
+
+  /**
+   * Confidence level (0-1)
+   *
+   * Lower if insufficient data or sensor issues
+   */
+  confidence: number;
+
+  /**
+   * Trend vs 7-day average
+   *
+   * Positive = improving, negative = declining
+   */
+  trend?: number;
+
+  /**
+   * Contributing factors (sorted by impact)
+   *
+   * Human-readable explanations
+   */
+  contributingFactors: Array<{
+    factor: string;
+    impact: 'positive' | 'negative' | 'neutral';
+    description: string;
+  }>;
+}
+
 /**
  * Sync payload from companion app
  */

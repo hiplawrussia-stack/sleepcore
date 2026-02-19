@@ -25,6 +25,11 @@
     <string name="sync_background_sync">Background Sync</string>
     <string name="sync_background_description">Automatically sync sleep data every 15 minutes</string>
 
+    <!-- Samsung Accuracy Disclaimer -->
+    <string name="samsung_disclaimer_title">Samsung Galaxy Watch Notice</string>
+    <string name="samsung_disclaimer_message">Some Samsung Galaxy Watch models (especially Galaxy Watch 7/Ultra with One UI 8) may report inaccurate sleep stage detection. If you notice significant discrepancies between your actual sleep and recorded data, consider using the subjective sleep diary as your primary data source.</string>
+    <string name="samsung_disclaimer_learn_more">Learn More</string>
+
     <!-- Unlink Dialog -->
     <string name="unlink_title">Unlink Device?</string>
     <string name="unlink_message">This will disconnect your device from SleepCore. You will need to link again to sync sleep data.</string>

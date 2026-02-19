@@ -6,6 +6,7 @@
 
 package ru.sleepcore.companion.presentation.sync
 
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -17,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -36,6 +38,12 @@ fun SyncScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+
+    // Detect Samsung device for accuracy disclaimer
+    val isSamsungDevice = remember {
+        Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+    }
 
     // Permission launcher
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -149,6 +157,47 @@ fun SyncScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(stringResource(R.string.sync_grant_permissions))
+                        }
+                    }
+                }
+            }
+
+            // Samsung accuracy disclaimer
+            if (isSamsungDevice) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = stringResource(R.string.samsung_disclaimer_title),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.samsung_disclaimer_message),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(
+                            onClick = {
+                                uriHandler.open("https://us.community.samsung.com/t5/Galaxy-Watch/Galaxy-Watch-7-Ultra-inaccurate-sleep-tracking/td-p/3057389")
+                            },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text(stringResource(R.string.samsung_disclaimer_learn_more))
                         }
                     }
                 }
