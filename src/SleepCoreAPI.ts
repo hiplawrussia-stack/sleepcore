@@ -134,6 +134,28 @@ import type {
 import type { IActiveQuest, IQuest } from './modules/quests/QuestService';
 import type { IUserBadge, IBadge } from './modules/quests/BadgeService';
 
+// Wave 6: AInsomnia Features (Seasonal, Activity Proxy, Anomaly Detection)
+import {
+  SeasonalEngine,
+  type SeasonalContext,
+  type LightRecommendation,
+  type SeasonalTip,
+  type SeasonalTIBAdjustment,
+  type UserLocation,
+} from './seasonal';
+import {
+  ActivityProxyEngine,
+  type ActivityData,
+  type EstimatedSleep,
+  type ActivityPattern,
+} from './activity';
+import {
+  AnomalyDetector,
+  type BaselineStats,
+  type AnomalyResult,
+  type SleepSessionForAnomaly,
+} from './anomaly';
+
 /**
  * SleepCore user session
  */
@@ -269,6 +291,12 @@ export class SleepCoreAPI {
 
   // Wave 5: Precision Phenotyping (Blanken 2019, PAT Ruan 2024)
   private readonly phenotypingService: PhenotypingService;
+
+  // Wave 6: AInsomnia Features (Seasonal, Activity Proxy, Anomaly Detection)
+  private readonly seasonalEngine: SeasonalEngine;
+  private readonly activityProxyEngine: ActivityProxyEngine;
+  private readonly anomalyDetector: AnomalyDetector;
+  private userLocations: Map<string, UserLocation>;
 
   private sessions: Map<string, ISleepCoreSession>;
   private sleepStates: Map<string, ISleepState[]>;
@@ -437,6 +465,12 @@ export class SleepCoreAPI {
     // Wave 5: Precision Phenotyping (Blanken 2019, PAT Ruan 2024)
     // Links to ThirdWaveCoordinator for phenotype-based therapy selection
     this.phenotypingService = new PhenotypingService();
+
+    // Wave 6: AInsomnia Features (Seasonal, Activity Proxy, Anomaly Detection)
+    this.seasonalEngine = new SeasonalEngine();
+    this.activityProxyEngine = new ActivityProxyEngine();
+    this.anomalyDetector = new AnomalyDetector();
+    this.userLocations = new Map();
 
     this.sessions = new Map();
     this.sleepStates = new Map();
@@ -2899,6 +2933,225 @@ export class SleepCoreAPI {
     };
 
     return instructions[technique] || ['Дышите медленно и глубоко.'];
+  }
+
+  // ============= Wave 6: AInsomnia Features =============
+  // Seasonal Patterns, Activity Proxy, Anomaly Detection
+
+  // ------------- Seasonal Patterns -------------
+
+  /**
+   * Set user location for seasonal calculations
+   * Required for accurate SAD risk assessment and light recommendations
+   *
+   * @param userId - User identifier
+   * @param location - User's location data
+   */
+  setUserLocation(userId: string, location: UserLocation): void {
+    this.userLocations.set(userId, location);
+  }
+
+  /**
+   * Get user location if set
+   *
+   * @param userId - User identifier
+   * @returns User location or null
+   */
+  getUserLocation(userId: string): UserLocation | null {
+    return this.userLocations.get(userId) || null;
+  }
+
+  /**
+   * Get seasonal context for a user based on their location
+   *
+   * @param userId - User identifier
+   * @param date - Optional date (defaults to now)
+   * @returns Seasonal context or null if no location set
+   */
+  getSeasonalContext(userId: string, date?: Date): SeasonalContext | null {
+    const location = this.userLocations.get(userId);
+    if (!location) return null;
+
+    return this.seasonalEngine.getSeasonalContext(
+      location.latitude,
+      date || new Date(),
+      location.longitude
+    );
+  }
+
+  /**
+   * Get light therapy recommendation based on user's seasonal context
+   *
+   * @param userId - User identifier
+   * @returns Light recommendation or null if no location set
+   */
+  getLightRecommendation(userId: string): LightRecommendation | null {
+    const context = this.getSeasonalContext(userId);
+    if (!context) return null;
+
+    return this.seasonalEngine.getLightRecommendation(context);
+  }
+
+  /**
+   * Get seasonal tips relevant to user's current context
+   *
+   * @param userId - User identifier
+   * @param limit - Maximum number of tips (default: 3)
+   * @returns Array of seasonal tips or empty array if no location
+   */
+  getSeasonalTips(userId: string, limit: number = 3): SeasonalTip[] {
+    const context = this.getSeasonalContext(userId);
+    if (!context) return [];
+
+    return this.seasonalEngine.getSeasonalTips(context, limit);
+  }
+
+  /**
+   * Get seasonal TIB adjustment suggestion
+   * NOTE: Advisory only - SleepRestrictionEngine enforces MIN_TIB
+   *
+   * @param userId - User identifier
+   * @returns TIB adjustment suggestion or null if no location
+   */
+  getSeasonalTIBAdjustment(userId: string): SeasonalTIBAdjustment | null {
+    const context = this.getSeasonalContext(userId);
+    if (!context) return null;
+
+    return this.seasonalEngine.suggestTIBAdjustment(context);
+  }
+
+  /**
+   * Get SeasonalEngine singleton (Typed Accessor)
+   */
+  getSeasonalEngine(): SeasonalEngine {
+    return this.seasonalEngine;
+  }
+
+  // ------------- Activity Proxy -------------
+
+  /**
+   * Estimate sleep from activity data when wearable sleep tracking unavailable
+   *
+   * @param data - Activity data for a day
+   * @returns Estimated sleep parameters
+   */
+  estimateSleepFromActivity(data: ActivityData): EstimatedSleep {
+    return this.activityProxyEngine.estimateSleepFromActivity(data);
+  }
+
+  /**
+   * Calculate activity pattern from multiple days of data
+   *
+   * @param multiDayData - Activity data for multiple days
+   * @returns Activity pattern summary
+   */
+  calculateActivityPattern(multiDayData: ActivityData[]): ActivityPattern {
+    return this.activityProxyEngine.calculateActivityPattern(multiDayData);
+  }
+
+  /**
+   * Get ActivityProxyEngine singleton (Typed Accessor)
+   */
+  getActivityProxyEngine(): ActivityProxyEngine {
+    return this.activityProxyEngine;
+  }
+
+  // ------------- Anomaly Detection -------------
+
+  /**
+   * Calculate baseline statistics from user's sleep history
+   * Requires at least 7 sessions for reliable baseline
+   *
+   * @param userId - User identifier
+   * @returns Baseline stats or null if insufficient data
+   */
+  calculateAnomalyBaseline(userId: string): BaselineStats | null {
+    const sleepStates = this.getSleepStates(userId);
+    if (!sleepStates || sleepStates.length < 7) return null;
+
+    // Convert ISleepState[] to SleepSessionForAnomaly[]
+    const sessions: SleepSessionForAnomaly[] = sleepStates.map((state) => ({
+      date: state.timestamp || new Date(),
+      tst: state.metrics.totalSleepTime,
+      se: state.metrics.sleepEfficiency,
+      sol: state.metrics.sleepOnsetLatency,
+      waso: state.metrics.wakeAfterSleepOnset || 0,
+    }));
+
+    return this.anomalyDetector.calculateBaseline(sessions);
+  }
+
+  /**
+   * Detect if a sleep session is anomalous compared to user's baseline
+   *
+   * @param userId - User identifier
+   * @param session - Sleep session to analyze (defaults to latest)
+   * @returns Anomaly result or null if insufficient baseline data
+   */
+  detectSleepAnomaly(
+    userId: string,
+    session?: SleepSessionForAnomaly
+  ): AnomalyResult | null {
+    const baseline = this.calculateAnomalyBaseline(userId);
+    if (!baseline || !baseline.isReliable) return null;
+
+    // If no session provided, use latest sleep state
+    if (!session) {
+      const sleepStates = this.getSleepStates(userId);
+      if (!sleepStates || sleepStates.length === 0) return null;
+
+      const latestState = sleepStates[sleepStates.length - 1];
+      session = {
+        date: latestState.timestamp || new Date(),
+        tst: latestState.metrics.totalSleepTime,
+        se: latestState.metrics.sleepEfficiency,
+        sol: latestState.metrics.sleepOnsetLatency,
+        waso: latestState.metrics.wakeAfterSleepOnset || 0,
+      };
+    }
+
+    return this.anomalyDetector.detectAnomaly(session, baseline);
+  }
+
+  /**
+   * Find all anomalies in user's recent sleep history
+   *
+   * @param userId - User identifier
+   * @param days - Number of days to analyze (default: 7)
+   * @returns Array of anomaly results
+   */
+  getRecentAnomalies(userId: string, days: number = 7): AnomalyResult[] {
+    const sleepStates = this.getSleepStates(userId);
+    if (!sleepStates || sleepStates.length < 7) return [];
+
+    const baseline = this.calculateAnomalyBaseline(userId);
+    if (!baseline || !baseline.isReliable) return [];
+
+    // Get recent sessions
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    const sessions: SleepSessionForAnomaly[] = sleepStates
+      .filter((state) => {
+        const stateDate = state.timestamp || new Date();
+        return stateDate >= cutoffDate;
+      })
+      .map((state) => ({
+        date: state.timestamp || new Date(),
+        tst: state.metrics.totalSleepTime,
+        se: state.metrics.sleepEfficiency,
+        sol: state.metrics.sleepOnsetLatency,
+        waso: state.metrics.wakeAfterSleepOnset || 0,
+      }));
+
+    return this.anomalyDetector.findAnomalies(sessions, baseline);
+  }
+
+  /**
+   * Get AnomalyDetector singleton (Typed Accessor)
+   */
+  getAnomalyDetector(): AnomalyDetector {
+    return this.anomalyDetector;
   }
 }
 

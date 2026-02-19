@@ -27,6 +27,7 @@ import type {
   IInterventionTarget,
   ICausalFactor,
 } from '../services/CausalInsightsService';
+import type { AnomalyResult } from '../../anomaly/types';
 import type { sleepPredictionService } from '../services/SleepPredictionService';
 import type { ISleepState } from '../../sleep/interfaces/ISleepState';
 
@@ -223,6 +224,14 @@ ${sonya.tip('Продолжай вести дневник — скоро я см
       return this.showAnalysisError();
     }
 
+    // Get recent anomalies (last 7 days)
+    let anomalies: AnomalyResult[] = [];
+    try {
+      anomalies = await ctx.sleepCore.getRecentAnomalies(ctx.userId, 7);
+    } catch {
+      // Anomaly detection is optional - continue without it
+    }
+
     // Get top 3 insights
     const topInsights = insights.slice(0, 3);
 
@@ -236,6 +245,11 @@ ${sonya.tip('Продолжай вести дневник — скоро я см
       ? `\n${formatter.divider()}\n\n🎯 *Главная точка воздействия:*\n${this.formatTargetBrief(target)}`
       : '';
 
+    // Anomaly section
+    const anomalyText = anomalies.length > 0
+      ? `\n${formatter.divider()}\n\n⚠️ *Необычные ночи за неделю:*\n${this.formatAnomalies(anomalies)}`
+      : '';
+
     const message = `
 ${formatter.header('🔍 Почему я плохо сплю?')}
 
@@ -245,6 +259,7 @@ ${formatter.info(`Анализ на основе ${history.length} дней да
 
 ${insightsSummary}
 ${targetText}
+${anomalyText}
 
 ${formatter.divider()}
 
@@ -711,6 +726,25 @@ ${formatter.tip('Используйте /diary для добавления за�
 ${pattern.explanationRu}
 
 ${pattern.recommendationRu ? `💡 ${pattern.recommendationRu}` : ''}`;
+  }
+
+  private formatAnomalies(anomalies: AnomalyResult[]): string {
+    return anomalies
+      .slice(0, 3) // Limit to 3 anomalies for readability
+      .map((a) => {
+        const severityEmoji =
+          a.severity === 'severe' ? '🔴' :
+          a.severity === 'moderate' ? '🟠' : '🟡';
+        const dateStr = this.formatDate(a.date);
+        return `${severityEmoji} ${dateStr}: ${a.explanation}`;
+      })
+      .join('\n');
+  }
+
+  private formatDate(date: Date): string {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    return `${day}.${month}`;
   }
 
   private buildImpactBar(impact: number): string {

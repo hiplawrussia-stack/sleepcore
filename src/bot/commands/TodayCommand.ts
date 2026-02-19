@@ -32,6 +32,7 @@ import {
   CBTI_COMPONENT_ICONS,
   CBTI_COMPONENT_SELECTION_REASONS,
 } from '../../modules/content/clinical/ClinicalContent';
+import type { SeasonalTip } from '../../seasonal';
 
 /**
  * /today Command Implementation
@@ -156,11 +157,14 @@ ${formatter.tip('Чем больше данных, тем точнее реко�
     // Get proactive JITAI insights (graceful degradation: empty on failure/insufficient data)
     const proactiveSection = await this.buildProactiveInsightsSection(ctx);
 
+    // Get seasonal tips based on user's location (graceful: empty if no location)
+    const seasonalSection = this.buildSeasonalSection(ctx);
+
     const message = `
 ${sonya.emoji} *${sonya.name}*
 
 ${greetingText}
-${ewsAlert}${proactiveSection}
+${ewsAlert}${proactiveSection}${seasonalSection}
 ${formatter.header('Задание на сегодня')}
 
 ${icon} *${name}*
@@ -593,6 +597,53 @@ ${formatter.info('Альтернатив пока нет')}
 
     // Show different task (in production would use Thompson Sampling exploration)
     return this.execute(ctx);
+  }
+
+  // ==================== Seasonal Section ====================
+
+  /**
+   * Build seasonal tips section based on user's location context
+   * Returns empty string if no location set or no relevant tips
+   */
+  private buildSeasonalSection(ctx: ISleepCoreContext): string {
+    const seasonalContext = ctx.sleepCore.getSeasonalContext(ctx.userId);
+    if (!seasonalContext) {
+      return ''; // No location set, skip seasonal section
+    }
+
+    const tips = ctx.sleepCore.getSeasonalTips(ctx.userId, 2);
+    if (tips.length === 0) {
+      return '';
+    }
+
+    // Check for SAD risk
+    const lightRec = ctx.sleepCore.getLightRecommendation(ctx.userId);
+    let sadAlert = '';
+    if (seasonalContext.sadRiskLevel === 'high' && lightRec?.lightboxRecommended) {
+      sadAlert = `\n☀️ *Внимание:* Короткий световой день (${seasonalContext.daylightHours.toFixed(1)}ч). Рекомендуется светотерапия.\n`;
+    } else if (seasonalContext.sadRiskLevel === 'moderate') {
+      sadAlert = `\n☀️ Световой день сегодня: ${seasonalContext.daylightHours.toFixed(1)} часов\n`;
+    }
+
+    const tipIcons: Record<string, string> = {
+      light: '💡',
+      temperature: '🌡️',
+      activity: '🏃',
+      nutrition: '🥗',
+      circadian: '⏰',
+    };
+
+    const tipsText = tips.map((tip: SeasonalTip) => {
+      const icon = tipIcons[tip.category] || '💡';
+      return `${icon} ${tip.content}`;
+    }).join('\n\n');
+
+    return `
+${formatter.header('Сезонные советы')}
+${sadAlert}
+${tipsText}
+
+`;
   }
 }
 
