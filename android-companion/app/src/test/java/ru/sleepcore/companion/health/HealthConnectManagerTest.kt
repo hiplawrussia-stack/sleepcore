@@ -160,6 +160,10 @@ class HealthConnectManagerTest {
         assertFalse(permissions.restingHeartRateRead)
         assertFalse(permissions.backgroundRead)
         assertFalse(permissions.historyRead)
+        // Enhanced metrics (added Feb 2026)
+        assertFalse(permissions.spo2Read)
+        assertFalse(permissions.respirationRateRead)
+        assertFalse(permissions.skinTemperatureRead)
     }
 
     // ========== Background/History Permission Tests ==========
@@ -172,7 +176,11 @@ class HealthConnectManagerTest {
             heartRateRead = true,
             restingHeartRateRead = true,
             backgroundRead = true,
-            historyRead = true
+            historyRead = true,
+            // Enhanced metrics required for hasAllPermissions
+            spo2Read = true,
+            respirationRateRead = true,
+            skinTemperatureRead = true
         )
 
         assertTrue(permissions.hasAllPermissions)
@@ -186,7 +194,10 @@ class HealthConnectManagerTest {
             heartRateRead = true,
             restingHeartRateRead = true,
             backgroundRead = false,
-            historyRead = true
+            historyRead = true,
+            spo2Read = true,
+            respirationRateRead = true,
+            skinTemperatureRead = true
         )
 
         assertFalse(permissions.hasAllPermissions)
@@ -200,10 +211,54 @@ class HealthConnectManagerTest {
             heartRateRead = true,
             restingHeartRateRead = true,
             backgroundRead = true,
-            historyRead = false
+            historyRead = false,
+            spo2Read = true,
+            respirationRateRead = true,
+            skinTemperatureRead = true
         )
 
         assertFalse(permissions.hasAllPermissions)
+    }
+
+    @Test
+    fun `HealthConnectPermissions hasAllPermissions false when enhanced metrics missing`() {
+        val permissions = HealthConnectPermissions(
+            sleepRead = true,
+            hrvRead = true,
+            heartRateRead = true,
+            restingHeartRateRead = true,
+            backgroundRead = true,
+            historyRead = true,
+            spo2Read = false,  // Missing SpO2
+            respirationRateRead = true,
+            skinTemperatureRead = true
+        )
+
+        assertFalse(permissions.hasAllPermissions)
+    }
+
+    @Test
+    fun `HealthConnectPermissions hasEnhancedMetrics true when any enhanced metric granted`() {
+        val permissionsWithSpO2 = HealthConnectPermissions(spo2Read = true)
+        assertTrue(permissionsWithSpO2.hasEnhancedMetrics)
+
+        val permissionsWithRespiration = HealthConnectPermissions(respirationRateRead = true)
+        assertTrue(permissionsWithRespiration.hasEnhancedMetrics)
+
+        val permissionsWithSkinTemp = HealthConnectPermissions(skinTemperatureRead = true)
+        assertTrue(permissionsWithSkinTemp.hasEnhancedMetrics)
+    }
+
+    @Test
+    fun `HealthConnectPermissions hasEnhancedMetrics false when no enhanced metrics granted`() {
+        val permissions = HealthConnectPermissions(
+            sleepRead = true,
+            hrvRead = true,
+            heartRateRead = true,
+            restingHeartRateRead = true
+        )
+
+        assertFalse(permissions.hasEnhancedMetrics)
     }
 
     @Test
@@ -256,14 +311,21 @@ class HealthConnectManagerTest {
             heartRateRead = true,
             restingHeartRateRead = true,
             backgroundRead = false,
-            historyRead = false
+            historyRead = false,
+            spo2Read = false,
+            respirationRateRead = false,
+            skinTemperatureRead = false
         )
 
         val missing = permissions.missingOptionalPermissions
 
-        assertEquals(2, missing.size)
+        // 2 background/history + 3 enhanced metrics = 5
+        assertEquals(5, missing.size)
         assertTrue(missing.any { it.contains("BACKGROUND") })
         assertTrue(missing.any { it.contains("HISTORY") })
+        assertTrue(missing.any { it.contains("OxygenSaturation") || it.contains("OXYGEN") })
+        assertTrue(missing.any { it.contains("RespiratoryRate") || it.contains("RESPIRATORY") })
+        assertTrue(missing.any { it.contains("SkinTemperature") || it.contains("SKIN") })
     }
 
     @Test
@@ -274,7 +336,10 @@ class HealthConnectManagerTest {
             heartRateRead = true,
             restingHeartRateRead = true,
             backgroundRead = true,
-            historyRead = true
+            historyRead = true,
+            spo2Read = true,
+            respirationRateRead = true,
+            skinTemperatureRead = true
         )
 
         assertTrue(permissions.missingOptionalPermissions.isEmpty())

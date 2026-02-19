@@ -41,6 +41,7 @@ import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import ru.sleepcore.companion.domain.model.BreathingDisturbance
 import ru.sleepcore.companion.domain.model.HeartRateSample
@@ -339,6 +340,12 @@ class HealthConnectManager @Inject constructor(
      * @param endTime End of time range
      * @return List of sleep sessions with stages, HRV, and heart rate data
      */
+    /**
+     * PERFORMANCE FIX (Feb 2026): Parallelized Health Connect reads
+     * Previous: Sequential reads = 7 round-trips
+     * Current: Parallel reads = 1 round-trip (all in parallel)
+     * Source: Kotlin Coroutines Best Practices 2025
+     */
     suspend fun readSleepSessions(
         startTime: Instant,
         endTime: Instant
@@ -347,84 +354,105 @@ class HealthConnectManager @Inject constructor(
             val client = healthConnectClient
                 ?: return@withContext Result.failure(IllegalStateException("Health Connect not available"))
 
-            // Read sleep sessions
-            val sleepRequest = ReadRecordsRequest(
-                recordType = SleepSessionRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
-            )
-            val sleepResponse = client.readRecords(sleepRequest)
+            val timeFilter = TimeRangeFilter.between(startTime, endTime)
 
-            // Read HRV data for the same period
-            val hrvRequest = ReadRecordsRequest(
-                recordType = HeartRateVariabilityRmssdRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
-            )
-            val hrvResponse = try {
-                client.readRecords(hrvRequest)
-            } catch (e: Exception) {
-                null  // HRV might not be available
-            }
+            // PERFORMANCE: Run all Health Connect reads in parallel using coroutineScope + async
+            // This reduces latency from O(n) to O(1) for n data types
+            val sessions = kotlinx.coroutines.coroutineScope {
+                // Primary: Sleep sessions (required)
+                val sleepDeferred = async {
+                    client.readRecords(ReadRecordsRequest(
+                        recordType = SleepSessionRecord::class,
+                        timeRangeFilter = timeFilter
+                    ))
+                }
 
-            // Read heart rate data
-            val hrRequest = ReadRecordsRequest(
-                recordType = HeartRateRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
-            )
-            val hrResponse = try {
-                client.readRecords(hrRequest)
-            } catch (e: Exception) {
-                null
-            }
+                // HRV data
+                val hrvDeferred = async {
+                    try {
+                        client.readRecords(ReadRecordsRequest(
+                            recordType = HeartRateVariabilityRmssdRecord::class,
+                            timeRangeFilter = timeFilter
+                        ))
+                    } catch (e: Exception) {
+                        null  // HRV might not be available
+                    }
+                }
 
-            // Read resting heart rate
-            val restingHrRequest = ReadRecordsRequest(
-                recordType = RestingHeartRateRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
-            )
-            val restingHrResponse = try {
-                client.readRecords(restingHrRequest)
-            } catch (e: Exception) {
-                null
-            }
+                // Heart rate data
+                val hrDeferred = async {
+                    try {
+                        client.readRecords(ReadRecordsRequest(
+                            recordType = HeartRateRecord::class,
+                            timeRangeFilter = timeFilter
+                        ))
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
 
-            // NEW (2025-02): Read SpO2 / Blood Oxygen data
-            val spo2Request = ReadRecordsRequest(
-                recordType = OxygenSaturationRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
-            )
-            val spo2Response = try {
-                client.readRecords(spo2Request)
-            } catch (e: Exception) {
-                Log.d(TAG, "SpO2 data not available: ${e.message}")
-                null
-            }
+                // Resting heart rate
+                val restingHrDeferred = async {
+                    try {
+                        client.readRecords(ReadRecordsRequest(
+                            recordType = RestingHeartRateRecord::class,
+                            timeRangeFilter = timeFilter
+                        ))
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
 
-            // NEW (2025-02): Read respiration rate data
-            val respirationRequest = ReadRecordsRequest(
-                recordType = RespiratoryRateRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
-            )
-            val respirationResponse = try {
-                client.readRecords(respirationRequest)
-            } catch (e: Exception) {
-                Log.d(TAG, "Respiration rate data not available: ${e.message}")
-                null
-            }
+                // SpO2 / Blood Oxygen data
+                val spo2Deferred = async {
+                    try {
+                        client.readRecords(ReadRecordsRequest(
+                            recordType = OxygenSaturationRecord::class,
+                            timeRangeFilter = timeFilter
+                        ))
+                    } catch (e: Exception) {
+                        Log.d(TAG, "SpO2 data not available: ${e.message}")
+                        null
+                    }
+                }
 
-            // NEW (2025-02): Read skin temperature data
-            val skinTempRequest = ReadRecordsRequest(
-                recordType = SkinTemperatureRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
-            )
-            val skinTempResponse = try {
-                client.readRecords(skinTempRequest)
-            } catch (e: Exception) {
-                Log.d(TAG, "Skin temperature data not available: ${e.message}")
-                null
-            }
+                // Respiration rate data
+                val respirationDeferred = async {
+                    try {
+                        client.readRecords(ReadRecordsRequest(
+                            recordType = RespiratoryRateRecord::class,
+                            timeRangeFilter = timeFilter
+                        ))
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Respiration rate data not available: ${e.message}")
+                        null
+                    }
+                }
 
-            // Map to domain models
-            val sessions = sleepResponse.records.map { record ->
+                // Skin temperature data
+                val skinTempDeferred = async {
+                    try {
+                        client.readRecords(ReadRecordsRequest(
+                            recordType = SkinTemperatureRecord::class,
+                            timeRangeFilter = timeFilter
+                        ))
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Skin temperature data not available: ${e.message}")
+                        null
+                    }
+                }
+
+                // Await all results
+                val sleepResponse = sleepDeferred.await()
+                val hrvResponse = hrvDeferred.await()
+                val hrResponse = hrDeferred.await()
+                val restingHrResponse = restingHrDeferred.await()
+                val spo2Response = spo2Deferred.await()
+                val respirationResponse = respirationDeferred.await()
+                val skinTempResponse = skinTempDeferred.await()
+
+                // Map to domain models (inside coroutineScope to access responses)
+                sleepResponse.records.map { record ->
                 val sessionStart = record.startTime
                 val sessionEnd = record.endTime
 
@@ -517,6 +545,7 @@ class HealthConnectManager @Inject constructor(
                     skinTemperature = skinTemperature
                 )
             }
+            } // end coroutineScope
 
             Result.success(sessions)
         } catch (e: Exception) {

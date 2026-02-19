@@ -18,6 +18,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -387,12 +389,32 @@ private fun StatItem(
     }
 }
 
+/**
+ * Sync status chip with accessibility support
+ *
+ * ACCESSIBILITY: Uses full text descriptions instead of symbols
+ * for screen reader compatibility (WCAG 2.1 AA)
+ */
 @Composable
 private fun SyncStatusChip(status: String) {
-    val (color, text) = when (status) {
-        "completed" -> MaterialTheme.colorScheme.primary to "OK"
-        "processing" -> MaterialTheme.colorScheme.tertiary to "..."
-        else -> MaterialTheme.colorScheme.error to "!"
+    // ACCESSIBILITY FIX: Use descriptive text instead of "...", "!", "OK"
+    // Screen readers cannot meaningfully interpret these symbols
+    val (color, displayText, contentDescription) = when (status) {
+        "completed" -> Triple(
+            MaterialTheme.colorScheme.primary,
+            "✓",  // Visual indicator
+            "Sync completed successfully"  // Screen reader text
+        )
+        "processing" -> Triple(
+            MaterialTheme.colorScheme.tertiary,
+            "⟳",  // Visual indicator
+            "Sync in progress"  // Screen reader text
+        )
+        else -> Triple(
+            MaterialTheme.colorScheme.error,
+            "✗",  // Visual indicator
+            "Sync failed"  // Screen reader text
+        )
     }
 
     Surface(
@@ -400,8 +422,10 @@ private fun SyncStatusChip(status: String) {
         shape = MaterialTheme.shapes.small
     ) {
         Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            text = displayText,
+            modifier = Modifier
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .semantics { this.contentDescription = contentDescription },
             style = MaterialTheme.typography.labelMedium,
             color = color
         )

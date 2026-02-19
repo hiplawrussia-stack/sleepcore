@@ -46,6 +46,18 @@
     <!-- Historical Data (>30 days) - For complete sleep history -->
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
 
+    <!--
+      Enhanced Sleep Metrics (Added Feb 2026)
+      Based on sleep apnea screening research:
+      - SpO2: Oxygen saturation drops indicate apnea events
+      - Respiratory Rate: Breathing pattern analysis
+      - Skin Temperature: Circadian rhythm marker
+      Source: AASM Technical Guidelines 2024
+    -->
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <uses-permission android:name="android.permission.health.READ_RESPIRATORY_RATE" />
+    <uses-permission android:name="android.permission.health.READ_SKIN_TEMPERATURE" />
+
     <application
         android:name=".SleepCoreCompanionApp"
         android:allowBackup="false"

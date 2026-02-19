@@ -136,7 +136,9 @@ class TokenStorage @Inject constructor(
         private val KEY_REFRESH_TOKEN = stringPreferencesKey("refresh_token")  // Added Feb 2026
         private val KEY_EXPIRES_AT = stringPreferencesKey("token_expires_at")
         private val KEY_USER_ID = stringPreferencesKey("user_id")
-        private val KEY_TELEGRAM_ID = longPreferencesKey("telegram_id")
+        // SECURITY: TelegramId encrypted (MASVS-STORAGE L2, HIPAA)
+        // Changed from longPreferencesKey to stringPreferencesKey for encryption
+        private val KEY_TELEGRAM_ID = stringPreferencesKey("telegram_id_encrypted")
         private val KEY_USER_NAME = stringPreferencesKey("user_name")
         private val KEY_DEVICE_ID = stringPreferencesKey("device_id")
         private val KEY_LINKED_AT = stringPreferencesKey("linked_at")
@@ -308,11 +310,12 @@ class TokenStorage @Inject constructor(
                 Log.i(TAG, "Migrating credentials from EncryptedSharedPreferences")
 
                 // Save to new DataStore with Tink encryption
+                // SECURITY: All PII including telegramId is encrypted (HIPAA/MASVS)
                 dataStore.edit { prefs ->
                     prefs[KEY_TOKEN] = encrypt(token)
                     expiresAt?.let { prefs[KEY_EXPIRES_AT] = it }
                     prefs[KEY_USER_ID] = encrypt(userId)
-                    prefs[KEY_TELEGRAM_ID] = telegramId
+                    prefs[KEY_TELEGRAM_ID] = encrypt(telegramId.toString())
                     prefs[KEY_USER_NAME] = encrypt(userName)
                     prefs[KEY_DEVICE_ID] = encrypt(deviceId)
                     linkedAt?.let { prefs[KEY_LINKED_AT] = it }
@@ -423,11 +426,16 @@ class TokenStorage @Inject constructor(
     /**
      * Parse credentials from DataStore preferences
      */
+    /**
+     * Parse credentials from DataStore preferences
+     *
+     * SECURITY: All PII fields are encrypted, including telegramId (HIPAA/MASVS-STORAGE L2)
+     */
     private fun parseCredentials(prefs: Preferences): StoredCredentials? {
         val tokenEncrypted = prefs[KEY_TOKEN] ?: return null
         val expiresAt = prefs[KEY_EXPIRES_AT] ?: return null
         val userIdEncrypted = prefs[KEY_USER_ID] ?: return null
-        val telegramId = prefs[KEY_TELEGRAM_ID] ?: 0L
+        val telegramIdEncrypted = prefs[KEY_TELEGRAM_ID] ?: return null
         val userNameEncrypted = prefs[KEY_USER_NAME] ?: return null
         val deviceIdEncrypted = prefs[KEY_DEVICE_ID] ?: return null
         val linkedAt = prefs[KEY_LINKED_AT] ?: return null
@@ -438,7 +446,7 @@ class TokenStorage @Inject constructor(
                 token = decrypt(tokenEncrypted),
                 expiresAt = Instant.parse(expiresAt),
                 userId = decrypt(userIdEncrypted),
-                telegramId = telegramId,
+                telegramId = decrypt(telegramIdEncrypted).toLong(),
                 userName = decrypt(userNameEncrypted),
                 deviceId = decrypt(deviceIdEncrypted),
                 linkedAt = Instant.parse(linkedAt),
@@ -466,11 +474,12 @@ class TokenStorage @Inject constructor(
     ) = withContext(Dispatchers.IO) {
         val linkedAt = Instant.now()
 
+        // SECURITY: All PII encrypted including telegramId (HIPAA/MASVS-STORAGE L2)
         dataStore.edit { prefs ->
             prefs[KEY_TOKEN] = encrypt(token)
             prefs[KEY_EXPIRES_AT] = expiresAt
             prefs[KEY_USER_ID] = encrypt(userId)
-            prefs[KEY_TELEGRAM_ID] = telegramId
+            prefs[KEY_TELEGRAM_ID] = encrypt(telegramId.toString())
             prefs[KEY_USER_NAME] = encrypt(userName)
             prefs[KEY_DEVICE_ID] = encrypt(deviceId)
             prefs[KEY_LINKED_AT] = linkedAt.toString()
@@ -608,10 +617,14 @@ class TokenStorage @Inject constructor(
 
     /**
      * Clear all stored credentials (on unlink)
+     *
+     * SECURITY: Removes ALL credentials including refresh token to prevent
+     * unauthorized access after device unlink (MASVS-AUTH-2)
      */
     suspend fun clearCredentials() = withContext(Dispatchers.IO) {
         dataStore.edit { prefs ->
             prefs.remove(KEY_TOKEN)
+            prefs.remove(KEY_REFRESH_TOKEN)  // SECURITY FIX: Was missing, caused credential leak
             prefs.remove(KEY_EXPIRES_AT)
             prefs.remove(KEY_USER_ID)
             prefs.remove(KEY_TELEGRAM_ID)
@@ -621,7 +634,7 @@ class TokenStorage @Inject constructor(
             prefs.remove(KEY_LAST_SYNC_TIME)
         }
         _credentialsFlow.value = null
-        Log.d(TAG, "Credentials cleared")
+        Log.d(TAG, "Credentials cleared (including refresh token)")
     }
 
     /**

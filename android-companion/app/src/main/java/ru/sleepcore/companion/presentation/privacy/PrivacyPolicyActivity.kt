@@ -87,7 +87,11 @@ fun PrivacyPolicyScreen(
                     "Sleep Sessions - duration, start/end times, sleep stages",
                     "Heart Rate Variability (HRV) - RMSSD measurements during sleep",
                     "Heart Rate - average heart rate during sleep periods",
-                    "Resting Heart Rate - daily resting heart rate"
+                    "Resting Heart Rate - daily resting heart rate",
+                    // GDPR Article 13: Enhanced metrics disclosure (Feb 2026)
+                    "Blood Oxygen (SpO2) - oxygen saturation levels during sleep",
+                    "Respiratory Rate - breathing patterns and disturbances",
+                    "Skin Temperature - circadian rhythm temperature variations"
                 )
             )
 
@@ -99,7 +103,10 @@ fun PrivacyPolicyScreen(
                     "Generate personalized sleep therapy recommendations",
                     "Track your sleep improvement progress over time",
                     "Calculate sleep efficiency and other sleep metrics",
-                    "Identify patterns that affect your sleep quality"
+                    "Identify patterns that affect your sleep quality",
+                    // Enhanced metrics usage (Feb 2026)
+                    "Screen for potential sleep breathing disorders (SpO2, respiratory patterns)",
+                    "Monitor circadian rhythm indicators (skin temperature)"
                 )
             )
 
