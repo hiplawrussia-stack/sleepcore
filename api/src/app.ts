@@ -34,6 +34,7 @@ import {
   healthRoutes,
   wearableRoutes,
   leaderboardRoutes,
+  downloadRoutes,
   ouraRoutes,
 } from './routes/index.js';
 
@@ -131,6 +132,11 @@ export function createApp(config: AppConfig): Hono {
   // Health Routes (no rate limiting, no /api prefix)
   // =========================================================================
   app.route('/health', healthRoutes);
+
+  // =========================================================================
+  // Download Routes (no rate limiting, no /api prefix)
+  // =========================================================================
+  app.route('/download', downloadRoutes);
 
   // =========================================================================
   // Rate Limiting (OWASP API4:2023 — Unrestricted Resource Consumption)

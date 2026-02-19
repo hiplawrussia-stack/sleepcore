@@ -1121,4 +1121,140 @@ wearable.delete('/unlink', deviceAuthMiddleware, async (c) => {
   });
 });
 
+// ============================================================================
+// Bot-Facing Endpoints (for /link command)
+// ============================================================================
+
+/**
+ * GET /devices
+ * Get list of user's linked devices by telegramId
+ * Used by Telegram bot /link command
+ */
+wearable.get('/devices', async (c) => {
+  const telegramIdStr = c.req.query('telegramId');
+
+  if (!telegramIdStr) {
+    throw new HTTPException(400, { message: 'telegramId is required' });
+  }
+
+  const telegramId = parseInt(telegramIdStr, 10);
+  if (isNaN(telegramId)) {
+    throw new HTTPException(400, { message: 'Invalid telegramId' });
+  }
+
+  const db = getDatabase();
+
+  // Find user by telegramId
+  const user = await db.query.users.findFirst({
+    where: eq(users.telegramId, telegramId),
+  });
+
+  if (!user) {
+    // No user found - return empty list (not an error)
+    return c.json<ApiResponse<{ devices: Array<{
+      id: number;
+      deviceId: string;
+      deviceType: string;
+      deviceName: string | null;
+      lastSyncAt: string | null;
+      isActive: boolean;
+    }> }>>({
+      success: true,
+      data: { devices: [] },
+      timestamp: Date.now(),
+    });
+  }
+
+  // Get active devices for this user
+  const devices = await db.query.wearableDevices.findMany({
+    where: and(
+      eq(wearableDevices.userId, user.id),
+      eq(wearableDevices.isActive, true)
+    ),
+    orderBy: [desc(wearableDevices.lastSyncAt)],
+  });
+
+  return c.json<ApiResponse<{ devices: Array<{
+    id: string;
+    deviceId: string;
+    deviceType: string;
+    deviceName: string | null;
+    lastSyncAt: string | null;
+    isActive: boolean;
+  }> }>>({
+    success: true,
+    data: {
+      devices: devices.map(d => ({
+        id: d.id,
+        deviceId: d.deviceId,
+        deviceType: 'android_companion',
+        deviceName: d.deviceName ?? (`${d.manufacturer ?? ''} ${d.model ?? ''}`.trim() || null),
+        lastSyncAt: d.lastSyncAt,
+        isActive: d.isActive ?? true,
+      })),
+    },
+    timestamp: Date.now(),
+  });
+});
+
+/**
+ * POST /device/unlink
+ * Unlink a device by telegramId and deviceId
+ * Used by Telegram bot /link command (confirmation dialog)
+ */
+wearable.post('/device/unlink', async (c) => {
+  const body = await c.req.json() as { telegramId?: number; deviceId?: string };
+
+  if (!body.telegramId || !body.deviceId) {
+    throw new HTTPException(400, { message: 'telegramId and deviceId are required' });
+  }
+
+  const db = getDatabase();
+
+  // Find user by telegramId
+  const user = await db.query.users.findFirst({
+    where: eq(users.telegramId, body.telegramId),
+  });
+
+  if (!user) {
+    throw new HTTPException(404, { message: 'User not found' });
+  }
+
+  // Find device belonging to this user
+  const device = await db.query.wearableDevices.findFirst({
+    where: and(
+      eq(wearableDevices.userId, user.id),
+      eq(wearableDevices.deviceId, body.deviceId),
+      eq(wearableDevices.isActive, true)
+    ),
+  });
+
+  if (!device) {
+    throw new HTTPException(404, { message: 'Device not found or already unlinked' });
+  }
+
+  const now = new Date().toISOString();
+
+  // Deactivate device (soft delete to preserve history)
+  // Note: We don't null out tokens (they have notNull constraint)
+  // Instead, isActive=false makes them unusable
+  await db.update(wearableDevices)
+    .set({
+      isActive: false,
+      deactivatedAt: now,
+      deactivationReason: 'user_request_via_bot',
+      updatedAt: now,
+    })
+    .where(eq(wearableDevices.id, device.id));
+
+  return c.json<ApiResponse<{ unlinked: boolean; deviceId: string }>>({
+    success: true,
+    data: {
+      unlinked: true,
+      deviceId: body.deviceId,
+    },
+    timestamp: Date.now(),
+  });
+});
+
 export default wearable;

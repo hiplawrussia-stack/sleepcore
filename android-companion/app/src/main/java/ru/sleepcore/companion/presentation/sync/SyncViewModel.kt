@@ -64,6 +64,8 @@ class SyncViewModel @Inject constructor(
 
     private fun checkPermissions() {
         viewModelScope.launch {
+            // Must call checkAvailability first to initialize healthConnectClient
+            healthConnectManager.checkAvailability()
             val permissions = healthConnectManager.checkPermissions()
             _uiState.update {
                 it.copy(hasPermissions = permissions.hasMinimumPermissions)

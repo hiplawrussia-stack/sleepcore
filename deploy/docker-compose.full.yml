@@ -48,6 +48,7 @@ services:
       - API_URL=http://api:3001
     volumes:
       - bot-data:/app/data
+      - /root/sleepcore:/app/assets:ro
     networks:
       - sleepcore-net
     healthcheck:
@@ -76,6 +77,7 @@ services:
       - ENCRYPTION_MASTER_KEY_SALT=${ENCRYPTION_MASTER_KEY_SALT}
     volumes:
       - api-data:/app/data
+      - /root/sleepcore:/app/assets:ro
     networks:
       - sleepcore-net
     labels:
@@ -84,6 +86,10 @@ services:
       - "traefik.http.routers.api.rule=Host(`api.sleepcore.ru`)"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
       - "traefik.http.routers.api.service=api"
+      # Download route: api.sleepcore.ru/download/* (APK download)
+      - "traefik.http.routers.api-download.rule=Host(`api.sleepcore.ru`) && PathPrefix(`/download`)"
+      - "traefik.http.routers.api-download.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api-download.service=api"
       # Alternative route: app.sleepcore.ru/api/* (for TG Mini App - Russia network restrictions)
       - "traefik.http.routers.api-alt.rule=Host(`app.sleepcore.ru`) && PathPrefix(`/api`)"
       - "traefik.http.routers.api-alt.tls.certresolver=letsencrypt"
