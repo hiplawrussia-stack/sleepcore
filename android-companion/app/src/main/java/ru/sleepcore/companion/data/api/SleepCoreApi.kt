@@ -47,13 +47,53 @@ data class DeviceDto(
 )
 
 /**
- * Link response
+ * Link response (legacy format - single token)
+ *
+ * NOTE: Server returns both accessToken and refreshToken via /device/token endpoint.
+ * The legacy /link endpoint returns only "token" which is the accessToken.
+ * For backward compatibility, we support both formats.
  */
 @Serializable
 data class LinkResponseDto(
-    val token: String,
-    val expiresAt: String,
-    val user: UserDto
+    val token: String,  // Legacy: accessToken
+    val expiresAt: String,  // Legacy: accessTokenExpiresAt
+    val user: UserDto,
+    // New fields (from /device/token endpoint)
+    val accessToken: String? = null,
+    val refreshToken: String? = null,
+    val tokenType: String? = null,
+    val expiresIn: Int? = null
+) {
+    /**
+     * Get the access token, preferring new format over legacy
+     */
+    fun getAccessToken(): String = accessToken ?: token
+
+    /**
+     * Get the access token expiry time
+     */
+    fun getAccessTokenExpiresAt(): String = expiresAt
+}
+
+/**
+ * Refresh token request
+ * Used with POST /device/refresh endpoint
+ */
+@Serializable
+data class RefreshTokenRequest(
+    val grantType: String = "refresh_token",
+    val refreshToken: String
+)
+
+/**
+ * Refresh token response
+ */
+@Serializable
+data class RefreshTokenResponseDto(
+    val accessToken: String,
+    val tokenType: String,
+    val expiresIn: Int,
+    val refreshToken: String
 )
 
 @Serializable
@@ -83,7 +123,12 @@ data class SleepSessionDto(
     val stages: List<StageDto>? = null,
     val hrv: List<HrvDto>? = null,
     val heartRate: List<HeartRateDto>? = null,
-    val restingHeartRate: Int? = null
+    val restingHeartRate: Int? = null,
+    // NEW (2025-02): Advanced wearable metrics
+    val spo2: List<SpO2Dto>? = null,
+    val breathingDisturbances: List<BreathingDisturbanceDto>? = null,
+    val respirationRate: Double? = null,
+    val skinTemperature: Double? = null
 )
 
 @Serializable
@@ -105,6 +150,26 @@ data class HrvDto(
 data class HeartRateDto(
     val timestamp: String,
     val bpm: Int
+)
+
+/**
+ * SpO2 (Blood Oxygen) sample DTO
+ * Added 2025-02 for sleep apnea screening
+ */
+@Serializable
+data class SpO2Dto(
+    val timestamp: String,
+    val percentage: Double
+)
+
+/**
+ * Breathing disturbance event DTO
+ * Added 2025-02 for sleep apnea screening
+ */
+@Serializable
+data class BreathingDisturbanceDto(
+    val timestamp: String,
+    val durationSeconds: Int? = null
 )
 
 /**
@@ -213,4 +278,18 @@ interface SleepCoreApi {
     suspend fun unlinkDevice(
         @Header("Authorization") token: String
     ): Response<ApiResponse<UnlinkResponseDto>>
+
+    /**
+     * Refresh access token using refresh token
+     * POST /api/wearable/device/refresh
+     *
+     * Token rotation: Each refresh invalidates the old refresh token
+     * and returns a new one. This detects token theft.
+     *
+     * @see RFC 9700 (OAuth 2.0 Security Best Current Practice)
+     */
+    @POST("wearable/device/refresh")
+    suspend fun refreshToken(
+        @Body request: RefreshTokenRequest
+    ): Response<ApiResponse<RefreshTokenResponseDto>>
 }

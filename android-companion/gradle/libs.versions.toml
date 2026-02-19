@@ -4,12 +4,13 @@
 
 [versions]
 # Android SDK
-compileSdk = "35"
+# Health Connect 1.1.0 requires compileSdk 36 and AGP 8.9.1+
+compileSdk = "36"
 minSdk = "28"  # Health Connect requires Android 9 (API 28)+
-targetSdk = "35"
+targetSdk = "35"  # Keep targetSdk at 35 for now (opt-in to new behavior separately)
 
 # Core
-agp = "8.7.3"
+agp = "8.9.1"  # Required for Health Connect 1.1.0
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.27"
 
@@ -23,8 +24,9 @@ work = "2.10.0"
 datastore = "1.1.1"
 securityCrypto = "1.1.0-alpha06"  # EncryptedSharedPreferences
 
-# Health Connect - Based on research: Jetpack SDK 1.1.0 stable (March 2025)
-healthConnect = "1.1.0-alpha10"
+# Health Connect - Stable 1.1.0 (October 2025)
+# Source: https://mvnrepository.com/artifact/androidx.health.connect/connect-client/1.1.0
+healthConnect = "1.1.0"
 
 # Networking
 retrofit = "2.11.0"
@@ -37,6 +39,9 @@ hiltNavigation = "1.2.0"
 
 # Coroutines
 coroutines = "1.9.0"
+
+# Security - Tink for robust encryption (Google's crypto library)
+tink = "1.15.0"
 
 # Testing
 junit = "4.13.2"
@@ -67,9 +72,12 @@ androidx-navigation-compose = { group = "androidx.navigation", name = "navigatio
 # WorkManager - For background sync (research: 15 min minimum interval)
 androidx-work-runtime = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 
-# DataStore & Security - For secure token storage (research: EncryptedSharedPreferences)
+# DataStore & Security - For secure token storage
+# Migration from EncryptedSharedPreferences to DataStore + Tink (Feb 2026)
+# Tink: Google's multi-language crypto library, more robust than KeyStore-based solutions
 androidx-datastore = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+tink-android = { group = "com.google.crypto.tink", name = "tink-android", version.ref = "tink" }
 
 # Health Connect - Research: SDK 1.1.0 stable, Android 14+ native integration
 androidx-health-connect = { group = "androidx.health.connect", name = "connect-client", version.ref = "healthConnect" }

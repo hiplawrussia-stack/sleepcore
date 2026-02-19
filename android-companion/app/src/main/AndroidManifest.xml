@@ -85,7 +85,7 @@
 
         <!-- Privacy policy activity for Health Connect -->
         <activity
-            android:name=".presentation.main.PrivacyPolicyActivity"
+            android:name=".presentation.privacy.PrivacyPolicyActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />

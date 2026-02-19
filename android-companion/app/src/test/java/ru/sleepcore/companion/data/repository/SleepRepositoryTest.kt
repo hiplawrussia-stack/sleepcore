@@ -176,7 +176,7 @@ class SleepRepositoryTest {
     @Test
     fun `syncSessions returns NO_NEW_DATA when empty sessions`() = runTest {
         every { tokenStorage.getBearerToken() } returns "Bearer token"
-        every { tokenStorage.getLastSyncTime() } returns null
+        coEvery { tokenStorage.getLastSyncTime() } returns null
         coEvery { healthConnectManager.readSessionsSinceLastSync(any()) } returns Result.success(emptyList())
 
         val result = repository.syncSessions()
@@ -223,7 +223,7 @@ class SleepRepositoryTest {
         )
 
         every { tokenStorage.getBearerToken() } returns "Bearer token"
-        every { tokenStorage.getLastSyncTime() } returns null
+        coEvery { tokenStorage.getLastSyncTime() } returns null
         coEvery { healthConnectManager.readSessionsSinceLastSync(any()) } returns Result.success(sessions)
         coEvery { api.syncSessions(any(), any()) } returns Response.success(apiResponse)
         coEvery { tokenStorage.saveLastSyncTime(any()) } just Runs
@@ -263,7 +263,7 @@ class SleepRepositoryTest {
         )
 
         every { tokenStorage.getBearerToken() } returns "Bearer token"
-        every { tokenStorage.getLastSyncTime() } returns null
+        coEvery { tokenStorage.getLastSyncTime() } returns null
         coEvery { healthConnectManager.readSessionsSinceLastSync(any()) } returns Result.success(sessions)
         coEvery { api.syncSessions(any(), any()) } returns Response.error(401, mockk(relaxed = true))
 
@@ -276,7 +276,7 @@ class SleepRepositoryTest {
     @Test
     fun `syncSessions propagates Health Connect error`() = runTest {
         every { tokenStorage.getBearerToken() } returns "Bearer token"
-        every { tokenStorage.getLastSyncTime() } returns null
+        coEvery { tokenStorage.getLastSyncTime() } returns null
         coEvery { healthConnectManager.readSessionsSinceLastSync(any()) } returns Result.failure(Exception("Permission denied"))
 
         val result = repository.syncSessions()

@@ -3,10 +3,10 @@
  * ======================================================
  * Android Companion App for Health Connect integration.
  *
- * Security compliance (based on research):
- * - HIPAA/GDPR: AES-256-GCM encryption, TLS 1.3
- * - Token storage: EncryptedSharedPreferences
- * - Certificate pinning for API calls
+ * Security compliance (Feb 2026):
+ * - HIPAA/GDPR: AES-256-GCM encryption via Google Tink
+ * - Token storage: DataStore + Tink (migrated from EncryptedSharedPreferences)
+ * - TLS validation via Network Security Config
  */
 
 plugins {
@@ -40,7 +40,9 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3001/api/\"")
+            // Use production API for testing on real devices
+            // Use http://10.0.2.2:3001/api/ for emulator only
+            buildConfigField("String", "API_BASE_URL", "\"https://api.sleepcore.ru/api/\"")
             isDebuggable = true
         }
         release {
@@ -99,8 +101,11 @@ dependencies {
     implementation(libs.androidx.work.runtime)
 
     // DataStore & Security - Secure token storage
+    // Migrated from EncryptedSharedPreferences to DataStore + Tink (Feb 2026)
+    // Tink provides more robust key management without Samsung KeyStoreException issues
     implementation(libs.androidx.datastore)
-    implementation(libs.androidx.security.crypto)
+    implementation(libs.androidx.security.crypto)  // Keep for migration from old storage
+    implementation(libs.tink.android)
 
     // Health Connect - Sleep, HRV, Heart Rate data
     implementation(libs.androidx.health.connect)

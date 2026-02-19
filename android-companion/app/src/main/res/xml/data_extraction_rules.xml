@@ -4,17 +4,28 @@
   =======================
   Health data should NOT be backed up or transferred.
   Based on HIPAA/GDPR compliance requirements.
+
+  Updated Feb 2026:
+  - Added Tink keyset exclusion (sleepcore_tink_prefs.xml)
+  - Added DataStore exclusion (datastore/)
+  - Added file domain to device-transfer
 -->
 <data-extraction-rules>
     <cloud-backup>
         <!-- Exclude all sensitive data from cloud backup -->
         <exclude domain="sharedpref" path="sleepcore_secure_prefs.xml"/>
+        <exclude domain="sharedpref" path="sleepcore_tink_prefs.xml"/>
         <exclude domain="database" path="."/>
         <exclude domain="file" path="."/>
     </cloud-backup>
     <device-transfer>
-        <!-- Exclude sensitive data from device transfer -->
+        <!--
+          Exclude sensitive data from device transfer (Android 12+)
+          Encryption keys are device-bound and MUST NOT be transferred
+        -->
         <exclude domain="sharedpref" path="sleepcore_secure_prefs.xml"/>
+        <exclude domain="sharedpref" path="sleepcore_tink_prefs.xml"/>
         <exclude domain="database" path="."/>
+        <exclude domain="file" path="datastore/"/>
     </device-transfer>
 </data-extraction-rules>

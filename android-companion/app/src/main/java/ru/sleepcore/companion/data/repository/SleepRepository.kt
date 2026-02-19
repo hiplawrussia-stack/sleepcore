@@ -69,14 +69,15 @@ class SleepRepository @Inject constructor(
             if (response.isSuccessful && response.body()?.success == true) {
                 val data = response.body()!!.data!!
 
-                // Save credentials
+                // Save credentials (with refresh token if available)
                 tokenStorage.saveCredentials(
-                    token = data.token,
-                    expiresAt = data.expiresAt,
+                    token = data.getAccessToken(),
+                    expiresAt = data.getAccessTokenExpiresAt(),
                     userId = data.user.id,
                     telegramId = data.user.telegramId,
                     userName = data.user.firstName,
-                    deviceId = deviceInfo.id
+                    deviceId = deviceInfo.id,
+                    refreshToken = data.refreshToken
                 )
 
                 Result.success(
@@ -109,8 +110,8 @@ class SleepRepository @Inject constructor(
     suspend fun syncSessions(
         syncType: String = "manual"
     ): Result<SyncResult> {
-        // Check if linked
-        val token = tokenStorage.getBearerToken()
+        // Check if linked (with automatic token refresh)
+        val token = getValidBearerToken()
             ?: return Result.failure(Exception("NOT_LINKED"))
 
         // Get last sync time
@@ -127,7 +128,7 @@ class SleepRepository @Inject constructor(
             return Result.failure(Exception("NO_NEW_DATA"))
         }
 
-        // Convert to API format
+        // Convert to API format (including new 2025-02 metrics)
         val sessionDtos = sessions.map { session ->
             SleepSessionDto(
                 sessionId = session.id,
@@ -156,7 +157,22 @@ class SleepRepository @Inject constructor(
                         bpm = hr.bpm
                     )
                 }.takeIf { it.isNotEmpty() },
-                restingHeartRate = session.restingHeartRate
+                restingHeartRate = session.restingHeartRate,
+                // NEW (2025-02): Advanced wearable metrics
+                spo2 = session.spo2Samples.map { sample ->
+                    SpO2Dto(
+                        timestamp = sample.timestamp.toString(),
+                        percentage = sample.percentage
+                    )
+                }.takeIf { it.isNotEmpty() },
+                breathingDisturbances = session.breathingDisturbances.map { disturbance ->
+                    BreathingDisturbanceDto(
+                        timestamp = disturbance.timestamp.toString(),
+                        durationSeconds = disturbance.durationSeconds
+                    )
+                }.takeIf { it.isNotEmpty() },
+                respirationRate = session.respirationRate,
+                skinTemperature = session.skinTemperature
             )
         }
 
@@ -201,7 +217,8 @@ class SleepRepository @Inject constructor(
      * Get sync status from backend
      */
     suspend fun getSyncStatus(): Result<SyncStatus> {
-        val token = tokenStorage.getBearerToken()
+        // Check if linked (with automatic token refresh)
+        val token = getValidBearerToken()
             ?: return Result.failure(Exception("NOT_LINKED"))
 
         return try {
@@ -236,7 +253,12 @@ class SleepRepository @Inject constructor(
                     )
                 )
             } else {
-                Result.failure(Exception(response.body()?.error ?: "Failed to get status"))
+                // BUG-05 FIX: Consistent HTTP 401 handling across all API calls
+                val error = response.body()?.error ?: "Failed to get status"
+                when (response.code()) {
+                    401 -> Result.failure(Exception("TOKEN_EXPIRED"))
+                    else -> Result.failure(Exception(error))
+                }
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -278,4 +300,77 @@ class SleepRepository @Inject constructor(
      * Get credentials flow for observing changes
      */
     fun observeCredentials() = tokenStorage.credentialsFlow
+
+    /**
+     * Refresh access token using refresh token
+     *
+     * Token rotation: Each refresh invalidates the old refresh token
+     * and returns a new one. This is a security feature that detects
+     * token theft (RFC 9700).
+     *
+     * @return true if refresh succeeded, false otherwise
+     */
+    suspend fun refreshAccessToken(): Boolean {
+        val refreshToken = tokenStorage.getRefreshToken()
+            ?: return false
+
+        return try {
+            val request = RefreshTokenRequest(
+                grantType = "refresh_token",
+                refreshToken = refreshToken
+            )
+
+            val response = api.refreshToken(request)
+
+            if (response.isSuccessful && response.body()?.success == true) {
+                val data = response.body()!!.data!!
+
+                // Update tokens with rotation
+                tokenStorage.updateTokens(
+                    accessToken = data.accessToken,
+                    expiresIn = data.expiresIn,
+                    refreshToken = data.refreshToken  // New rotated refresh token
+                )
+
+                true
+            } else {
+                // Refresh failed - user needs to re-link
+                false
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Get valid bearer token, refreshing if necessary
+     *
+     * @return Bearer token string or null if not linked/refresh failed
+     */
+    private suspend fun getValidBearerToken(): String? {
+        val credentials = tokenStorage.loadCredentials()
+            ?: return null
+
+        // If token is expiring soon, try to refresh
+        if (credentials.isExpiringSoon && credentials.canRefresh) {
+            if (refreshAccessToken()) {
+                // Get updated token after refresh
+                return tokenStorage.getBearerToken()
+            }
+        }
+
+        // Return current token if not expired
+        return if (!credentials.isExpired) {
+            "Bearer ${credentials.token}"
+        } else if (credentials.canRefresh) {
+            // Token expired but we can refresh
+            if (refreshAccessToken()) {
+                tokenStorage.getBearerToken()
+            } else {
+                null
+            }
+        } else {
+            null
+        }
+    }
 }
