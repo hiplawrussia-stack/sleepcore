@@ -937,16 +937,20 @@ wearable.post('/link', zValidator('json', z.object({
     where: eq(users.id, code.userId),
   });
 
-  // Legacy response format
+  // Legacy response format (with refresh token added Feb 2026)
   return c.json<ApiResponse<{
     token: string;
     expiresAt: string;
+    refreshToken: string;
+    expiresIn: number;
     user: { id: string; telegramId: number; firstName: string };
   }>>({
     success: true,
     data: {
-      token: tokens.accessToken, // Legacy: single token
+      token: tokens.accessToken,
       expiresAt: tokens.accessTokenExpiresAt,
+      refreshToken: tokens.refreshToken,  // FIX: Return refresh token to enable token renewal
+      expiresIn: 3600,  // 1 hour
       user: {
         id: code.userId,
         telegramId: code.telegramId,
