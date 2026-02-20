@@ -25,8 +25,13 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import ru.sleepcore.companion.BuildConfig
 import ru.sleepcore.companion.data.api.SleepCoreApi
+import ru.sleepcore.companion.data.local.SleepCoreDatabase
 import ru.sleepcore.companion.data.local.TokenStorage
+import ru.sleepcore.companion.data.local.audit.AuditLogDao
+import ru.sleepcore.companion.data.local.audit.AuditLogger
 import ru.sleepcore.companion.health.HealthConnectManager
+import ru.sleepcore.companion.security.BiometricAuthManager
+import ru.sleepcore.companion.security.SessionManager
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
@@ -57,9 +62,13 @@ object AppModule {
         builder.connectionSpecs(listOf(ConnectionSpec.MODERN_TLS))
 
         // Add logging interceptor for debug builds
+        // SECURITY: Use HEADERS level instead of BODY to avoid logging PHI
+        // Redact Authorization header to prevent token leakage in logs
         if (BuildConfig.DEBUG) {
             val loggingInterceptor = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
+                level = HttpLoggingInterceptor.Level.HEADERS
+                redactHeader("Authorization")
+                redactHeader("X-Device-Token")
             }
             builder.addInterceptor(loggingInterceptor)
         }
@@ -106,5 +115,54 @@ object AppModule {
         @ApplicationContext context: Context
     ): HealthConnectManager {
         return HealthConnectManager(context)
+    }
+
+    // ===========================================
+    // HIPAA Audit Trail (Room Database)
+    // ===========================================
+
+    @Provides
+    @Singleton
+    fun provideSleepCoreDatabase(
+        @ApplicationContext context: Context
+    ): SleepCoreDatabase {
+        return SleepCoreDatabase.getInstance(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAuditLogDao(database: SleepCoreDatabase): AuditLogDao {
+        return database.auditLogDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideAuditLogger(
+        @ApplicationContext context: Context,
+        auditLogDao: AuditLogDao
+    ): AuditLogger {
+        return AuditLogger(context, auditLogDao)
+    }
+
+    // ===========================================
+    // HIPAA Session Management
+    // ===========================================
+
+    @Provides
+    @Singleton
+    fun provideSessionManager(
+        @ApplicationContext context: Context,
+        auditLogger: AuditLogger
+    ): SessionManager {
+        return SessionManager(context, auditLogger)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBiometricAuthManager(
+        @ApplicationContext context: Context,
+        auditLogger: AuditLogger
+    ): BiometricAuthManager {
+        return BiometricAuthManager(context, auditLogger)
     }
 }

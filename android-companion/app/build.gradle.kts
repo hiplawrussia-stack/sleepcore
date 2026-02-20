@@ -84,6 +84,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel)
+    implementation(libs.androidx.lifecycle.process) // Session timeout observer
     implementation(libs.androidx.activity.compose)
 
     // Compose
@@ -107,6 +108,9 @@ dependencies {
     implementation(libs.androidx.security.crypto)  // Keep for migration from old storage
     implementation(libs.tink.android)
 
+    // Biometric - HIPAA-compliant authentication
+    implementation(libs.androidx.biometric)
+
     // Health Connect - Sleep, HRV, Heart Rate data
     implementation(libs.androidx.health.connect)
 
@@ -128,6 +132,11 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
 
+    // Room - HIPAA Audit Trail (persistent immutable logs)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    kapt(libs.androidx.room.compiler)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
@@ -144,4 +153,8 @@ dependencies {
 
 kapt {
     correctErrorTypes = true
+    // Room schema export location for migrations
+    arguments {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
 }

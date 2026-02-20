@@ -12,8 +12,12 @@
 
 package ru.sleepcore.companion.data.repository
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import ru.sleepcore.companion.data.api.*
 import ru.sleepcore.companion.data.local.TokenStorage
+import ru.sleepcore.companion.data.local.audit.AuditLogger
+import ru.sleepcore.companion.data.local.audit.AuditOutcome
 import ru.sleepcore.companion.domain.model.*
 import ru.sleepcore.companion.health.HealthConnectManager
 import java.time.Instant
@@ -42,8 +46,16 @@ sealed class SyncError {
 class SleepRepository @Inject constructor(
     private val api: SleepCoreApi,
     private val tokenStorage: TokenStorage,
-    private val healthConnectManager: HealthConnectManager
+    private val healthConnectManager: HealthConnectManager,
+    private val auditLogger: AuditLogger
 ) {
+    /**
+     * Mutex for token refresh to prevent race condition (RFC 9700 compliance)
+     *
+     * Without this mutex, concurrent callers could both try to refresh the token,
+     * causing the second refresh to fail (token rotation invalidates old refresh token).
+     */
+    private val tokenRefreshMutex = Mutex()
     /**
      * Link device using 6-character code
      */
@@ -80,6 +92,16 @@ class SleepRepository @Inject constructor(
                     refreshToken = data.refreshToken
                 )
 
+                // HIPAA Audit: Log successful device linking
+                auditLogger.setCurrentUser(data.user.id)
+                auditLogger.logAuthentication(
+                    action = "DEVICE_LINK",
+                    outcome = AuditOutcome.SUCCESS,
+                    userId = data.user.id,
+                    details = "Device linked successfully",
+                    source = "SleepRepository:linkDevice"
+                )
+
                 Result.success(
                     LinkResult(
                         token = data.token,
@@ -93,6 +115,13 @@ class SleepRepository @Inject constructor(
                 )
             } else {
                 val error = response.body()?.error ?: "Unknown error"
+                // HIPAA Audit: Log failed device linking
+                auditLogger.logAuthentication(
+                    action = "DEVICE_LINK",
+                    outcome = AuditOutcome.FAILURE,
+                    errorMessage = error,
+                    source = "SleepRepository:linkDevice"
+                )
                 when {
                     error.contains("Invalid", ignoreCase = true) -> Result.failure(Exception("INVALID_CODE"))
                     error.contains("expired", ignoreCase = true) -> Result.failure(Exception("EXPIRED_CODE"))
@@ -100,6 +129,13 @@ class SleepRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
+            // HIPAA Audit: Log link error
+            auditLogger.logAuthentication(
+                action = "DEVICE_LINK",
+                outcome = AuditOutcome.ERROR,
+                errorMessage = e.message,
+                source = "SleepRepository:linkDevice"
+            )
             Result.failure(e)
         }
     }
@@ -192,6 +228,14 @@ class SleepRepository @Inject constructor(
                 // Update last sync time
                 tokenStorage.saveLastSyncTime(Instant.now())
 
+                // HIPAA Audit: Log successful sync
+                auditLogger.logDataSync(
+                    action = "SYNC_SESSIONS",
+                    outcome = AuditOutcome.SUCCESS,
+                    details = "processed=${data.processed}, skipped=${data.skipped}, syncType=$syncType",
+                    source = "SleepRepository:syncSessions"
+                )
+
                 Result.success(
                     SyncResult(
                         processed = data.processed,
@@ -203,12 +247,26 @@ class SleepRepository @Inject constructor(
                 )
             } else {
                 val error = response.body()?.error ?: "Sync failed"
+                // HIPAA Audit: Log failed sync
+                auditLogger.logDataSync(
+                    action = "SYNC_SESSIONS",
+                    outcome = AuditOutcome.FAILURE,
+                    errorMessage = error,
+                    source = "SleepRepository:syncSessions"
+                )
                 when (response.code()) {
                     401 -> Result.failure(Exception("TOKEN_EXPIRED"))
                     else -> Result.failure(Exception(error))
                 }
             }
         } catch (e: Exception) {
+            // HIPAA Audit: Log sync error
+            auditLogger.logDataSync(
+                action = "SYNC_SESSIONS",
+                outcome = AuditOutcome.ERROR,
+                errorMessage = e.message,
+                source = "SleepRepository:syncSessions"
+            )
             Result.failure(e)
         }
     }
@@ -270,9 +328,20 @@ class SleepRepository @Inject constructor(
      */
     suspend fun unlinkDevice(): Result<Boolean> {
         val token = tokenStorage.getBearerToken()
+        val userId = tokenStorage.loadCredentials()?.userId
+
+        // HIPAA Audit: Log device unlink attempt
+        auditLogger.logAuthentication(
+            action = "DEVICE_UNLINK",
+            outcome = AuditOutcome.SUCCESS,
+            userId = userId,
+            details = "Device unlink initiated",
+            source = "SleepRepository:unlinkDevice"
+        )
 
         // Clear local credentials first
         tokenStorage.clearCredentials()
+        auditLogger.setCurrentUser(null)
 
         // If we have a token, try to notify the server
         if (token != null) {
@@ -280,6 +349,13 @@ class SleepRepository @Inject constructor(
                 api.unlinkDevice(token)
             } catch (e: Exception) {
                 // Ignore server errors during unlink - local state is already cleared
+                // But log it for audit trail
+                auditLogger.logAuthentication(
+                    action = "DEVICE_UNLINK_SERVER_NOTIFY",
+                    outcome = AuditOutcome.ERROR,
+                    errorMessage = e.message,
+                    source = "SleepRepository:unlinkDevice"
+                )
             }
         }
 
@@ -288,8 +364,25 @@ class SleepRepository @Inject constructor(
 
     /**
      * Check if device is linked
+     *
+     * WARNING: Uses runBlocking internally - avoid on Main thread.
+     * Prefer suspendIsLinked() in coroutines.
      */
     fun isLinked(): Boolean = tokenStorage.isLinked()
+
+    /**
+     * Check if device is linked (suspend version - NO ANR RISK)
+     *
+     * Use this in ViewModels inside viewModelScope.launch {}
+     */
+    suspend fun suspendIsLinked(): Boolean = tokenStorage.suspendIsLinked()
+
+    /**
+     * Check if access token needs refresh
+     *
+     * Returns true if access token is expired but we have a refresh token.
+     */
+    fun needsTokenRefresh(): Boolean = tokenStorage.needsTokenRefresh()
 
     /**
      * Get stored credentials
@@ -308,13 +401,24 @@ class SleepRepository @Inject constructor(
      * and returns a new one. This is a security feature that detects
      * token theft (RFC 9700).
      *
-     * @return true if refresh succeeded, false otherwise
+     * THREAD-SAFETY: Uses mutex to prevent race condition when multiple
+     * callers try to refresh simultaneously. Without mutex, second caller
+     * would fail because first refresh already invalidated the old token.
+     *
+     * @return Result.success if refresh succeeded, Result.failure with exception otherwise
      */
-    suspend fun refreshAccessToken(): Boolean {
-        val refreshToken = tokenStorage.getRefreshToken()
-            ?: return false
+    suspend fun refreshAccessToken(): Result<Unit> = tokenRefreshMutex.withLock {
+        // Double-check after acquiring lock - another thread may have refreshed already
+        val credentials = tokenStorage.suspendLoadCredentials()
+        if (credentials != null && !credentials.isExpired && !credentials.isExpiringSoon) {
+            // Token was refreshed by another thread while we waited for lock
+            return@withLock Result.success(Unit)
+        }
 
-        return try {
+        val refreshToken = tokenStorage.getRefreshToken()
+            ?: return@withLock Result.failure(IllegalStateException("No refresh token available"))
+
+        return@withLock try {
             val request = RefreshTokenRequest(
                 grantType = "refresh_token",
                 refreshToken = refreshToken
@@ -332,30 +436,54 @@ class SleepRepository @Inject constructor(
                     refreshToken = data.refreshToken  // New rotated refresh token
                 )
 
-                true
+                // HIPAA Audit: Log successful token refresh
+                auditLogger.logAuthentication(
+                    action = "TOKEN_REFRESH",
+                    outcome = AuditOutcome.SUCCESS,
+                    source = "SleepRepository:refreshAccessToken"
+                )
+
+                Result.success(Unit)
             } else {
                 // Refresh failed - user needs to re-link
-                false
+                val error = response.body()?.error ?: "Token refresh failed"
+                // HIPAA Audit: Log failed token refresh
+                auditLogger.logAuthentication(
+                    action = "TOKEN_REFRESH",
+                    outcome = AuditOutcome.FAILURE,
+                    errorMessage = error,
+                    source = "SleepRepository:refreshAccessToken"
+                )
+                Result.failure(IllegalStateException(error))
             }
         } catch (e: Exception) {
-            false
+            // HIPAA Audit: Log token refresh error
+            auditLogger.logAuthentication(
+                action = "TOKEN_REFRESH",
+                outcome = AuditOutcome.ERROR,
+                errorMessage = e.message,
+                source = "SleepRepository:refreshAccessToken"
+            )
+            Result.failure(e)
         }
     }
 
     /**
      * Get valid bearer token, refreshing if necessary
      *
+     * Uses suspend versions of TokenStorage methods to avoid ANR risk.
+     *
      * @return Bearer token string or null if not linked/refresh failed
      */
     private suspend fun getValidBearerToken(): String? {
-        val credentials = tokenStorage.loadCredentials()
+        val credentials = tokenStorage.suspendLoadCredentials()
             ?: return null
 
         // If token is expiring soon, try to refresh
         if (credentials.isExpiringSoon && credentials.canRefresh) {
-            if (refreshAccessToken()) {
+            if (refreshAccessToken().isSuccess) {
                 // Get updated token after refresh
-                return tokenStorage.getBearerToken()
+                return tokenStorage.suspendGetBearerToken()
             }
         }
 
@@ -364,8 +492,8 @@ class SleepRepository @Inject constructor(
             "Bearer ${credentials.token}"
         } else if (credentials.canRefresh) {
             // Token expired but we can refresh
-            if (refreshAccessToken()) {
-                tokenStorage.getBearerToken()
+            if (refreshAccessToken().isSuccess) {
+                tokenStorage.suspendGetBearerToken()
             } else {
                 null
             }

@@ -84,8 +84,31 @@
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
 
-            <!-- Deep link for device linking from Telegram -->
+            <!--
+              HTTPS App Links for device linking from Telegram
+              ==================================================
+              Security: HTTPS App Links are verified via assetlinks.json
+              and cannot be hijacked by other apps (unlike custom schemes).
+
+              IMPORTANT: Deploy assetlinks.json to:
+              https://sleepcore.ru/.well-known/assetlinks.json
+
+              Source: OWASP MASVS-PLATFORM-1 (2025)
+            -->
             <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <!-- Primary: HTTPS App Link (verified, secure) -->
+                <data
+                    android:scheme="https"
+                    android:host="app.sleepcore.app"
+                    android:pathPrefix="/link" />
+            </intent-filter>
+
+            <!-- Fallback: Custom scheme for backwards compatibility -->
+            <!-- TODO: Remove after migration complete (target: 2026-Q3) -->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />

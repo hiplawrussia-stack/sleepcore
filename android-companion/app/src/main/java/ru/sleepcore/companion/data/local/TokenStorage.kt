@@ -222,7 +222,7 @@ class TokenStorage @Inject constructor(
      * Returns true if initialized, false if timeout/failed.
      */
     private fun awaitInitializationBlocking(): Boolean {
-        if (initCompleted.isCompleted) return !initCompleted.isCompletedExceptionally
+        if (initCompleted.isCompleted) return initCompleted.getCompletionExceptionOrNull() == null
 
         return try {
             runBlocking {
@@ -552,6 +552,9 @@ class TokenStorage @Inject constructor(
     /**
      * Load stored credentials (sync version for compatibility)
      *
+     * WARNING: Uses runBlocking - avoid on Main thread.
+     * Prefer suspendLoadCredentials() in coroutines.
+     *
      * Waits for initialization to complete before returning.
      * For non-blocking access, use credentialsFlow.
      */
@@ -561,7 +564,20 @@ class TokenStorage @Inject constructor(
     }
 
     /**
+     * Load stored credentials (suspend version - NO ANR RISK)
+     *
+     * Use this in coroutines/suspend functions instead of loadCredentials().
+     */
+    suspend fun suspendLoadCredentials(): StoredCredentials? {
+        awaitInitialization()
+        return _credentialsFlow.value
+    }
+
+    /**
      * Get bearer token header value
+     *
+     * WARNING: Uses runBlocking - avoid on Main thread.
+     * Prefer suspendGetBearerToken() in coroutines.
      *
      * Waits for initialization to complete before returning.
      */
@@ -573,15 +589,57 @@ class TokenStorage @Inject constructor(
     }
 
     /**
+     * Get bearer token header value (suspend version - NO ANR RISK)
+     *
+     * Use this in coroutines/suspend functions instead of getBearerToken().
+     */
+    suspend fun suspendGetBearerToken(): String? {
+        awaitInitialization()
+        val credentials = _credentialsFlow.value
+        if (credentials == null || credentials.isExpired) return null
+        return "Bearer ${credentials.token}"
+    }
+
+    /**
      * Check if device is linked
+     *
+     * Device is considered linked if:
+     * - Has valid (non-expired) access token, OR
+     * - Has refresh token (can obtain new access token)
+     *
+     * WARNING: Uses runBlocking - avoid on Main thread.
+     * Prefer suspendIsLinked() in coroutines.
      *
      * Waits for initialization to complete before returning.
      * For non-blocking check, observe initState and credentialsFlow.
      */
     fun isLinked(): Boolean {
         awaitInitializationBlocking()
-        val credentials = _credentialsFlow.value
-        return credentials != null && !credentials.isExpired
+        val credentials = _credentialsFlow.value ?: return false
+        // Linked if token is valid OR we can refresh it
+        return !credentials.isExpired || credentials.canRefresh
+    }
+
+    /**
+     * Check if device is linked (suspend version - NO ANR RISK)
+     *
+     * Use this in coroutines/suspend functions instead of isLinked().
+     */
+    suspend fun suspendIsLinked(): Boolean {
+        awaitInitialization()
+        val credentials = _credentialsFlow.value ?: return false
+        return !credentials.isExpired || credentials.canRefresh
+    }
+
+    /**
+     * Check if access token needs refresh
+     *
+     * Returns true if token is expired but we have a refresh token.
+     * Caller should call refreshAccessToken() to get a new access token.
+     */
+    fun needsTokenRefresh(): Boolean {
+        val credentials = _credentialsFlow.value ?: return false
+        return credentials.isExpired && credentials.canRefresh
     }
 
     /**
@@ -644,7 +702,7 @@ class TokenStorage @Inject constructor(
      * Check if storage is available and initialized
      */
     fun isStorageAvailable(): Boolean = initCompleted.isCompleted &&
-        !initCompleted.isCompletedExceptionally &&
+        initCompleted.getCompletionExceptionOrNull() == null &&
         aead != null
 
     /**

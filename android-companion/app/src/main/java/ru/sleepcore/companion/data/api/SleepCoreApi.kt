@@ -15,6 +15,7 @@ package ru.sleepcore.companion.data.api
 import kotlinx.serialization.Serializable
 import retrofit2.Response
 import retrofit2.http.*
+import java.time.Instant
 
 /**
  * Base API response wrapper
@@ -71,8 +72,28 @@ data class LinkResponseDto(
 
     /**
      * Resolve the access token expiry time
+     *
+     * Handles both response formats:
+     * - Legacy: expiresAt as ISO-8601 string (e.g., "2026-02-20T12:00:00Z")
+     * - New: expiresIn as seconds from now (e.g., 3600 for 1 hour)
+     *
+     * Fallback priority:
+     * 1. expiresAt (if not empty/null)
+     * 2. Calculate from expiresIn
+     * 3. Default to 1 hour from now
      */
-    fun resolveExpiresAt(): String = expiresAt
+    fun resolveExpiresAt(): String {
+        // Prefer explicit expiresAt if available
+        if (expiresAt.isNotBlank()) {
+            return expiresAt
+        }
+        // Calculate from expiresIn if available
+        if (expiresIn != null && expiresIn > 0) {
+            return Instant.now().plusSeconds(expiresIn.toLong()).toString()
+        }
+        // Fallback: 1 hour from now (default access token lifetime)
+        return Instant.now().plusSeconds(3600).toString()
+    }
 }
 
 /**

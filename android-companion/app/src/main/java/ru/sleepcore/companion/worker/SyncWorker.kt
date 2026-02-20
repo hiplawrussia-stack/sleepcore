@@ -90,12 +90,15 @@ class SyncWorker @AssistedInject constructor(
 
         /**
          * Schedule periodic sync
+         *
+         * Uses UPDATE policy to ensure constraints are refreshed when app updates.
+         * KEEP would ignore new constraints if work already exists.
          */
         fun schedulePeriodicSync(context: Context) {
             WorkManager.getInstance(context)
                 .enqueueUniquePeriodicWork(
                     WORK_NAME,
-                    ExistingPeriodicWorkPolicy.KEEP,
+                    ExistingPeriodicWorkPolicy.UPDATE,
                     createPeriodicWorkRequest()
                 )
             ErrorLogger.log(
@@ -147,6 +150,25 @@ class SyncWorker @AssistedInject constructor(
                 message = "Device not linked, skipping sync"
             )
             return Result.success()
+        }
+
+        // Refresh token if needed (access token expired but have refresh token)
+        if (sleepRepository.needsTokenRefresh()) {
+            ErrorLogger.log(
+                severity = ErrorSeverity.DEBUG,
+                context = ErrorContext(TAG, "doWork"),
+                message = "Access token expired, attempting refresh"
+            )
+            val refreshResult = sleepRepository.refreshAccessToken()
+            if (refreshResult.isFailure) {
+                ErrorLogger.logTokenRefresh(
+                    success = false,
+                    error = refreshResult.exceptionOrNull()?.message ?: "Unknown error"
+                )
+                // Token refresh failed - might need re-linking
+                return Result.retry()
+            }
+            ErrorLogger.logTokenRefresh(success = true)
         }
 
         // Check Health Connect availability

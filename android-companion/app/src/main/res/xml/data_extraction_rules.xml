@@ -12,11 +12,13 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- Exclude all sensitive data from cloud backup -->
+        <!-- Exclude all sensitive data from cloud backup (HIPAA §164.312(a)(2)(iv)) -->
         <exclude domain="sharedpref" path="sleepcore_secure_prefs.xml"/>
         <exclude domain="sharedpref" path="sleepcore_tink_prefs.xml"/>
         <exclude domain="database" path="."/>
         <exclude domain="file" path="."/>
+        <!-- Explicit DataStore exclusion for audit clarity (symmetric with device-transfer) -->
+        <exclude domain="file" path="datastore/"/>
     </cloud-backup>
     <device-transfer>
         <!--
