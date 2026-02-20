@@ -163,7 +163,7 @@ class SyncWorker @AssistedInject constructor(
             if (refreshResult.isFailure) {
                 ErrorLogger.logTokenRefresh(
                     success = false,
-                    error = refreshResult.exceptionOrNull()?.message ?: "Unknown error"
+                    reason = refreshResult.exceptionOrNull()?.message ?: "Unknown error"
                 )
                 // Token refresh failed - might need re-linking
                 return Result.retry()

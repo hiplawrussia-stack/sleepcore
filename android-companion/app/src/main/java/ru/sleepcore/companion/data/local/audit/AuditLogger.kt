@@ -53,10 +53,10 @@ class AuditLogger @Inject constructor(
     /**
      * Cached device ID (computed once)
      */
-    @SuppressLint("HardwareIds")
     private val deviceId: String by lazy {
-        Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-            ?: "unknown"
+        @SuppressLint("HardwareIds")
+        val id = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+        id ?: "unknown"
     }
 
     /**
