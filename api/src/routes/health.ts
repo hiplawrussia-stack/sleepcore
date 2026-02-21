@@ -31,8 +31,8 @@ health.get('/live', (c) => {
  * GET /health/ready
  * Readiness probe - Can we accept traffic?
  */
-health.get('/ready', (c) => {
-  const dbHealthy = isDatabaseHealthy();
+health.get('/ready', async (c) => {
+  const dbHealthy = await isDatabaseHealthy();
 
   if (!dbHealthy) {
     return c.json({
@@ -75,8 +75,8 @@ health.get('/startup', (c) => {
  * GET /health
  * Combined health check
  */
-health.get('/', (c) => {
-  const dbHealthy = isDatabaseHealthy();
+health.get('/', async (c) => {
+  const dbHealthy = await isDatabaseHealthy();
 
   const status = {
     status: dbHealthy && isInitialized ? 'healthy' : 'unhealthy',

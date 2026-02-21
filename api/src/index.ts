@@ -25,6 +25,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const JWT_SECRET = process.env.JWT_SECRET || process.env.BOT_TOKEN || '';
 const DATABASE_PATH = process.env.DATABASE_PATH || './database/api.db';
+const DATABASE_URL = process.env.DATABASE_URL || '';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 const VK_SECRET_KEY = process.env.VK_SECRET_KEY || '';
 
@@ -34,18 +35,27 @@ if (!BOT_TOKEN) {
   process.exit(1);
 }
 
+// Determine database type
+const isPostgreSQL = DATABASE_URL && (DATABASE_URL.startsWith('postgresql://') || DATABASE_URL.startsWith('postgres://'));
+const dbInfo = isPostgreSQL ? `PostgreSQL: ${DATABASE_URL.replace(/:[^:@]+@/, ':***@')}` : `SQLite: ${DATABASE_PATH}`;
+
 console.log('[API] Starting SleepCore API...');
 console.log(`[API] Environment: ${process.env.NODE_ENV || 'development'}`);
-console.log(`[API] Database: ${DATABASE_PATH}`);
+console.log(`[API] Database: ${dbInfo}`);
 
-// Initialize database
-try {
-  initDatabase(DATABASE_PATH);
-  console.log('[API] Database initialized');
-} catch (error) {
-  console.error('[API] Database initialization failed:', error);
-  process.exit(1);
+// Initialize database (async for PostgreSQL support)
+async function initializeDatabase(): Promise<void> {
+  try {
+    await initDatabase(isPostgreSQL ? DATABASE_URL : DATABASE_PATH);
+    console.log('[API] Database initialized');
+  } catch (error) {
+    console.error('[API] Database initialization failed:', error);
+    process.exit(1);
+  }
 }
+
+// Run async initialization
+await initializeDatabase();
 
 // =========================================================================
 // PHI Encryption Validation (HIPAA Compliance)
@@ -122,7 +132,8 @@ const shutdown = async () => {
   // Flush Sentry events before exit
   await flushSentry(2000);
 
-  closeDatabase();
+  // Close database connection (async for PostgreSQL)
+  await closeDatabase();
   process.exit(0);
 };
 
