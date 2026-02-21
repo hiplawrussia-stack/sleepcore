@@ -2899,8 +2899,6 @@ async function main(): Promise<void> {
       postgresOptions: {
         poolMax: 10,
         ssl: useSSL,
-        // Schema-per-service pattern: Bot uses 'bot' schema for isolation
-        schema: 'bot',
       },
     });
     console.log(`[DB] ${dbConfig.type === 'postgres' ? 'PostgreSQL' : 'SQLite'} initialized successfully`);

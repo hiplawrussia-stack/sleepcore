@@ -55,13 +55,6 @@ export interface IPostgreSQLConfig extends IDatabaseConfig {
 
   /** Reject unauthorized SSL connections */
   readonly sslRejectUnauthorized?: boolean;
-
-  /**
-   * PostgreSQL schema (search_path)
-   * Enables schema-per-service pattern for microservices isolation
-   * @example 'bot' | 'api' | 'public'
-   */
-  readonly schema?: string;
 }
 
 /**
@@ -191,19 +184,8 @@ export class PostgreSQLConnection implements IDatabaseConnection {
 
       this.pool = new Pool(poolConfig);
 
-      // Set search_path for schema isolation (schema-per-service pattern)
-      if (this.config.schema) {
-        this.pool.on('connect', async (client) => {
-          await client.query(`SET search_path TO ${this.config.schema}, public`);
-        });
-      }
-
-      // Test connection and verify schema
+      // Test connection
       const client = await this.pool.connect();
-      if (this.config.schema) {
-        // Create schema if not exists
-        await client.query(`CREATE SCHEMA IF NOT EXISTS ${this.config.schema}`);
-      }
       client.release();
 
       // Log pool events in verbose mode
@@ -217,9 +199,6 @@ export class PostgreSQLConnection implements IDatabaseConnection {
       console.log(
         `[PostgreSQL] Pool size: min=${this.config.poolMin}, max=${this.config.poolMax}`
       );
-      if (this.config.schema) {
-        console.log(`[PostgreSQL] Schema: ${this.config.schema}`);
-      }
     } catch (error) {
       console.error('[PostgreSQL] Connection failed:', error);
       throw error;
