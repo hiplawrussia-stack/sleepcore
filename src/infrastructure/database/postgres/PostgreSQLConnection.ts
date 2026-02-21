@@ -116,17 +116,12 @@ class PostgreSQLTransaction implements ITransaction {
     params: unknown[] = []
   ): Promise<{ changes: number; lastInsertRowid: number }> {
     const pgSql = convertPlaceholders(sql);
-
-    // Handle INSERT with RETURNING for lastInsertRowid
-    let finalSql = pgSql;
-    if (pgSql.trim().toUpperCase().startsWith('INSERT') && !pgSql.includes('RETURNING')) {
-      finalSql = pgSql.replace(/;?\s*$/, ' RETURNING id');
-    }
-
-    const result = await this.client.query(finalSql, params);
+    const result = await this.client.query(pgSql, params);
 
     return {
       changes: result.rowCount || 0,
+      // PostgreSQL doesn't have lastInsertRowid like SQLite
+      // Use RETURNING clause explicitly if needed
       lastInsertRowid: result.rows[0]?.id || 0,
     };
   }
@@ -230,17 +225,13 @@ export class PostgreSQLConnection implements IDatabaseConnection {
     params: unknown[] = []
   ): Promise<{ changes: number; lastInsertRowid: number }> {
     this.ensureConnected();
-    let pgSql = this.convertSQL(sql);
-
-    // Handle INSERT with RETURNING for lastInsertRowid
-    if (pgSql.trim().toUpperCase().startsWith('INSERT') && !pgSql.toUpperCase().includes('RETURNING')) {
-      pgSql = pgSql.replace(/;?\s*$/, ' RETURNING id');
-    }
-
+    const pgSql = this.convertSQL(sql);
     const result = await this.pool!.query(pgSql, params);
 
     return {
       changes: result.rowCount || 0,
+      // PostgreSQL doesn't have lastInsertRowid like SQLite
+      // Use RETURNING clause explicitly if needed
       lastInsertRowid: result.rows[0]?.id || 0,
     };
   }
