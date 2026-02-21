@@ -128,7 +128,9 @@ import { VERSION, BUILD_DATE } from './index';
 
 // Database imports
 import {
-  initializeDatabase,
+  initializeDatabaseWithFactory,
+  getDatabaseConfigSummary,
+  MIGRATIONS,
   createGrammySessionAdapter,
   UserRepository,
   SleepDiaryRepository,
@@ -2863,24 +2865,42 @@ async function main(): Promise<void> {
   }
   healthState.databaseHealthy = true; // Initial assumption, will be verified below
 
-  // --- SQLite Database Initialization ---
-  const dbPath = process.env.DATABASE_PATH || "./data/sleepcore.db";
+  // --- Database Initialization (Auto-detect SQLite/PostgreSQL) ---
+  // 2025/2026 Best Practice: DatabaseFactory auto-detects from DATABASE_URL
+  // - Production: PostgreSQL (scalable, HIPAA-ready, connection pooling)
+  // - Development: SQLite (zero config, embedded)
+  const dbConfig = getDatabaseConfigSummary();
+  console.log(`[DB] Database type: ${dbConfig.type} (source: ${dbConfig.source})`);
 
-  // Ensure data directory exists
-  const dbDir = path.dirname(dbPath);
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-    console.log(`[DB] Created directory: ${dbDir}`);
+  // For SQLite, ensure data directory exists
+  if (dbConfig.type === 'sqlite') {
+    const dbPath = dbConfig.path || './data/sleepcore.db';
+    const dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+      console.log(`[DB] Created directory: ${dbDir}`);
+    }
   }
 
   let db: IDatabaseConnection | null = null;
   let sessionAdapter: GrammySessionAdapter<SessionData> | null = null;
 
   try {
-    db = await initializeDatabase(dbPath);
-    console.log(`[DB] SQLite initialized: ${dbPath}`);
+    // DatabaseFactory auto-detects from DATABASE_URL environment variable
+    // PostgreSQL: DATABASE_URL=postgresql://user:pass@host:5432/db
+    // SQLite: Falls back to DATABASE_PATH or default ./data/sleepcore.db
+    db = await initializeDatabaseWithFactory({
+      migrations: [...MIGRATIONS],
+      verbose: process.env.NODE_ENV !== 'production',
+      // PostgreSQL-specific options for production
+      postgresOptions: {
+        poolMax: 10,
+        ssl: process.env.NODE_ENV === 'production',
+      },
+    });
+    console.log(`[DB] ${dbConfig.type === 'postgres' ? 'PostgreSQL' : 'SQLite'} initialized successfully`);
 
-    // Create Grammy session adapter with SQLite storage
+    // Create Grammy session adapter (works with both SQLite and PostgreSQL)
     sessionAdapter = createGrammySessionAdapter<SessionData>(db, {
       ttlSeconds: 60 * 60 * 24 * 30, // 30 days session TTL for GDPR
       autoCleanup: true,
@@ -2890,7 +2910,7 @@ async function main(): Promise<void> {
   } catch (error) {
     // CRITICAL: Database is REQUIRED for healthcare data (HIPAA/152-FZ compliance)
     // Fail-fast prevents silent data loss (consent, PHI, therapy progress)
-    console.error("[DB] FATAL: SQLite initialization failed:", error);
+    console.error(`[DB] FATAL: ${dbConfig.type} initialization failed:`, error);
     console.error("[DB] Cannot start bot without persistent storage - informed consent and PHI data would be lost");
     process.exit(1);
   }
