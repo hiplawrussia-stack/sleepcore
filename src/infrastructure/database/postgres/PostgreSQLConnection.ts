@@ -101,7 +101,7 @@ class PostgreSQLTransaction implements ITransaction {
   }
 
   async query<T>(sql: string, params: unknown[] = []): Promise<T[]> {
-    const pgSql = convertPlaceholders(sql);
+    const pgSql = convertSQLiteToPostgres(sql);
     const result = await this.client.query(pgSql, params);
     return result.rows as T[];
   }
@@ -115,7 +115,7 @@ class PostgreSQLTransaction implements ITransaction {
     sql: string,
     params: unknown[] = []
   ): Promise<{ changes: number; lastInsertRowid: number }> {
-    const pgSql = convertPlaceholders(sql);
+    const pgSql = convertSQLiteToPostgres(sql);
     const result = await this.client.query(pgSql, params);
 
     return {
@@ -150,6 +150,41 @@ function convertDatetimeFunctions(sql: string): string {
       }
       return 'NOW()';
     });
+}
+
+/**
+ * Convert SQLite AUTOINCREMENT to PostgreSQL SERIAL
+ */
+function convertAutoIncrement(sql: string): string {
+  // INTEGER PRIMARY KEY AUTOINCREMENT -> SERIAL PRIMARY KEY
+  return sql.replace(
+    /INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/gi,
+    'SERIAL PRIMARY KEY'
+  );
+}
+
+/**
+ * Convert SQLite randomblob UUID generation to PostgreSQL gen_random_uuid()
+ * SQLite: lower(hex(randomblob(4))) || '-' || ... complex expression
+ * PostgreSQL: gen_random_uuid()
+ */
+function convertSQLiteUUID(sql: string): string {
+  // Match the complex SQLite UUID expression and replace with gen_random_uuid()
+  const uuidPattern =
+    /\(lower\(hex\(randomblob\(\d+\)\)\)\s*\|\|\s*'-'\s*\|\|\s*lower\(hex\(randomblob\(\d+\)\)\)\s*\|\|\s*'-4'\s*\|\|\s*substr\(lower\(hex\(randomblob\(\d+\)\)\),\d+\)\s*\|\|\s*'-'\s*\|\|\s*substr\('[^']+',abs\(random\(\)\)\s*%\s*\d+\s*\+\s*\d+,\s*\d+\)\s*\|\|\s*substr\(lower\(hex\(randomblob\(\d+\)\)\),\d+\)\s*\|\|\s*'-'\s*\|\|\s*lower\(hex\(randomblob\(\d+\)\)\)\)/gi;
+
+  return sql.replace(uuidPattern, 'gen_random_uuid()::TEXT');
+}
+
+/**
+ * Full SQL conversion from SQLite to PostgreSQL syntax
+ */
+function convertSQLiteToPostgres(sql: string): string {
+  let pgSql = convertPlaceholders(sql);
+  pgSql = convertDatetimeFunctions(pgSql);
+  pgSql = convertAutoIncrement(pgSql);
+  pgSql = convertSQLiteUUID(pgSql);
+  return pgSql;
 }
 
 /**
@@ -400,9 +435,7 @@ export class PostgreSQLConnection implements IDatabaseConnection {
   }
 
   private convertSQL(sql: string): string {
-    let pgSql = convertPlaceholders(sql);
-    pgSql = convertDatetimeFunctions(pgSql);
-    return pgSql;
+    return convertSQLiteToPostgres(sql);
   }
 }
 
