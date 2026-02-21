@@ -89,7 +89,14 @@ function initSQLite(dbPath: string): DrizzleDB {
 }
 
 /**
+ * PostgreSQL schema name for API service isolation
+ * Schema-per-Service pattern: Bot uses 'bot', API uses 'api'
+ */
+const API_SCHEMA = 'api';
+
+/**
  * Initialize PostgreSQL connection
+ * Implements Schema-per-Service pattern for microservice isolation
  */
 async function initPostgreSQL(connectionString: string): Promise<DrizzleDB> {
   pgPool = new pg.Pool({
@@ -99,18 +106,30 @@ async function initPostgreSQL(connectionString: string): Promise<DrizzleDB> {
     connectionTimeoutMillis: 5000,
   });
 
-  // Test connection
+  // Set search_path for schema isolation on every new connection
+  pgPool.on('connect', async (client) => {
+    await client.query(`SET search_path TO ${API_SCHEMA}, public`);
+  });
+
+  // Test connection and create schema if not exists
   const client = await pgPool.connect();
-  client.release();
+  try {
+    // Create api schema if not exists (schema-per-service pattern)
+    await client.query(`CREATE SCHEMA IF NOT EXISTS ${API_SCHEMA}`);
+    // Set search_path for this connection too
+    await client.query(`SET search_path TO ${API_SCHEMA}, public`);
+  } finally {
+    client.release();
+  }
 
   // Cast to DrizzleDB type for TypeScript compatibility
   // At runtime, Drizzle SQLite and PostgreSQL APIs are compatible
   db = drizzlePg(pgPool, { schema: combinedSchema }) as unknown as DrizzleDB;
 
-  // Run migrations
+  // Run migrations (now in api schema)
   await runPostgreSQLMigrations(pgPool);
 
-  console.log('[Database] PostgreSQL connection established');
+  console.log(`[Database] PostgreSQL connection established (schema: ${API_SCHEMA})`);
   return db;
 }
 
@@ -183,18 +202,22 @@ function runSQLiteMigrations(sqlite: Database.Database): void {
 
 /**
  * Run PostgreSQL migrations
+ * All tables are created in the api schema
  */
 async function runPostgreSQLMigrations(pool: pg.Pool): Promise<void> {
   const client = await pool.connect();
   try {
-    // Create tables if they don't exist
+    // Explicitly set search_path for migrations
+    await client.query(`SET search_path TO ${API_SCHEMA}, public`);
+
+    // Create tables if they don't exist (in api schema)
     await client.query(getPostgreSQLSchema());
 
     // Run incremental migrations
     await migrateUsersAddVkIdPostgreSQL(client);
     await migrateWearableSleepSessionsAddSpO2PostgreSQL(client);
 
-    console.log('[Database] PostgreSQL migrations complete');
+    console.log(`[Database] PostgreSQL migrations complete (schema: ${API_SCHEMA})`);
   } finally {
     client.release();
   }
@@ -813,8 +836,8 @@ function migrateWearableSleepSessionsAddSpO2SQLite(sqlite: Database.Database): v
 async function migrateUsersAddVkIdPostgreSQL(client: pg.PoolClient): Promise<void> {
   const result = await client.query(`
     SELECT column_name FROM information_schema.columns
-    WHERE table_name = 'api_users' AND column_name = 'vk_id'
-  `);
+    WHERE table_schema = $1 AND table_name = 'api_users' AND column_name = 'vk_id'
+  `, [API_SCHEMA]);
 
   if (result.rows.length > 0) {
     return;
@@ -828,8 +851,8 @@ async function migrateUsersAddVkIdPostgreSQL(client: pg.PoolClient): Promise<voi
 async function migrateWearableSleepSessionsAddSpO2PostgreSQL(client: pg.PoolClient): Promise<void> {
   const result = await client.query(`
     SELECT column_name FROM information_schema.columns
-    WHERE table_name = 'api_wearable_sleep_sessions' AND column_name = 'spo2_mean'
-  `);
+    WHERE table_schema = $1 AND table_name = 'api_wearable_sleep_sessions' AND column_name = 'spo2_mean'
+  `, [API_SCHEMA]);
 
   if (result.rows.length > 0) {
     return;
