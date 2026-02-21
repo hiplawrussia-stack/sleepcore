@@ -2889,13 +2889,16 @@ async function main(): Promise<void> {
     // DatabaseFactory auto-detects from DATABASE_URL environment variable
     // PostgreSQL: DATABASE_URL=postgresql://user:pass@host:5432/db
     // SQLite: Falls back to DATABASE_PATH or default ./data/sleepcore.db
+    // SSL: Disabled by default for Docker internal networks (no external exposure)
+    //      Set DATABASE_SSL=true for external PostgreSQL connections
+    const useSSL = process.env.DATABASE_SSL === 'true';
     db = await initializeDatabaseWithFactory({
       migrations: [...MIGRATIONS],
       verbose: process.env.NODE_ENV !== 'production',
-      // PostgreSQL-specific options for production
+      // PostgreSQL-specific options
       postgresOptions: {
         poolMax: 10,
-        ssl: process.env.NODE_ENV === 'production',
+        ssl: useSSL,
       },
     });
     console.log(`[DB] ${dbConfig.type === 'postgres' ? 'PostgreSQL' : 'SQLite'} initialized successfully`);
