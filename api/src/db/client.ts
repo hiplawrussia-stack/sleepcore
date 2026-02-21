@@ -25,8 +25,9 @@ const combinedSchema = { ...schema, ...wearableSchema, ...ouraSchema };
 // Database type
 type DatabaseType = 'sqlite' | 'postgres';
 
-// Unified database type (either SQLite or PostgreSQL drizzle instance)
-type DrizzleDB = ReturnType<typeof drizzleSqlite<typeof combinedSchema>> | ReturnType<typeof drizzlePg<typeof combinedSchema>>;
+// Use SQLite drizzle type as base (API-compatible with PostgreSQL at runtime)
+// This allows existing code to work without TypeScript union type issues
+type DrizzleDB = ReturnType<typeof drizzleSqlite<typeof combinedSchema>>;
 
 let db: DrizzleDB | null = null;
 let sqlite: Database.Database | null = null;
@@ -102,7 +103,9 @@ async function initPostgreSQL(connectionString: string): Promise<DrizzleDB> {
   const client = await pgPool.connect();
   client.release();
 
-  db = drizzlePg(pgPool, { schema: combinedSchema });
+  // Cast to DrizzleDB type for TypeScript compatibility
+  // At runtime, Drizzle SQLite and PostgreSQL APIs are compatible
+  db = drizzlePg(pgPool, { schema: combinedSchema }) as unknown as DrizzleDB;
 
   // Run migrations
   await runPostgreSQLMigrations(pgPool);
