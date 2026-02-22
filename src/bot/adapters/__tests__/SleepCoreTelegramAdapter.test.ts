@@ -84,17 +84,21 @@ jest.mock('grammy', () => {
       },
     };
 
-    private handlers: Map<string, Function[]> = new Map();
-    private catchHandler?: Function;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private handlers: Map<string, Array<(ctx: any) => void>> = new Map();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private catchHandler?: (err: any) => void;
 
     use = jest.fn();
-    on = jest.fn((event: string, handler: Function) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    on = jest.fn((event: string, handler: (ctx: any) => void) => {
       if (!this.handlers.has(event)) {
         this.handlers.set(event, []);
       }
       this.handlers.get(event)!.push(handler);
     });
-    catch = jest.fn((handler: Function) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    catch = jest.fn((handler: (err: any) => void) => {
       this.catchHandler = handler;
     });
     start = jest.fn();

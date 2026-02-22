@@ -19,7 +19,6 @@ import {
   IGraphNode,
   IGraphEdge,
   IPaperNode,
-  IConceptNode,
   IAuthorNode,
   NodeType,
   EdgeType,

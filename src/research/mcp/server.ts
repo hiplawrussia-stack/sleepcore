@@ -21,7 +21,6 @@
 import { InsomniaResearchAgent } from '../agents/InsomniaResearchAgent';
 import {
   ResearchSource,
-  ResearchCategory,
   IResearchQuery,
   DEFAULT_RESEARCH_CONFIG,
 } from '../types';

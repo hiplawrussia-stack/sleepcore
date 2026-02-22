@@ -16,7 +16,7 @@
 
 import { BaseCallbackHandler } from './BaseCallbackHandler';
 import type { ICallbackResult, IHandlerContext, IHandlerDependencies } from './types';
-import type { ICommandResult, ISleepCoreContext, IConversationCommand } from '../commands';
+import type { ICommandResult, IConversationCommand } from '../commands';
 
 interface ISleepDiaryEntryEntity {
   id?: string;

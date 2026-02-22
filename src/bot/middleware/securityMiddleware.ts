@@ -230,6 +230,7 @@ export function sanitizeInput(text: string, config: ISecurityConfig = DEFAULT_CO
   }
 
   // Remove null bytes and control characters (except newlines)
+  // eslint-disable-next-line no-control-regex
   const controlCharPattern = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
   if (controlCharPattern.test(sanitized)) {
     sanitized = sanitized.replace(controlCharPattern, '');

@@ -20,7 +20,7 @@
 import { InlineKeyboard } from 'grammy';
 import { BaseCallbackHandler } from './BaseCallbackHandler';
 import type { ICallbackResult, IHandlerContext, IHandlerDependencies } from './types';
-import type { ICommandResult, ISleepCoreContext, IConversationCommand } from '../commands';
+import type { ICommandResult, ISleepCoreContext } from '../commands';
 
 interface ISonyaEvolutionService {
   recordInteraction(userId: string, type: string): void;

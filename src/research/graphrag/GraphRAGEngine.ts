@@ -25,7 +25,6 @@ import {
   IGraphQueryResult,
   QueryType,
   NodeType,
-  EdgeType,
 } from './types';
 import { IResearchResult, ConfidenceLevel } from '../types';
 

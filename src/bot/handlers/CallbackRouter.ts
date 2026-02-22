@@ -18,7 +18,6 @@
 
 import {
   type ICallbackHandler,
-  type ICallbackData,
   type ICallbackResult,
   type IHandlerContext,
   type IHandlerRegistry,

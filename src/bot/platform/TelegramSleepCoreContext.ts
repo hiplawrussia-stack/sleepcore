@@ -19,8 +19,6 @@
 import type { Context } from 'grammy';
 import { InlineKeyboard, Keyboard } from 'grammy';
 import type {
-  ISleepCoreContext as IPlatformSleepCoreContext,
-  ISleepCoreAPI as IPlatformSleepCoreAPI,
   ICommandResult,
   IReplyOptions,
   IInlineButton,

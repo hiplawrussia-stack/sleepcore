@@ -27,7 +27,6 @@
 import type {
   IActivityProxyEngine,
   ActivityData,
-  ActivityDataPoint,
   ActivityGap,
   EstimatedSleep,
   ActivityPattern,

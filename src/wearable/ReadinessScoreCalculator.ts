@@ -442,7 +442,7 @@ function calculateRespiratoryComponent(
  */
 function calculateConfidence(metrics: IWearableSleepMetrics): number {
   let dataPoints = 0;
-  let maxPoints = 5;
+  const maxPoints = 5;
 
   // Check what data is available
   if (metrics.hrvMetrics && metrics.hrvMetrics.sampleCount >= 3) {

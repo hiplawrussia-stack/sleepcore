@@ -13,7 +13,7 @@
  * @compliance Research tool, not clinical
  */
 
-import { IResearchResult, ResearchCategory, ConfidenceLevel } from '../types';
+import { IResearchResult, ResearchCategory } from '../types';
 
 /**
  * Citation metrics for a paper

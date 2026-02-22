@@ -15,7 +15,6 @@
 import {
   IWearableSleepData,
   IWearableSleepMetrics,
-  IWearableHRVMetrics,
   IWearableStageDistribution,
 } from './types';
 /**

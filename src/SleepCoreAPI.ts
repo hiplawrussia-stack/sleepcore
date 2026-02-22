@@ -70,7 +70,6 @@ import {
 import {
   TCMIntegratedCBTIEngine,
   AyurvedaYogaEngine,
-  INSOMNIA_ACUPOINTS,
   type ITCMAssessment,
   type ITCMCBTIPlan,
   type IAyurvedicAssessment,
@@ -120,7 +119,6 @@ import { getGamificationEngine } from './bot/services/GamificationContext';
 import {
   PhenotypingService,
   type ISleepProfile,
-  type ITherapyRecommendation as IPhenotypeTherapyRecommendation,
 } from './sleep/services/PhenotypingService';
 import type { IActigraphySession } from './sleep/interfaces/IActigraphy';
 import type {

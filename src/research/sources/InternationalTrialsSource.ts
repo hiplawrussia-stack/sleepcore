@@ -19,7 +19,6 @@
 import {
   IResearchQuery,
   IResearchResult,
-  IClinicalTrial,
   ResearchSource,
   ResearchCategory,
   ConfidenceLevel,

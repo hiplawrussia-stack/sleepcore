@@ -28,8 +28,7 @@ import {
   IWearableSyncResponse,
   IWearableSleepStage,
   IWearableHRVRecord,
-  STAGE_MAPPING,
-  SleepCoreStage
+  STAGE_MAPPING
 } from './types';
 
 /**

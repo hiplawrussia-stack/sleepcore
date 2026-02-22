@@ -9,7 +9,6 @@ import {
   createHyperarousalAwareSRT,
   DEFAULT_HYPERAROUSAL_SRT_CONFIG,
   type ISRTScreeningResult,
-  type IHyperarousalProfile,
 } from '../HyperarousalAwareSRT';
 import type { ISleepMetrics } from '../../../sleep/interfaces/ISleepState';
 

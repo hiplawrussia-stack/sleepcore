@@ -17,7 +17,7 @@
  * @module @sleepcore/infrastructure/database
  */
 
-import { ISIScheduleRepository, type IISIScheduleRow, type IISIScheduleEntity } from '../ISIScheduleRepository';
+import { ISIScheduleRepository, type IISIScheduleRow } from '../ISIScheduleRepository';
 import type { IDatabaseConnection } from '../../interfaces/IDatabaseConnection';
 
 /**

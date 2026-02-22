@@ -8,7 +8,7 @@
  */
 
 import { SeasonalEngine } from '../SeasonalEngine';
-import type { SeasonalContext, SADRiskLevel, Season } from '../types';
+import type { SeasonalContext, SADRiskLevel } from '../types';
 
 describe('SeasonalEngine', () => {
   let engine: SeasonalEngine;

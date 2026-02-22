@@ -13,7 +13,7 @@
  * @module @sleepcore/infrastructure/database
  */
 
-import { OnboardingRepository, IOnboardingRow, IOnboardingEntity } from '../OnboardingRepository';
+import { OnboardingRepository, IOnboardingRow } from '../OnboardingRepository';
 import type { IDatabaseConnection } from '../../interfaces/IDatabaseConnection';
 
 /**

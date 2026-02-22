@@ -21,9 +21,9 @@
  */
 
 import type { ISleepMetrics } from '../../sleep/interfaces/ISleepState';
-import type { ISleepRestrictionPrescription, ISleepRestrictionRules } from '../interfaces/ICBTIComponents';
+import type { ISleepRestrictionPrescription } from '../interfaces/ICBTIComponents';
 import { SleepRestrictionEngine } from './SleepRestrictionEngine';
-import { TIB_LIMITS, SE_THRESHOLDS, TIB_ADJUSTMENT } from '../constants';
+import { TIB_LIMITS } from '../constants';
 
 // ============================================================================
 // TYPES AND INTERFACES
