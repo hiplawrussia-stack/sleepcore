@@ -74,7 +74,8 @@ class AuditLoggerTest {
             outcome = AuditOutcome.SUCCESS
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match {
@@ -92,7 +93,8 @@ class AuditLoggerTest {
             outcome = AuditOutcome.SUCCESS
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match { it.resource == "credentials" })
@@ -107,7 +109,8 @@ class AuditLoggerTest {
             userId = "user-123"
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match { it.userId == "user-123" })
@@ -122,7 +125,8 @@ class AuditLoggerTest {
             errorMessage = "Invalid credentials"
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match {
@@ -142,7 +146,8 @@ class AuditLoggerTest {
             outcome = AuditOutcome.SUCCESS
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match {
@@ -162,7 +167,8 @@ class AuditLoggerTest {
             details = "Read 5 sessions"
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match { it.details == "Read 5 sessions" })
@@ -179,7 +185,8 @@ class AuditLoggerTest {
             outcome = AuditOutcome.SUCCESS
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match {
@@ -198,7 +205,8 @@ class AuditLoggerTest {
             outcome = AuditOutcome.SUCCESS
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match {
@@ -216,7 +224,8 @@ class AuditLoggerTest {
             errorMessage = "Network timeout"
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match {
@@ -235,7 +244,8 @@ class AuditLoggerTest {
             outcome = AuditOutcome.SUCCESS
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match {
@@ -253,7 +263,8 @@ class AuditLoggerTest {
             source = "SessionManager:startSession"
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match { it.source == "SessionManager:startSession" })
@@ -269,7 +280,8 @@ class AuditLoggerTest {
             outcome = AuditOutcome.SUCCESS
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match {
@@ -288,7 +300,8 @@ class AuditLoggerTest {
             source = "MainActivity:onCreate"
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match {
@@ -310,7 +323,8 @@ class AuditLoggerTest {
             outcome = AuditOutcome.SUCCESS
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match { it.userId == "user-456" })
@@ -327,7 +341,8 @@ class AuditLoggerTest {
             outcome = AuditOutcome.SUCCESS
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match { it.userId == null })
@@ -344,7 +359,8 @@ class AuditLoggerTest {
             userId = "user-explicit"
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match { it.userId == "user-explicit" })
@@ -360,7 +376,8 @@ class AuditLoggerTest {
             outcome = AuditOutcome.SUCCESS
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match {
@@ -398,7 +415,8 @@ class AuditLoggerTest {
             outcome = AuditOutcome.SUCCESS
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match {
@@ -417,7 +435,8 @@ class AuditLoggerTest {
             outcome = AuditOutcome.SUCCESS
         )
 
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify {
             auditLogDao.insert(match { it.deviceId.isNotEmpty() })
@@ -433,11 +452,13 @@ class AuditLoggerTest {
 
         // Should not throw
         auditLogger.logSystemEvent(action = "TEST1", outcome = AuditOutcome.SUCCESS)
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         // Should still work
         auditLogger.logSystemEvent(action = "TEST2", outcome = AuditOutcome.SUCCESS)
-        advanceUntilIdle()
+        // AuditLogger uses Dispatchers.IO, not test dispatcher
+        Thread.sleep(100)
 
         coVerify(exactly = 2) { auditLogDao.insert(any()) }
     }
