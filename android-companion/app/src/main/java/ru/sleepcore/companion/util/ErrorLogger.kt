@@ -1,23 +1,26 @@
 /**
- * Centralized Error Logger
- * =========================
+ * Centralized Error Logger with Sentry Integration
+ * =================================================
  * Provides centralized error logging and crash reporting.
  *
- * Based on research (February 2026):
- * - Sentry vs Crashlytics: Sentry provides deeper context
- * - For now: Android Log with structured format
- * - Future: Add Sentry SDK integration
+ * Research (February 2026):
+ * - Sentry SDK 8.33.0 with Jetpack Compose support
+ * - HIPAA BAA available on Sentry Business tier
+ * - beforeSend callback for PHI scrubbing
  *
  * Sources:
  * - docs.sentry.io/platforms/android/
- * - www.baytechconsulting.com/blog/sentry-io-comprehensive-guide-2025
+ * - sentry.io/legal/baa/ (HIPAA Business Associate Agreement)
  *
- * Confidence: HIGH (pattern), MEDIUM (specific SDK choice)
+ * Confidence: HIGH
  */
 
 package ru.sleepcore.companion.util
 
 import android.util.Log
+import io.sentry.Breadcrumb
+import io.sentry.Sentry
+import io.sentry.SentryLevel
 import ru.sleepcore.companion.BuildConfig
 
 /**
@@ -33,6 +36,10 @@ enum class ErrorSeverity {
 
 /**
  * Error context for structured logging
+ *
+ * HIPAA Note: Never include PHI (patient health info) in context.
+ * - userId should be anonymized ID, not email/name
+ * - extras should not contain health data
  */
 data class ErrorContext(
     val tag: String,
@@ -43,9 +50,7 @@ data class ErrorContext(
 )
 
 /**
- * Centralized error logging utility
- *
- * Currently uses Android Log. Designed for easy migration to Sentry/Crashlytics.
+ * Centralized error logging utility with Sentry integration
  *
  * Usage:
  * ```kotlin
@@ -83,24 +88,24 @@ object ErrorLogger {
         val fullTag = "$APP_TAG:${context.tag}"
         val fullMessage = buildLogMessage(context, message)
 
+        // Local Android logging (stripped in release by ProGuard)
         when (severity) {
             ErrorSeverity.DEBUG -> Log.d(fullTag, fullMessage, throwable)
             ErrorSeverity.INFO -> Log.i(fullTag, fullMessage, throwable)
             ErrorSeverity.WARNING -> Log.w(fullTag, fullMessage, throwable)
             ErrorSeverity.ERROR -> Log.e(fullTag, fullMessage, throwable)
-            ErrorSeverity.CRITICAL -> {
-                Log.e(fullTag, "[CRITICAL] $fullMessage", throwable)
-                // Future: Send to Sentry immediately
-                // Sentry.captureException(throwable)
-            }
+            ErrorSeverity.CRITICAL -> Log.e(fullTag, "[CRITICAL] $fullMessage", throwable)
         }
 
-        // Future: Add breadcrumb for Sentry
-        // Sentry.addBreadcrumb(Breadcrumb().apply {
-        //     category = context.tag
-        //     this.message = message
-        //     level = mapToSentryLevel(severity)
-        // })
+        // Sentry breadcrumb for all logs (helps debug crashes)
+        if (Sentry.isEnabled()) {
+            addSentryBreadcrumb(severity, context, message)
+
+            // Send to Sentry for ERROR and CRITICAL
+            if (severity == ErrorSeverity.ERROR || severity == ErrorSeverity.CRITICAL) {
+                sendToSentry(severity, context, message, throwable)
+            }
+        }
     }
 
     /**
@@ -231,32 +236,104 @@ object ErrorLogger {
         }
     }
 
-    // ============================================
-    // Future Sentry Integration (Commented Out)
-    // ============================================
-    //
-    // To integrate Sentry:
-    // 1. Add to build.gradle.kts:
-    //    implementation("io.sentry:sentry-android:7.x.x")
-    //
-    // 2. Add to AndroidManifest.xml:
-    //    <meta-data android:name="io.sentry.dsn" android:value="YOUR_DSN" />
-    //
-    // 3. Initialize in Application class:
-    //    SentryAndroid.init(this) { options ->
-    //        options.dsn = "YOUR_DSN"
-    //        options.tracesSampleRate = if (BuildConfig.DEBUG) 1.0 else 0.1
-    //    }
-    //
-    // 4. Uncomment Sentry calls in this file
-    //
-    // private fun mapToSentryLevel(severity: ErrorSeverity): SentryLevel {
-    //     return when (severity) {
-    //         ErrorSeverity.DEBUG -> SentryLevel.DEBUG
-    //         ErrorSeverity.INFO -> SentryLevel.INFO
-    //         ErrorSeverity.WARNING -> SentryLevel.WARNING
-    //         ErrorSeverity.ERROR -> SentryLevel.ERROR
-    //         ErrorSeverity.CRITICAL -> SentryLevel.FATAL
-    //     }
-    // }
+    /**
+     * Add breadcrumb to Sentry for debugging
+     */
+    private fun addSentryBreadcrumb(
+        severity: ErrorSeverity,
+        context: ErrorContext,
+        message: String
+    ) {
+        val breadcrumb = Breadcrumb().apply {
+            category = context.tag
+            this.message = message
+            level = mapToSentryLevel(severity)
+            type = "debug"
+
+            // Add safe context data (no PHI)
+            data["operation"] = context.operation
+            context.extras.forEach { (key, value) ->
+                if (value != null && isSafeForSentry(key, value)) {
+                    data[key] = value
+                }
+            }
+        }
+        Sentry.addBreadcrumb(breadcrumb)
+    }
+
+    /**
+     * Send error/exception to Sentry
+     */
+    private fun sendToSentry(
+        severity: ErrorSeverity,
+        context: ErrorContext,
+        message: String,
+        throwable: Throwable?
+    ) {
+        Sentry.configureScope { scope ->
+            scope.setTag("component", context.tag)
+            scope.setTag("operation", context.operation)
+            scope.level = mapToSentryLevel(severity)
+
+            // Add safe extras as context
+            context.extras.forEach { (key, value) ->
+                if (value != null && isSafeForSentry(key, value)) {
+                    scope.setExtra(key, value)
+                }
+            }
+        }
+
+        if (throwable != null) {
+            Sentry.captureException(throwable)
+        } else {
+            Sentry.captureMessage(message, mapToSentryLevel(severity))
+        }
+    }
+
+    /**
+     * Map ErrorSeverity to Sentry level
+     */
+    private fun mapToSentryLevel(severity: ErrorSeverity): SentryLevel {
+        return when (severity) {
+            ErrorSeverity.DEBUG -> SentryLevel.DEBUG
+            ErrorSeverity.INFO -> SentryLevel.INFO
+            ErrorSeverity.WARNING -> SentryLevel.WARNING
+            ErrorSeverity.ERROR -> SentryLevel.ERROR
+            ErrorSeverity.CRITICAL -> SentryLevel.FATAL
+        }
+    }
+
+    /**
+     * Check if a key-value pair is safe to send to Sentry (no PHI)
+     *
+     * HIPAA Compliance: Filter out potential PHI before sending.
+     */
+    private fun isSafeForSentry(key: String, value: Any): Boolean {
+        // Block known PHI fields
+        val phiKeys = setOf(
+            "email", "name", "phone", "address", "dob", "birthdate",
+            "ssn", "medical", "health", "diagnosis", "medication",
+            "sleep_data", "heart_rate", "hrv", "spo2", "weight", "height",
+            "password", "token", "secret", "key", "credential"
+        )
+
+        val lowerKey = key.lowercase()
+        if (phiKeys.any { lowerKey.contains(it) }) {
+            return false
+        }
+
+        // Block values that look like PHI
+        val stringValue = value.toString()
+        if (stringValue.contains("@") && stringValue.contains(".")) {
+            return false // Looks like email
+        }
+        if (stringValue.matches(Regex("\\d{3}-\\d{2}-\\d{4}"))) {
+            return false // Looks like SSN
+        }
+        if (stringValue.matches(Regex("\\+?\\d{10,}"))) {
+            return false // Looks like phone
+        }
+
+        return true
+    }
 }

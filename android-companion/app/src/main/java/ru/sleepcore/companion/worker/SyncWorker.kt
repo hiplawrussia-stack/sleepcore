@@ -197,7 +197,31 @@ class SyncWorker @AssistedInject constructor(
             return Result.success()  // Don't retry - user needs to grant permissions
         }
 
-        // Perform sync
+        // STEP 1: Process pending queue first (February 2026 - Offline-first pattern)
+        val queueResult = sleepRepository.processPendingQueue()
+        if (queueResult.isSuccess) {
+            val queuedCount = queueResult.getOrThrow()
+            if (queuedCount > 0) {
+                ErrorLogger.log(
+                    severity = ErrorSeverity.INFO,
+                    context = ErrorContext(TAG, "doWork"),
+                    message = "Processed $queuedCount pending queue items"
+                )
+            }
+        } else {
+            val error = queueResult.exceptionOrNull()?.message
+            if (error == "TOKEN_EXPIRED") {
+                return Result.failure()  // Need re-auth
+            }
+            // Continue with regular sync even if queue processing failed
+            ErrorLogger.log(
+                severity = ErrorSeverity.WARNING,
+                context = ErrorContext(TAG, "doWork"),
+                message = "Queue processing failed: $error, continuing with regular sync"
+            )
+        }
+
+        // STEP 2: Perform regular sync (new sessions from Health Connect)
         val syncResult = sleepRepository.syncSessions(syncType = "background")
 
         return when {

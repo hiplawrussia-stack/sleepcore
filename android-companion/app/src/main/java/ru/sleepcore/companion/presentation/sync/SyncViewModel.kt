@@ -6,10 +6,12 @@
  * Updated (February 2026):
  * - Added retry logic with exponential backoff for network operations
  * - Integrated centralized error logging
+ * - Added offline sync queue UI integration
  *
  * Sources:
  * - developer.android.com/topic/libraries/architecture/workmanager
  * - medium.com/@hiren6997/workmanager-in-2025-5-patterns-that-actually-work-in-production
+ * - developer.android.com/topic/architecture/data-layer/offline-first
  */
 
 package ru.sleepcore.companion.presentation.sync
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.sleepcore.companion.data.repository.PendingSyncRepository
 import ru.sleepcore.companion.data.repository.SleepRepository
 import ru.sleepcore.companion.health.HealthConnectManager
 import ru.sleepcore.companion.util.ErrorContext
@@ -47,13 +50,18 @@ data class SyncUiState(
     val syncError: Boolean = false,
     val backgroundSyncEnabled: Boolean = true,
     val showUnlinkDialog: Boolean = false,
-    val isUnlinked: Boolean = false
+    val isUnlinked: Boolean = false,
+    // Offline sync queue state (February 2026)
+    val pendingCount: Int = 0,
+    val failedCount: Int = 0,
+    val isRetryingFailed: Boolean = false
 )
 
 @HiltViewModel
 class SyncViewModel @Inject constructor(
     private val sleepRepository: SleepRepository,
-    private val healthConnectManager: HealthConnectManager
+    private val healthConnectManager: HealthConnectManager,
+    private val pendingSyncRepository: PendingSyncRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SyncUiState())
@@ -66,6 +74,24 @@ class SyncViewModel @Inject constructor(
         loadUserInfo()
         checkPermissions()
         refreshStatus()
+        observePendingQueue()
+    }
+
+    /**
+     * Observe pending sync queue counts
+     * Updates UI badge when items are queued for sync
+     */
+    private fun observePendingQueue() {
+        viewModelScope.launch {
+            pendingSyncRepository.observePendingCount().collect { count ->
+                _uiState.update { it.copy(pendingCount = count) }
+            }
+        }
+        viewModelScope.launch {
+            pendingSyncRepository.observeFailedCount().collect { count ->
+                _uiState.update { it.copy(failedCount = count) }
+            }
+        }
     }
 
     private fun loadUserInfo() {
@@ -262,6 +288,87 @@ class SyncViewModel @Inject constructor(
                 it.copy(
                     showUnlinkDialog = false,
                     isUnlinked = true
+                )
+            }
+        }
+    }
+
+    /**
+     * Retry all failed sync items
+     *
+     * Resets failed items to pending and triggers immediate sync.
+     * Based on offline-first pattern (February 2026).
+     */
+    fun retryFailedItems() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRetryingFailed = true) }
+
+            try {
+                pendingSyncRepository.resetAllFailed()
+
+                ErrorLogger.log(
+                    severity = ErrorSeverity.INFO,
+                    context = ErrorContext(TAG, "retryFailedItems"),
+                    message = "Reset failed items for retry"
+                )
+
+                // Trigger immediate sync to process the queue
+                val context = appContext
+                if (context != null) {
+                    SyncWorker.triggerImmediateSync(context)
+                }
+
+                _uiState.update {
+                    it.copy(
+                        isRetryingFailed = false,
+                        syncMessage = "Retrying failed syncs..."
+                    )
+                }
+            } catch (e: Exception) {
+                ErrorLogger.log(
+                    severity = ErrorSeverity.ERROR,
+                    context = ErrorContext(TAG, "retryFailedItems"),
+                    message = "Failed to retry items",
+                    throwable = e
+                )
+                _uiState.update {
+                    it.copy(
+                        isRetryingFailed = false,
+                        syncMessage = "Failed to retry: ${e.message}",
+                        syncError = true
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Clear all failed sync items (user chose to discard)
+     */
+    fun clearFailedItems() {
+        viewModelScope.launch {
+            try {
+                // Get failed items and delete them
+                val failedItems = pendingSyncRepository.getFailedItems()
+                failedItems.forEach { item ->
+                    pendingSyncRepository.markSynced(item.sessionId)  // Removes from queue
+                }
+
+                ErrorLogger.log(
+                    severity = ErrorSeverity.INFO,
+                    context = ErrorContext(TAG, "clearFailedItems"),
+                    message = "Cleared ${failedItems.size} failed items"
+                )
+
+                _uiState.update {
+                    it.copy(syncMessage = "Cleared ${failedItems.size} failed item(s)")
+                }
+            } catch (e: Exception) {
+                ErrorLogger.log(
+                    severity = ErrorSeverity.ERROR,
+                    context = ErrorContext(TAG, "clearFailedItems"),
+                    message = "Failed to clear items",
+                    throwable = e
                 )
             }
         }

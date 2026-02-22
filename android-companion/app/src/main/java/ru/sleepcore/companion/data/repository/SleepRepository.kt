@@ -14,8 +14,10 @@ package ru.sleepcore.companion.data.repository
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import android.content.Context
 import ru.sleepcore.companion.data.api.*
 import ru.sleepcore.companion.data.local.TokenStorage
+import ru.sleepcore.companion.data.local.sync.PendingSyncEntity
 import ru.sleepcore.companion.data.local.audit.AuditLogger
 import ru.sleepcore.companion.data.local.audit.AuditOutcome
 import ru.sleepcore.companion.domain.model.*
@@ -47,7 +49,8 @@ class SleepRepository @Inject constructor(
     private val api: SleepCoreApi,
     private val tokenStorage: TokenStorage,
     private val healthConnectManager: HealthConnectManager,
-    private val auditLogger: AuditLogger
+    private val auditLogger: AuditLogger,
+    private val pendingSyncRepository: PendingSyncRepository
 ) {
     /**
      * Mutex for token refresh to prevent race condition (RFC 9700 compliance)
@@ -254,6 +257,13 @@ class SleepRepository @Inject constructor(
                     errorMessage = error,
                     source = "SleepRepository:syncSessions"
                 )
+
+                // OFFLINE QUEUE: Save to pending queue for retry (February 2026)
+                // Don't queue on auth errors - user needs to re-link
+                if (response.code() != 401) {
+                    pendingSyncRepository.enqueueAll(sessionDtos)
+                }
+
                 when (response.code()) {
                     401 -> Result.failure(Exception("TOKEN_EXPIRED"))
                     else -> Result.failure(Exception(error))
@@ -267,9 +277,105 @@ class SleepRepository @Inject constructor(
                 errorMessage = e.message,
                 source = "SleepRepository:syncSessions"
             )
+
+            // OFFLINE QUEUE: Save to pending queue on network error (February 2026)
+            pendingSyncRepository.enqueueAll(sessionDtos)
+
             Result.failure(e)
         }
     }
+
+    /**
+     * Process pending sync queue
+     *
+     * Called by SyncWorker to drain the offline queue.
+     * Returns number of successfully synced sessions.
+     */
+    suspend fun processPendingQueue(): Result<Int> {
+        // Check if linked
+        val token = getValidBearerToken()
+            ?: return Result.failure(Exception("NOT_LINKED"))
+
+        val pendingItems = pendingSyncRepository.getPendingItems()
+        if (pendingItems.isEmpty()) {
+            return Result.success(0)
+        }
+
+        var successCount = 0
+        var failCount = 0
+
+        for (item in pendingItems) {
+            val session = pendingSyncRepository.parseSession(item)
+            if (session == null) {
+                // Corrupted data - mark as failed
+                pendingSyncRepository.markFailed(item.sessionId, "Failed to parse session data")
+                failCount++
+                continue
+            }
+
+            try {
+                val request = SyncRequest(
+                    syncType = "queue",
+                    lastSyncTime = null,
+                    sleepSessions = listOf(session)
+                )
+
+                val response = api.syncSessions(token, request)
+
+                if (response.isSuccessful && response.body()?.success == true) {
+                    pendingSyncRepository.markSynced(item.sessionId)
+                    successCount++
+
+                    auditLogger.logDataSync(
+                        action = "SYNC_QUEUE_ITEM",
+                        outcome = AuditOutcome.SUCCESS,
+                        details = "sessionId=${item.sessionId}",
+                        source = "SleepRepository:processPendingQueue"
+                    )
+                } else {
+                    val error = response.body()?.error ?: "Unknown error"
+                    pendingSyncRepository.markFailed(item.sessionId, error)
+                    failCount++
+
+                    // Stop on auth error
+                    if (response.code() == 401) {
+                        return Result.failure(Exception("TOKEN_EXPIRED"))
+                    }
+                }
+            } catch (e: Exception) {
+                // Network error - stop processing, will retry later
+                pendingSyncRepository.markFailed(item.sessionId, e.message)
+                return Result.failure(e)
+            }
+        }
+
+        return Result.success(successCount)
+    }
+
+    /**
+     * Get pending sync count (for UI display)
+     */
+    fun observePendingCount() = pendingSyncRepository.observePendingCount()
+
+    /**
+     * Get failed sync count (for UI display)
+     */
+    fun observeFailedCount() = pendingSyncRepository.observeFailedCount()
+
+    /**
+     * Check if there are pending items
+     */
+    suspend fun hasPendingItems() = pendingSyncRepository.hasPendingItems()
+
+    /**
+     * Reset stuck items on app startup
+     */
+    suspend fun resetStuckSyncItems() = pendingSyncRepository.resetStuckItems()
+
+    /**
+     * Retry all failed items
+     */
+    suspend fun retryFailedItems() = pendingSyncRepository.resetAllFailed()
 
     /**
      * Get sync status from backend

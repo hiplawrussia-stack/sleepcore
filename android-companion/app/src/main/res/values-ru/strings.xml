@@ -48,6 +48,14 @@
     <string name="sync_failed">Ошибка синхронизации: %s</string>
     <string name="sync_retrying">Повторная попытка… (%d)</string>
 
+    <!-- Offline Sync Queue (February 2026) -->
+    <string name="sync_pending_queue">Очередь синхронизации</string>
+    <string name="sync_pending_count">Ожидают синхронизации: %d</string>
+    <string name="sync_failed_count">Не удалось синхронизировать: %d</string>
+    <string name="sync_pending_and_failed">Ожидают: %d, ошибок: %d</string>
+    <string name="sync_retry_failed">Повторить</string>
+    <string name="sync_clear_failed">Очистить</string>
+
     <!-- Samsung Accuracy Disclaimer -->
     <string name="samsung_disclaimer_title">Уведомление для Samsung Galaxy Watch</string>
     <string name="samsung_disclaimer_message">Некоторые модели Samsung Galaxy Watch (особенно Galaxy Watch 7/Ultra с One UI 8) могут неточно определять фазы сна. Если вы заметили значительные расхождения между вашим реальным сном и записанными данными, используйте субъективный дневник сна как основной источник данных.</string>
@@ -59,26 +67,70 @@
     <string name="unlink_confirm">Отвязать</string>
     <string name="cancel">Отмена</string>
 
-    <!-- Privacy Policy -->
+    <!-- Privacy Policy (GDPR Article 13/14 Compliant) -->
     <string name="privacy_policy_title">Политика конфиденциальности</string>
-    <string name="privacy_policy_content">
-        Политика конфиденциальности приложения SleepCore Companion\n\n
-        Мы собираем данные о сне из Health Connect для предоставления персонализированных рекомендаций по терапии сна.\n\n
-        Собираемые данные:\n
-        • Сессии сна (продолжительность, фазы)\n
-        • Вариабельность сердечного ритма (ВСР)\n
-        • Частота пульса во время сна\n
-        • Пульс в покое\n
-        • Насыщение крови кислородом (SpO2)\n
-        • Частота дыхания\n
-        • Температура кожи\n\n
-        Ваши данные:\n
-        • Шифруются при передаче (TLS 1.3)\n
-        • Хранятся безопасно на наших серверах\n
-        • Никогда не передаются третьим лицам\n
-        • Используются только для вашей терапии сна\n\n
-        Вы можете удалить свои данные в любое время, отвязав устройство.
-    </string>
+
+    <string name="privacy_policy_intro">Настоящая Политика конфиденциальности объясняет, как приложение SleepCore Companion собирает, использует и защищает ваши данные о здоровье из Health Connect. Эта политика применяется ко всем пользователям цифровой терапевтической платформы SleepCore для лечения бессонницы.</string>
+
+    <!-- Data Controller (GDPR Article 13.1.a) -->
+    <string name="privacy_section_controller">Оператор данных</string>
+    <string name="privacy_controller_content">Оператором данных является Благотворительный фонд «Другой путь», зарегистрированный в Российской Федерации.\n\nКонтакт: privacy@sleepcore.ru</string>
+
+    <!-- Data Collected -->
+    <string name="privacy_section_data_collected">Собираемые данные о здоровье</string>
+    <string name="privacy_data_sleep">Сессии сна: продолжительность, время начала/окончания, фазы сна (REM, глубокий, лёгкий, бодрствование)</string>
+    <string name="privacy_data_hrv">Вариабельность сердечного ритма (ВСР): показатели RMSSD для оценки качества сна</string>
+    <string name="privacy_data_heart_rate">Частота пульса: средний пульс во время сна</string>
+    <string name="privacy_data_resting_hr">Пульс в покое: ежедневные базовые измерения</string>
+    <string name="privacy_data_spo2">Насыщение крови кислородом (SpO2): уровень кислорода во время сна</string>
+    <string name="privacy_data_respiratory">Частота дыхания: паттерны дыхания и возможные нарушения</string>
+    <string name="privacy_data_temperature">Температура кожи: индикаторы циркадного ритма</string>
+
+    <!-- Purpose (GDPR Article 13.1.c) -->
+    <string name="privacy_section_purpose">Цели сбора данных</string>
+    <string name="privacy_purpose_therapy">Предоставление персонализированных рекомендаций КПТ-И (когнитивно-поведенческой терапии бессонницы)</string>
+    <string name="privacy_purpose_progress">Отслеживание прогресса улучшения сна в ходе терапии</string>
+    <string name="privacy_purpose_metrics">Расчёт эффективности сна, общего времени сна и других клинических показателей</string>
+    <string name="privacy_purpose_patterns">Выявление паттернов и факторов, влияющих на качество сна</string>
+    <string name="privacy_purpose_screening">Скрининг возможных нарушений дыхания во сне по данным SpO2 и дыхания</string>
+    <string name="privacy_purpose_circadian">Мониторинг циркадного ритма по температурным паттернам</string>
+
+    <!-- Legal Basis (GDPR Article 13.1.c) -->
+    <string name="privacy_section_legal_basis">Правовое основание обработки</string>
+    <string name="privacy_legal_basis_content">Мы обрабатываем ваши данные о здоровье на основании вашего явного согласия (статья 9.2.a GDPR). Вы даёте это согласие, предоставляя разрешения Health Connect и привязывая устройство к SleepCore.\n\nВы можете отозвать согласие в любое время, отвязав устройство или отозвав разрешения Health Connect.</string>
+
+    <!-- Data Retention (GDPR Article 13.2.a) -->
+    <string name="privacy_section_retention">Сроки хранения данных</string>
+    <string name="privacy_retention_content">Ваши данные о здоровье хранятся в течение программы терапии плюс 6 лет для соответствия требованиям медицинской документации (FDA 21 CFR Part 11, HIPAA).\n\nПри отвязке устройства ваши данные помечаются к удалению и безвозвратно стираются в течение 30 дней, если иное не требуется законом.</string>
+
+    <!-- Security -->
+    <string name="privacy_section_security">Защита данных</string>
+    <string name="privacy_security_tls">Все данные шифруются при передаче по протоколу TLS 1.3</string>
+    <string name="privacy_security_encryption">Данные в хранилище шифруются алгоритмом AES-256-GCM</string>
+    <string name="privacy_security_hipaa">Хранение на инфраструктуре, соответствующей HIPAA</string>
+    <string name="privacy_security_no_sharing">Мы никогда не продаём и не передаём ваши данные третьим лицам для маркетинга</string>
+
+    <!-- Data Transfers (GDPR Article 13.1.f) -->
+    <string name="privacy_section_transfers">Международная передача данных</string>
+    <string name="privacy_transfers_content">Ваши данные могут обрабатываться на серверах, расположенных в Европейском Союзе и/или Российской Федерации. Мы обеспечиваем надлежащие гарантии для любой международной передачи в соответствии с применимым законодательством о защите данных.</string>
+
+    <!-- Your Rights (GDPR Article 13.2.b-d) -->
+    <string name="privacy_section_rights">Ваши права</string>
+    <string name="privacy_right_access">Доступ: запросить копию всех данных, которые мы храним о вас</string>
+    <string name="privacy_right_rectification">Исправление: запросить исправление неточных данных</string>
+    <string name="privacy_right_erasure">Удаление: запросить удаление ваших данных («право на забвение»)</string>
+    <string name="privacy_right_portability">Переносимость: получить ваши данные в машиночитаемом формате</string>
+    <string name="privacy_right_withdraw">Отзыв согласия: отозвать разрешения в любое время через настройки устройства</string>
+    <string name="privacy_right_complaint">Жалоба: подать жалобу в местный орган по защите данных</string>
+
+    <!-- Exercise Rights -->
+    <string name="privacy_section_exercise_rights">Как реализовать свои права</string>
+    <string name="privacy_exercise_rights_content">Для реализации любого из этих прав:\n\n1. Отвязать устройство: в настройках этого приложения для немедленной остановки сбора данных\n2. Отозвать разрешения: Настройки Android → Health Connect → SleepCore\n3. Запрос данных: отправьте email на privacy@sleepcore.ru\n\nМы ответим на ваш запрос в течение 30 дней.</string>
+
+    <!-- Footer -->
+    <string name="privacy_contact">Контакт: privacy@sleepcore.ru</string>
+    <string name="privacy_last_updated">Последнее обновление: февраль 2026</string>
+    <string name="privacy_version">Версия политики конфиденциальности 2.0</string>
 
     <!-- Errors -->
     <string name="error_network">Ошибка сети. Проверьте подключение к интернету.</string>

@@ -79,11 +79,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Health Connect permissions rationale -->
-            <intent-filter>
-                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
-            </intent-filter>
-
             <!--
               HTTPS App Links for device linking from Telegram
               ==================================================
@@ -118,15 +113,38 @@
             </intent-filter>
         </activity>
 
-        <!-- Privacy policy activity for Health Connect -->
+        <!--
+          Privacy Policy Activity for Health Connect
+          ===========================================
+          Required by Google Play and Health Connect guidelines.
+          Must display the same privacy policy as in Play Console.
+
+          Research (Feb 2026):
+          - Android 13-: ACTION_SHOW_PERMISSIONS_RATIONALE
+          - Android 14+: VIEW_PERMISSION_USAGE + HEALTH_PERMISSIONS + activity-alias
+          Source: developer.android.com/health-and-fitness/health-connect/get-started
+        -->
         <activity
             android:name=".presentation.privacy.PrivacyPolicyActivity"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/privacy_policy_title">
+            <!-- Android 13 and lower (APK-based Health Connect) -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Android 14+ (Platform Health Connect) - activity-alias pattern -->
+        <activity-alias
+            android:name=".ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".presentation.privacy.PrivacyPolicyActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
             </intent-filter>
-        </activity>
+        </activity-alias>
 
         <!-- WorkManager for background sync -->
         <provider
@@ -144,6 +162,32 @@
         <meta-data
             android:name="health_connect_opt_in_enabled"
             android:value="true" />
+
+        <!--
+          Sentry Configuration (HIPAA BAA Required)
+          ==========================================
+          IMPORTANT: Replace with your Sentry DSN from sentry.io
+          Requires Business tier for HIPAA BAA compliance.
+
+          Research (Feb 2026): Sentry 8.x best practices
+          - Manual initialization for beforeSend PHI scrubbing
+          - Source: docs.sentry.io/platforms/android/
+        -->
+        <meta-data
+            android:name="io.sentry.dsn"
+            android:value="${SENTRY_DSN}" />
+        <meta-data
+            android:name="io.sentry.send-default-pii"
+            android:value="false" />
+        <meta-data
+            android:name="io.sentry.traces.sample-rate"
+            android:value="0.1" />
+        <meta-data
+            android:name="io.sentry.session-tracking.enable"
+            android:value="true" />
+        <meta-data
+            android:name="io.sentry.auto-init"
+            android:value="false" />
 
 
     </application>

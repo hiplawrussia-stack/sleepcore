@@ -29,6 +29,8 @@ import ru.sleepcore.companion.data.local.SleepCoreDatabase
 import ru.sleepcore.companion.data.local.TokenStorage
 import ru.sleepcore.companion.data.local.audit.AuditLogDao
 import ru.sleepcore.companion.data.local.audit.AuditLogger
+import ru.sleepcore.companion.data.local.sync.PendingSyncDao
+import ru.sleepcore.companion.data.repository.PendingSyncRepository
 import ru.sleepcore.companion.health.HealthConnectManager
 import ru.sleepcore.companion.security.BiometricAuthManager
 import ru.sleepcore.companion.security.SessionManager
@@ -142,6 +144,25 @@ object AppModule {
         auditLogDao: AuditLogDao
     ): AuditLogger {
         return AuditLogger(context, auditLogDao)
+    }
+
+    // ===========================================
+    // Offline Sync Queue (February 2026)
+    // ===========================================
+
+    @Provides
+    @Singleton
+    fun providePendingSyncDao(database: SleepCoreDatabase): PendingSyncDao {
+        return database.pendingSyncDao()
+    }
+
+    @Provides
+    @Singleton
+    fun providePendingSyncRepository(
+        pendingSyncDao: PendingSyncDao,
+        json: Json
+    ): PendingSyncRepository {
+        return PendingSyncRepository(pendingSyncDao, json)
     }
 
     // ===========================================

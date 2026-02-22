@@ -100,3 +100,24 @@
     public static int e(...);
     public static int wtf(...);
 }
+
+# Sentry SDK (Feb 2026)
+# Research: Keep rules for proper stack trace deobfuscation
+# Source: docs.sentry.io/platforms/android/configuration/proguard/
+-keep class io.sentry.** { *; }
+-keep class io.sentry.android.** { *; }
+-keepattributes LineNumberTable,SourceFile
+
+# Sentry Compose integration
+-keep class io.sentry.compose.** { *; }
+
+# Keep Sentry event classes for proper serialization
+-keepclassmembers class io.sentry.protocol.** { *; }
+-keepclassmembers class io.sentry.SentryEvent { *; }
+-keepclassmembers class io.sentry.SentryOptions { *; }
+
+# Don't warn about Sentry optional dependencies
+-dontwarn io.sentry.android.timber.**
+-dontwarn io.sentry.android.fragment.**
+-dontwarn io.sentry.graphql.**
+-dontwarn io.sentry.opentelemetry.**

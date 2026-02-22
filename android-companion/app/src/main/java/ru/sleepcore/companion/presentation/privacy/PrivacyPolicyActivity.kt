@@ -3,6 +3,19 @@
  * =======================
  * Displays the privacy policy for Health Connect data usage.
  * Required by Google Play and Health Connect guidelines.
+ *
+ * Research (February 2026):
+ * - Must match Play Console privacy policy exactly
+ * - GDPR Article 13/14 compliance required
+ * - Android 13: ACTION_SHOW_PERMISSIONS_RATIONALE
+ * - Android 14+: VIEW_PERMISSION_USAGE + HEALTH_PERMISSIONS
+ *
+ * Sources:
+ * - developer.android.com/health-and-fitness/health-connect/get-started
+ * - gdpr-info.eu/art-13-gdpr/
+ * - support.google.com/googleplay/android-developer/answer/12991134
+ *
+ * Confidence: HIGH
  */
 
 package ru.sleepcore.companion.presentation.privacy
@@ -66,78 +79,125 @@ fun PrivacyPolicyScreen(
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
+            // Introduction
             Text(
-                text = stringResource(R.string.privacy_policy_content),
+                text = stringResource(R.string.privacy_policy_intro),
                 style = MaterialTheme.typography.bodyMedium
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Data Controller (GDPR Article 13.1.a)
+            PrivacySectionTitle(stringResource(R.string.privacy_section_controller))
             Text(
-                text = "Health Connect Data Usage",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                text = stringResource(R.string.privacy_controller_content),
+                style = MaterialTheme.typography.bodyMedium
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            PrivacySection(
-                title = "Data We Read",
+            // Health Connect Data We Read
+            PrivacySectionTitle(stringResource(R.string.privacy_section_data_collected))
+            PrivacyBulletList(
                 items = listOf(
-                    "Sleep Sessions - duration, start/end times, sleep stages",
-                    "Heart Rate Variability (HRV) - RMSSD measurements during sleep",
-                    "Heart Rate - average heart rate during sleep periods",
-                    "Resting Heart Rate - daily resting heart rate",
-                    // GDPR Article 13: Enhanced metrics disclosure (Feb 2026)
-                    "Blood Oxygen (SpO2) - oxygen saturation levels during sleep",
-                    "Respiratory Rate - breathing patterns and disturbances",
-                    "Skin Temperature - circadian rhythm temperature variations"
+                    stringResource(R.string.privacy_data_sleep),
+                    stringResource(R.string.privacy_data_hrv),
+                    stringResource(R.string.privacy_data_heart_rate),
+                    stringResource(R.string.privacy_data_resting_hr),
+                    stringResource(R.string.privacy_data_spo2),
+                    stringResource(R.string.privacy_data_respiratory),
+                    stringResource(R.string.privacy_data_temperature)
                 )
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            PrivacySection(
-                title = "How We Use Your Data",
+            // Purpose of Processing (GDPR Article 13.1.c)
+            PrivacySectionTitle(stringResource(R.string.privacy_section_purpose))
+            PrivacyBulletList(
                 items = listOf(
-                    "Generate personalized sleep therapy recommendations",
-                    "Track your sleep improvement progress over time",
-                    "Calculate sleep efficiency and other sleep metrics",
-                    "Identify patterns that affect your sleep quality",
-                    // Enhanced metrics usage (Feb 2026)
-                    "Screen for potential sleep breathing disorders (SpO2, respiratory patterns)",
-                    "Monitor circadian rhythm indicators (skin temperature)"
+                    stringResource(R.string.privacy_purpose_therapy),
+                    stringResource(R.string.privacy_purpose_progress),
+                    stringResource(R.string.privacy_purpose_metrics),
+                    stringResource(R.string.privacy_purpose_patterns),
+                    stringResource(R.string.privacy_purpose_screening),
+                    stringResource(R.string.privacy_purpose_circadian)
                 )
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            PrivacySection(
-                title = "Data Protection",
+            // Legal Basis (GDPR Article 13.1.c)
+            PrivacySectionTitle(stringResource(R.string.privacy_section_legal_basis))
+            Text(
+                text = stringResource(R.string.privacy_legal_basis_content),
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Data Retention (GDPR Article 13.2.a)
+            PrivacySectionTitle(stringResource(R.string.privacy_section_retention))
+            Text(
+                text = stringResource(R.string.privacy_retention_content),
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Data Protection & Security
+            PrivacySectionTitle(stringResource(R.string.privacy_section_security))
+            PrivacyBulletList(
                 items = listOf(
-                    "All data is encrypted in transit using TLS 1.3",
-                    "Data is stored securely on HIPAA-compliant servers",
-                    "We never share your data with third parties",
-                    "You can delete all your data at any time by unlinking"
+                    stringResource(R.string.privacy_security_tls),
+                    stringResource(R.string.privacy_security_encryption),
+                    stringResource(R.string.privacy_security_hipaa),
+                    stringResource(R.string.privacy_security_no_sharing)
                 )
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            PrivacySection(
-                title = "Your Rights",
+            // Data Transfers (GDPR Article 13.1.f)
+            PrivacySectionTitle(stringResource(R.string.privacy_section_transfers))
+            Text(
+                text = stringResource(R.string.privacy_transfers_content),
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Your Rights (GDPR Article 13.2.b-d)
+            PrivacySectionTitle(stringResource(R.string.privacy_section_rights))
+            PrivacyBulletList(
                 items = listOf(
-                    "Access: View all data we have collected about you",
-                    "Deletion: Request complete erasure of your data",
-                    "Portability: Export your data in standard formats",
-                    "Revocation: Revoke permissions at any time in Settings"
+                    stringResource(R.string.privacy_right_access),
+                    stringResource(R.string.privacy_right_rectification),
+                    stringResource(R.string.privacy_right_erasure),
+                    stringResource(R.string.privacy_right_portability),
+                    stringResource(R.string.privacy_right_withdraw),
+                    stringResource(R.string.privacy_right_complaint)
                 )
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // How to Exercise Rights
+            PrivacySectionTitle(stringResource(R.string.privacy_section_exercise_rights))
+            Text(
+                text = stringResource(R.string.privacy_exercise_rights_content),
+                style = MaterialTheme.typography.bodyMedium
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Contact & Last Updated
+            HorizontalDivider()
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Text(
-                text = "Contact: privacy@sleepcore.ru",
+                text = stringResource(R.string.privacy_contact),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -145,7 +205,15 @@ fun PrivacyPolicyScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Last updated: February 2026",
+                text = stringResource(R.string.privacy_last_updated),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = stringResource(R.string.privacy_version),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -154,24 +222,24 @@ fun PrivacyPolicyScreen(
 }
 
 @Composable
-private fun PrivacySection(
-    title: String,
-    items: List<String>
-) {
+private fun PrivacySectionTitle(title: String) {
     Text(
         text = title,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
     )
+    Spacer(modifier = Modifier.height(8.dp))
+}
 
-    Spacer(modifier = Modifier.height(4.dp))
-
+@Composable
+private fun PrivacyBulletList(items: List<String>) {
     items.forEach { item ->
         Row(
-            modifier = Modifier.padding(start = 8.dp, top = 4.dp)
+            modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp)
         ) {
             Text(
-                text = "• ",
+                text = "\u2022 ",
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(

@@ -322,6 +322,111 @@ fun SyncScreen(
                 }
             }
 
+            // Pending sync queue card (February 2026 - Offline-first)
+            if (uiState.pendingCount > 0 || uiState.failedCount > 0) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (uiState.failedCount > 0)
+                            MaterialTheme.colorScheme.errorContainer
+                        else MaterialTheme.colorScheme.tertiaryContainer
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (uiState.failedCount > 0)
+                                    Icons.Default.CloudOff
+                                else Icons.Default.CloudQueue,
+                                contentDescription = null,
+                                tint = if (uiState.failedCount > 0)
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                else MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.sync_pending_queue),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = if (uiState.failedCount > 0)
+                                        MaterialTheme.colorScheme.onErrorContainer
+                                    else MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                Text(
+                                    text = when {
+                                        uiState.failedCount > 0 && uiState.pendingCount > 0 ->
+                                            stringResource(
+                                                R.string.sync_pending_and_failed,
+                                                uiState.pendingCount,
+                                                uiState.failedCount
+                                            )
+                                        uiState.failedCount > 0 ->
+                                            stringResource(
+                                                R.string.sync_failed_count,
+                                                uiState.failedCount
+                                            )
+                                        else ->
+                                            stringResource(
+                                                R.string.sync_pending_count,
+                                                uiState.pendingCount
+                                            )
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (uiState.failedCount > 0)
+                                        MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+                                    else MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+
+                        // Retry button for failed items
+                        if (uiState.failedCount > 0) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                TextButton(
+                                    onClick = {
+                                        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                        viewModel.clearFailedItems()
+                                    },
+                                    enabled = !uiState.isRetryingFailed
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.sync_clear_failed),
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(
+                                    onClick = {
+                                        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                        viewModel.retryFailedItems()
+                                    },
+                                    enabled = !uiState.isRetryingFailed,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.error
+                                    )
+                                ) {
+                                    if (uiState.isRetryingFailed) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            color = MaterialTheme.colorScheme.onError,
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                    Text(stringResource(R.string.sync_retry_failed))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Background sync info
             Card(modifier = Modifier.fillMaxWidth()) {
                 Row(
