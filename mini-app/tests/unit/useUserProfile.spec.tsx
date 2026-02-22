@@ -284,7 +284,7 @@ describe('useUserProfile', () => {
     it('should update updatedAt during optimistic update', async () => {
       const queryClient = new QueryClient({
         defaultOptions: {
-          queries: { retry: false, gcTime: 0 },
+          queries: { retry: false, gcTime: Infinity }, // Keep cache for test
           mutations: { retry: false },
         },
       });
@@ -295,22 +295,38 @@ describe('useUserProfile', () => {
         <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
       );
 
-      (apiClient.request as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ updated: true });
+      // Use delayed promise to capture optimistic state before onSuccess invalidates
+      let resolveRequest: ((value: { updated: boolean }) => void) | undefined;
+      (apiClient.request as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        })
+      );
 
       const { result } = renderHook(() => useUserProfile(), { wrapper });
 
       const originalUpdatedAt = result.current.profile?.updatedAt;
 
-      await act(async () => {
-        await result.current.updateProfile({ xp: 500 });
+      act(() => {
+        result.current.updateProfile({ xp: 500 });
       });
 
-      // Optimistic update sets a new updatedAt timestamp
+      // Wait for mutation to start (optimistic state applied)
+      await waitFor(() => {
+        expect(result.current.isUpdating).toBe(true);
+      });
+
+      // Check optimistic state WHILE mutation is pending (before onSuccess)
       expect(result.current.profile?.updatedAt).not.toBe(originalUpdatedAt);
       // Should be a valid ISO date more recent than original
       expect(new Date(result.current.profile?.updatedAt ?? '').getTime()).toBeGreaterThan(
         new Date(originalUpdatedAt ?? '').getTime()
       );
+
+      // Resolve the mutation
+      await act(async () => {
+        resolveRequest?.({ updated: true });
+      });
     });
 
     it('should rollback on error', async () => {
