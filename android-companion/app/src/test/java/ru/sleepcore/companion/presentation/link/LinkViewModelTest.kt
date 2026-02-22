@@ -9,6 +9,7 @@ package ru.sleepcore.companion.presentation.link
 import app.cash.turbine.test
 import io.mockk.*
 import io.mockk.impl.annotations.MockK
+import io.sentry.Sentry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
@@ -42,6 +43,10 @@ class LinkViewModelTest {
         MockKAnnotations.init(this)
         Dispatchers.setMain(testDispatcher)
 
+        // Mock Sentry to prevent RuntimeException in ErrorLogger
+        mockkStatic(Sentry::class)
+        every { Sentry.isEnabled() } returns false
+
         every { healthConnectManager.checkAvailability() } returns HealthConnectAvailability.Available
 
         viewModel = LinkViewModel(sleepRepository, healthConnectManager)
@@ -50,6 +55,7 @@ class LinkViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkStatic(Sentry::class)
         unmockkAll()
     }
 

@@ -8,8 +8,10 @@ package ru.sleepcore.companion.data.repository
 
 import io.mockk.*
 import io.mockk.impl.annotations.MockK
+import io.sentry.Sentry
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -45,6 +47,11 @@ class SleepRepositoryTest {
     @Before
     fun setup() {
         MockKAnnotations.init(this)
+
+        // Mock Sentry to prevent RuntimeException in ErrorLogger
+        mockkStatic(Sentry::class)
+        every { Sentry.isEnabled() } returns false
+
         repository = SleepRepository(
             api,
             tokenStorage,
@@ -52,6 +59,11 @@ class SleepRepositoryTest {
             auditLogger,
             pendingSyncRepository
         )
+    }
+
+    @After
+    fun teardown() {
+        unmockkStatic(Sentry::class)
     }
 
     // ========== Link Device Tests ==========

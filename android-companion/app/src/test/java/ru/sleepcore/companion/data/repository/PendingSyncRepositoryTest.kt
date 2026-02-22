@@ -17,11 +17,13 @@ package ru.sleepcore.companion.data.repository
 
 import io.mockk.*
 import io.mockk.impl.annotations.MockK
+import io.sentry.Sentry
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -42,11 +44,21 @@ class PendingSyncRepositoryTest {
     @Before
     fun setup() {
         MockKAnnotations.init(this)
+
+        // Mock Sentry to prevent RuntimeException in ErrorLogger
+        mockkStatic(Sentry::class)
+        every { Sentry.isEnabled() } returns false
+
         json = Json {
             ignoreUnknownKeys = true
             encodeDefaults = true
         }
         repository = PendingSyncRepository(pendingSyncDao, json)
+    }
+
+    @After
+    fun teardown() {
+        unmockkStatic(Sentry::class)
     }
 
     // ==================== ENQUEUE TESTS ====================

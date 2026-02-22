@@ -434,18 +434,18 @@ class SleepModelsTest {
     }
 
     @Test
-    fun `StoredCredentials isExpiringSoon returns true within 7 days`() {
+    fun `StoredCredentials isExpiringSoon returns true within 5 minutes`() {
         val credentials = createTestCredentials(
-            expiresAt = Instant.now().plusSeconds(5 * 24 * 60 * 60) // 5 days
+            expiresAt = Instant.now().plusSeconds(3 * 60) // 3 minutes (within 5 min threshold)
         )
 
         assertTrue(credentials.isExpiringSoon)
     }
 
     @Test
-    fun `StoredCredentials isExpiringSoon returns false beyond 7 days`() {
+    fun `StoredCredentials isExpiringSoon returns false beyond 5 minutes`() {
         val credentials = createTestCredentials(
-            expiresAt = Instant.now().plusSeconds(10 * 24 * 60 * 60) // 10 days
+            expiresAt = Instant.now().plusSeconds(10 * 60) // 10 minutes
         )
 
         assertFalse(credentials.isExpiringSoon)

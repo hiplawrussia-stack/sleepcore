@@ -373,7 +373,9 @@ class AuditLoggerTest {
     @Test
     fun `integrity hash is unique per event`() = runTest {
         val capturedLogs = mutableListOf<AuditLogEntity>()
-        coEvery { auditLogDao.insert(capture(capturedLogs)) } returns 1L
+        coEvery { auditLogDao.insert(capture(capturedLogs)) } answers {
+            capturedLogs.size.toLong()
+        }
 
         auditLogger.logAuthentication(action = "LOGIN", outcome = AuditOutcome.SUCCESS)
         advanceUntilIdle()
