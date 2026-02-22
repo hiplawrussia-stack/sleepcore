@@ -625,6 +625,9 @@ export function createMockSleepCoreAPI(overrides: Partial<SleepCoreAPI> = {}): S
     }),
     updateGamificationSettings: jest.fn().mockResolvedValue(undefined),
 
+    // === Seasonal Context ===
+    getSeasonalContext: jest.fn().mockReturnValue(null),
+
     ...overrides,
   } as unknown as SleepCoreAPI;
 }

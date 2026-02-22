@@ -1,7 +1,7 @@
 /**
  * Smoke Test: All Bot Commands
  * ============================
- * Verifies that all 25 commands are properly configured and instantiable.
+ * Verifies that all 26 commands are properly configured and instantiable.
  *
  * Tests:
  * - Command metadata (name, description, aliases)
@@ -14,7 +14,7 @@
 import { allCommands, commandRegistry, initializeCommandRegistry } from '../../src/bot/commands';
 
 describe('Commands Smoke Test', () => {
-  const EXPECTED_COMMAND_COUNT = 25;
+  const EXPECTED_COMMAND_COUNT = 26;
 
   describe('Command Count', () => {
     it(`should have exactly ${EXPECTED_COMMAND_COUNT} commands registered`, () => {
@@ -50,6 +50,7 @@ describe('Commands Smoke Test', () => {
       'explain',
       'safety',
       'twin',
+      'link',
     ];
 
     it('should have all expected command names', () => {
