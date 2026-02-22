@@ -27,19 +27,19 @@ import java.time.Instant
 @OptIn(ExperimentalCoroutinesApi::class)
 class SleepRepositoryTest {
 
-    @MockK
+    @MockK(relaxed = true)
     private lateinit var api: SleepCoreApi
 
-    @MockK(relaxUnitFun = true)
+    @MockK(relaxed = true)
     private lateinit var tokenStorage: TokenStorage
 
-    @MockK
+    @MockK(relaxed = true)
     private lateinit var healthConnectManager: HealthConnectManager
 
-    @MockK(relaxUnitFun = true)
+    @MockK(relaxed = true)
     private lateinit var auditLogger: AuditLogger
 
-    @MockK(relaxUnitFun = true)
+    @MockK(relaxed = true)
     private lateinit var pendingSyncRepository: PendingSyncRepository
 
     private lateinit var repository: SleepRepository
