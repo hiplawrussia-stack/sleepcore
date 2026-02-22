@@ -447,7 +447,7 @@ describe('useLogSession', () => {
   it('should perform optimistic update on stats', async () => {
     const queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { retry: false, gcTime: Infinity }, // Keep cache indefinitely for test
         mutations: { retry: false },
       },
     });
@@ -459,7 +459,13 @@ describe('useLogSession', () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    (apiClient.requestValidated as ReturnType<typeof vi.fn>).mockResolvedValueOnce(mockLogResponse);
+    // Use a delayed promise to capture optimistic state before onSuccess invalidates
+    let resolveRequest: ((value: LogSessionResponse) => void) | undefined;
+    (apiClient.requestValidated as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRequest = resolve;
+      })
+    );
 
     const { result } = renderHook(() => useLogSession(), { wrapper });
 
@@ -470,14 +476,25 @@ describe('useLogSession', () => {
       duration: 300, // 5 minutes = 25 XP (5*5) + 10 XP (5*2) = 35 XP estimated
     };
 
-    await act(async () => {
-      await result.current.logSession(sessionData);
+    // Start mutation (don't await - we want to check optimistic state)
+    act(() => {
+      result.current.logSession(sessionData);
     });
 
-    // Check that stats were optimistically updated
+    // Wait for mutation to start and optimistic update to apply
+    await waitFor(() => {
+      expect(result.current.isLogging).toBe(true);
+    });
+
+    // Check that stats were optimistically updated (before request completes)
     const updatedStats = queryClient.getQueryData<BreathingStats>(['breathing', 'stats']);
     expect(updatedStats?.totalSessions).toBe(16); // 15 + 1
     expect(updatedStats?.totalMinutes).toBe(125); // 120 + 5
+
+    // Clean up: resolve the pending request
+    await act(async () => {
+      resolveRequest?.(mockLogResponse);
+    });
   });
 
   it('should rollback on error', async () => {
@@ -665,7 +682,7 @@ describe('XP Calculation', () => {
   it('should calculate XP correctly: 5 XP per minute + 2 XP per cycle', async () => {
     const queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { retry: false, gcTime: Infinity }, // Keep cache indefinitely for test
         mutations: { retry: false },
       },
     });
@@ -676,15 +693,19 @@ describe('XP Calculation', () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    (apiClient.requestValidated as ReturnType<typeof vi.fn>).mockResolvedValueOnce(mockLogResponse);
+    // Use a delayed promise to capture optimistic state before onSuccess invalidates
+    let resolveRequest: ((value: LogSessionResponse) => void) | undefined;
+    (apiClient.requestValidated as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      new Promise((resolve) => { resolveRequest = resolve; })
+    );
 
     const { result } = renderHook(() => useLogSession(), { wrapper });
 
     // 180 seconds = 3 minutes = 15 XP from duration
     // 5 cycles = 10 XP from cycles
     // Total estimated: 25 XP
-    await act(async () => {
-      await result.current.logSession({
+    act(() => {
+      result.current.logSession({
         patternId: 'relax',
         patternName: 'Релаксация',
         cycles: 5,
@@ -692,8 +713,16 @@ describe('XP Calculation', () => {
       });
     });
 
-    // Verify optimistic update happened (stats.totalMinutes should increase by 3)
+    // Wait for mutation to start and optimistic update to apply
+    await waitFor(() => {
+      expect(result.current.isLogging).toBe(true);
+    });
+
+    // Verify optimistic update happened BEFORE request completes (stats.totalMinutes should increase by 3)
     const updatedStats = queryClient.getQueryData<BreathingStats>(['breathing', 'stats']);
     expect(updatedStats?.totalMinutes).toBe(123); // 120 + 3
+
+    // Clean up: resolve the pending request
+    await act(async () => { resolveRequest?.(mockLogResponse); });
   });
 });
