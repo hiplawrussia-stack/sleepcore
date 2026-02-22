@@ -16,6 +16,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.sentry)
+    jacoco
 }
 
 android {
@@ -36,6 +38,12 @@ android {
 
         // Build config for API URL
         buildConfigField("String", "API_BASE_URL", "\"https://api.sleepcore.ru/api/\"")
+
+        // Sentry DSN - Override via local.properties or CI environment
+        // IMPORTANT: Set SENTRY_DSN in local.properties for development
+        manifestPlaceholders["SENTRY_DSN"] = project.findProperty("SENTRY_DSN")?.toString()
+            ?: System.getenv("SENTRY_DSN")
+            ?: ""  // Empty DSN disables Sentry
     }
 
     buildTypes {
@@ -137,12 +145,20 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     kapt(libs.androidx.room.compiler)
 
+    // Sentry - Crash reporting & performance monitoring (HIPAA BAA available)
+    // Research (Feb 2026): Sentry 8.x with Jetpack Compose support
+    // Requires HIPAA BAA on Sentry Business tier
+    implementation(libs.sentry.android)
+    implementation(libs.sentry.compose)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.arch.core.testing)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.work.testing)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -157,4 +173,143 @@ kapt {
     arguments {
         arg("room.schemaLocation", "$projectDir/schemas")
     }
+}
+
+// Sentry Gradle Plugin Configuration (Feb 2026)
+// Research: Auto-instrumentation, source context, ProGuard mapping upload
+// Source: docs.sentry.io/platforms/android/configuration/gradle/
+sentry {
+    // Enables source context for stack traces (maps to actual source code)
+    includeSourceContext.set(true)
+
+    // Uploads ProGuard/R8 mappings for readable stack traces
+    autoUploadProguardMapping.set(true)
+
+    // Enables auto-instrumentation for OkHttp, Room, Navigation
+    tracingInstrumentation {
+        enabled.set(true)
+        features.set(setOf(
+            io.sentry.android.gradle.extensions.InstrumentationFeature.DATABASE,
+            io.sentry.android.gradle.extensions.InstrumentationFeature.FILE_IO,
+            io.sentry.android.gradle.extensions.InstrumentationFeature.OKHTTP,
+            io.sentry.android.gradle.extensions.InstrumentationFeature.COMPOSE
+        ))
+    }
+
+    // HIPAA: Don't include local source files in builds
+    includeNativeSources.set(false)
+
+    // DSN from properties (CI/CD) - fallback to manifest
+    // Set SENTRY_DSN in local.properties or CI environment
+    autoInstallation {
+        enabled.set(false) // We manually initialize for HIPAA compliance
+    }
+}
+
+// =============================================================================
+// JaCoCo Code Coverage Configuration
+// =============================================================================
+// Best practices 2025-2026:
+// - Minimum 80% line coverage for production code
+// - Exclude generated code (Hilt, Room, BuildConfig)
+// - HTML + XML reports for CI integration
+// =============================================================================
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+// Coverage report task
+tasks.register<JacocoReport>("jacocoTestReport") {
+    dependsOn("testDebugUnitTest")
+
+    reports {
+        xml.required.set(true)  // For Codecov/SonarQube
+        html.required.set(true) // For human review
+        csv.required.set(false)
+    }
+
+    val fileFilter = listOf(
+        // Android generated
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        // Hilt generated
+        "**/*_HiltModules*",
+        "**/*_Factory*",
+        "**/*_MembersInjector*",
+        "**/Hilt_*",
+        "**/dagger/**",
+        // Room generated
+        "**/*_Impl*",
+        "**/*Dao_Impl*",
+        // Data classes (Kotlin)
+        "**/*$Creator*",
+        // Compose generated
+        "**/ComposableSingletons*"
+    )
+
+    val debugTree = fileTree("${buildDir}/tmp/kotlin-classes/debug") {
+        exclude(fileFilter)
+    }
+
+    val mainSrc = "${project.projectDir}/src/main/java"
+
+    sourceDirectories.setFrom(files(mainSrc))
+    classDirectories.setFrom(files(debugTree))
+    executionData.setFrom(fileTree(buildDir) {
+        include("jacoco/testDebugUnitTest.exec")
+    })
+}
+
+// Coverage verification (quality gate)
+tasks.register<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
+    dependsOn("jacocoTestReport")
+
+    violationRules {
+        rule {
+            limit {
+                // Minimum 80% line coverage
+                minimum = "0.80".toBigDecimal()
+            }
+        }
+
+        // Stricter rules for security-critical packages
+        rule {
+            element = "PACKAGE"
+            includes = listOf(
+                "ru.sleepcore.companion.security.*",
+                "ru.sleepcore.companion.data.local.audit.*"
+            )
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.90".toBigDecimal()  // 90% for security code
+            }
+        }
+    }
+
+    val fileFilter = listOf(
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/*_HiltModules*",
+        "**/*_Factory*",
+        "**/*_Impl*"
+    )
+
+    val debugTree = fileTree("${buildDir}/tmp/kotlin-classes/debug") {
+        exclude(fileFilter)
+    }
+
+    classDirectories.setFrom(files(debugTree))
+    executionData.setFrom(fileTree(buildDir) {
+        include("jacoco/testDebugUnitTest.exec")
+    })
+}
+
+// Run coverage check on every test run
+tasks.named("testDebugUnitTest") {
+    finalizedBy("jacocoTestReport")
 }
