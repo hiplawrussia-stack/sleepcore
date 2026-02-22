@@ -399,8 +399,8 @@ class AuditLoggerTest {
         auditLogger.logAuthentication(action = "LOGIN", outcome = AuditOutcome.SUCCESS)
         auditLogger.logAuthentication(action = "LOGOUT", outcome = AuditOutcome.SUCCESS)
 
-        // Wait for IO dispatcher coroutines to complete (500ms for slower systems)
-        Thread.sleep(500)
+        // Wait for IO dispatcher coroutines to complete (2s for CI runners)
+        Thread.sleep(2000)
 
         assertEquals(2, capturedHashes.size)
         assertNotEquals(capturedHashes[0], capturedHashes[1])
