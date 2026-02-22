@@ -1,0 +1,26 @@
+# SleepCore Companion - Local Properties Example
+# ================================================
+# Copy this file to local.properties and fill in your values.
+# DO NOT commit local.properties to git (it's in .gitignore)
+
+# Android SDK location (auto-detected by Android Studio)
+# sdk.dir=/path/to/Android/Sdk
+
+# ===========================================
+# Sentry Configuration (HIPAA BAA Required)
+# ===========================================
+# Get your DSN from: https://sentry.io/settings/projects/YOUR_PROJECT/keys/
+#
+# IMPORTANT: For HIPAA compliance, you must:
+# 1. Sign HIPAA BAA with Sentry (Business tier required)
+# 2. Enable server-side data scrubbing in Sentry dashboard
+# 3. Review beforeSend callback in SleepCoreCompanionApp.kt
+#
+# Leave empty to disable Sentry (useful for development)
+SENTRY_DSN=https://YOUR_KEY@YOUR_ORG.ingest.sentry.io/YOUR_PROJECT_ID
+
+# ===========================================
+# Optional: Debug Settings
+# ===========================================
+# Set to true to enable verbose Sentry logging
+# SENTRY_DEBUG=false
