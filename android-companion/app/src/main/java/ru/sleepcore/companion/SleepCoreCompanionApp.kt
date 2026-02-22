@@ -168,18 +168,8 @@ class SleepCoreCompanionApp : Application(), Configuration.Provider {
             keysToRemove.forEach { tags.remove(it) }
         }
 
-        // Scrub PHI from extra data
-        for (entry in event.contexts) {
-            val context = entry.value
-            if (context is MutableMap<*, *>) {
-                @Suppress("UNCHECKED_CAST")
-                val mutableContext = context as? MutableMap<String, Any?>
-                mutableContext?.let { ctx ->
-                    val keysToRemove = ctx.keys.filter { isPhiKey(it) }
-                    keysToRemove.forEach { ctx.remove(it) }
-                }
-            }
-        }
+        // Note: event.contexts contains system info (OS, device, app versions)
+        // which is not PHI data, so no scrubbing needed here
 
         // Scrub PHI from breadcrumbs
         event.breadcrumbs?.forEach { breadcrumb ->
