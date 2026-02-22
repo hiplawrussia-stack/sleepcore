@@ -151,6 +151,7 @@ describe('TodayCommand', () => {
         trackStimulusControlAdherence: mockTrackStimulusControlAdherence,
         getSleepStates: mockGetSleepStates,
         runProactiveAnalysis: mockRunProactiveAnalysis,
+        getSeasonalContext: jest.fn().mockReturnValue(null),
       },
     } as unknown as ISleepCoreContext;
   });

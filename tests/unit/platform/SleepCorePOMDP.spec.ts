@@ -304,9 +304,9 @@ describe('SleepCorePOMDP', () => {
     it('should prefer stimulus control for high SOL', () => {
       pomdp.updateBelief(createTestObservation({ sleepOnsetLatency: 50 }));
 
-      // Run multiple times
+      // Run multiple times (50 iterations for probabilistic stability)
       const actions: SleepAction[] = [];
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 50; i++) {
         actions.push(pomdp.selectAction());
       }
 
