@@ -175,32 +175,24 @@ kapt {
     }
 }
 
-// Sentry Gradle Plugin Configuration (Feb 2026)
-// Research: Auto-instrumentation, source context, ProGuard mapping upload
+// Sentry Gradle Plugin Configuration
 // Source: docs.sentry.io/platforms/android/configuration/gradle/
 sentry {
-    // Enables source context for stack traces (maps to actual source code)
+    // Enables source context for stack traces
     includeSourceContext.set(true)
 
     // Uploads ProGuard/R8 mappings for readable stack traces
     autoUploadProguardMapping.set(true)
 
-    // Enables auto-instrumentation for OkHttp, Room, Navigation
+    // Auto-instrumentation for performance monitoring
     tracingInstrumentation {
         enabled.set(true)
-        features.set(setOf(
-            io.sentry.android.gradle.extensions.InstrumentationFeature.DATABASE,
-            io.sentry.android.gradle.extensions.InstrumentationFeature.FILE_IO,
-            io.sentry.android.gradle.extensions.InstrumentationFeature.OKHTTP,
-            io.sentry.android.gradle.extensions.InstrumentationFeature.COMPOSE
-        ))
     }
 
     // HIPAA: Don't include local source files in builds
     includeNativeSources.set(false)
 
     // DSN from properties (CI/CD) - fallback to manifest
-    // Set SENTRY_DSN in local.properties or CI environment
     autoInstallation {
         enabled.set(false) // We manually initialize for HIPAA compliance
     }

@@ -47,9 +47,9 @@ room = "2.6.1"
 tink = "1.15.0"
 
 # Sentry - Crash reporting & performance monitoring (HIPAA BAA available)
-# Research (Feb 2026): Sentry 8.x provides Jetpack Compose support, HIPAA BAA on Business tier
-# Source: docs.sentry.io/platforms/android/, sentry.io/legal/baa/
-sentry = "8.33.0"
+# Latest stable: 6.1.0 (Feb 2026)
+# Source: github.com/getsentry/sentry-android-gradle-plugin/releases
+sentry = "6.1.0"
 
 # Biometric - HIPAA-compliant authentication
 biometric = "1.2.0-alpha05"
