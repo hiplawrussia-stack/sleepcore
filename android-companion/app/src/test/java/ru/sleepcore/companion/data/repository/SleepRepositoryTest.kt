@@ -83,7 +83,7 @@ class SleepRepositoryTest {
         )
 
         coEvery { api.linkDevice(any()) } returns Response.success(apiResponse)
-        coEvery { tokenStorage.saveCredentials(any(), any(), any(), any(), any(), any()) } returns Unit
+        coEvery { tokenStorage.saveCredentials(any(), any(), any(), any(), any(), any()) } returns 0
 
         val result = repository.linkDevice("ABC123", deviceInfo)
 
@@ -123,7 +123,7 @@ class SleepRepositoryTest {
         )
 
         coEvery { api.linkDevice(any()) } returns Response.success(apiResponse)
-        coEvery { tokenStorage.saveCredentials(any(), any(), any(), any(), any(), any()) } returns Unit
+        coEvery { tokenStorage.saveCredentials(any(), any(), any(), any(), any(), any()) } returns 0
 
         repository.linkDevice("abc123", deviceInfo)
 
@@ -250,7 +250,7 @@ class SleepRepositoryTest {
         coEvery { tokenStorage.getLastSyncTime() } returns null
         coEvery { healthConnectManager.readSessionsSinceLastSync(any()) } returns Result.success(sessions)
         coEvery { api.syncSessions(any(), any()) } returns Response.success(apiResponse)
-        coEvery { tokenStorage.saveLastSyncTime(any()) } returns Unit
+        coEvery { tokenStorage.saveLastSyncTime(any()) } returns mockk(relaxed = true)
 
         val result = repository.syncSessions(syncType = "manual")
 
@@ -380,7 +380,7 @@ class SleepRepositoryTest {
         )
 
         every { tokenStorage.getBearerToken() } returns "Bearer token"
-        coEvery { tokenStorage.clearCredentials() } returns Unit
+        coEvery { tokenStorage.clearCredentials() } returns 0
         coEvery { api.unlinkDevice(any()) } returns Response.success(unlinkResponse)
 
         val result = repository.unlinkDevice()
@@ -396,7 +396,7 @@ class SleepRepositoryTest {
     @Test
     fun `unlinkDevice succeeds even if API fails`() = runTest {
         every { tokenStorage.getBearerToken() } returns "Bearer token"
-        coEvery { tokenStorage.clearCredentials() } returns Unit
+        coEvery { tokenStorage.clearCredentials() } returns 0
         coEvery { api.unlinkDevice(any()) } throws Exception("Network error")
 
         val result = repository.unlinkDevice()
@@ -407,7 +407,7 @@ class SleepRepositoryTest {
     @Test
     fun `unlinkDevice succeeds without token`() = runTest {
         every { tokenStorage.getBearerToken() } returns null
-        coEvery { tokenStorage.clearCredentials() } returns Unit
+        coEvery { tokenStorage.clearCredentials() } returns 0
 
         val result = repository.unlinkDevice()
 
