@@ -278,7 +278,7 @@ object ErrorLogger {
             // Add safe extras as context
             context.extras.forEach { (key, value) ->
                 if (value != null && isSafeForSentry(key, value)) {
-                    scope.setExtra(key, value)
+                    scope.setExtra(key, value.toString())
                 }
             }
         }
