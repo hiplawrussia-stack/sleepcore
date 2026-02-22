@@ -58,6 +58,7 @@ biometric = "1.2.0-alpha05"
 # Testing
 junit = "4.13.2"
 junitVersion = "1.2.1"
+testCore = "1.6.1"  # ApplicationProvider for Robolectric tests
 espresso = "3.6.1"
 mockk = "1.13.13"
 turbine = "1.2.0"
@@ -128,6 +129,7 @@ sentry-compose = { group = "io.sentry", name = "sentry-compose-android", version
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "testCore" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }

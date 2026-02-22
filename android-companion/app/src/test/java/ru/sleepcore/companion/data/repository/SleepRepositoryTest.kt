@@ -17,6 +17,7 @@ import retrofit2.Response
 import ru.sleepcore.companion.data.api.*
 import ru.sleepcore.companion.data.local.StoredCredentials
 import ru.sleepcore.companion.data.local.TokenStorage
+import ru.sleepcore.companion.data.local.audit.AuditLogger
 import ru.sleepcore.companion.domain.model.*
 import ru.sleepcore.companion.health.HealthConnectManager
 import java.time.Instant
@@ -33,12 +34,24 @@ class SleepRepositoryTest {
     @MockK
     private lateinit var healthConnectManager: HealthConnectManager
 
+    @MockK
+    private lateinit var auditLogger: AuditLogger
+
+    @MockK
+    private lateinit var pendingSyncRepository: PendingSyncRepository
+
     private lateinit var repository: SleepRepository
 
     @Before
     fun setup() {
         MockKAnnotations.init(this)
-        repository = SleepRepository(api, tokenStorage, healthConnectManager)
+        repository = SleepRepository(
+            api,
+            tokenStorage,
+            healthConnectManager,
+            auditLogger,
+            pendingSyncRepository
+        )
     }
 
     // ========== Link Device Tests ==========
@@ -52,22 +65,25 @@ class SleepRepositoryTest {
             model = "Galaxy S24"
         )
 
-        val apiResponse = LinkResponse(
+        val linkResponseDto = LinkResponseDto(
+            token = "jwt-token-123",
+            expiresAt = "2026-03-07T00:00:00Z",
+            user = UserDto(
+                id = "user-1",
+                telegramId = 123456L,
+                firstName = "Иван"
+            )
+        )
+
+        val apiResponse = ApiResponse(
             success = true,
-            data = LinkData(
-                token = "jwt-token-123",
-                expiresAt = "2026-03-07T00:00:00Z",
-                user = UserData(
-                    id = "user-1",
-                    telegramId = 123456L,
-                    firstName = "Иван"
-                )
-            ),
-            error = null
+            data = linkResponseDto,
+            error = null,
+            timestamp = System.currentTimeMillis()
         )
 
         coEvery { api.linkDevice(any()) } returns Response.success(apiResponse)
-        coEvery { tokenStorage.saveCredentials(any(), any(), any(), any(), any(), any()) } just Runs
+        coEvery { tokenStorage.saveCredentials(any(), any(), any(), any(), any(), any()) } returns Unit
 
         val result = repository.linkDevice("ABC123", deviceInfo)
 
@@ -93,18 +109,21 @@ class SleepRepositoryTest {
     fun `linkDevice normalizes code to uppercase`() = runTest {
         val deviceInfo = DeviceInfo(id = "device-123")
 
-        val apiResponse = LinkResponse(
+        val linkResponseDto = LinkResponseDto(
+            token = "token",
+            expiresAt = "2026-03-07T00:00:00Z",
+            user = UserDto(id = "u1", telegramId = 1L, firstName = "Test")
+        )
+
+        val apiResponse = ApiResponse(
             success = true,
-            data = LinkData(
-                token = "token",
-                expiresAt = "2026-03-07T00:00:00Z",
-                user = UserData(id = "u1", telegramId = 1L, firstName = "Test")
-            ),
-            error = null
+            data = linkResponseDto,
+            error = null,
+            timestamp = System.currentTimeMillis()
         )
 
         coEvery { api.linkDevice(any()) } returns Response.success(apiResponse)
-        coEvery { tokenStorage.saveCredentials(any(), any(), any(), any(), any(), any()) } just Runs
+        coEvery { tokenStorage.saveCredentials(any(), any(), any(), any(), any(), any()) } returns Unit
 
         repository.linkDevice("abc123", deviceInfo)
 
@@ -117,10 +136,11 @@ class SleepRepositoryTest {
     fun `linkDevice returns INVALID_CODE error`() = runTest {
         val deviceInfo = DeviceInfo(id = "device-123")
 
-        val apiResponse = LinkResponse(
+        val apiResponse = ApiResponse<LinkResponseDto>(
             success = false,
             data = null,
-            error = "Invalid link code"
+            error = "Invalid link code",
+            timestamp = System.currentTimeMillis()
         )
 
         coEvery { api.linkDevice(any()) } returns Response.success(apiResponse)
@@ -135,10 +155,11 @@ class SleepRepositoryTest {
     fun `linkDevice returns EXPIRED_CODE error`() = runTest {
         val deviceInfo = DeviceInfo(id = "device-123")
 
-        val apiResponse = LinkResponse(
+        val apiResponse = ApiResponse<LinkResponseDto>(
             success = false,
             data = null,
-            error = "Link code has expired"
+            error = "Link code has expired",
+            timestamp = System.currentTimeMillis()
         )
 
         coEvery { api.linkDevice(any()) } returns Response.success(apiResponse)
@@ -210,23 +231,26 @@ class SleepRepositoryTest {
             )
         )
 
-        val apiResponse = SyncResponse(
+        val syncResponseDto = SyncResponseDto(
+            processed = 1,
+            skipped = 0,
+            errors = emptyList(),
+            syncId = "sync-123",
+            nextSyncRecommended = "PT15M"
+        )
+
+        val apiResponse = ApiResponse(
             success = true,
-            data = SyncData(
-                processed = 1,
-                skipped = 0,
-                errors = emptyList(),
-                syncId = "sync-123",
-                nextSyncRecommended = "PT15M"
-            ),
-            error = null
+            data = syncResponseDto,
+            error = null,
+            timestamp = System.currentTimeMillis()
         )
 
         every { tokenStorage.getBearerToken() } returns "Bearer token"
         coEvery { tokenStorage.getLastSyncTime() } returns null
         coEvery { healthConnectManager.readSessionsSinceLastSync(any()) } returns Result.success(sessions)
         coEvery { api.syncSessions(any(), any()) } returns Response.success(apiResponse)
-        coEvery { tokenStorage.saveLastSyncTime(any()) } just Runs
+        coEvery { tokenStorage.saveLastSyncTime(any()) } returns Unit
 
         val result = repository.syncSessions(syncType = "manual")
 
@@ -299,33 +323,36 @@ class SleepRepositoryTest {
 
     @Test
     fun `getSyncStatus returns parsed status from API`() = runTest {
-        val apiResponse = StatusResponse(
-            success = true,
-            data = StatusData(
-                device = DeviceData(
-                    id = "device-1",
-                    name = "Pixel 8",
-                    manufacturer = "Google",
-                    model = "Pixel 8 Pro",
-                    linkedAt = "2026-01-01T00:00:00Z",
-                    lastSyncAt = "2026-02-07T10:00:00Z"
-                ),
-                stats = StatsData(
-                    totalSessions = 50,
-                    sessionsLast7Days = 7,
-                    lastSyncStatus = "success"
-                ),
-                recentSyncs = listOf(
-                    RecentSyncData(
-                        id = "sync-1",
-                        type = "manual",
-                        processed = 3,
-                        status = "success",
-                        completedAt = "2026-02-07T10:00:00Z"
-                    )
-                )
+        val statusResponseDto = StatusResponseDto(
+            device = DeviceStatusDto(
+                id = "device-1",
+                name = "Pixel 8",
+                manufacturer = "Google",
+                model = "Pixel 8 Pro",
+                linkedAt = "2026-01-01T00:00:00Z",
+                lastSyncAt = "2026-02-07T10:00:00Z"
             ),
-            error = null
+            stats = StatsDto(
+                totalSessions = 50,
+                sessionsLast7Days = 7,
+                lastSyncStatus = "success"
+            ),
+            recentSyncs = listOf(
+                RecentSyncDto(
+                    id = "sync-1",
+                    type = "manual",
+                    processed = 3,
+                    status = "success",
+                    completedAt = "2026-02-07T10:00:00Z"
+                )
+            )
+        )
+
+        val apiResponse = ApiResponse(
+            success = true,
+            data = statusResponseDto,
+            error = null,
+            timestamp = System.currentTimeMillis()
         )
 
         every { tokenStorage.getBearerToken() } returns "Bearer token"
@@ -345,9 +372,16 @@ class SleepRepositoryTest {
 
     @Test
     fun `unlinkDevice clears local credentials first`() = runTest {
+        val unlinkResponse = ApiResponse(
+            success = true,
+            data = UnlinkResponseDto(unlinked = true),
+            error = null,
+            timestamp = System.currentTimeMillis()
+        )
+
         every { tokenStorage.getBearerToken() } returns "Bearer token"
-        coEvery { tokenStorage.clearCredentials() } just Runs
-        coEvery { api.unlinkDevice(any()) } returns Response.success(mockk(relaxed = true))
+        coEvery { tokenStorage.clearCredentials() } returns Unit
+        coEvery { api.unlinkDevice(any()) } returns Response.success(unlinkResponse)
 
         val result = repository.unlinkDevice()
 
@@ -362,7 +396,7 @@ class SleepRepositoryTest {
     @Test
     fun `unlinkDevice succeeds even if API fails`() = runTest {
         every { tokenStorage.getBearerToken() } returns "Bearer token"
-        coEvery { tokenStorage.clearCredentials() } just Runs
+        coEvery { tokenStorage.clearCredentials() } returns Unit
         coEvery { api.unlinkDevice(any()) } throws Exception("Network error")
 
         val result = repository.unlinkDevice()
@@ -373,7 +407,7 @@ class SleepRepositoryTest {
     @Test
     fun `unlinkDevice succeeds without token`() = runTest {
         every { tokenStorage.getBearerToken() } returns null
-        coEvery { tokenStorage.clearCredentials() } just Runs
+        coEvery { tokenStorage.clearCredentials() } returns Unit
 
         val result = repository.unlinkDevice()
 

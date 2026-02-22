@@ -17,6 +17,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import ru.sleepcore.companion.data.local.StoredCredentials
+import ru.sleepcore.companion.data.repository.PendingSyncRepository
 import ru.sleepcore.companion.data.repository.SleepRepository
 import ru.sleepcore.companion.domain.model.*
 import ru.sleepcore.companion.health.HealthConnectManager
@@ -33,6 +34,9 @@ class SyncViewModelTest {
 
     @MockK
     private lateinit var healthConnectManager: HealthConnectManager
+
+    @MockK
+    private lateinit var pendingSyncRepository: PendingSyncRepository
 
     private lateinit var viewModel: SyncViewModel
 
@@ -52,7 +56,7 @@ class SyncViewModelTest {
         )
         coEvery { sleepRepository.getSyncStatus() } returns Result.failure(Exception("Not linked"))
 
-        viewModel = SyncViewModel(sleepRepository, healthConnectManager)
+        viewModel = SyncViewModel(sleepRepository, healthConnectManager, pendingSyncRepository)
     }
 
     @After
@@ -93,7 +97,7 @@ class SyncViewModelTest {
         )
         every { sleepRepository.getCredentials() } returns credentials
 
-        val vm = SyncViewModel(sleepRepository, healthConnectManager)
+        val vm = SyncViewModel(sleepRepository, healthConnectManager, pendingSyncRepository)
         val mockContext = mockk<android.content.Context>(relaxed = true)
         every { mockContext.applicationContext } returns mockContext
 
@@ -116,7 +120,7 @@ class SyncViewModelTest {
             backgroundRead = false
         )
 
-        val vm = SyncViewModel(sleepRepository, healthConnectManager)
+        val vm = SyncViewModel(sleepRepository, healthConnectManager, pendingSyncRepository)
         val mockContext = mockk<android.content.Context>(relaxed = true)
         every { mockContext.applicationContext } returns mockContext
 
@@ -149,7 +153,7 @@ class SyncViewModelTest {
         )
         coEvery { sleepRepository.getSyncStatus() } returns Result.success(syncStatus)
 
-        val vm = SyncViewModel(sleepRepository, healthConnectManager)
+        val vm = SyncViewModel(sleepRepository, healthConnectManager, pendingSyncRepository)
         val mockContext = mockk<android.content.Context>(relaxed = true)
         every { mockContext.applicationContext } returns mockContext
 

@@ -414,11 +414,10 @@ class PendingSyncRepositoryTest {
         sessionId = sessionId,
         startTime = startTime,
         endTime = endTime,
-        durationMinutes = 480,
         source = source,
         stages = emptyList(),
-        hrvSamples = emptyList(),
-        heartRateSamples = emptyList()
+        hrv = emptyList(),
+        heartRate = emptyList()
     )
 
     private fun createEntity(
