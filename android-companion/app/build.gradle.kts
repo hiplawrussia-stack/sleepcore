@@ -302,6 +302,8 @@ tasks.register<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
 }
 
 // Run coverage check on every test run
-tasks.named("testDebugUnitTest") {
-    finalizedBy("jacocoTestReport")
+afterEvaluate {
+    tasks.named("testDebugUnitTest") {
+        finalizedBy("jacocoTestReport")
+    }
 }
