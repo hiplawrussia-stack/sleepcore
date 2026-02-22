@@ -1,7 +1,7 @@
 # SleepCore Unified Roadmap
 
-**Version**: 4.0
-**Updated**: 2026-02-16
+**Version**: 4.1
+**Updated**: 2026-02-22
 **Status**: Active Development — Strategic Pivot
 
 ---
@@ -131,7 +131,7 @@
 | Branches | 72.45% | ✅ |
 | Functions | 87.47% | ✅ |
 | Lines | 84.97% | ✅ |
-| **Всего тестов** | **8752+** | ✅ |
+| **Всего тестов** | **10444+** | ✅ |
 
 ---
 
@@ -359,12 +359,15 @@
 │  ├── Types for Health Connect                                   │
 │  └── 46 unit tests                                              │
 │                                                                 │
-│  Phase 2: Android Companion App ✅ COMPLETE (2026-02-08)        │
+│  Phase 2: Android Companion App ✅ COMPLETE (2026-02-22)        │
 │  ├── Kotlin + Health Connect SDK                                │
 │  ├── Samsung Galaxy Watch support                               │
 │  ├── Foreground sync (manual)                                   │
 │  ├── Telegram bot linking                                       │
-│  └── 42 files, 7 test files, 2281 lines of tests                │
+│  ├── Offline Sync Queue (Room + WorkManager)                    │
+│  ├── Sentry SDK 8.33.0 (HIPAA-compliant PHI scrubbing)          │
+│  ├── GDPR Privacy Policy Activity                               │
+│  └── 514 tests, 19 test files, 8048 lines of tests              │
 │                                                                 │
 │  Phase 3: Background Sync 🔜                                    │
 │  ├── WorkManager (Android 15+ only)                             │
@@ -375,6 +378,12 @@
 │  ├── PAT adapter switch to real data                            │
 │  ├── Phenotype from actual HRV/sleep                            │
 │  └── Validation against simulated                               │
+│                                                                 │
+│  Phase 5: Advanced Metrics (Q3 2026) 🔜                         │
+│  ├── SpO2 / Sleep Apnea Screening (FDA K240929)                 │
+│  ├── Skin Temperature (circadian rhythm)                        │
+│  ├── Breathing Disturbances count                               │
+│  └── Samsung accuracy disclaimer (known issues)                 │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -540,6 +549,15 @@
 
 ## Changelog
 
+### 2026-02-22 — Android Companion App Update (v4.1)
+- 📱 **Android test coverage**: 514 tests, 19 test files, 8048 lines
+- 🔒 **Sentry SDK 8.33.0** integrated with HIPAA-compliant PHI scrubbing
+- 📴 **Offline Sync Queue** implemented (Room + WorkManager)
+- 📋 **GDPR Privacy Policy Activity** compliant with Health Connect requirements
+- 🔬 **Wearable Research** completed: SpO2/Sleep Apnea and Skin Temperature identified as Phase 5
+- ⚠️ Samsung Galaxy Watch accuracy issues documented (One UI 8 sleep score bug)
+- 🔗 Reference: `reports/WEARABLE_INTEGRATION_RESEARCH_2026-02-19.md`
+
 ### 2026-02-16 — STRATEGIC PIVOT (v4.0)
 - 🎯 **Strategic analysis**: Russian market = "blue ocean" (no CBT-I competitors)
 - 🎯 **TOP-3 priorities defined**: Pilot RCT (n=100), Web App, B2B Pilots
@@ -593,6 +611,6 @@
 
 ---
 
-*Unified Roadmap v4.0 — Updated 2026-02-16*
+*Unified Roadmap v4.1 — Updated 2026-02-22*
 *Strategic Pivot: Nonprofit DTx for Russian-speaking "Blue Ocean" market*
 *Next review: After Pilot RCT (Q3 2026)*
