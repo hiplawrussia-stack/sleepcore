@@ -372,19 +372,21 @@ class AuditLoggerTest {
 
     @Test
     fun `integrity hash is unique per event`() = runTest {
-        val capturedLogs = mutableListOf<AuditLogEntity>()
-        coEvery { auditLogDao.insert(capture(capturedLogs)) } answers {
-            capturedLogs.size.toLong()
+        val capturedHashes = mutableListOf<String>()
+        coEvery { auditLogDao.insert(any()) } coAnswers {
+            val entity = firstArg<AuditLogEntity>()
+            capturedHashes.add(entity.integrityHash)
+            capturedHashes.size.toLong()
         }
 
         auditLogger.logAuthentication(action = "LOGIN", outcome = AuditOutcome.SUCCESS)
-        advanceUntilIdle()
-
         auditLogger.logAuthentication(action = "LOGOUT", outcome = AuditOutcome.SUCCESS)
-        advanceUntilIdle()
 
-        assertEquals(2, capturedLogs.size)
-        assertNotEquals(capturedLogs[0].integrityHash, capturedLogs[1].integrityHash)
+        // Wait for IO dispatcher coroutines to complete (500ms for slower systems)
+        Thread.sleep(500)
+
+        assertEquals(2, capturedHashes.size)
+        assertNotEquals(capturedHashes[0], capturedHashes[1])
     }
 
     // ==================== TIMESTAMP TESTS ====================

@@ -69,6 +69,17 @@ class SleepRepositoryTest {
         unmockkObject(ErrorLogger)
     }
 
+    // Helper to create valid (non-expired) credentials
+    private fun createValidCredentials(token: String = "token") = StoredCredentials(
+        token = token,
+        expiresAt = Instant.now().plusSeconds(3600), // Not expired
+        userId = "user-1",
+        telegramId = 123L,
+        userName = "Test",
+        deviceId = "device-1",
+        linkedAt = Instant.now()
+    )
+
     // ========== Link Device Tests ==========
 
     @Test
@@ -201,7 +212,7 @@ class SleepRepositoryTest {
 
     @Test
     fun `syncSessions returns NOT_LINKED when no token`() = runTest {
-        every { tokenStorage.getBearerToken() } returns null
+        coEvery { tokenStorage.suspendLoadCredentials() } returns null
 
         val result = repository.syncSessions()
 
@@ -211,7 +222,7 @@ class SleepRepositoryTest {
 
     @Test
     fun `syncSessions returns NO_NEW_DATA when empty sessions`() = runTest {
-        every { tokenStorage.getBearerToken() } returns "Bearer token"
+        coEvery { tokenStorage.suspendLoadCredentials() } returns createValidCredentials()
         coEvery { tokenStorage.getLastSyncTime() } returns null
         coEvery { healthConnectManager.readSessionsSinceLastSync(any()) } returns Result.success(emptyList())
 
@@ -261,7 +272,7 @@ class SleepRepositoryTest {
             timestamp = System.currentTimeMillis()
         )
 
-        every { tokenStorage.getBearerToken() } returns "Bearer token"
+        coEvery { tokenStorage.suspendLoadCredentials() } returns createValidCredentials()
         coEvery { tokenStorage.getLastSyncTime() } returns null
         coEvery { healthConnectManager.readSessionsSinceLastSync(any()) } returns Result.success(sessions)
         coEvery { api.syncSessions(any(), any()) } returns Response.success(apiResponse)
@@ -276,7 +287,7 @@ class SleepRepositoryTest {
 
         coVerify {
             api.syncSessions(
-                token = "Bearer token",
+                token = match { it.startsWith("Bearer ") },
                 request = match {
                     it.syncType == "manual" &&
                     it.sleepSessions.size == 1 &&
@@ -301,7 +312,7 @@ class SleepRepositoryTest {
             )
         )
 
-        every { tokenStorage.getBearerToken() } returns "Bearer token"
+        coEvery { tokenStorage.suspendLoadCredentials() } returns createValidCredentials()
         coEvery { tokenStorage.getLastSyncTime() } returns null
         coEvery { healthConnectManager.readSessionsSinceLastSync(any()) } returns Result.success(sessions)
         coEvery { api.syncSessions(any(), any()) } returns Response.error(401, mockk(relaxed = true))
@@ -314,7 +325,7 @@ class SleepRepositoryTest {
 
     @Test
     fun `syncSessions propagates Health Connect error`() = runTest {
-        every { tokenStorage.getBearerToken() } returns "Bearer token"
+        coEvery { tokenStorage.suspendLoadCredentials() } returns createValidCredentials()
         coEvery { tokenStorage.getLastSyncTime() } returns null
         coEvery { healthConnectManager.readSessionsSinceLastSync(any()) } returns Result.failure(Exception("Permission denied"))
 
@@ -328,7 +339,7 @@ class SleepRepositoryTest {
 
     @Test
     fun `getSyncStatus returns NOT_LINKED when no token`() = runTest {
-        every { tokenStorage.getBearerToken() } returns null
+        coEvery { tokenStorage.suspendLoadCredentials() } returns null
 
         val result = repository.getSyncStatus()
 
@@ -370,7 +381,7 @@ class SleepRepositoryTest {
             timestamp = System.currentTimeMillis()
         )
 
-        every { tokenStorage.getBearerToken() } returns "Bearer token"
+        coEvery { tokenStorage.suspendLoadCredentials() } returns createValidCredentials()
         coEvery { api.getStatus(any()) } returns Response.success(apiResponse)
 
         val result = repository.getSyncStatus()

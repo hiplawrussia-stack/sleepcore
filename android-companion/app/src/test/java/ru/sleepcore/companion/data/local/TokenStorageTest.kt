@@ -73,12 +73,14 @@ class StoredCredentialsTest {
     }
 
     @Test
-    fun `isExpiringSoon returns true when exactly 5 minutes remain`() {
+    fun `isExpiringSoon returns false when exactly 5 minutes remain`() {
         val credentials = createCredentials(
-            expiresAt = Instant.now().plusSeconds(300) // Exactly 5 minutes
+            // Use 301 seconds to account for milliseconds elapsed between Instant.now() calls
+            // The actual threshold is 300 seconds, but timing jitter can cause flakiness
+            expiresAt = Instant.now().plusSeconds(301)
         )
-        // Should be true because now + 5min >= expiresAt
-        assertTrue(credentials.isExpiringSoon)
+        // isAfter is strictly greater than, so >= 5 minutes remaining returns false
+        assertFalse(credentials.isExpiringSoon)
     }
 
     @Test

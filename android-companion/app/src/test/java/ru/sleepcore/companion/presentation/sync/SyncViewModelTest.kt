@@ -20,6 +20,7 @@ import ru.sleepcore.companion.data.local.StoredCredentials
 import ru.sleepcore.companion.data.repository.PendingSyncRepository
 import ru.sleepcore.companion.data.repository.SleepRepository
 import ru.sleepcore.companion.domain.model.*
+import ru.sleepcore.companion.health.HealthConnectAvailability
 import ru.sleepcore.companion.health.HealthConnectManager
 import ru.sleepcore.companion.health.HealthConnectPermissions
 import ru.sleepcore.companion.util.ErrorLogger
@@ -60,7 +61,10 @@ class SyncViewModelTest {
             restingHeartRateRead = false,
             backgroundRead = false
         )
+        every { healthConnectManager.checkAvailability() } returns HealthConnectAvailability.Available
         coEvery { sleepRepository.getSyncStatus() } returns Result.failure(Exception("Not linked"))
+        every { pendingSyncRepository.observePendingCount() } returns kotlinx.coroutines.flow.flowOf(0)
+        every { pendingSyncRepository.observeFailedCount() } returns kotlinx.coroutines.flow.flowOf(0)
 
         viewModel = SyncViewModel(sleepRepository, healthConnectManager, pendingSyncRepository)
     }
@@ -296,7 +300,8 @@ class SyncViewModelTest {
 
     @Test
     fun `syncNow generic error shows error state`() = runTest {
-        coEvery { sleepRepository.syncSessions(any()) } returns Result.failure(Exception("Network error"))
+        // Use an error that is not retryable (doesn't contain "network", "timeout", etc.)
+        coEvery { sleepRepository.syncSessions(any()) } returns Result.failure(Exception("Server error"))
 
         viewModel.uiState.test {
             awaitItem()

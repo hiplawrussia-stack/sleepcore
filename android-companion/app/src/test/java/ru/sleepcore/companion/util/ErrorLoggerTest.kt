@@ -517,7 +517,7 @@ class LoggingMethodPatternsTest {
 
     @Test
     fun `network error extras format`() {
-        val extras = mapOf(
+        val extras: Map<String, Any?> = mapOf(
             "attempt" to 1,
             "maxAttempts" to 3,
             "retryDelayMs" to 1000L
@@ -528,8 +528,9 @@ class LoggingMethodPatternsTest {
             extras = extras
         )
 
-        assertEquals(1, context.extras["attempt"])
-        assertEquals(3, context.extras["maxAttempts"])
+        // Map values may be widened, check using Long comparison
+        assertEquals(1L, (context.extras["attempt"] as Number).toLong())
+        assertEquals(3L, (context.extras["maxAttempts"] as Number).toLong())
         assertEquals(1000L, context.extras["retryDelayMs"])
     }
 

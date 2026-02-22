@@ -165,13 +165,13 @@ class PendingSyncRepositoryTest {
     fun `dequeue returns oldest pending item`() = runTest {
         val entity = createEntity("session-1")
         coEvery { pendingSyncDao.getOldestPending() } returns entity
-        coEvery { pendingSyncDao.markSyncing("session-1") } just Runs
+        coEvery { pendingSyncDao.markSyncing(any(), any()) } just Runs
 
         val result = repository.dequeue()
 
         assertNotNull(result)
         assertEquals("session-1", result!!.sessionId)
-        coVerify { pendingSyncDao.markSyncing("session-1") }
+        coVerify { pendingSyncDao.markSyncing("session-1", any()) }
     }
 
     @Test
@@ -191,12 +191,12 @@ class PendingSyncRepositoryTest {
             createEntity("session-3")
         )
         coEvery { pendingSyncDao.getPendingBatch(10) } returns entities
-        coEvery { pendingSyncDao.markSyncing(any()) } just Runs
+        coEvery { pendingSyncDao.markSyncing(any(), any()) } just Runs
 
         val result = repository.dequeueBatch(10)
 
         assertEquals(3, result.size)
-        coVerify(exactly = 3) { pendingSyncDao.markSyncing(any()) }
+        coVerify(exactly = 3) { pendingSyncDao.markSyncing(any(), any()) }
     }
 
     @Test
@@ -206,12 +206,12 @@ class PendingSyncRepositoryTest {
             createEntity("session-2")
         )
         coEvery { pendingSyncDao.getPendingBatch(any()) } returns entities
-        coEvery { pendingSyncDao.markSyncing(any()) } just Runs
+        coEvery { pendingSyncDao.markSyncing(any(), any()) } just Runs
 
         repository.dequeueBatch(5)
 
-        coVerify { pendingSyncDao.markSyncing("session-1") }
-        coVerify { pendingSyncDao.markSyncing("session-2") }
+        coVerify { pendingSyncDao.markSyncing("session-1", any()) }
+        coVerify { pendingSyncDao.markSyncing("session-2", any()) }
     }
 
     // ==================== PARSE SESSION TESTS ====================
@@ -269,20 +269,20 @@ class PendingSyncRepositoryTest {
 
     @Test
     fun `markFailed calls dao with error`() = runTest {
-        coEvery { pendingSyncDao.markFailed("session-1", "Network error") } just Runs
+        coEvery { pendingSyncDao.markFailed("session-1", "Network error", any()) } just Runs
 
         repository.markFailed("session-1", "Network error")
 
-        coVerify { pendingSyncDao.markFailed("session-1", "Network error") }
+        coVerify { pendingSyncDao.markFailed("session-1", "Network error", any()) }
     }
 
     @Test
     fun `markFailed handles null error`() = runTest {
-        coEvery { pendingSyncDao.markFailed("session-1", null) } just Runs
+        coEvery { pendingSyncDao.markFailed("session-1", null, any()) } just Runs
 
         repository.markFailed("session-1", null)
 
-        coVerify { pendingSyncDao.markFailed("session-1", null) }
+        coVerify { pendingSyncDao.markFailed("session-1", null, any()) }
     }
 
     // ==================== RESET TESTS ====================

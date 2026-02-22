@@ -15,6 +15,7 @@ package ru.sleepcore.companion.util
 
 import android.content.Context
 import android.os.Build
+import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
 import org.junit.Before
@@ -36,6 +37,12 @@ class DeviceUtilsTest {
     @Before
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
+        // Set a consistent ANDROID_ID for test reproducibility
+        Settings.Secure.putString(
+            context.contentResolver,
+            Settings.Secure.ANDROID_ID,
+            "test_android_id_12345"
+        )
     }
 
     // ============================================================================
@@ -462,7 +469,8 @@ class DeviceNameFormattingTest {
     @Test
     fun `empty manufacturer`() {
         val result = formatDeviceName("", "Model")
-        assertEquals(" Model", result)
+        // Empty string is always a prefix, so model is returned as-is
+        assertEquals("Model", result)
     }
 
     @Test

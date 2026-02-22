@@ -28,6 +28,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.*
@@ -54,8 +55,8 @@ class SessionManagerTest {
     private lateinit var dataStoreFile: File
 
     @Before
-    fun setup() {
-        MockKAnnotations.init(this)
+    fun setup() = kotlinx.coroutines.runBlocking {
+        MockKAnnotations.init(this@SessionManagerTest)
         context = ApplicationProvider.getApplicationContext()
 
         // Clear any existing datastore
@@ -67,6 +68,9 @@ class SessionManagerTest {
 
         sessionManager = SessionManager(context, auditLogger)
         testScope = TestScope(UnconfinedTestDispatcher() + Job())
+
+        // Clear any in-memory session state from previous tests
+        sessionManager.endSession()
     }
 
     @After
@@ -172,6 +176,9 @@ class SessionManagerTest {
 
     @Test
     fun `isSessionExpired returns true when no session exists`() = runTest {
+        // Ensure no session from previous tests (DataStore is cached)
+        sessionManager.endSession()
+
         val isExpired = sessionManager.isSessionExpired()
         assertTrue(isExpired)
     }
@@ -186,6 +193,11 @@ class SessionManagerTest {
 
     @Test
     fun `hasActiveSession returns false when no session exists`() = runTest {
+        // Create and then end a session to ensure known state
+        // (DataStore singleton may have data from previous tests)
+        sessionManager.startSession()
+        sessionManager.endSession()
+
         val hasSession = sessionManager.hasActiveSession()
         assertFalse(hasSession)
     }
@@ -239,6 +251,9 @@ class SessionManagerTest {
 
     @Test
     fun `getRemainingSessionTime returns 0 when no session`() = runTest {
+        // Ensure no session from previous tests (DataStore is cached)
+        sessionManager.endSession()
+
         val remaining = sessionManager.getRemainingSessionTime()
         assertEquals(0L, remaining)
     }
@@ -303,6 +318,10 @@ class SessionManagerTest {
 
     @Test
     fun `checkSessionWithTimeout returns false when no session`() = runTest {
+        // Create and then end a session to ensure known state
+        sessionManager.startSession()
+        sessionManager.endSession()
+
         var timeoutCalled = false
 
         val result = sessionManager.checkSessionWithTimeout {
@@ -315,7 +334,10 @@ class SessionManagerTest {
 
     @Test
     fun `checkSessionWithTimeout calls onTimeout when expired`() = runTest {
-        // No session exists, so it's expired
+        // Create and then end a session to ensure known state
+        sessionManager.startSession()
+        sessionManager.endSession()
+
         var timeoutCalled = false
 
         sessionManager.checkSessionWithTimeout {
@@ -327,6 +349,9 @@ class SessionManagerTest {
 
     @Test
     fun `checkSessionWithTimeout logs timeout event`() = runTest {
+        // Ensure no session from previous tests (DataStore is cached)
+        sessionManager.endSession()
+
         // Clear previous mocks
         clearMocks(auditLogger, answers = false)
         every { auditLogger.logSecurityEvent(any(), any(), any(), any(), any(), any()) } just Runs
@@ -345,10 +370,17 @@ class SessionManagerTest {
 
     @Test
     fun `checkSessionWithTimeout ends session when timed out`() = runTest {
-        // Start then manually expire by checking without session
+        // Ensure no session from previous tests (DataStore is cached)
+        sessionManager.endSession()
+
+        // Clear previous mocks to avoid verifying endSession from above
+        clearMocks(auditLogger, answers = false)
+        every { auditLogger.logSecurityEvent(any(), any(), any(), any(), any(), any()) } just Runs
+
+        // Check session (will timeout since no session)
         sessionManager.checkSessionWithTimeout {}
 
-        // Verify end session was also logged
+        // Verify end session was logged
         verify {
             auditLogger.logSecurityEvent(
                 action = "SESSION_END",
