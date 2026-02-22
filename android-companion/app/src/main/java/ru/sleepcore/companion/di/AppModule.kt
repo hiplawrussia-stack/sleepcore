@@ -29,8 +29,10 @@ import ru.sleepcore.companion.data.local.SleepCoreDatabase
 import ru.sleepcore.companion.data.local.TokenStorage
 import ru.sleepcore.companion.data.local.audit.AuditLogDao
 import ru.sleepcore.companion.data.local.audit.AuditLogger
+import ru.sleepcore.companion.data.local.diary.ManualDiaryDao
 import ru.sleepcore.companion.data.local.sync.PendingSyncDao
 import ru.sleepcore.companion.data.repository.PendingSyncRepository
+import ru.sleepcore.companion.data.SleepCoreRepository
 import ru.sleepcore.companion.health.HealthConnectManager
 import ru.sleepcore.companion.security.BiometricAuthManager
 import ru.sleepcore.companion.security.SessionManager
@@ -163,6 +165,24 @@ object AppModule {
         json: Json
     ): PendingSyncRepository {
         return PendingSyncRepository(pendingSyncDao, json)
+    }
+
+    // ===========================================
+    // Manual Sleep Diary (February 2026)
+    // ===========================================
+
+    @Provides
+    @Singleton
+    fun provideManualDiaryDao(database: SleepCoreDatabase): ManualDiaryDao {
+        return database.manualDiaryDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideSleepCoreRepository(
+        manualDiaryDao: ManualDiaryDao
+    ): SleepCoreRepository {
+        return SleepCoreRepository(manualDiaryDao)
     }
 
     // ===========================================

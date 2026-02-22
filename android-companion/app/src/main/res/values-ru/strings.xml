@@ -154,4 +154,128 @@
     <string name="readiness_good">Хорошая</string>
     <string name="readiness_fair">Средняя</string>
     <string name="readiness_low">Низкая</string>
+
+    <!-- Diagnostics Screen (February 2026) -->
+    <string name="sync_diagnostics">Диагностика</string>
+    <string name="diagnostics_title">Диагностика Health Connect</string>
+    <string name="diagnostics_copied">Отчёт скопирован в буфер обмена</string>
+    <string name="diagnostics_copy_report">Копировать отчёт</string>
+
+    <!-- Diagnostics Status -->
+    <string name="diagnostics_status_ok">Всё в порядке</string>
+    <string name="diagnostics_status_warning">Предупреждение</string>
+    <string name="diagnostics_status_error">Ошибка</string>
+
+    <!-- Diagnostics Sections -->
+    <string name="diagnostics_health_connect">Health Connect</string>
+    <string name="diagnostics_permissions">Разрешения</string>
+    <string name="diagnostics_token">Статус токена</string>
+    <string name="diagnostics_known_issues">Известные проблемы</string>
+    <string name="diagnostics_troubleshooting">Устранение неполадок</string>
+
+    <!-- Health Connect Status -->
+    <string name="diagnostics_hc_status">Статус</string>
+    <string name="diagnostics_hc_version">Версия</string>
+    <string name="diagnostics_hc_available">Доступен</string>
+    <string name="diagnostics_hc_not_installed">Не установлен</string>
+    <string name="diagnostics_hc_update_required">Требуется обновление</string>
+    <string name="diagnostics_feature_background">Фоновое чтение</string>
+    <string name="diagnostics_feature_history">Чтение истории</string>
+    <string name="diagnostics_available">Доступно</string>
+    <string name="diagnostics_not_available">Недоступно</string>
+    <string name="diagnostics_install_hc">Установить Health Connect</string>
+    <string name="diagnostics_update_hc">Обновить Health Connect</string>
+
+    <!-- Token Status -->
+    <string name="diagnostics_token_state">Состояние</string>
+    <string name="diagnostics_token_expires">Истекает</string>
+    <string name="diagnostics_refresh_token">Токен обновления</string>
+    <string name="diagnostics_relink">Переподключить</string>
+
+    <!-- Quick Actions (February 2026) -->
+    <string name="sync_quick_actions">Быстрые действия</string>
+    <string name="sync_setup_guides">Настройка носимых устройств</string>
+    <string name="sync_manual_entry">Ручной дневник сна</string>
+
+    <!-- Setup Guides Screen (February 2026) -->
+    <string name="guides_title">Настройка устройств</string>
+    <string name="guides_intro">Выберите ваше устройство для просмотра инструкций по настройке Health Connect.</string>
+    <string name="guides_detected_device">Обнаруженное устройство</string>
+    <string name="guides_setup_steps">Шаги настройки</string>
+    <string name="guides_limitations">Известные ограничения</string>
+    <string name="guides_alternatives">Альтернативные приложения</string>
+    <string name="guides_sync_delay">Типичная задержка синхронизации: ~%d мин</string>
+    <string name="guides_optional">(Необязательно)</string>
+    <string name="guides_manual_entry_title">Устройство не поддерживается?</string>
+    <string name="guides_manual_entry_description">Если ваше устройство не поддерживает Health Connect, вы можете использовать ручной дневник сна. Он клинически валидирован и может быть даже точнее для КПТ-И терапии.</string>
+    <string name="guides_try_manual_entry">Попробовать ручной ввод</string>
+    <string name="guides_later">Позже</string>
+
+    <!-- Manual Sleep Entry Screen (February 2026) -->
+    <string name="manual_entry_title">Дневник сна</string>
+    <string name="manual_entry_step_timing">Время</string>
+    <string name="manual_entry_step_quality">Качество</string>
+    <string name="manual_entry_step_review">Проверка</string>
+    <string name="manual_entry_sleep_date">Дата сна</string>
+    <string name="manual_entry_confirm">Подтвердить</string>
+    <string name="manual_entry_next">Далее</string>
+    <string name="manual_entry_back">Назад</string>
+    <string name="manual_entry_save">Сохранить запись</string>
+    <string name="manual_entry_tap_to_set">Нажмите для ввода</string>
+
+    <!-- Manual Entry - Timing Step -->
+    <string name="manual_entry_timing_title">Время сна</string>
+    <string name="manual_entry_timing_subtitle">Когда вы легли спать и проснулись?</string>
+    <string name="manual_entry_bed_time">Время отхода ко сну</string>
+    <string name="manual_entry_bed_time_desc">Во сколько вы легли в постель?</string>
+    <string name="manual_entry_try_sleep_time">Попытка уснуть</string>
+    <string name="manual_entry_try_sleep_time_desc">Во сколько вы попытались уснуть?</string>
+    <string name="manual_entry_final_wake_time">Окончательное пробуждение</string>
+    <string name="manual_entry_final_wake_time_desc">Во сколько было ваше последнее пробуждение?</string>
+    <string name="manual_entry_out_of_bed_time">Подъём с постели</string>
+    <string name="manual_entry_out_of_bed_time_desc">Во сколько вы встали с постели?</string>
+
+    <!-- Manual Entry - Quality Step -->
+    <string name="manual_entry_quality_title">Качество сна</string>
+    <string name="manual_entry_quality_subtitle">Как бы вы оценили свой сон?</string>
+    <string name="manual_entry_quality_rating">Общее качество сна</string>
+    <string name="manual_entry_quality_very_poor">Очень плохо</string>
+    <string name="manual_entry_quality_poor">Плохо</string>
+    <string name="manual_entry_quality_fair">Средне</string>
+    <string name="manual_entry_quality_good">Хорошо</string>
+    <string name="manual_entry_quality_very_good">Очень хорошо</string>
+    <string name="manual_entry_show_advanced">Показать дополнительные поля</string>
+    <string name="manual_entry_hide_advanced">Скрыть дополнительные поля</string>
+    <string name="manual_entry_sol">Латентность засыпания</string>
+    <string name="manual_entry_sol_desc">Сколько времени вам потребовалось, чтобы уснуть?</string>
+    <string name="manual_entry_nwak">Количество пробуждений</string>
+    <string name="manual_entry_nwak_desc">Сколько раз вы просыпались ночью?</string>
+    <string name="manual_entry_waso">Время бодрствования ночью</string>
+    <string name="manual_entry_waso_desc">Общее время бодрствования ночью (без финального пробуждения)?</string>
+    <string name="manual_entry_minutes">мин</string>
+    <string name="manual_entry_times">раз</string>
+    <string name="manual_entry_comments">Комментарии</string>
+    <string name="manual_entry_comments_placeholder">Заметки о вашем сне (необязательно)</string>
+
+    <!-- Manual Entry - Review Step -->
+    <string name="manual_entry_review_title">Проверка записи</string>
+    <string name="manual_entry_review_subtitle">Проверьте данные о сне перед сохранением.</string>
+    <string name="manual_entry_sol_short">Латентность</string>
+    <string name="manual_entry_waso_short">Бодрствование</string>
+    <string name="manual_entry_quality_label">Качество</string>
+    <string name="manual_entry_calculated_metrics">Рассчитанные метрики</string>
+    <string name="manual_entry_tst">Общее время сна</string>
+    <string name="manual_entry_se">Эффективность сна</string>
+
+    <!-- Manual Entry - Validation -->
+    <string name="manual_entry_error_bed_time_required">Укажите время отхода ко сну</string>
+    <string name="manual_entry_error_out_of_bed_required">Укажите время подъёма с постели</string>
+    <string name="manual_entry_error_quality_required">Укажите оценку качества сна</string>
+    <string name="manual_entry_error_try_sleep_before_bed">Попытка уснуть не может быть раньше отхода ко сну</string>
+    <string name="manual_entry_error_sol_negative">Латентность засыпания не может быть отрицательной</string>
+    <string name="manual_entry_error_waso_negative">Время бодрствования не может быть отрицательным</string>
+    <string name="manual_entry_error_nwak_negative">Количество пробуждений не может быть отрицательным</string>
+    <string name="manual_entry_warning_tib_short">Время в постели менее 5 часов. Это может повлиять на терапию.</string>
+    <string name="manual_entry_warning_tib_long">Время в постели превышает 12 часов. Проверьте введённые данные.</string>
+    <string name="manual_entry_warning_sol_high">Латентность засыпания более 5 часов кажется необычной. Проверьте данные.</string>
 </resources>

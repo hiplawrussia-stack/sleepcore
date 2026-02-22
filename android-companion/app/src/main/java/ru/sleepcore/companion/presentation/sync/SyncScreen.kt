@@ -38,6 +38,9 @@ import java.time.format.FormatStyle
 @Composable
 fun SyncScreen(
     onUnlinked: () -> Unit,
+    onNavigateToDiagnostics: () -> Unit = {},
+    onNavigateToSetupGuides: () -> Unit = {},
+    onNavigateToManualEntry: () -> Unit = {},
     viewModel: SyncViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -456,6 +459,72 @@ fun SyncScreen(
                         checked = uiState.backgroundSyncEnabled,
                         onCheckedChange = { viewModel.toggleBackgroundSync(it) }
                     )
+                }
+            }
+
+            // Quick Actions (February 2026)
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = stringResource(R.string.sync_quick_actions),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Setup Guides button
+                    OutlinedButton(
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            onNavigateToSetupGuides()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Watch,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.sync_setup_guides))
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Manual Entry button
+                    OutlinedButton(
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            onNavigateToManualEntry()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.sync_manual_entry))
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Diagnostics button
+                    TextButton(
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            onNavigateToDiagnostics()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BugReport,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.sync_diagnostics))
+                    }
                 }
             }
         }

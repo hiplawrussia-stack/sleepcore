@@ -140,4 +140,128 @@
     <string name="readiness_good">Good</string>
     <string name="readiness_fair">Fair</string>
     <string name="readiness_low">Low</string>
+
+    <!-- Diagnostics Screen (February 2026) -->
+    <string name="sync_diagnostics">Diagnostics</string>
+    <string name="diagnostics_title">Health Connect Diagnostics</string>
+    <string name="diagnostics_copied">Diagnostic report copied to clipboard</string>
+    <string name="diagnostics_copy_report">Copy Diagnostic Report</string>
+
+    <!-- Diagnostics Status -->
+    <string name="diagnostics_status_ok">All Systems OK</string>
+    <string name="diagnostics_status_warning">Warning</string>
+    <string name="diagnostics_status_error">Error</string>
+
+    <!-- Diagnostics Sections -->
+    <string name="diagnostics_health_connect">Health Connect</string>
+    <string name="diagnostics_permissions">Permissions</string>
+    <string name="diagnostics_token">Token Status</string>
+    <string name="diagnostics_known_issues">Known Issues</string>
+    <string name="diagnostics_troubleshooting">Troubleshooting</string>
+
+    <!-- Health Connect Status -->
+    <string name="diagnostics_hc_status">Status</string>
+    <string name="diagnostics_hc_version">Version</string>
+    <string name="diagnostics_hc_available">Available</string>
+    <string name="diagnostics_hc_not_installed">Not Installed</string>
+    <string name="diagnostics_hc_update_required">Update Required</string>
+    <string name="diagnostics_feature_background">Background Read</string>
+    <string name="diagnostics_feature_history">History Read</string>
+    <string name="diagnostics_available">Available</string>
+    <string name="diagnostics_not_available">Not Available</string>
+    <string name="diagnostics_install_hc">Install Health Connect</string>
+    <string name="diagnostics_update_hc">Update Health Connect</string>
+
+    <!-- Token Status -->
+    <string name="diagnostics_token_state">State</string>
+    <string name="diagnostics_token_expires">Expires</string>
+    <string name="diagnostics_refresh_token">Refresh Token</string>
+    <string name="diagnostics_relink">Re-link Device</string>
+
+    <!-- Quick Actions (February 2026) -->
+    <string name="sync_quick_actions">Quick Actions</string>
+    <string name="sync_setup_guides">Wearable Setup Guides</string>
+    <string name="sync_manual_entry">Manual Sleep Diary</string>
+
+    <!-- Setup Guides Screen (February 2026) -->
+    <string name="guides_title">Wearable Setup</string>
+    <string name="guides_intro">Select your wearable device to see Health Connect setup instructions.</string>
+    <string name="guides_detected_device">Detected Device</string>
+    <string name="guides_setup_steps">Setup Steps</string>
+    <string name="guides_limitations">Known Limitations</string>
+    <string name="guides_alternatives">Alternative Apps</string>
+    <string name="guides_sync_delay">Typical sync delay: ~%d minutes</string>
+    <string name="guides_optional">(Optional)</string>
+    <string name="guides_manual_entry_title">Device Not Supported?</string>
+    <string name="guides_manual_entry_description">If your device doesn\'t support Health Connect, you can use our manual sleep diary. It\'s clinically validated and may be even more accurate for CBT-I therapy.</string>
+    <string name="guides_try_manual_entry">Try Manual Entry</string>
+    <string name="guides_later">Later</string>
+
+    <!-- Manual Sleep Entry Screen (February 2026) -->
+    <string name="manual_entry_title">Sleep Diary</string>
+    <string name="manual_entry_step_timing">Timing</string>
+    <string name="manual_entry_step_quality">Quality</string>
+    <string name="manual_entry_step_review">Review</string>
+    <string name="manual_entry_sleep_date">Sleep Date</string>
+    <string name="manual_entry_confirm">Confirm</string>
+    <string name="manual_entry_next">Next</string>
+    <string name="manual_entry_back">Back</string>
+    <string name="manual_entry_save">Save Entry</string>
+    <string name="manual_entry_tap_to_set">Tap to set</string>
+
+    <!-- Manual Entry - Timing Step -->
+    <string name="manual_entry_timing_title">Sleep Timing</string>
+    <string name="manual_entry_timing_subtitle">When did you go to bed and wake up?</string>
+    <string name="manual_entry_bed_time">Bed Time</string>
+    <string name="manual_entry_bed_time_desc">What time did you get into bed?</string>
+    <string name="manual_entry_try_sleep_time">Try to Sleep</string>
+    <string name="manual_entry_try_sleep_time_desc">What time did you try to go to sleep?</string>
+    <string name="manual_entry_final_wake_time">Final Wake</string>
+    <string name="manual_entry_final_wake_time_desc">What time was your final awakening?</string>
+    <string name="manual_entry_out_of_bed_time">Out of Bed</string>
+    <string name="manual_entry_out_of_bed_time_desc">What time did you get out of bed?</string>
+
+    <!-- Manual Entry - Quality Step -->
+    <string name="manual_entry_quality_title">Sleep Quality</string>
+    <string name="manual_entry_quality_subtitle">How would you rate your sleep?</string>
+    <string name="manual_entry_quality_rating">Overall Sleep Quality</string>
+    <string name="manual_entry_quality_very_poor">Very Poor</string>
+    <string name="manual_entry_quality_poor">Poor</string>
+    <string name="manual_entry_quality_fair">Fair</string>
+    <string name="manual_entry_quality_good">Good</string>
+    <string name="manual_entry_quality_very_good">Very Good</string>
+    <string name="manual_entry_show_advanced">Show Advanced Fields</string>
+    <string name="manual_entry_hide_advanced">Hide Advanced Fields</string>
+    <string name="manual_entry_sol">Sleep Onset Latency</string>
+    <string name="manual_entry_sol_desc">How long did it take to fall asleep?</string>
+    <string name="manual_entry_nwak">Number of Awakenings</string>
+    <string name="manual_entry_nwak_desc">How many times did you wake up during the night?</string>
+    <string name="manual_entry_waso">Wake After Sleep Onset</string>
+    <string name="manual_entry_waso_desc">Total time awake during the night (excluding final wake)?</string>
+    <string name="manual_entry_minutes">min</string>
+    <string name="manual_entry_times">times</string>
+    <string name="manual_entry_comments">Comments</string>
+    <string name="manual_entry_comments_placeholder">Any notes about your sleep? (optional)</string>
+
+    <!-- Manual Entry - Review Step -->
+    <string name="manual_entry_review_title">Review Entry</string>
+    <string name="manual_entry_review_subtitle">Check your sleep data before saving.</string>
+    <string name="manual_entry_sol_short">Sleep Latency</string>
+    <string name="manual_entry_waso_short">Time Awake</string>
+    <string name="manual_entry_quality_label">Quality</string>
+    <string name="manual_entry_calculated_metrics">Calculated Metrics</string>
+    <string name="manual_entry_tst">Total Sleep Time</string>
+    <string name="manual_entry_se">Sleep Efficiency</string>
+
+    <!-- Manual Entry - Validation -->
+    <string name="manual_entry_error_bed_time_required">Bed time is required</string>
+    <string name="manual_entry_error_out_of_bed_required">Out of bed time is required</string>
+    <string name="manual_entry_error_quality_required">Sleep quality rating is required</string>
+    <string name="manual_entry_error_try_sleep_before_bed">Try to sleep time cannot be before bed time</string>
+    <string name="manual_entry_error_sol_negative">Sleep onset latency cannot be negative</string>
+    <string name="manual_entry_error_waso_negative">Wake time cannot be negative</string>
+    <string name="manual_entry_error_nwak_negative">Number of awakenings cannot be negative</string>
+    <string name="manual_entry_warning_tib_short">Time in bed is less than 5 hours. This may affect your therapy.</string>
+    <string name="manual_entry_warning_tib_long">Time in bed exceeds 12 hours. Please verify your times.</string>
+    <string name="manual_entry_warning_sol_high">Sleep onset latency over 5 hours seems unusual. Please verify.</string>
 </resources>

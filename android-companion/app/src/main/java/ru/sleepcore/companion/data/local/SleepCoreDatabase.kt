@@ -38,24 +38,29 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import ru.sleepcore.companion.data.local.audit.AuditLogDao
 import ru.sleepcore.companion.data.local.audit.AuditLogEntity
+import ru.sleepcore.companion.data.local.diary.ManualDiaryDao
+import ru.sleepcore.companion.data.local.diary.ManualDiaryEntity
 import ru.sleepcore.companion.data.local.sync.PendingSyncDao
 import ru.sleepcore.companion.data.local.sync.PendingSyncEntity
 
 @Database(
     entities = [
         AuditLogEntity::class,
-        PendingSyncEntity::class
+        PendingSyncEntity::class,
+        ManualDiaryEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,  // Required for migrations
     autoMigrations = [
-        AutoMigration(from = 1, to = 2)
+        AutoMigration(from = 1, to = 2),
+        AutoMigration(from = 2, to = 3)
     ]
 )
 abstract class SleepCoreDatabase : RoomDatabase() {
 
     abstract fun auditLogDao(): AuditLogDao
     abstract fun pendingSyncDao(): PendingSyncDao
+    abstract fun manualDiaryDao(): ManualDiaryDao
 
     companion object {
         const val DATABASE_NAME = "sleepcore.db"
@@ -93,6 +98,41 @@ abstract class SleepCoreDatabase : RoomDatabase() {
         }
 
         /**
+         * Manual migration from v2 to v3
+         * Adds manual_diary table for CSD entries (February 2026)
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `manual_diary` (
+                        `date` TEXT NOT NULL PRIMARY KEY,
+                        `bed_time` TEXT,
+                        `try_to_sleep_time` TEXT,
+                        `final_wake_time` TEXT,
+                        `out_of_bed_time` TEXT,
+                        `sleep_onset_latency` INTEGER,
+                        `number_of_awakenings` INTEGER,
+                        `wake_after_sleep_onset` INTEGER,
+                        `sleep_quality` INTEGER,
+                        `comments` TEXT,
+                        `total_sleep_time` INTEGER,
+                        `time_in_bed` INTEGER,
+                        `sleep_efficiency` INTEGER,
+                        `sync_status` TEXT NOT NULL DEFAULT 'PENDING',
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        `synced_at` INTEGER,
+                        `sync_error` TEXT
+                    )
+                """.trimIndent())
+
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_manual_diary_date` ON `manual_diary` (`date`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_manual_diary_sync_status` ON `manual_diary` (`sync_status`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_manual_diary_created_at` ON `manual_diary` (`created_at`)")
+            }
+        }
+
+        /**
          * Get singleton database instance
          *
          * Note: In production, consider using SQLCipher for encryption:
@@ -115,8 +155,8 @@ abstract class SleepCoreDatabase : RoomDatabase() {
                 SleepCoreDatabase::class.java,
                 DATABASE_NAME
             )
-                // Fallback migration in case AutoMigration fails
-                .addMigrations(MIGRATION_1_2)
+                // Fallback migrations in case AutoMigration fails
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 // Do NOT use fallbackToDestructiveMigration() - audit logs must persist
                 // .fallbackToDestructiveMigration() // NEVER for HIPAA compliance
                 .build()
