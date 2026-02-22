@@ -8,7 +8,6 @@ package ru.sleepcore.companion.data.repository
 
 import io.mockk.*
 import io.mockk.impl.annotations.MockK
-import io.sentry.Sentry
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -22,6 +21,7 @@ import ru.sleepcore.companion.data.local.TokenStorage
 import ru.sleepcore.companion.data.local.audit.AuditLogger
 import ru.sleepcore.companion.domain.model.*
 import ru.sleepcore.companion.health.HealthConnectManager
+import ru.sleepcore.companion.util.ErrorLogger
 import java.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -48,9 +48,12 @@ class SleepRepositoryTest {
     fun setup() {
         MockKAnnotations.init(this)
 
-        // Mock Sentry to prevent RuntimeException in ErrorLogger
-        mockkStatic(Sentry::class)
-        every { Sentry.isEnabled() } returns false
+        // Mock ErrorLogger to prevent android.util.Log calls
+        mockkObject(ErrorLogger)
+        every { ErrorLogger.log(any(), any(), any(), any()) } just Runs
+        every { ErrorLogger.logSync(any(), any(), any(), any(), any(), any()) } just Runs
+        every { ErrorLogger.logNetworkError(any(), any(), any(), any(), any(), any()) } just Runs
+        every { ErrorLogger.logTokenRefresh(any(), any()) } just Runs
 
         repository = SleepRepository(
             api,
@@ -63,7 +66,7 @@ class SleepRepositoryTest {
 
     @After
     fun teardown() {
-        unmockkStatic(Sentry::class)
+        unmockkObject(ErrorLogger)
     }
 
     // ========== Link Device Tests ==========

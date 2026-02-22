@@ -9,7 +9,6 @@ package ru.sleepcore.companion.presentation.sync
 import app.cash.turbine.test
 import io.mockk.*
 import io.mockk.impl.annotations.MockK
-import io.sentry.Sentry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
@@ -23,6 +22,7 @@ import ru.sleepcore.companion.data.repository.SleepRepository
 import ru.sleepcore.companion.domain.model.*
 import ru.sleepcore.companion.health.HealthConnectManager
 import ru.sleepcore.companion.health.HealthConnectPermissions
+import ru.sleepcore.companion.util.ErrorLogger
 import java.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -46,9 +46,10 @@ class SyncViewModelTest {
         MockKAnnotations.init(this)
         Dispatchers.setMain(testDispatcher)
 
-        // Mock Sentry to prevent RuntimeException in ErrorLogger
-        mockkStatic(Sentry::class)
-        every { Sentry.isEnabled() } returns false
+        // Mock ErrorLogger to prevent android.util.Log calls
+        mockkObject(ErrorLogger)
+        every { ErrorLogger.log(any(), any(), any(), any()) } just Runs
+        every { ErrorLogger.logSync(any(), any(), any(), any(), any(), any()) } just Runs
 
         // Default mocks
         every { sleepRepository.getCredentials() } returns null
@@ -67,7 +68,7 @@ class SyncViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
-        unmockkStatic(Sentry::class)
+        unmockkObject(ErrorLogger)
         unmockkAll()
     }
 

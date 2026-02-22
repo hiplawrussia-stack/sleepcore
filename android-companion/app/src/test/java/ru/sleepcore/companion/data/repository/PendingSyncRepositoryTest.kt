@@ -17,7 +17,6 @@ package ru.sleepcore.companion.data.repository
 
 import io.mockk.*
 import io.mockk.impl.annotations.MockK
-import io.sentry.Sentry
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
@@ -31,6 +30,7 @@ import ru.sleepcore.companion.data.api.SleepSessionDto
 import ru.sleepcore.companion.data.local.sync.PendingSyncDao
 import ru.sleepcore.companion.data.local.sync.PendingSyncEntity
 import ru.sleepcore.companion.data.local.sync.PendingSyncStatus
+import ru.sleepcore.companion.util.ErrorLogger
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PendingSyncRepositoryTest {
@@ -45,9 +45,9 @@ class PendingSyncRepositoryTest {
     fun setup() {
         MockKAnnotations.init(this)
 
-        // Mock Sentry to prevent RuntimeException in ErrorLogger
-        mockkStatic(Sentry::class)
-        every { Sentry.isEnabled() } returns false
+        // Mock ErrorLogger to prevent android.util.Log calls
+        mockkObject(ErrorLogger)
+        every { ErrorLogger.log(any(), any(), any(), any()) } just Runs
 
         json = Json {
             ignoreUnknownKeys = true
@@ -58,7 +58,7 @@ class PendingSyncRepositoryTest {
 
     @After
     fun teardown() {
-        unmockkStatic(Sentry::class)
+        unmockkObject(ErrorLogger)
     }
 
     // ==================== ENQUEUE TESTS ====================

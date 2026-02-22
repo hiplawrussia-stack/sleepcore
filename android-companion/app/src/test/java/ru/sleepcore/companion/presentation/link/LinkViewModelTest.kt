@@ -9,7 +9,6 @@ package ru.sleepcore.companion.presentation.link
 import app.cash.turbine.test
 import io.mockk.*
 import io.mockk.impl.annotations.MockK
-import io.sentry.Sentry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
@@ -24,6 +23,7 @@ import ru.sleepcore.companion.domain.model.LinkResult
 import ru.sleepcore.companion.domain.model.LinkedUser
 import ru.sleepcore.companion.health.HealthConnectAvailability
 import ru.sleepcore.companion.health.HealthConnectManager
+import ru.sleepcore.companion.util.ErrorLogger
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LinkViewModelTest {
@@ -43,9 +43,9 @@ class LinkViewModelTest {
         MockKAnnotations.init(this)
         Dispatchers.setMain(testDispatcher)
 
-        // Mock Sentry to prevent RuntimeException in ErrorLogger
-        mockkStatic(Sentry::class)
-        every { Sentry.isEnabled() } returns false
+        // Mock ErrorLogger to prevent android.util.Log calls
+        mockkObject(ErrorLogger)
+        every { ErrorLogger.log(any(), any(), any(), any()) } just Runs
 
         every { healthConnectManager.checkAvailability() } returns HealthConnectAvailability.Available
 
@@ -55,7 +55,7 @@ class LinkViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
-        unmockkStatic(Sentry::class)
+        unmockkObject(ErrorLogger)
         unmockkAll()
     }
 
