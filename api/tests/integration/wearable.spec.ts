@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createApp } from '../../src/app.js';
-import { generateDeviceToken } from '../../src/utils/wearable-auth.js';
+import { generateDeviceToken, generateTokenPair } from '../../src/utils/wearable-auth.js';
 
 const TEST_BOT_TOKEN = '1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh';
 const TEST_JWT_SECRET = 'test-jwt-secret-key-1234567890abcdef';
@@ -16,6 +16,7 @@ let mockUsers = new Map<string, any>();
 let mockDevices = new Map<string, any>();
 let mockSessions = new Map<string, any>();
 let mockSyncLogs = new Map<string, any>();
+let mockLinkCodes = new Map<string, any>();
 
 // Mock the database module
 vi.mock('../../src/db/index.js', () => {
@@ -51,6 +52,13 @@ vi.mock('../../src/db/index.js', () => {
         },
         wearableSyncLog: {
           findMany: vi.fn(async () => Array.from(mockSyncLogs.values())),
+        },
+        wearableLinkCodes: {
+          findFirst: vi.fn(async ({ where }: any) => {
+            // Return undefined for all lookups - simulates invalid/not found codes
+            // This triggers proper 400 responses in the route handlers
+            return undefined;
+          }),
         },
       },
       insert: vi.fn(() => ({
@@ -105,6 +113,18 @@ vi.mock('../../src/db/index.js', () => {
       deviceId: 'deviceId',
       syncStartedAt: 'syncStartedAt',
     },
+    wearableLinkCodes: {
+      $inferSelect: {} as any,
+      id: 'id',
+      userId: 'userId',
+      telegramId: 'telegramId',
+      userCode: 'userCode',
+      deviceCode: 'deviceCode',
+      expiresAt: 'expiresAt',
+      usedAt: 'usedAt',
+      attempts: 'attempts',
+      lastAttemptAt: 'lastAttemptAt',
+    },
     isDatabaseHealthy: vi.fn(() => true),
   };
 });
@@ -120,6 +140,7 @@ describe('Wearable Routes', () => {
     mockDevices.clear();
     mockSessions.clear();
     mockSyncLogs.clear();
+    mockLinkCodes.clear();
     vi.clearAllMocks();
   });
 
@@ -409,14 +430,20 @@ describe('Sleep Metrics Calculation', () => {
   // These tests verify the sync endpoint processes sleep data correctly
   // by checking the validation of incoming data
 
+  beforeEach(() => {
+    mockDevices.clear();
+    mockSessions.clear();
+    vi.clearAllMocks();
+  });
+
   it('should validate sleep session schema', async () => {
     const app = createApp({
       botToken: TEST_BOT_TOKEN,
       jwtSecret: TEST_JWT_SECRET,
     });
 
-    // Generate a valid device token for testing
-    const tokenResult = await generateDeviceToken(
+    // Generate a valid access token for testing (using new token pair API)
+    const tokenResult = await generateTokenPair(
       {
         deviceId: 'test-device',
         userId: 'test-user',
@@ -425,7 +452,7 @@ describe('Sleep Metrics Calculation', () => {
       TEST_JWT_SECRET
     );
 
-    // Add mock device to pass auth
+    // Add mock device to pass auth (must include accessToken for validation)
     mockDevices.set('test-device', {
       id: 'test-device-id',
       deviceId: 'test-device',
@@ -433,13 +460,14 @@ describe('Sleep Metrics Calculation', () => {
       telegramId: 123456789,
       isActive: true,
       linkedAt: new Date().toISOString(),
+      accessToken: tokenResult.accessToken,
     });
 
     const res = await app.request('/api/wearable/sync', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${tokenResult.token}`,
+        Authorization: `Bearer ${tokenResult.accessToken}`,
       },
       body: JSON.stringify({
         syncType: 'manual',
@@ -479,7 +507,7 @@ describe('Sleep Metrics Calculation', () => {
       jwtSecret: TEST_JWT_SECRET,
     });
 
-    const tokenResult = await generateDeviceToken(
+    const tokenResult = await generateTokenPair(
       {
         deviceId: 'test-device-2',
         userId: 'test-user',
@@ -495,13 +523,14 @@ describe('Sleep Metrics Calculation', () => {
       telegramId: 123456789,
       isActive: true,
       linkedAt: new Date().toISOString(),
+      accessToken: tokenResult.accessToken,
     });
 
     const res = await app.request('/api/wearable/sync', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${tokenResult.token}`,
+        Authorization: `Bearer ${tokenResult.accessToken}`,
       },
       body: JSON.stringify({
         syncType: 'background',
@@ -528,7 +557,7 @@ describe('Sleep Metrics Calculation', () => {
       jwtSecret: TEST_JWT_SECRET,
     });
 
-    const tokenResult = await generateDeviceToken(
+    const tokenResult = await generateTokenPair(
       {
         deviceId: 'test-device-3',
         userId: 'test-user',
@@ -544,13 +573,14 @@ describe('Sleep Metrics Calculation', () => {
       telegramId: 123456789,
       isActive: true,
       linkedAt: new Date().toISOString(),
+      accessToken: tokenResult.accessToken,
     });
 
     const res = await app.request('/api/wearable/sync', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${tokenResult.token}`,
+        Authorization: `Bearer ${tokenResult.accessToken}`,
       },
       body: JSON.stringify({
         syncType: 'manual',
@@ -572,7 +602,7 @@ describe('Sleep Metrics Calculation', () => {
       jwtSecret: TEST_JWT_SECRET,
     });
 
-    const tokenResult = await generateDeviceToken(
+    const tokenResult = await generateTokenPair(
       {
         deviceId: 'test-device-4',
         userId: 'test-user',
@@ -588,13 +618,14 @@ describe('Sleep Metrics Calculation', () => {
       telegramId: 123456789,
       isActive: true,
       linkedAt: new Date().toISOString(),
+      accessToken: tokenResult.accessToken,
     });
 
     const res = await app.request('/api/wearable/sync', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${tokenResult.token}`,
+        Authorization: `Bearer ${tokenResult.accessToken}`,
       },
       body: JSON.stringify({
         syncType: 'manual',
