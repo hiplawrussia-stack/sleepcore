@@ -30,16 +30,16 @@ class SleepRepositoryTest {
     @MockK
     private lateinit var api: SleepCoreApi
 
-    @MockK
+    @MockK(relaxUnitFun = true)
     private lateinit var tokenStorage: TokenStorage
 
     @MockK
     private lateinit var healthConnectManager: HealthConnectManager
 
-    @MockK
+    @MockK(relaxUnitFun = true)
     private lateinit var auditLogger: AuditLogger
 
-    @MockK
+    @MockK(relaxUnitFun = true)
     private lateinit var pendingSyncRepository: PendingSyncRepository
 
     private lateinit var repository: SleepRepository

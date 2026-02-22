@@ -35,7 +35,7 @@ import ru.sleepcore.companion.util.ErrorLogger
 @OptIn(ExperimentalCoroutinesApi::class)
 class PendingSyncRepositoryTest {
 
-    @MockK
+    @MockK(relaxUnitFun = true)
     private lateinit var pendingSyncDao: PendingSyncDao
 
     private lateinit var json: Json
