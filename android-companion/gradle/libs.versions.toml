@@ -47,9 +47,10 @@ room = "2.6.1"
 tink = "1.15.0"
 
 # Sentry - Crash reporting & performance monitoring (HIPAA BAA available)
-# Latest stable: 6.1.0 (Feb 2026)
-# Source: github.com/getsentry/sentry-android-gradle-plugin/releases
-sentry = "6.1.0"
+# Gradle Plugin: 6.1.0 (Feb 2026) - github.com/getsentry/sentry-android-gradle-plugin/releases
+# SDK: 8.16.0 (Feb 2026) - search.maven.org/artifact/io.sentry/sentry-android
+sentryPlugin = "6.1.0"
+sentrySdk = "8.16.0"
 
 # Biometric - HIPAA-compliant authentication
 biometric = "1.2.0-alpha05"
@@ -122,8 +123,8 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
 # Sentry - Crash reporting & performance monitoring
-sentry-android = { group = "io.sentry", name = "sentry-android", version.ref = "sentry" }
-sentry-compose = { group = "io.sentry", name = "sentry-compose-android", version.ref = "sentry" }
+sentry-android = { group = "io.sentry", name = "sentry-android", version.ref = "sentrySdk" }
+sentry-compose = { group = "io.sentry", name = "sentry-compose-android", version.ref = "sentrySdk" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -147,4 +148,4 @@ kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-sentry = { id = "io.sentry.android.gradle", version.ref = "sentry" }
+sentry = { id = "io.sentry.android.gradle", version.ref = "sentryPlugin" }
