@@ -170,7 +170,11 @@ object RetryHelper {
 
         // Add jitter (±jitterFactor)
         val jitterRange = cappedDelay * config.jitterFactor
-        val jitter = Random.nextDouble(-jitterRange, jitterRange)
+        val jitter = if (jitterRange > 0) {
+            Random.nextDouble(-jitterRange, jitterRange)
+        } else {
+            0.0
+        }
 
         return (cappedDelay + jitter).toLong().coerceAtLeast(0)
     }

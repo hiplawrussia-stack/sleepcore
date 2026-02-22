@@ -62,8 +62,8 @@ class SessionManagerTest {
         dataStoreFile = context.preferencesDataStoreFile("session")
         dataStoreFile.delete()
 
-        // Mock audit logger
-        every { auditLogger.logSecurityEvent(any(), any(), any(), any(), any(), any()) } just Runs
+        // Mock audit logger (7 parameters: action, outcome, userId, resource, details, errorMessage, source)
+        every { auditLogger.logSecurityEvent(any(), any(), any(), any(), any(), any(), any()) } just Runs
 
         sessionManager = SessionManager(context, auditLogger)
         testScope = TestScope(UnconfinedTestDispatcher() + Job())
