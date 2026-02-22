@@ -224,7 +224,7 @@ tasks.register<JacocoReport>("jacocoTestReport") {
     val fileFilter = listOf(
         // Android generated
         "**/R.class",
-        "**/R$*.class",
+        "**/R\$*.class",
         "**/BuildConfig.*",
         "**/Manifest*.*",
         // Hilt generated
@@ -237,7 +237,7 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         "**/*_Impl*",
         "**/*Dao_Impl*",
         // Data classes (Kotlin)
-        "**/*$Creator*",
+        "**/*\$Creator*",
         // Compose generated
         "**/ComposableSingletons*"
     )
@@ -284,7 +284,7 @@ tasks.register<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
 
     val fileFilter = listOf(
         "**/R.class",
-        "**/R$*.class",
+        "**/R\$*.class",
         "**/BuildConfig.*",
         "**/*_HiltModules*",
         "**/*_Factory*",
