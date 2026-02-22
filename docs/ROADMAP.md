@@ -1,8 +1,8 @@
 # SleepCore Unified Roadmap
 
-**Version**: 4.1
+**Version**: 4.3
 **Updated**: 2026-02-22
-**Status**: Active Development — Strategic Pivot
+**Status**: Active Development — Wearable Strategy Phase 1 ✅
 
 ---
 
@@ -388,6 +388,149 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Wearable Strategy Roadmap (2026-2027)
+
+**Проблемы (выявлены 2026-02-22):**
+1. Token истекает через ~1 час после линковки с Telegram
+2. Samsung Health ↔ Health Connect не синхронизирует (известный баг)
+3. Проблема затрагивает ВСЕХ производителей, не только Samsung
+
+**Исследование:** Полный обход приложений производителей невозможен для закрытых устройств
+из-за проприетарных BLE-протоколов. Но есть альтернативные пути.
+
+#### Фаза 1: Критические исправления (Q1 2026) ✅ COMPLETE
+
+| Задача | Описание | Статус |
+|--------|----------|--------|
+| **Fix Token Refresh** | Access: 24ч, Refresh: 30 дней, Silent refresh | ✅ Done |
+| **Health Connect Diagnostics** | Экран диагностики в Android app | ✅ Done |
+| **Инструкции по производителям** | Samsung, Garmin, Xiaomi, Fitbit guides | ✅ Done |
+| **Fallback на ручной ввод** | Consensus Sleep Diary (CSD) ручной ввод | ✅ Done |
+
+#### Фаза 2: Multi-Device Support (Q2 2026) 🟡
+
+| Задача | Описание | Приоритет |
+|--------|----------|-----------|
+| **Open Wearables API** | MIT-licensed, 200+ устройств, self-hosted | 🟡 High |
+| **Colmi R02 Ring** | $20, прямой BLE, open-source, PPG/SpO2 | 🟡 High |
+| **Multi-device fusion** | Объединение данных с нескольких устройств | 🟡 High |
+| **Gadgetbridge интеграция** | Mi Band, Amazfit без облака | 🟢 Medium |
+
+#### Фаза 3: Standards & Compliance (Q3 2026) 🟡
+
+| Задача | Описание | Приоритет |
+|--------|----------|-----------|
+| **FHIR Export** | Стандартный формат для клиник/врачей (EHDS) | 🟡 High |
+| **EU Data Act подготовка** | Сентябрь 2025: производители ОБЯЗАНЫ открыть API | 🟡 High |
+| **IEEE 11073 PHD support** | Медицинские устройства стандарт | 🟢 Medium |
+| **Offline-first sync** | Работа без интернета, очередь синхронизации | 🟡 High |
+
+#### Фаза 4: Open Hardware (Q4 2026) 🟢
+
+| Задача | Описание | Приоритет |
+|--------|----------|-----------|
+| **PineTime/InfiniTime** | $27 open-source часы, полный контроль | 🟢 Medium |
+| **Bangle.js integration** | JavaScript-программируемые часы | 🟢 Medium |
+| **Open Ring support** | MIT-licensed smart ring, research-grade | 🟢 Medium |
+
+#### Фаза 5: iOS & Advanced (2027) 🟢
+
+| Задача | Описание | Приоритет |
+|--------|----------|-----------|
+| **iOS Companion App** | HealthKit интеграция для iPhone | 🟡 High |
+| **Federated Learning** | ML на устройстве, без централизации PHI | 🟢 Medium |
+| **Real-time streaming** | Continuous data от часов | 🟢 Medium |
+
+#### Фаза 6: Future Tech (2027+) 🔮
+
+| Задача | Описание | Приоритет |
+|--------|----------|-----------|
+| **Blockchain consent (ZKP)** | Zero-Knowledge Proofs для privacy | 🟢 Low |
+| **Self-sovereign identity** | DID — пользователь владеет данными | 🟢 Low |
+| **Custom firmware** | Собственная прошивка для партнёров | 🟢 Low |
+
+#### Визуализация стратегии
+
+```
+2026 Q1          Q2              Q3              Q4          2027
+  │               │               │               │
+  ▼               ▼               ▼               ▼
+┌─────────────────┐
+│ 🔴 CRITICAL     │
+│ Token Refresh   │
+│ Diagnostics     │
+│ Producer Guides │
+└────────┬────────┘
+         │
+         ▼
+      ┌──────────────────┐
+      │ 🟡 MULTI-DEVICE  │
+      │ Open Wearables   │
+      │ Colmi R02        │
+      │ Multi-fusion     │
+      └────────┬─────────┘
+               │
+               ▼  ← EU Data Act (Sept 2025)
+            ┌─────────────────────┐
+            │ 🟡 STANDARDS        │
+            │ FHIR Export         │
+            │ IEEE 11073          │
+            │ Offline-first       │
+            └──────────┬──────────┘
+                       │
+                       ▼
+                  ┌─────────────────┐
+                  │ 🟢 OPEN HW      │
+                  │ PineTime        │
+                  │ Bangle.js       │
+                  └────────┬────────┘
+                           │
+                           ▼
+                      ┌─────────────────┐
+                      │ 🟢 iOS + ML     │
+                      │ HealthKit       │
+                      │ Federated Learn │
+                      └────────┬────────┘
+                               │
+                               ▼
+                          ┌─────────────────┐
+                          │ 🔮 FUTURE       │
+                          │ Blockchain/ZKP  │
+                          │ Custom Firmware │
+                          └─────────────────┘
+```
+
+#### Поддерживаемые производители (план)
+
+| Производитель | Путь данных | Статус | Fallback |
+|---------------|-------------|--------|----------|
+| Samsung | Samsung Health → Health Connect | ✅ + ⚠️ баги | Ручной ввод |
+| Garmin | Garmin Connect → Health Connect | 🔜 Q2 2026 | OAuth API |
+| Fitbit | Fitbit → Health Connect | 🔜 Q2 2026 | OAuth API |
+| Xiaomi | Mi Fitness → Health Connect | 🔜 Q2 2026 | Gadgetbridge |
+| Huawei | Huawei Health → Health Connect | 🔜 Q3 2026 | Health Sync app |
+| Polar | Polar Flow → Health Connect | 🔜 Q2 2026 | Direct BLE |
+| Apple | HealthKit (iOS only) | 🔜 2027 | iOS App required |
+| **Open Hardware** | Direct BLE | 🔜 Q4 2026 | — |
+
+#### Ключевые технологии
+
+| Технология | Что даёт | Когда |
+|------------|----------|-------|
+| **Open Wearables API** | 200+ устройств через один API, MIT license | Q2 2026 |
+| **EU Data Act** | Законодательное требование открыть API | Sept 2025 |
+| **FHIR** | Стандарт для клинической интеграции | Q3 2026 |
+| **Federated Learning** | Privacy-preserving ML | 2027 |
+| **ZKP (Zero-Knowledge Proofs)** | Доказательство здоровья без раскрытия данных | 2027+ |
+
+#### Исследовательские ресурсы
+
+- [Open Wearables](https://www.openwearables.io/) — MIT-licensed API
+- [Gadgetbridge](https://gadgetbridge.org/) — Open-source Android app
+- [PineTime/InfiniTime](https://infinitime.io/) — Open-source smartwatch
+- [Colmi R02 Client](https://github.com/tahnok/colmi_r02_client) — Python BLE client
+- [EU Data Act](https://digital-strategy.ec.europa.eu/en/policies/data-act) — Regulatory framework
+
 ### Precision Phenotyping Roadmap
 
 ```
@@ -549,6 +692,26 @@
 
 ## Changelog
 
+### 2026-02-22 — Wearable Strategy Phase 1 Complete (v4.3)
+- ✅ **Phase 1 COMPLETE**: All critical wearable fixes implemented
+- 📱 **Manufacturer Setup Guides**: Samsung, Garmin, Xiaomi, Fitbit instructions with auto-detection
+- 📝 **Manual Sleep Diary Fallback**: Consensus Sleep Diary (Carney et al., 2012) format
+- 🗄️ **Room Database v3**: ManualDiaryEntity with offline-first sync
+- 🎨 **Progressive Disclosure UX**: 3-step form (Timing → Quality → Review)
+- ⚠️ **TIB ≥ 5h safety validation** per SleepCore clinical constraints
+- 📊 **SE/TST preview calculations** before save
+- 🌍 **Localization**: EN/RU strings for all new screens
+
+### 2026-02-22 — Wearable Strategy Roadmap (v4.2)
+- 🗺️ **Wearable Strategy Roadmap** added: 6-phase plan through 2027+
+- 🔍 **Deep research completed**: breakthrough technologies for wearable data access
+- 🔴 **Critical issues identified**: Token expiration (~1h), Samsung Health sync bugs
+- 🌐 **Multi-manufacturer analysis**: problems affect ALL vendors, not just Samsung
+- 📋 **Technologies evaluated**: Open Wearables API, Colmi R02, PineTime, FHIR, EU Data Act
+- ⚖️ **Regulatory insight**: EU Data Act (Sept 2025) will force manufacturers to open APIs
+- 🔮 **Future tech mapped**: Federated Learning, Blockchain/ZKP, Self-sovereign identity
+- 🔗 Research sources: Open Wearables, Gadgetbridge, InfiniTime, IEEE standards
+
 ### 2026-02-22 — Android Companion App Update (v4.1)
 - 📱 **Android test coverage**: 514 tests, 19 test files, 8048 lines
 - 🔒 **Sentry SDK 8.33.0** integrated with HIPAA-compliant PHI scrubbing
@@ -611,6 +774,7 @@
 
 ---
 
-*Unified Roadmap v4.1 — Updated 2026-02-22*
+*Unified Roadmap v4.3 — Updated 2026-02-22*
 *Strategic Pivot: Nonprofit DTx for Russian-speaking "Blue Ocean" market*
+*Wearable Strategy Phase 1 Complete: Setup Guides + Manual Diary Fallback*
 *Next review: After Pilot RCT (Q3 2026)*
