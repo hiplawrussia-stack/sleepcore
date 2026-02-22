@@ -169,7 +169,8 @@ class SleepCoreCompanionApp : Application(), Configuration.Provider {
         }
 
         // Scrub PHI from extra data
-        event.contexts.entries.forEach { (_, context) ->
+        for (entry in event.contexts) {
+            val context = entry.value
             if (context is MutableMap<*, *>) {
                 @Suppress("UNCHECKED_CAST")
                 val mutableContext = context as? MutableMap<String, Any?>
