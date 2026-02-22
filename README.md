@@ -6,6 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 [![Tests](https://img.shields.io/badge/tests-8752%2B-green.svg)](package.json)
 [![Coverage](https://img.shields.io/badge/coverage-84.97%25-green.svg)](package.json)
+[![Android Coverage](https://codecov.io/gh/hiplawrussia-stack/sleepcore/branch/master/graph/badge.svg?flag=android)](https://codecov.io/gh/hiplawrussia-stack/sleepcore)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 SleepCore is a clinical-grade digital therapeutic (DTx) platform implementing evidence-based Cognitive Behavioral Therapy for Insomnia (CBT-I). Built on the CogniCore Engine, it provides AI-optimized personalized treatment for chronic insomnia.
