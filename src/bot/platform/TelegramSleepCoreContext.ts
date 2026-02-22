@@ -23,7 +23,7 @@ import type {
   IReplyOptions,
   IInlineButton,
   IReplyButton,
-} from '@sleepcore/core';
+} from '../commands/interfaces/ICommand';
 import type { SleepCoreAPI } from '../../SleepCoreAPI';
 
 // ============================================================================

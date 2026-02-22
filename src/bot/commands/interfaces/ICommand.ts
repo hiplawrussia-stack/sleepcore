@@ -81,6 +81,18 @@ export interface IReplyButton {
   requestLocation?: boolean;
 }
 
+/**
+ * Reply options for messages
+ */
+export interface IReplyOptions {
+  /** Inline keyboard buttons */
+  keyboard?: IInlineButton[][];
+  /** Reply keyboard buttons */
+  replyKeyboard?: IReplyButton[][];
+  /** Whether to remove keyboard */
+  removeKeyboard?: boolean;
+}
+
 // ==================== Command Interface ====================
 
 /**
