@@ -254,11 +254,13 @@ class ErrorContextTest {
 class PhiFilteringTest {
 
     // Simulate the PHI filtering logic from ErrorLogger
+    // HIPAA PHI identifiers - catch all variations (camelCase, snake_case, etc.)
     private val phiKeys = setOf(
-        "email", "name", "phone", "address", "dob", "birthdate",
-        "ssn", "medical", "health", "diagnosis", "medication",
-        "sleep_data", "heart_rate", "hrv", "spo2", "weight", "height",
-        "password", "token", "secret", "key", "credential"
+        "email", "name", "phone", "address", "dob", "birth",
+        "ssn", "social", "medical", "health", "diagnosis", "medication",
+        "sleep", "heart", "hrv", "spo2", "oxygen", "respiratory",
+        "weight", "height", "bmi", "temperature",
+        "password", "token", "secret", "key", "credential", "auth"
     )
 
     private fun isSafeKey(key: String): Boolean {
