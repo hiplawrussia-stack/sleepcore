@@ -2435,7 +2435,7 @@ ${sonya.tip('КПТ-И — «золотой стандарт» лечения х
     _data: Record<string, unknown>
   ): Promise<ICommandResult> {
     const components = ctx.sleepCore.getMostEffectiveCBTIComponents();
-    const allEvidence = ctx.sleepCore.getCBTIComponentEvidence();
+    const _allEvidence = ctx.sleepCore.getCBTIComponentEvidence();
 
     // Component name mapping - extend centralized names with evidence-specific entries
     const evidenceComponentNames: Record<string, string> = {
@@ -3851,7 +3851,7 @@ ${formatter.tip('Протокол Spielman (1987): еженедельная ко
    * - Yoga Nidra: 89% sleep induction rate (Pandi-Perumal, 2022)
    */
   private async showCulturalMenu(
-    ctx: ISleepCoreContext,
+    _ctx: ISleepCoreContext,
     _data: Record<string, unknown>
   ): Promise<ICommandResult> {
     const message = `
@@ -3894,7 +3894,7 @@ ${formatter.tip('Эти методы дополняют, но не заменя�
    * Show acupressure introduction
    */
   private async showAcupressureIntro(
-    ctx: ISleepCoreContext,
+    _ctx: ISleepCoreContext,
     _data: Record<string, unknown>
   ): Promise<ICommandResult> {
     const message = `
@@ -3980,7 +3980,7 @@ ${formatter.tip('Ведите заметки в дневнике сна о ка�
    * Show Yoga Nidra introduction
    */
   private async showYogaNidraIntro(
-    ctx: ISleepCoreContext,
+    _ctx: ISleepCoreContext,
     _data: Record<string, unknown>
   ): Promise<ICommandResult> {
     const message = `

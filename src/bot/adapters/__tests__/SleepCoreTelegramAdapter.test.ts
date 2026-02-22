@@ -155,7 +155,8 @@ function createAdapter(options?: Partial<SleepCoreAdapterOptions>): SleepCoreTel
   });
 }
 
-function createMockContext(overrides: Partial<any> = {}): any {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function _createMockContext(overrides: Partial<any> = {}): any {
   return {
     message: {
       message_id: 123,
@@ -641,6 +642,7 @@ describe('SleepCoreTelegramAdapter', () => {
     });
 
     it('should handle GrammyError 429 (rate limit)', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const error = new GrammyError('Rate limit', {
         ok: false,
         error_code: 429,

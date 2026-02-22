@@ -417,7 +417,7 @@ ${sonya.tip('Твоя обратная связь помогает сделат�
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
     const weeklyEvents = allEvents.filter(e => e.timestamp >= weekAgo);
-    const userWeeklyEvents = userEvents.filter(e => e.timestamp >= weekAgo);
+    const _userWeeklyEvents = userEvents.filter(e => e.timestamp >= weekAgo);
 
     // Determine safety level from recent user events
     const recentUserCrises = userEvents.filter(

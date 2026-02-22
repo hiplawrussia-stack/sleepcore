@@ -133,7 +133,7 @@ export class LinkCommand implements IConversationCommand {
    * Show main link menu
    * UX: Clear options, emoji for friendliness (Telegram UX best practices)
    */
-  private async showLinkMenu(ctx: ISleepCoreContext): Promise<ICommandResult> {
+  private async showLinkMenu(_ctx: ISleepCoreContext): Promise<ICommandResult> {
     const message = `
 *Подключение носимого устройства*
 
