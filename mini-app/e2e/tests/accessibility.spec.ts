@@ -7,14 +7,82 @@
  * - Accessibility verification as part of usability testing
  * - User safety: Ensuring all users can operate the medical device
  *
- * Note: Comprehensive axe-core testing would require @axe-core/playwright.
- * These tests cover basic accessibility requirements manually.
+ * Uses @axe-core/playwright for automated WCAG 2.2 AA checks.
  *
  * @module @sleepcore/mini-app/e2e
  */
 
 import { test, expect } from '../fixtures/telegram.fixture';
+import AxeBuilder from '@axe-core/playwright';
 import { HomePage, BreathingPage, ProfilePage } from '../pages';
+
+/**
+ * WCAG 2.2 AA Automated Tests (axe-core)
+ * These tests run automated accessibility checks on each page.
+ */
+test.describe('WCAG 2.2 AA Compliance', () => {
+  test('Home page should have no critical accessibility violations', async ({
+    telegramPage,
+  }) => {
+    await telegramPage.goto('/');
+    await telegramPage.waitForLoadState('networkidle');
+
+    const results = await new AxeBuilder({ page: telegramPage })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag22aa'])
+      .analyze();
+
+    // Log violations for debugging
+    if (results.violations.length > 0) {
+      console.log('Accessibility violations on Home:', JSON.stringify(results.violations, null, 2));
+    }
+
+    // Allow some violations for MVP, but track them
+    const criticalViolations = results.violations.filter(
+      (v) => v.impact === 'critical' || v.impact === 'serious'
+    );
+    expect(criticalViolations).toHaveLength(0);
+  });
+
+  test('Breathing page should have no critical accessibility violations', async ({
+    telegramPage,
+  }) => {
+    await telegramPage.goto('/breathing');
+    await telegramPage.waitForLoadState('networkidle');
+
+    const results = await new AxeBuilder({ page: telegramPage })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag22aa'])
+      .analyze();
+
+    if (results.violations.length > 0) {
+      console.log('Accessibility violations on Breathing:', JSON.stringify(results.violations, null, 2));
+    }
+
+    const criticalViolations = results.violations.filter(
+      (v) => v.impact === 'critical' || v.impact === 'serious'
+    );
+    expect(criticalViolations).toHaveLength(0);
+  });
+
+  test('Profile page should have no critical accessibility violations', async ({
+    telegramPage,
+  }) => {
+    await telegramPage.goto('/profile');
+    await telegramPage.waitForLoadState('networkidle');
+
+    const results = await new AxeBuilder({ page: telegramPage })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag22aa'])
+      .analyze();
+
+    if (results.violations.length > 0) {
+      console.log('Accessibility violations on Profile:', JSON.stringify(results.violations, null, 2));
+    }
+
+    const criticalViolations = results.violations.filter(
+      (v) => v.impact === 'critical' || v.impact === 'serious'
+    );
+    expect(criticalViolations).toHaveLength(0);
+  });
+});
 
 test.describe('Accessibility', () => {
   test.describe('Color Contrast', () => {
@@ -63,8 +131,11 @@ test.describe('Accessibility', () => {
 
       await breathingPage.goto();
 
-      // Check cycle selector buttons
-      const cycleButtons = await telegramPage.locator('button:has-text(/^\\d+$/)').all();
+      // Check cycle selector buttons (3, 5, 7, 10)
+      const cycleButtons = await telegramPage
+        .locator('button')
+        .filter({ hasText: /^[357]$|^10$/ })
+        .all();
 
       for (const button of cycleButtons) {
         const box = await button.boundingBox();

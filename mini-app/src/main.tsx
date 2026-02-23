@@ -2,12 +2,19 @@
  * Main Entry Point
  * ================
  * Application bootstrap with React 18 and strict mode.
+ *
+ * Sentry is initialized BEFORE React to capture all errors.
  */
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { initSentry } from '@/services/sentry';
+import '@/i18n'; // Initialize i18n before App
 import App from './App';
 import '@/styles/global.css';
+
+// Initialize Sentry BEFORE React renders
+initSentry();
 
 // Environment-based Telegram mock for development
 const isDevelopment = import.meta.env.DEV;

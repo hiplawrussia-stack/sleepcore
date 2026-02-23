@@ -19,6 +19,7 @@ import type { AuthUser } from '@/api';
 import { AuthUserSchema } from '@/api/schemas';
 import { useAuthStore } from '@/store/authStore';
 import { telegram } from '@/services/telegram';
+import { setUser as setSentryUser, clearUser as clearSentryUser } from '@/services/sentry';
 
 interface UseAuthReturn {
   user: AuthUser | null;
@@ -65,7 +66,10 @@ export const useAuth = (): UseAuthReturn => {
       return apiClient.authenticate();
     },
     onSuccess: (data) => {
-      setUser(data.user as AuthUser);
+      const authUser = data.user as AuthUser;
+      setUser(authUser);
+      // Set Sentry user context (ID only, no PHI)
+      setSentryUser(authUser.telegramId);
       // Invalidate user-related queries
       queryClient.invalidateQueries({ queryKey: queryKeys.user.all });
     },
@@ -106,6 +110,7 @@ export const useAuth = (): UseAuthReturn => {
   // Logout
   const logout = useCallback(() => {
     tokenManager.clearTokens();
+    clearSentryUser();
     storeLogout();
     queryClient.clear();
   }, [storeLogout, queryClient]);

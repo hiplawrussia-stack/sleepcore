@@ -306,6 +306,9 @@ export const Profile: React.FC = () => {
             <button
               onClick={() => setHapticsEnabled(!hapticsEnabled)}
               disabled={!hapticsAvailable}
+              aria-label="Вибрация"
+              aria-checked={hapticsEnabled}
+              role="switch"
               className={`w-12 h-7 rounded-full transition-colors relative ${
                 hapticsEnabled && hapticsAvailable
                   ? 'bg-primary-500'

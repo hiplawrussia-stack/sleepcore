@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 // import basicSsl from '@vitejs/plugin-basic-ssl'; // Uncomment for HTTPS dev
 import { visualizer } from 'rollup-plugin-visualizer';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 import path from 'path';
 
 // https://vitejs.dev/config/
@@ -10,7 +11,17 @@ export default defineConfig({
     react(),
     // Uncomment for HTTPS local development (required for Telegram Mini App testing)
     // basicSsl(),
-  ],
+    // Sentry sourcemap upload (only in production build with auth token)
+    process.env.SENTRY_AUTH_TOKEN &&
+      sentryVitePlugin({
+        org: process.env.SENTRY_ORG || 'sleepcore',
+        project: process.env.SENTRY_PROJECT || 'mini-app',
+        authToken: process.env.SENTRY_AUTH_TOKEN,
+        sourcemaps: {
+          filesToDeleteAfterUpload: ['**/*.map'],
+        },
+      }),
+  ].filter(Boolean),
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

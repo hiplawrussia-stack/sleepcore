@@ -1,0 +1,144 @@
+{
+  "common": {
+    "loading": "Загрузка...",
+    "error": "Ошибка",
+    "retry": "Попробовать снова",
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "close": "Закрыть",
+    "done": "Готово",
+    "start": "Начать",
+    "stop": "Остановить",
+    "continue": "Продолжить",
+    "back": "Назад",
+    "offline": "Офлайн",
+    "syncing": "Синхронизация...",
+    "pending": "Ожидает: {{count}}"
+  },
+  "navigation": {
+    "home": "Главная",
+    "breathing": "Дыхание",
+    "profile": "Профиль"
+  },
+  "home": {
+    "greeting": {
+      "morning": "Доброе утро",
+      "afternoon": "Добрый день",
+      "evening": "Добрый вечер",
+      "night": "Доброй ночи"
+    },
+    "cards": {
+      "breathing": {
+        "title": "Дыхательные практики",
+        "description": "Расслабляющие упражнения"
+      },
+      "patterns": {
+        "title": "Техники дыхания"
+      }
+    },
+    "stats": {
+      "sessions": "сессий",
+      "minutes": "минут",
+      "streak": "дней подряд"
+    }
+  },
+  "breathing": {
+    "title": "Выбери технику дыхания",
+    "cycles": {
+      "title": "Количество циклов",
+      "duration": "~{{minutes}} мин"
+    },
+    "patterns": {
+      "478": {
+        "name": "4-7-8 Релакс",
+        "description": "Снижает тревожность и помогает заснуть"
+      },
+      "box": {
+        "name": "Квадратное дыхание",
+        "description": "Баланс и концентрация"
+      },
+      "relaxing": {
+        "name": "Расслабляющее",
+        "description": "Глубокое расслабление"
+      },
+      "energizing": {
+        "name": "Бодрящее",
+        "description": "Энергия и фокус"
+      }
+    },
+    "phases": {
+      "inhale": "Вдох",
+      "hold": "Задержка",
+      "exhale": "Выдох"
+    },
+    "progress": "Цикл {{current}} из {{total}}",
+    "completion": {
+      "title": "Отлично!",
+      "message": "Вы завершили {{cycles}} циклов дыхания",
+      "xpGain": "+{{xp}} XP"
+    },
+    "buttons": {
+      "start": "Начать",
+      "stop": "Остановить",
+      "done": "Готово"
+    }
+  },
+  "profile": {
+    "title": "Профиль",
+    "level": "Уровень {{level}}",
+    "xp": "{{current}} / {{total}} XP",
+    "evolution": {
+      "owlet": "Совёнок",
+      "youngOwl": "Молодая сова",
+      "wiseOwl": "Мудрая сова",
+      "master": "Мастер"
+    },
+    "stats": {
+      "title": "Статистика",
+      "totalSessions": "Всего сессий",
+      "totalMinutes": "Минут практики",
+      "currentStreak": "Текущая серия",
+      "longestStreak": "Лучшая серия"
+    },
+    "settings": {
+      "title": "Настройки",
+      "haptics": {
+        "title": "Вибрация",
+        "description": "Тактильная обратная связь при дыхании",
+        "unavailable": "Недоступно на этом устройстве"
+      },
+      "language": {
+        "title": "Язык",
+        "ru": "Русский",
+        "en": "English"
+      }
+    },
+    "privacy": {
+      "title": "Конфиденциальность",
+      "leaderboard": {
+        "title": "Участие в рейтинге",
+        "description": "Показывать мой прогресс в общем рейтинге"
+      },
+      "dataExport": "Экспорт данных",
+      "deleteAccount": "Удалить аккаунт"
+    },
+    "badges": {
+      "title": "Достижения"
+    }
+  },
+  "quests": {
+    "title": "Задания",
+    "daily": "Ежедневные",
+    "weekly": "Еженедельные",
+    "completed": "Выполнено",
+    "expired": "Истекло",
+    "reward": "+{{xp}} XP"
+  },
+  "errors": {
+    "generic": "Что-то пошло не так",
+    "network": "Проверьте подключение к интернету",
+    "auth": "Ошибка авторизации",
+    "notInTelegram": "Это приложение работает только внутри Telegram",
+    "openInTelegram": "Открыть в Telegram"
+  }
+}

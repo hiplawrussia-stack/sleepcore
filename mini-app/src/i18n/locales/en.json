@@ -1,0 +1,144 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "retry": "Try again",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "done": "Done",
+    "start": "Start",
+    "stop": "Stop",
+    "continue": "Continue",
+    "back": "Back",
+    "offline": "Offline",
+    "syncing": "Syncing...",
+    "pending": "Pending: {{count}}"
+  },
+  "navigation": {
+    "home": "Home",
+    "breathing": "Breathing",
+    "profile": "Profile"
+  },
+  "home": {
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening",
+      "night": "Good night"
+    },
+    "cards": {
+      "breathing": {
+        "title": "Breathing Exercises",
+        "description": "Relaxation techniques"
+      },
+      "patterns": {
+        "title": "Breathing Patterns"
+      }
+    },
+    "stats": {
+      "sessions": "sessions",
+      "minutes": "minutes",
+      "streak": "day streak"
+    }
+  },
+  "breathing": {
+    "title": "Choose a breathing technique",
+    "cycles": {
+      "title": "Number of cycles",
+      "duration": "~{{minutes}} min"
+    },
+    "patterns": {
+      "478": {
+        "name": "4-7-8 Relaxing",
+        "description": "Reduces anxiety and helps you fall asleep"
+      },
+      "box": {
+        "name": "Box Breathing",
+        "description": "Balance and focus"
+      },
+      "relaxing": {
+        "name": "Relaxing Breath",
+        "description": "Deep relaxation"
+      },
+      "energizing": {
+        "name": "Energizing Breath",
+        "description": "Energy and focus"
+      }
+    },
+    "phases": {
+      "inhale": "Inhale",
+      "hold": "Hold",
+      "exhale": "Exhale"
+    },
+    "progress": "Cycle {{current}} of {{total}}",
+    "completion": {
+      "title": "Great job!",
+      "message": "You completed {{cycles}} breathing cycles",
+      "xpGain": "+{{xp}} XP"
+    },
+    "buttons": {
+      "start": "Start",
+      "stop": "Stop",
+      "done": "Done"
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "level": "Level {{level}}",
+    "xp": "{{current}} / {{total}} XP",
+    "evolution": {
+      "owlet": "Owlet",
+      "youngOwl": "Young Owl",
+      "wiseOwl": "Wise Owl",
+      "master": "Master"
+    },
+    "stats": {
+      "title": "Statistics",
+      "totalSessions": "Total sessions",
+      "totalMinutes": "Minutes practiced",
+      "currentStreak": "Current streak",
+      "longestStreak": "Best streak"
+    },
+    "settings": {
+      "title": "Settings",
+      "haptics": {
+        "title": "Haptics",
+        "description": "Tactile feedback during breathing",
+        "unavailable": "Not available on this device"
+      },
+      "language": {
+        "title": "Language",
+        "ru": "Russian",
+        "en": "English"
+      }
+    },
+    "privacy": {
+      "title": "Privacy",
+      "leaderboard": {
+        "title": "Leaderboard participation",
+        "description": "Show my progress in the leaderboard"
+      },
+      "dataExport": "Export data",
+      "deleteAccount": "Delete account"
+    },
+    "badges": {
+      "title": "Achievements"
+    }
+  },
+  "quests": {
+    "title": "Quests",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "completed": "Completed",
+    "expired": "Expired",
+    "reward": "+{{xp}} XP"
+  },
+  "errors": {
+    "generic": "Something went wrong",
+    "network": "Check your internet connection",
+    "auth": "Authentication error",
+    "notInTelegram": "This app only works inside Telegram",
+    "openInTelegram": "Open in Telegram"
+  }
+}

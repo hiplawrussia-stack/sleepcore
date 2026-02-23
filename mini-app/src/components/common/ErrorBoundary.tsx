@@ -55,7 +55,7 @@ const ErrorFallback: React.FC<FallbackProps> = ({ error, resetErrorBoundary }) =
 };
 
 /**
- * Log error to console (and optionally to monitoring service)
+ * Log error to console and Sentry
  */
 const logError = (error: unknown, info: { componentStack?: string | null }) => {
   console.error('[ErrorBoundary] Caught error:', error);
@@ -63,10 +63,12 @@ const logError = (error: unknown, info: { componentStack?: string | null }) => {
     console.error('[ErrorBoundary] Component stack:', info.componentStack);
   }
 
-  // TODO: Send to Sentry or other monitoring service
-  // if (import.meta.env.PROD) {
-  //   Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
-  // }
+  // Send to Sentry in production
+  if (import.meta.env.PROD) {
+    import('@/services/sentry').then(({ captureException }) => {
+      captureException(error, { componentStack: info.componentStack });
+    });
+  }
 };
 
 interface ErrorBoundaryProps {
