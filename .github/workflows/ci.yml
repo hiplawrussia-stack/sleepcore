@@ -1,6 +1,9 @@
 # CI Pipeline - SleepCore
 # Runs on every push and pull request
 # Jobs: lint, test, build for all packages
+#
+# Note: mini-app has additional DTx-compliant pipeline in mini-app-ci.yml
+# with SBOM generation, Sentry releases, and audit trail artifacts
 
 name: CI
 

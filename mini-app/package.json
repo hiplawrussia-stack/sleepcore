@@ -14,7 +14,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "sbom": "npx @cyclonedx/cyclonedx-npm --output-format json --output-file sbom.json",
+    "licenses": "npx license-checker --summary --production"
   },
   "dependencies": {
     "@sentry/react": "^10.39.0",

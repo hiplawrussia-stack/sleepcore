@@ -10,15 +10,15 @@ on:
       - main
     paths:
       - 'api/**'
-      - 'mini-app/**'
       - 'e2e/**'
+      # mini-app E2E tests handled by mini-app-ci.yml
   pull_request:
     branches:
       - main
     paths:
       - 'api/**'
-      - 'mini-app/**'
       - 'e2e/**'
+      # mini-app E2E tests handled by mini-app-ci.yml
   workflow_dispatch:
     inputs:
       browser:
