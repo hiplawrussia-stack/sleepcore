@@ -84,6 +84,17 @@ class SleepRepository @Inject constructor(
             if (response.isSuccessful && response.body()?.success == true) {
                 val data = response.body()!!.data!!
 
+                // CRITICAL: Log warning if server didn't return refresh token
+                // This means user will need to re-link after token expires (~1 hour)
+                if (data.refreshToken == null) {
+                    ru.sleepcore.companion.util.ErrorLogger.log(
+                        severity = ru.sleepcore.companion.util.ErrorSeverity.WARNING,
+                        context = ru.sleepcore.companion.util.ErrorContext("SleepRepository", "linkDevice"),
+                        message = "Server did not return refresh token! User will need to re-link in ~1 hour. " +
+                            "This may indicate backend needs update."
+                    )
+                }
+
                 // Save credentials (with refresh token if available)
                 tokenStorage.saveCredentials(
                     token = data.resolveAccessToken(),
@@ -93,6 +104,14 @@ class SleepRepository @Inject constructor(
                     userName = data.user.firstName,
                     deviceId = deviceInfo.id,
                     refreshToken = data.refreshToken
+                )
+
+                // Log successful link with token info
+                ru.sleepcore.companion.util.ErrorLogger.log(
+                    severity = ru.sleepcore.companion.util.ErrorSeverity.INFO,
+                    context = ru.sleepcore.companion.util.ErrorContext("SleepRepository", "linkDevice"),
+                    message = "Device linked successfully. RefreshToken: ${data.refreshToken != null}, " +
+                        "ExpiresAt: ${data.resolveExpiresAt()}"
                 )
 
                 // HIPAA Audit: Log successful device linking
@@ -491,6 +510,13 @@ class SleepRepository @Inject constructor(
     fun needsTokenRefresh(): Boolean = tokenStorage.needsTokenRefresh()
 
     /**
+     * Diagnose token state for UI display
+     *
+     * Use this to show users when re-linking is required (legacy scenario).
+     */
+    fun diagnoseTokenState(): TokenStorage.TokenDiagnostics = tokenStorage.diagnoseTokenState()
+
+    /**
      * Get stored credentials
      */
     fun getCredentials() = tokenStorage.loadCredentials()
@@ -583,10 +609,30 @@ class SleepRepository @Inject constructor(
      */
     private suspend fun getValidBearerToken(): String? {
         val credentials = tokenStorage.suspendLoadCredentials()
-            ?: return null
+        if (credentials == null) {
+            ru.sleepcore.companion.util.ErrorLogger.log(
+                severity = ru.sleepcore.companion.util.ErrorSeverity.DEBUG,
+                context = ru.sleepcore.companion.util.ErrorContext("SleepRepository", "getValidBearerToken"),
+                message = "No credentials stored"
+            )
+            return null
+        }
 
-        // If token is expiring soon, try to refresh
+        // Log token state for debugging
+        ru.sleepcore.companion.util.ErrorLogger.log(
+            severity = ru.sleepcore.companion.util.ErrorSeverity.DEBUG,
+            context = ru.sleepcore.companion.util.ErrorContext("SleepRepository", "getValidBearerToken"),
+            message = "Token state: expired=${credentials.isExpired}, expiringSoon=${credentials.isExpiringSoon}, " +
+                "canRefresh=${credentials.canRefresh}, expiresAt=${credentials.expiresAt}"
+        )
+
+        // If token is expiring soon, try to refresh proactively
         if (credentials.isExpiringSoon && credentials.canRefresh) {
+            ru.sleepcore.companion.util.ErrorLogger.log(
+                severity = ru.sleepcore.companion.util.ErrorSeverity.INFO,
+                context = ru.sleepcore.companion.util.ErrorContext("SleepRepository", "getValidBearerToken"),
+                message = "Token expiring soon, attempting proactive refresh"
+            )
             if (refreshAccessToken().isSuccess) {
                 // Get updated token after refresh
                 return tokenStorage.suspendGetBearerToken()
@@ -598,12 +644,27 @@ class SleepRepository @Inject constructor(
             "Bearer ${credentials.token}"
         } else if (credentials.canRefresh) {
             // Token expired but we can refresh
+            ru.sleepcore.companion.util.ErrorLogger.log(
+                severity = ru.sleepcore.companion.util.ErrorSeverity.INFO,
+                context = ru.sleepcore.companion.util.ErrorContext("SleepRepository", "getValidBearerToken"),
+                message = "Token expired, attempting refresh"
+            )
             if (refreshAccessToken().isSuccess) {
                 tokenStorage.suspendGetBearerToken()
             } else {
+                ru.sleepcore.companion.util.ErrorLogger.log(
+                    severity = ru.sleepcore.companion.util.ErrorSeverity.WARNING,
+                    context = ru.sleepcore.companion.util.ErrorContext("SleepRepository", "getValidBearerToken"),
+                    message = "Token refresh failed, user needs to re-link"
+                )
                 null
             }
         } else {
+            ru.sleepcore.companion.util.ErrorLogger.log(
+                severity = ru.sleepcore.companion.util.ErrorSeverity.WARNING,
+                context = ru.sleepcore.companion.util.ErrorContext("SleepRepository", "getValidBearerToken"),
+                message = "Token expired and no refresh token available, user needs to re-link"
+            )
             null
         }
     }

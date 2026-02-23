@@ -160,7 +160,92 @@ mini-app/
 
 ---
 
-## 7. Bot Commands (25+)
+## 7. Android Companion App
+
+```
+android-companion/
+├── app/src/main/java/ru/sleepcore/companion/
+│   ├── ui/screens/        # SyncScreen, DiagnosticsScreen, SetupGuides, ManualEntry
+│   ├── ui/viewmodels/     # SyncViewModel, DiagnosticsViewModel, etc.
+│   ├── data/local/        # Room DB, TokenStorage, ManualDiaryEntity
+│   ├── data/repository/   # SleepRepository, SleepCoreRepository
+│   ├── data/remote/       # ApiService (Retrofit)
+│   ├── sync/              # SyncWorker (WorkManager)
+│   └── di/                # Hilt modules
+└── app/src/test/          # 514 tests, 19 test files
+```
+
+**Стек:** Kotlin + Jetpack Compose + Health Connect SDK 1.1.0 + Room + Hilt + WorkManager
+
+### Экраны
+
+| Screen | Функционал |
+|--------|------------|
+| SyncScreen | Основной экран, статус синхронизации, Quick Actions |
+| DiagnosticsScreen | Проверка Health Connect, разрешений, совместимости |
+| SetupGuidesScreen | Инструкции для Samsung, Garmin, Xiaomi, Fitbit |
+| ManualEntryScreen | Ручной ввод сна (Consensus Sleep Diary) |
+
+### Ключевые компоненты
+
+| Компонент | Назначение |
+|-----------|------------|
+| `TokenStorage` | EncryptedSharedPreferences, JWT refresh (24h/30d) |
+| `SleepRepository` | Health Connect read, API sync |
+| `SyncWorker` | Background sync (WorkManager) |
+| `ManualDiaryDao` | Room DAO для ручных записей |
+| `SleepCoreDatabase` | Room v3, MIGRATION_2_3 |
+
+### Health Connect интеграция
+
+| Данные | Permission | Статус |
+|--------|------------|--------|
+| SleepSessionRecord | READ_SLEEP | ✅ |
+| HeartRateRecord | READ_HEART_RATE | ✅ |
+| RestingHeartRateRecord | READ_RESTING_HEART_RATE | ✅ |
+| HeartRateVariabilityRmssdRecord | READ_HEART_RATE_VARIABILITY | ✅ |
+
+### Manual Entry (Consensus Sleep Diary)
+
+Формат Carney et al., 2012 — 9 полей:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| bedTime | LocalTime | Время укладывания |
+| tryToSleepTime | LocalTime | Время попытки заснуть |
+| sleepOnsetLatency | Int (min) | Латентность засыпания |
+| numberOfAwakenings | Int | Количество пробуждений |
+| wakeAfterSleepOnset | Int (min) | WASO |
+| finalWakeTime | LocalTime | Финальное пробуждение |
+| outOfBedTime | LocalTime | Время подъёма |
+| sleepQuality | 1-5 | Likert scale |
+| comments | String? | Комментарии |
+
+**Safety:** TIB >= 5 часов валидируется перед сохранением.
+
+### Тестирование
+
+```bash
+./gradlew :app:testDebugUnitTest    # 514 tests
+```
+
+| Метрика | Значение |
+|---------|----------|
+| Тестов | 514 |
+| Тест-файлов | 19 |
+| Строк тестов | 8048 |
+
+### Compliance
+
+| Требование | Реализация |
+|------------|------------|
+| HIPAA | Sentry SDK 8.33.0 с PHI scrubbing |
+| GDPR | PrivacyPolicyActivity, opt-in consent |
+| Health Connect | Privacy Policy URL в манифесте |
+
+---
+
+## 8. Bot Commands (25+)
 
 ### Core
 
@@ -214,7 +299,7 @@ mini-app/
 
 ---
 
-## 8. Bot Services (32+)
+## 9. Bot Services (32+)
 
 ### Safety-Critical
 
@@ -269,7 +354,7 @@ mini-app/
 
 ---
 
-## 9. REST API (`/api`)
+## 10. REST API (`/api`)
 
 **Стек:** Hono + Drizzle ORM + PostgreSQL
 
@@ -294,7 +379,7 @@ mini-app/
 
 ---
 
-## 10. User Journey Flows
+## 11. User Journey Flows
 
 ### Онбординг (Week 0)
 
@@ -336,7 +421,7 @@ ISI Re-assessment → Outcome
 
 ---
 
-## 11. Gamification System
+## 12. Gamification System
 
 ### Прогрессия
 
@@ -371,7 +456,7 @@ ISI Re-assessment → Outcome
 
 ---
 
-## 12. Safety-Critical Modules
+## 13. Safety-Critical Modules
 
 ```
 ⚠️ ИЗМЕНЕНИЯ ТРЕБУЮТ: 2-person review + 100% test coverage
@@ -387,7 +472,7 @@ ISI Re-assessment → Outcome
 
 ---
 
-## 13. Тестирование
+## 14. Тестирование
 
 ```bash
 npm test                    # All tests
@@ -400,7 +485,7 @@ npm run test:coverage       # With coverage
 
 ---
 
-## 14. Environment
+## 15. Environment
 
 ```bash
 # Required
@@ -418,7 +503,7 @@ API_URL=http://localhost:3001         # Backend API
 
 ---
 
-## 15. Принципы интеграции
+## 16. Принципы интеграции
 
 ### 15.1. Вертикальные слайсы
 
@@ -450,7 +535,7 @@ main.ts → Commands → SleepCoreAPI → Engines
 
 ---
 
-## 16. Commit Checklist
+## 17. Commit Checklist
 
 ```
 БЕЗОПАСНОСТЬ
@@ -465,7 +550,7 @@ main.ts → Commands → SleepCoreAPI → Engines
 
 ---
 
-## 17. Эскалация
+## 18. Эскалация
 
 | Ситуация | Действие |
 |----------|----------|
@@ -475,7 +560,7 @@ main.ts → Commands → SleepCoreAPI → Engines
 
 ---
 
-## 18. Типы (Quick Reference)
+## 19. Типы (Quick Reference)
 
 ### Bot Types
 
@@ -497,7 +582,7 @@ main.ts → Commands → SleepCoreAPI → Engines
 
 ---
 
-## 19. File Headers
+## 20. File Headers
 
 См. `docs/file-headers.md`
 
@@ -505,7 +590,7 @@ main.ts → Commands → SleepCoreAPI → Engines
 
 # ЧАСТЬ III: AI/LLM POLICY
 
-## 20. Принципы использования AI/LLM
+## 21. Принципы использования AI/LLM
 
 ### Математические ограничения LLM
 
@@ -547,7 +632,7 @@ main.ts → Commands → SleepCoreAPI → Engines
 
 ---
 
-## 21. Калиброванная неопределённость
+## 22. Калиброванная неопределённость
 
 ### Принцип
 
@@ -585,7 +670,7 @@ main.ts → Commands → SleepCoreAPI → Engines
 
 ---
 
-## 22. Multi-Platform Ecosystem
+## 23. Multi-Platform Ecosystem
 
 ### Философия
 
@@ -637,7 +722,7 @@ class DiaryCommand implements ICommand {
 
 ---
 
-## 23. Anti-patterns (Запрещённые практики)
+## 24. Anti-patterns (Запрещённые практики)
 
 ### Технические anti-patterns
 
@@ -667,7 +752,7 @@ class DiaryCommand implements ICommand {
 
 ---
 
-## 24. Content Versioning
+## 25. Content Versioning
 
 ### Принцип
 
@@ -714,4 +799,4 @@ interface IVerifiedContent {
 >
 > **Галлюцинации неизбежны. Детерминированность — наш выбор.**
 
-*Версия: 2.2 | БФ «Другой путь»*
+*Версия: 2.3 | БФ «Другой путь»*

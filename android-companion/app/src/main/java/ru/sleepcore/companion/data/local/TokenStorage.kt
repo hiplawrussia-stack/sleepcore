@@ -106,10 +106,16 @@ data class StoredCredentials(
         get() = Instant.now().isAfter(expiresAt)
 
     /**
-     * Access token expires within 5 minutes (should refresh proactively)
+     * Access token expires within 10 minutes (should refresh proactively)
+     *
+     * Threshold increased from 5 to 10 minutes (Feb 2026) because:
+     * - WorkManager minimum interval is 15 minutes
+     * - With 10-minute threshold, we catch refresh window even if
+     *   last sync was at T-15min and token expires at T+5min
+     * - RFC 9700 recommends proactive refresh before expiry
      */
     val isExpiringSoon: Boolean
-        get() = Instant.now().plusSeconds(5 * 60).isAfter(expiresAt)
+        get() = Instant.now().plusSeconds(10 * 60).isAfter(expiresAt)
 
     /**
      * Has valid refresh token for renewal
@@ -640,6 +646,36 @@ class TokenStorage @Inject constructor(
     fun needsTokenRefresh(): Boolean {
         val credentials = _credentialsFlow.value ?: return false
         return credentials.isExpired && credentials.canRefresh
+    }
+
+    /**
+     * Diagnose token state for debugging
+     *
+     * Returns human-readable status for UI or logging.
+     * Use this to identify users who need to re-link (legacy scenario).
+     */
+    fun diagnoseTokenState(): TokenDiagnostics {
+        val credentials = _credentialsFlow.value
+        return when {
+            credentials == null -> TokenDiagnostics.NOT_LINKED
+            !credentials.canRefresh && credentials.isExpired -> TokenDiagnostics.EXPIRED_NO_REFRESH
+            !credentials.canRefresh -> TokenDiagnostics.LEGACY_NO_REFRESH
+            credentials.isExpired -> TokenDiagnostics.EXPIRED_CAN_REFRESH
+            credentials.isExpiringSoon -> TokenDiagnostics.EXPIRING_SOON
+            else -> TokenDiagnostics.VALID
+        }
+    }
+
+    /**
+     * Token diagnostics state
+     */
+    enum class TokenDiagnostics(val message: String, val needsRelink: Boolean) {
+        NOT_LINKED("Device not linked", true),
+        EXPIRED_NO_REFRESH("Token expired, no refresh token (re-link required)", true),
+        LEGACY_NO_REFRESH("Legacy link without refresh token (re-link recommended)", true),
+        EXPIRED_CAN_REFRESH("Token expired but can refresh", false),
+        EXPIRING_SOON("Token expiring soon", false),
+        VALID("Token valid", false)
     }
 
     /**
