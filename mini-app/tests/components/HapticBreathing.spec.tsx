@@ -36,6 +36,41 @@ vi.mock('@/services/telegram', () => ({
   },
 }));
 
+// Mock react-i18next
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, params?: Record<string, unknown> | string) => {
+      const translations: Record<string, string> = {
+        'breathing.title': 'Выбери технику дыхания',
+        'breathing.cycles.title': 'Количество циклов',
+        'breathing.buttons.start': 'Начать',
+        'breathing.buttons.stop': 'Остановить',
+        'breathing.buttons.done': 'Готово',
+        'breathing.progress': 'Цикл {{current}} из {{total}}',
+        'breathing.sec': 'сек',
+        'breathing.completion.title': 'Отлично!',
+        'breathing.completion.message': 'Ты выполнил {{cycles}} циклов',
+      };
+      let result = translations[key];
+      if (!result) {
+        // Return fallback if provided as second arg string, otherwise key
+        return typeof params === 'string' ? params : key;
+      }
+      // Handle interpolation
+      if (params && typeof params === 'object') {
+        Object.entries(params).forEach(([k, v]) => {
+          result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v));
+        });
+      }
+      return result;
+    },
+    i18n: {
+      language: 'ru',
+      changeLanguage: vi.fn(),
+    },
+  }),
+}));
+
 // Mock motion/react to avoid animation issues in tests
 vi.mock('motion/react', () => {
   const createMotionComponent = (tag: string) => {

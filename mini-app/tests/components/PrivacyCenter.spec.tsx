@@ -133,10 +133,11 @@ describe('PrivacyCenter', () => {
     });
 
     it('should be collapsed by default', () => {
-      render(<PrivacyCenter />);
+      const { container } = render(<PrivacyCenter />);
 
-      // Options should not be visible initially
-      expect(screen.queryByText('Мои данные')).not.toBeInTheDocument();
+      // Content container should have collapsed CSS classes (max-h-0 opacity-0)
+      const expandableContent = container.querySelector('.max-h-0.opacity-0');
+      expect(expandableContent).toBeInTheDocument();
     });
 
     it('should expand when header is clicked', async () => {
@@ -166,21 +167,24 @@ describe('PrivacyCenter', () => {
     });
 
     it('should toggle expand state', async () => {
-      render(<PrivacyCenter />);
+      const { container } = render(<PrivacyCenter />);
 
-      // Initially collapsed
-      expect(screen.queryByText('Мои данные')).not.toBeInTheDocument();
+      // Initially collapsed - has max-h-0 opacity-0
+      expect(container.querySelector('.max-h-0.opacity-0')).toBeInTheDocument();
+      expect(container.querySelector('.max-h-\\[500px\\].opacity-100')).not.toBeInTheDocument();
 
       // Click to expand
       fireEvent.click(screen.getByText('Приватность и данные'));
       await waitFor(() => {
-        expect(screen.getByText('Мои данные')).toBeInTheDocument();
+        // Expanded - has max-h-[500px] opacity-100
+        expect(container.querySelector('.max-h-\\[500px\\].opacity-100')).toBeInTheDocument();
       });
 
       // Click to collapse
       fireEvent.click(screen.getByText('Приватность и данные'));
       await waitFor(() => {
-        expect(screen.queryByText('Мои данные')).not.toBeInTheDocument();
+        // Collapsed again
+        expect(container.querySelector('.max-h-0.opacity-0')).toBeInTheDocument();
       });
     });
   });

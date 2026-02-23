@@ -81,6 +81,38 @@ vi.mock('../../src/services/haptics', () => ({
   },
 }));
 
+// Mock react-i18next
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, fallback?: string) => {
+      const translations: Record<string, string> = {
+        'home.greeting.morning': 'Доброе утро',
+        'home.greeting.afternoon': 'Добрый день',
+        'home.greeting.evening': 'Добрый вечер',
+        'home.greeting.night': 'Доброй ночи',
+        'home.readyToPractice': 'Готов к дыхательной практике?',
+        'home.stats.sessions': 'сессий',
+        'home.stats.streak': 'дней подряд',
+        'home.startBreathing': 'Начать дыхание',
+        'home.chooseTechnique': 'Выбери технику и практикуй',
+        'home.categories.sleep': 'Для сна',
+        'home.categories.stress': 'От стресса',
+        'home.sonya.greeting': 'Соня рада тебя видеть!',
+        'home.sonya.level': 'Уровень',
+        'profile.evolution.owlet': 'Совёнок',
+        'profile.evolution.youngOwl': 'Молодая сова',
+        'profile.evolution.wiseOwl': 'Мудрая сова',
+        'common.friend': 'друг',
+      };
+      return translations[key] || fallback || key;
+    },
+    i18n: {
+      language: 'ru',
+      changeLanguage: vi.fn(),
+    },
+  }),
+}));
+
 // Import after mocks
 import { Home } from '../../src/pages/Home';
 

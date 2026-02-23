@@ -30,26 +30,7 @@ vi.mock('../../src/services/haptics', () => ({
   },
 }));
 
-// Mock motion for faster tests
-vi.mock('motion/react', () => ({
-  motion: {
-    div: ({ children, onClick, className, style, ...props }: React.HTMLAttributes<HTMLDivElement> & { style?: React.CSSProperties }) => (
-      <div onClick={onClick} className={className} style={style} data-testid="motion-div" {...props}>
-        {children}
-      </div>
-    ),
-    h2: ({ children, className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-      <h2 className={className} {...props}>{children}</h2>
-    ),
-    p: ({ children, className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
-      <p className={className} {...props}>{children}</p>
-    ),
-    button: ({ children, onClick, className, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-      <button onClick={onClick} className={className} {...props}>{children}</button>
-    ),
-  },
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
+// Note: Component uses CSS-only animations, no motion/react mock needed
 
 describe('EvolutionCelebrationModal', () => {
   const defaultProps = {
@@ -193,26 +174,25 @@ describe('EvolutionCelebrationModal', () => {
 
     it('should call onClose when backdrop clicked', () => {
       const onClose = vi.fn();
-      render(<EvolutionCelebrationModal {...defaultProps} onClose={onClose} />);
+      const { container } = render(<EvolutionCelebrationModal {...defaultProps} onClose={onClose} />);
 
-      // Click on the backdrop (first motion-div which is the overlay)
-      const motionDivs = screen.getAllByTestId('motion-div');
-      fireEvent.click(motionDivs[0]);
+      // Click on the backdrop (the outer fixed div)
+      const backdrop = container.querySelector('.fixed.inset-0');
+      fireEvent.click(backdrop!);
 
       expect(onClose).toHaveBeenCalled();
     });
 
     it('should NOT call onClose when modal content clicked', () => {
       const onClose = vi.fn();
-      render(<EvolutionCelebrationModal {...defaultProps} onClose={onClose} />);
+      const { container } = render(<EvolutionCelebrationModal {...defaultProps} onClose={onClose} />);
 
       // Click on the modal content (which has stopPropagation)
-      const motionDivs = screen.getAllByTestId('motion-div');
-      // Modal content is deeper in the DOM
-      fireEvent.click(motionDivs[motionDivs.length - 1]);
+      const modalContent = container.querySelector('.rounded-3xl');
+      fireEvent.click(modalContent!);
 
-      // Should only be called if backdrop was clicked, not content
-      // Note: This test might need adjustment based on actual click handling
+      // Should not trigger onClose because of stopPropagation
+      expect(onClose).not.toHaveBeenCalled();
     });
   });
 
