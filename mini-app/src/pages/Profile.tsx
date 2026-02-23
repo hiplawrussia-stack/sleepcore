@@ -2,17 +2,28 @@
  * Profile Page
  * ============
  * User profile with stats, achievements, and settings.
+ *
+ * PERFORMANCE: CSS-only animations, lazy-loaded QuestsPanel.
  * Uses TanStack Query for server state management.
  */
 
-import React, { useEffect } from 'react';
-import { m } from 'motion/react';
+import React, { useEffect, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Card, PrivacyCenter } from '@/components/common';
-import { QuestsPanel } from '@/components/gamification';
+import { Card } from '@/components/common';
 import { useTelegram, useHaptics, useUserProfile, useBreathingStats, useEvolution } from '@/hooks';
 import { formatDuration } from '@/components/breathing/patterns';
+
+// Lazy load heavy components
+const QuestsPanel = React.lazy(() => import('@/components/gamification/QuestsPanel'));
+const PrivacyCenter = React.lazy(() => import('@/components/common/PrivacyCenter'));
+
+// Simple loading placeholder
+const ComponentLoader: React.FC = () => (
+  <div className="animate-pulse">
+    <div className="h-32 bg-night-800 rounded-2xl" />
+  </div>
+);
 
 export const Profile: React.FC = () => {
   const { t } = useTranslation();
@@ -111,12 +122,8 @@ export const Profile: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-night-900 px-4 py-6 pb-20">
-      {/* Header with avatar */}
-      <m.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-6"
-      >
+      {/* Header with avatar - CSS animation */}
+      <div className="text-center mb-6 animate-fade-in">
         {/* User avatar placeholder */}
         <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-night-700 flex items-center justify-center">
           <span className="text-4xl">
@@ -129,15 +136,13 @@ export const Profile: React.FC = () => {
         {(profile?.username || user?.username) && (
           <p className="text-night-400">@{profile?.username || user?.username}</p>
         )}
-      </m.div>
+      </div>
 
       {/* Evolution card */}
       {evolutionInfo && (
-        <m.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-6"
+        <div
+          className="mb-6 animate-slide-up"
+          style={{ animationDelay: '0.1s' }}
         >
           <Card variant="glass">
             <div className="flex items-center gap-4 mb-3">
@@ -154,11 +159,9 @@ export const Profile: React.FC = () => {
             {evolutionInfo.nextStage && (
               <>
                 <div className="h-2 bg-night-700 rounded-full overflow-hidden mb-2">
-                  <m.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${evolutionInfo.progress}%` }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    className="h-full bg-gradient-to-r from-primary-500 to-calm-purple rounded-full"
+                  <div
+                    style={{ width: `${evolutionInfo.progress}%` }}
+                    className="h-full bg-gradient-to-r from-primary-500 to-calm-purple rounded-full transition-all duration-500"
                   />
                 </div>
                 <div className="text-xs text-night-500">
@@ -169,16 +172,14 @@ export const Profile: React.FC = () => {
               </>
             )}
           </Card>
-        </m.div>
+        </div>
       )}
 
       {/* Stats grid */}
       {stats && (
-        <m.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="grid grid-cols-2 gap-3 mb-6"
+        <div
+          className="grid grid-cols-2 gap-3 mb-6 animate-slide-up"
+          style={{ animationDelay: '0.2s' }}
         >
           <Card className="text-center">
             <div className="text-2xl font-bold text-primary-400">
@@ -204,26 +205,24 @@ export const Profile: React.FC = () => {
             </div>
             <div className="text-xs text-night-400">{t('profile.stats.longestStreak')}</div>
           </Card>
-        </m.div>
+        </div>
       )}
 
-      {/* Quests Panel */}
-      <m.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.22 }}
-        className="mb-6"
+      {/* Quests Panel - Lazy loaded */}
+      <div
+        className="mb-6 animate-slide-up"
+        style={{ animationDelay: '0.22s' }}
       >
-        <QuestsPanel limit={3} activeOnly />
-      </m.div>
+        <Suspense fallback={<ComponentLoader />}>
+          <QuestsPanel limit={3} activeOnly />
+        </Suspense>
+      </div>
 
       {/* Weekly progress chart */}
       {stats?.weeklyProgress && stats.weeklyProgress.length > 0 && (
-        <m.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="mb-6"
+        <div
+          className="mb-6 animate-slide-up"
+          style={{ animationDelay: '0.25s' }}
         >
           <Card>
             <div className="text-sm font-medium text-night-300 mb-3">
@@ -237,11 +236,9 @@ export const Profile: React.FC = () => {
 
                 return (
                   <div key={index} className="flex-1 flex flex-col items-center">
-                    <m.div
-                      initial={{ height: 0 }}
-                      animate={{ height: `${Math.max(height, 4)}%` }}
-                      transition={{ duration: 0.3, delay: 0.4 + index * 0.05 }}
-                      className={`w-full rounded-t ${
+                    <div
+                      style={{ height: `${Math.max(height, 4)}%` }}
+                      className={`w-full rounded-t transition-all duration-300 ${
                         minutes > 0 ? 'bg-primary-500' : 'bg-night-700'
                       }`}
                     />
@@ -253,16 +250,14 @@ export const Profile: React.FC = () => {
               })}
             </div>
           </Card>
-        </m.div>
+        </div>
       )}
 
       {/* XP progress */}
       {profile && (
-        <m.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="mb-6"
+        <div
+          className="mb-6 animate-slide-up"
+          style={{ animationDelay: '0.3s' }}
         >
           <Card>
             <div className="flex justify-between items-center mb-2">
@@ -270,25 +265,22 @@ export const Profile: React.FC = () => {
               <span className="font-bold text-primary-400">{profile.xp} XP</span>
             </div>
             <div className="h-2 bg-night-700 rounded-full overflow-hidden">
-              <m.div
-                initial={{ width: 0 }}
-                animate={{ width: `${Math.min(100, (profile.xp % 100))}%` }}
-                transition={{ duration: 0.5, delay: 0.5 }}
-                className="h-full bg-primary-500 rounded-full"
+              <div
+                style={{ width: `${Math.min(100, (profile.xp % 100))}%` }}
+                className="h-full bg-primary-500 rounded-full transition-all duration-500"
               />
             </div>
             <div className="text-xs text-night-500 mt-1">
               {t('profile.xpToNext', { xp: 100 - (profile.xp % 100) })}
             </div>
           </Card>
-        </m.div>
+        </div>
       )}
 
       {/* Settings */}
-      <m.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
+      <div
+        className="animate-slide-up"
+        style={{ animationDelay: '0.4s' }}
       >
         <h3 className="text-lg font-semibold text-night-100 mb-3">
           {t('profile.settings.title')}
@@ -317,32 +309,31 @@ export const Profile: React.FC = () => {
                   : 'bg-night-600'
               } ${!hapticsAvailable ? 'opacity-50' : ''}`}
             >
-              <m.div
-                animate={{ x: hapticsEnabled && hapticsAvailable ? 20 : 2 }}
-                className="w-5 h-5 rounded-full bg-white absolute top-1"
+              <div
+                className={`w-5 h-5 rounded-full bg-white absolute top-1 transition-transform duration-200 ${
+                  hapticsEnabled && hapticsAvailable ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
               />
             </button>
           </div>
         </Card>
-      </m.div>
+      </div>
 
-      {/* Privacy & Data section (GDPR) */}
-      <m.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.45 }}
-        className="mt-6"
+      {/* Privacy & Data section (GDPR) - Lazy loaded */}
+      <div
+        className="mt-6 animate-slide-up"
+        style={{ animationDelay: '0.45s' }}
       >
-        <PrivacyCenter />
-      </m.div>
+        <Suspense fallback={<ComponentLoader />}>
+          <PrivacyCenter />
+        </Suspense>
+      </div>
 
       {/* Badges section */}
       {profile && profile.badges.length > 0 && (
-        <m.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="mt-6"
+        <div
+          className="mt-6 animate-slide-up"
+          style={{ animationDelay: '0.5s' }}
         >
           <h3 className="text-lg font-semibold text-night-100 mb-3">
             {t('profile.badges.title')}
@@ -357,7 +348,7 @@ export const Profile: React.FC = () => {
               </div>
             ))}
           </div>
-        </m.div>
+        </div>
       )}
     </div>
   );

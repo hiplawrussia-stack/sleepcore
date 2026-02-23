@@ -19,6 +19,8 @@
     "licenses": "npx license-checker --summary --production"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
+    "@formkit/auto-animate": "^0.9.0",
     "@sentry/react": "^10.39.0",
     "@sentry/vite-plugin": "^4.9.1",
     "@tanstack/react-query": "^5.90.12",

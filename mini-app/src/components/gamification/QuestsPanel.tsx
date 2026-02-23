@@ -3,6 +3,9 @@
  * ====================================================
  * Displays active and available quests with progress tracking.
  *
+ * PERFORMANCE: Uses AutoAnimate (2.3KB) instead of motion (18KB)
+ * for list animations. CSS transitions for progress bars.
+ *
  * UX Research:
  * - Short-term challenges add motivation (daily/weekly)
  * - Progress bars visualize advancement toward goals
@@ -14,7 +17,7 @@
  */
 
 import React from 'react';
-import { m, AnimatePresence } from 'motion/react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { Card } from '@/components/common';
 import { useQuests } from '@/hooks/useEvolution';
 import { haptics } from '@/services/haptics';
@@ -40,85 +43,75 @@ const getCategoryIcon = (questId: string): string => {
 
 interface QuestCardProps {
   quest: Quest;
-  index: number;
 }
 
-const QuestCard: React.FC<QuestCardProps> = ({ quest, index }) => {
+const QuestCard: React.FC<QuestCardProps> = ({ quest }) => {
   const progressPercent = Math.min(100, (quest.progress / quest.target) * 100);
   const isCompleted = quest.status === 'completed';
   const isExpired = quest.status === 'expired';
 
   return (
-    <m.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ delay: index * 0.1 }}
+    <Card
+      variant={isCompleted ? 'glass' : 'default'}
+      className={`${isExpired ? 'opacity-60' : ''}`}
     >
-      <Card
-        variant={isCompleted ? 'glass' : 'default'}
-        className={`${isExpired ? 'opacity-60' : ''}`}
-      >
-        <div className="flex items-start gap-3">
-          {/* Category icon */}
-          <div className="text-2xl">
-            {getCategoryIcon(quest.questId)}
+      <div className="flex items-start gap-3">
+        {/* Category icon */}
+        <div className="text-2xl">
+          {getCategoryIcon(quest.questId)}
+        </div>
+
+        {/* Quest content */}
+        <div className="flex-1 min-w-0">
+          {/* Title and status */}
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <h4 className="font-medium text-night-100 truncate">
+              {quest.title}
+            </h4>
+            <span className="text-sm shrink-0">
+              {STATUS_ICONS[quest.status]}
+            </span>
           </div>
 
-          {/* Quest content */}
-          <div className="flex-1 min-w-0">
-            {/* Title and status */}
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <h4 className="font-medium text-night-100 truncate">
-                {quest.title}
-              </h4>
-              <span className="text-sm shrink-0">
-                {STATUS_ICONS[quest.status]}
-              </span>
-            </div>
+          {/* Description */}
+          <p className="text-sm text-night-400 mb-2 line-clamp-2">
+            {quest.description}
+          </p>
 
-            {/* Description */}
-            <p className="text-sm text-night-400 mb-2 line-clamp-2">
-              {quest.description}
-            </p>
-
-            {/* Progress bar */}
-            {!isExpired && (
-              <div className="mb-2">
-                <div className="flex justify-between text-xs text-night-500 mb-1">
-                  <span>{quest.progress} / {quest.target}</span>
-                  <span>{Math.round(progressPercent)}%</span>
-                </div>
-                <div className="h-2 bg-night-700 rounded-full overflow-hidden">
-                  <m.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progressPercent}%` }}
-                    transition={{ duration: 0.5, delay: 0.2 + index * 0.1 }}
-                    className={`h-full rounded-full ${
-                      isCompleted
-                        ? 'bg-gradient-to-r from-calm-green to-calm-blue'
-                        : 'bg-gradient-to-r from-primary-500 to-calm-purple'
-                    }`}
-                  />
-                </div>
+          {/* Progress bar - CSS transition instead of motion */}
+          {!isExpired && (
+            <div className="mb-2">
+              <div className="flex justify-between text-xs text-night-500 mb-1">
+                <span>{quest.progress} / {quest.target}</span>
+                <span>{Math.round(progressPercent)}%</span>
               </div>
-            )}
-
-            {/* Reward */}
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-night-500">
-                {isCompleted ? 'Получено' : isExpired ? 'Истекло' : 'Награда'}
-              </span>
-              <span className={`text-sm font-medium ${
-                isCompleted ? 'text-calm-green' : 'text-primary-400'
-              }`}>
-                +{quest.reward} XP
-              </span>
+              <div className="h-2 bg-night-700 rounded-full overflow-hidden">
+                <div
+                  style={{ width: `${progressPercent}%` }}
+                  className={`h-full rounded-full transition-all duration-500 ease-out ${
+                    isCompleted
+                      ? 'bg-gradient-to-r from-calm-green to-calm-blue'
+                      : 'bg-gradient-to-r from-primary-500 to-calm-purple'
+                  }`}
+                />
+              </div>
             </div>
+          )}
+
+          {/* Reward */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-night-500">
+              {isCompleted ? 'Получено' : isExpired ? 'Истекло' : 'Награда'}
+            </span>
+            <span className={`text-sm font-medium ${
+              isCompleted ? 'text-calm-green' : 'text-primary-400'
+            }`}>
+              +{quest.reward} XP
+            </span>
           </div>
         </div>
-      </Card>
-    </m.div>
+      </div>
+    </Card>
   );
 };
 
@@ -140,6 +133,7 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
   className = '',
 }) => {
   const { quests, isLoading, isError, refetch } = useQuests();
+  const [listRef] = useAutoAnimate<HTMLDivElement>();
 
   // Filter quests
   const filteredQuests = React.useMemo(() => {
@@ -243,31 +237,20 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
         </div>
       )}
 
-      {/* Quest list */}
-      <div className="space-y-3">
-        <AnimatePresence mode="popLayout">
-          {filteredQuests.map((quest, index) => (
-            <QuestCard
-              key={quest.id}
-              quest={quest}
-              index={index}
-            />
-          ))}
-        </AnimatePresence>
+      {/* Quest list - AutoAnimate handles enter/exit/reorder */}
+      <div ref={listRef} className="space-y-3">
+        {filteredQuests.map((quest) => (
+          <QuestCard key={quest.id} quest={quest} />
+        ))}
       </div>
 
       {/* Show more link */}
       {limit && quests && quests.length > limit && !compact && (
-        <m.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="text-center mt-3"
-        >
+        <div className="text-center mt-3 animate-fade-in">
           <span className="text-sm text-night-500">
             +{quests.length - limit} ещё
           </span>
-        </m.div>
+        </div>
       )}
     </div>
   );

@@ -2,10 +2,12 @@
  * Card Component
  * ==============
  * Reusable card container with soft UI styling.
+ *
+ * PERFORMANCE: CSS-only animations, no motion dependency.
+ * Uses active:scale-[0.98] for tap feedback.
  */
 
 import React from 'react';
-import { m } from 'motion/react';
 
 interface CardProps {
   children: React.ReactNode;
@@ -36,22 +38,28 @@ export const Card: React.FC<CardProps> = ({
   padding = 'md',
   className = '',
 }) => {
-  const Component = onClick ? m.button : m.div;
+  const baseClasses = `
+    rounded-2xl transition-all duration-100
+    ${VARIANT_CLASSES[variant]}
+    ${PADDING_CLASSES[padding]}
+    ${className}
+  `;
+
+  if (onClick) {
+    return (
+      <button
+        onClick={onClick}
+        className={`${baseClasses} cursor-pointer hover:bg-night-700 active:scale-[0.98]`}
+      >
+        {children}
+      </button>
+    );
+  }
 
   return (
-    <Component
-      onClick={onClick}
-      whileTap={onClick ? { scale: 0.98 } : undefined}
-      className={`
-        rounded-2xl transition-colors
-        ${VARIANT_CLASSES[variant]}
-        ${PADDING_CLASSES[padding]}
-        ${onClick ? 'cursor-pointer hover:bg-night-700' : ''}
-        ${className}
-      `}
-    >
+    <div className={baseClasses}>
       {children}
-    </Component>
+    </div>
   );
 };
 

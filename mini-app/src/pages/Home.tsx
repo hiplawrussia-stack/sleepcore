@@ -3,10 +3,12 @@
  * =========
  * Main landing page with quick access to breathing exercises
  * and user stats overview.
+ *
+ * PERFORMANCE: CSS-only animations for page transitions.
+ * Saves ~8KB vs motion imports.
  */
 
 import React, { useEffect } from 'react';
-import { m } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/common';
@@ -48,27 +50,21 @@ export const Home: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-night-900 px-4 py-6 pb-20">
-      {/* Header */}
-      <m.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
-      >
+      {/* Header - CSS animation */}
+      <div className="mb-6 animate-fade-in">
         <h1 className="text-2xl font-bold text-night-100">
           {getGreeting()}, {user?.firstName || t('common.friend', 'друг')}!
         </h1>
         <p className="text-night-400 mt-1">
           {t('home.readyToPractice')}
         </p>
-      </m.div>
+      </div>
 
-      {/* Stats cards */}
+      {/* Stats cards - CSS animation with delay */}
       {stats && (
-        <m.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid grid-cols-2 gap-3 mb-6"
+        <div
+          className="grid grid-cols-2 gap-3 mb-6 animate-slide-up"
+          style={{ animationDelay: '0.1s' }}
         >
           <Card variant="glass" className="text-center">
             <div className="text-3xl font-bold text-primary-400">
@@ -82,15 +78,13 @@ export const Home: React.FC = () => {
             </div>
             <div className="text-sm text-night-400">{t('home.stats.streak')}</div>
           </Card>
-        </m.div>
+        </div>
       )}
 
       {/* Main CTA - Start breathing */}
-      <m.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.2 }}
-        className="mb-6"
+      <div
+        className="mb-6 animate-slide-up"
+        style={{ animationDelay: '0.2s' }}
       >
         <Card
           variant="elevated"
@@ -131,14 +125,12 @@ export const Home: React.FC = () => {
             </svg>
           </div>
         </Card>
-      </m.div>
+      </div>
 
       {/* Quick patterns - For Sleep */}
-      <m.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="mb-6"
+      <div
+        className="mb-6 animate-slide-up"
+        style={{ animationDelay: '0.3s' }}
       >
         <h3 className="text-lg font-semibold text-night-100 mb-3 flex items-center gap-2">
           {CATEGORY_ICONS.sleep} {t('home.categories.sleep')}
@@ -164,14 +156,12 @@ export const Home: React.FC = () => {
             </Card>
           ))}
         </div>
-      </m.div>
+      </div>
 
       {/* Quick patterns - Stress relief */}
-      <m.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="mb-6"
+      <div
+        className="mb-6 animate-slide-up"
+        style={{ animationDelay: '0.4s' }}
       >
         <h3 className="text-lg font-semibold text-night-100 mb-3 flex items-center gap-2">
           {CATEGORY_ICONS.stress} {t('home.categories.stress')}
@@ -197,14 +187,13 @@ export const Home: React.FC = () => {
             </Card>
           ))}
         </div>
-      </m.div>
+      </div>
 
       {/* Sonya greeting */}
       {profile && (
-        <m.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
+        <div
+          className="animate-slide-up"
+          style={{ animationDelay: '0.5s' }}
         >
           <Card variant="glass" className="flex items-center gap-4">
             <div className="text-4xl">
@@ -228,7 +217,7 @@ export const Home: React.FC = () => {
               </div>
             </div>
           </Card>
-        </m.div>
+        </div>
       )}
     </div>
   );

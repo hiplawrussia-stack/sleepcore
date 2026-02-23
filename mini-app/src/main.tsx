@@ -9,6 +9,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { initSentry } from '@/services/sentry';
+import '@fontsource-variable/inter'; // Self-hosted Inter Variable font
 import '@/i18n'; // Initialize i18n before App
 import App from './App';
 import '@/styles/global.css';

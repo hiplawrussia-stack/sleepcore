@@ -3,6 +3,9 @@
  * ========================================================
  * Opt-in leaderboard for social comparison and motivation.
  *
+ * PERFORMANCE: Uses AutoAnimate (2.3KB) instead of motion (18KB)
+ * for list animations.
+ *
  * Privacy Research:
  * - 88% users prefer opt-in consent mechanisms
  * - Transparency about data usage increases trust (79%)
@@ -19,7 +22,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { m, AnimatePresence } from 'motion/react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { Card } from '@/components/common';
 import { useTelegram } from '@/hooks';
 import { haptics } from '@/services/haptics';
@@ -73,14 +76,10 @@ const getRankIcon = (rank: number): string => {
   return `#${rank}`;
 };
 
-const LeaderboardEntry: React.FC<{
+const LeaderboardEntryRow: React.FC<{
   entry: LeaderboardEntry;
-  index: number;
-}> = ({ entry, index }) => (
-  <m.div
-    initial={{ opacity: 0, x: -20 }}
-    animate={{ opacity: 1, x: 0 }}
-    transition={{ delay: index * 0.05 }}
+}> = ({ entry }) => (
+  <div
     className={`flex items-center gap-3 p-3 rounded-xl ${
       entry.isCurrentUser
         ? 'bg-primary-500/10 border border-primary-500/30'
@@ -118,7 +117,7 @@ const LeaderboardEntry: React.FC<{
         🔥 {entry.streak}
       </div>
     </div>
-  </m.div>
+  </div>
 );
 
 const OptInPrompt: React.FC<{
@@ -186,6 +185,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
   const { showConfirm } = useTelegram();
   const [isOptingIn, setIsOptingIn] = useState(false);
   const [isOptingOut, setIsOptingOut] = useState(false);
+  const [listRef] = useAutoAnimate<HTMLDivElement>();
 
   // Handle opt-in
   const handleOptIn = useCallback(async (anonymous: boolean) => {
@@ -283,18 +283,15 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
         </div>
       )}
 
-      {/* Entries list */}
+      {/* Entries list - AutoAnimate handles animations */}
       {entries.length > 0 ? (
-        <div className="space-y-2">
-          <AnimatePresence mode="popLayout">
-            {entries.map((entry, index) => (
-              <LeaderboardEntry
-                key={`${entry.rank}-${entry.displayName}`}
-                entry={entry}
-                index={index}
-              />
-            ))}
-          </AnimatePresence>
+        <div ref={listRef} className="space-y-2">
+          {entries.map((entry) => (
+            <LeaderboardEntryRow
+              key={`${entry.rank}-${entry.displayName}`}
+              entry={entry}
+            />
+          ))}
         </div>
       ) : (
         <Card className="text-center py-6">

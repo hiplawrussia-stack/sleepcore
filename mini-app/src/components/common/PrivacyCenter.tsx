@@ -6,6 +6,8 @@
  * - Article 17: Right to Erasure
  * - Article 20: Right to Data Portability
  *
+ * PERFORMANCE: CSS-only animations, no motion dependency.
+ *
  * Compliance:
  * - GDPR Chapter 3 (Rights of the Data Subject)
  * - Clear and plain language requirement
@@ -16,7 +18,6 @@
  */
 
 import React, { useState } from 'react';
-import { m, AnimatePresence } from 'motion/react';
 import { Card } from './Card';
 import { useTelegram } from '@/hooks';
 import { useAuthStore } from '@/store/authStore';
@@ -212,99 +213,93 @@ export const PrivacyCenter: React.FC = () => {
             </div>
           </div>
         </div>
-        <m.span
-          animate={{ rotate: isExpanded ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-          className="text-night-400"
+        <span
+          className={`text-night-400 transition-transform duration-200 ${
+            isExpanded ? 'rotate-180' : ''
+          }`}
         >
           ▼
-        </m.span>
+        </span>
       </button>
 
-      {/* Expandable content */}
-      <AnimatePresence>
-        {isExpanded && (
-          <m.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
+      {/* Expandable content - CSS transition */}
+      <div
+        className={`overflow-hidden transition-all duration-200 ease-out ${
+          isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
+        <div className="pt-4 space-y-3">
+          {/* Article 15: Right of Access */}
+          <button
+            onClick={handleViewData}
+            className="w-full flex items-center gap-3 p-3 rounded-xl bg-night-700/50 hover:bg-night-700 transition-colors text-left"
           >
-            <div className="pt-4 space-y-3">
-              {/* Article 15: Right of Access */}
-              <button
-                onClick={handleViewData}
-                className="w-full flex items-center gap-3 p-3 rounded-xl bg-night-700/50 hover:bg-night-700 transition-colors text-left"
-              >
-                <span className="text-lg">📋</span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-night-100">Мои данные</div>
-                  <div className="text-xs text-night-400">
-                    Просмотреть сохранённые данные
-                  </div>
-                </div>
-              </button>
-
-              {/* Article 20: Right to Data Portability */}
-              <button
-                onClick={handleExportData}
-                disabled={isExporting}
-                className="w-full flex items-center gap-3 p-3 rounded-xl bg-night-700/50 hover:bg-night-700 transition-colors text-left disabled:opacity-50"
-              >
-                <span className="text-lg">{isExporting ? '⏳' : '📥'}</span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-night-100">
-                    {isExporting ? 'Экспортируем...' : 'Экспорт данных'}
-                  </div>
-                  <div className="text-xs text-night-400">
-                    Скачать данные в формате JSON
-                  </div>
-                </div>
-              </button>
-
-              {/* Article 17: Right to Erasure */}
-              <button
-                onClick={handleDeleteData}
-                disabled={isDeleting}
-                className="w-full flex items-center gap-3 p-3 rounded-xl bg-red-900/20 hover:bg-red-900/30 transition-colors text-left disabled:opacity-50"
-              >
-                <span className="text-lg">{isDeleting ? '⏳' : '🗑️'}</span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-red-400">
-                    {isDeleting ? 'Удаляем...' : 'Удалить данные'}
-                  </div>
-                  <div className="text-xs text-night-400">
-                    Удалить все персональные данные
-                  </div>
-                </div>
-              </button>
-
-              {/* Privacy Policy Link */}
-              <button
-                onClick={handleOpenPrivacyPolicy}
-                className="w-full flex items-center gap-3 p-3 rounded-xl bg-night-700/50 hover:bg-night-700 transition-colors text-left"
-              >
-                <span className="text-lg">📜</span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-night-100">
-                    Политика конфиденциальности
-                  </div>
-                  <div className="text-xs text-night-400">
-                    Telegram Privacy Policy
-                  </div>
-                </div>
-              </button>
-
-              {/* GDPR Notice */}
-              <div className="pt-2 text-xs text-night-500 text-center">
-                Согласно GDPR (ст. 15, 17, 20) вы имеете право на доступ,
-                удаление и переносимость ваших данных
+            <span className="text-lg">📋</span>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-night-100">Мои данные</div>
+              <div className="text-xs text-night-400">
+                Просмотреть сохранённые данные
               </div>
             </div>
-          </m.div>
-        )}
-      </AnimatePresence>
+          </button>
+
+          {/* Article 20: Right to Data Portability */}
+          <button
+            onClick={handleExportData}
+            disabled={isExporting}
+            className="w-full flex items-center gap-3 p-3 rounded-xl bg-night-700/50 hover:bg-night-700 transition-colors text-left disabled:opacity-50"
+          >
+            <span className="text-lg">{isExporting ? '⏳' : '📥'}</span>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-night-100">
+                {isExporting ? 'Экспортируем...' : 'Экспорт данных'}
+              </div>
+              <div className="text-xs text-night-400">
+                Скачать данные в формате JSON
+              </div>
+            </div>
+          </button>
+
+          {/* Article 17: Right to Erasure */}
+          <button
+            onClick={handleDeleteData}
+            disabled={isDeleting}
+            className="w-full flex items-center gap-3 p-3 rounded-xl bg-red-900/20 hover:bg-red-900/30 transition-colors text-left disabled:opacity-50"
+          >
+            <span className="text-lg">{isDeleting ? '⏳' : '🗑️'}</span>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-red-400">
+                {isDeleting ? 'Удаляем...' : 'Удалить данные'}
+              </div>
+              <div className="text-xs text-night-400">
+                Удалить все персональные данные
+              </div>
+            </div>
+          </button>
+
+          {/* Privacy Policy Link */}
+          <button
+            onClick={handleOpenPrivacyPolicy}
+            className="w-full flex items-center gap-3 p-3 rounded-xl bg-night-700/50 hover:bg-night-700 transition-colors text-left"
+          >
+            <span className="text-lg">📜</span>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-night-100">
+                Политика конфиденциальности
+              </div>
+              <div className="text-xs text-night-400">
+                Telegram Privacy Policy
+              </div>
+            </div>
+          </button>
+
+          {/* GDPR Notice */}
+          <div className="pt-2 text-xs text-night-500 text-center">
+            Согласно GDPR (ст. 15, 17, 20) вы имеете право на доступ,
+            удаление и переносимость ваших данных
+          </div>
+        </div>
+      </div>
     </Card>
   );
 };

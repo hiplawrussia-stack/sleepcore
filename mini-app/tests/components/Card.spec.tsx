@@ -159,7 +159,7 @@ describe('Card Component', () => {
     it('should have transition classes', () => {
       const { container } = render(<Card>Transition</Card>);
       const card = container.firstChild as HTMLElement;
-      expect(card.className).toContain('transition-colors');
+      expect(card.className).toContain('transition-all');
     });
   });
 });
