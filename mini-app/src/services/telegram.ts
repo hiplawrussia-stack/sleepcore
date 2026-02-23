@@ -288,6 +288,106 @@ class TelegramService {
     this.webApp.openTelegramLink(url);
   }
 
+  // ========== Performance Detection ==========
+
+  /**
+   * Device performance classes based on Telegram WebApp capabilities
+   * @see https://core.telegram.org/bots/webapps (2025 updates)
+   */
+  private performanceClass: 'low' | 'medium' | 'high' | null = null;
+
+  /**
+   * Get device performance class
+   * Used to adjust animations and effects for low-end devices
+   *
+   * Detection heuristics (2025 best practice):
+   * - iOS: Generally high performance
+   * - Android: Check memory/CPU if available, fallback to viewport size
+   * - Desktop: Always high performance
+   * - Web: Medium by default
+   *
+   * @returns 'low' | 'medium' | 'high'
+   */
+  getPerformanceClass(): 'low' | 'medium' | 'high' {
+    if (this.performanceClass) return this.performanceClass;
+
+    // Desktop is always high performance
+    if (this.isDesktop()) {
+      this.performanceClass = 'high';
+      return 'high';
+    }
+
+    // iOS devices are generally high performance
+    if (this.isIOS()) {
+      this.performanceClass = 'high';
+      return 'high';
+    }
+
+    // For Android, use viewport and memory heuristics
+    if (this.isAndroid()) {
+      // Check device memory if available (Navigator.deviceMemory)
+      const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+      if (memory !== undefined) {
+        if (memory <= 2) {
+          this.performanceClass = 'low';
+          return 'low';
+        }
+        if (memory <= 4) {
+          this.performanceClass = 'medium';
+          return 'medium';
+        }
+        this.performanceClass = 'high';
+        return 'high';
+      }
+
+      // Fallback: use viewport height as proxy (smaller = likely lower-end)
+      const viewportHeight = this.getViewportStableHeight();
+      if (viewportHeight < 600) {
+        this.performanceClass = 'low';
+        return 'low';
+      }
+      if (viewportHeight < 800) {
+        this.performanceClass = 'medium';
+        return 'medium';
+      }
+    }
+
+    // Default to medium for unknown platforms
+    this.performanceClass = 'medium';
+    return 'medium';
+  }
+
+  /**
+   * Check if animations should be reduced
+   * Based on device performance and user preferences
+   */
+  shouldReduceAnimations(): boolean {
+    // Check user preference first (prefers-reduced-motion)
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return true;
+    }
+
+    // Reduce for low-performance devices
+    return this.getPerformanceClass() === 'low';
+  }
+
+  /**
+   * Get recommended animation duration multiplier
+   * Low-end devices get faster (shorter) animations
+   */
+  getAnimationDurationMultiplier(): number {
+    const performanceClass = this.getPerformanceClass();
+    switch (performanceClass) {
+      case 'low':
+        return 0.5; // Half duration
+      case 'medium':
+        return 0.75; // 75% duration
+      case 'high':
+      default:
+        return 1.0; // Full duration
+    }
+  }
+
   // ========== Cloud Storage ==========
 
   /**

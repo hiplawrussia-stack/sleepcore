@@ -17,8 +17,25 @@
 import * as Sentry from '@sentry/react';
 
 /**
+ * Sensitive routes that should not be traced in detail
+ * @see HIPAA Safe Harbor de-identification
+ */
+const SENSITIVE_ROUTE_PATTERNS = [
+  /\/profile/i,
+  /\/settings/i,
+  /\/diary/i,
+];
+
+/**
  * Initialize Sentry error monitoring
  * Should be called BEFORE React renders
+ *
+ * Configuration follows 2025-2026 best practices:
+ * - replaysOnErrorSampleRate: 1.0 to capture full context on errors
+ * - tracesSampleRate: 0.2 for balanced coverage vs cost
+ * - beforeSendTransaction: filter sensitive routes
+ *
+ * @see https://docs.sentry.io/platforms/javascript/guides/react/
  */
 export function initSentry(): void {
   const dsn = import.meta.env.VITE_SENTRY_DSN;
@@ -34,12 +51,13 @@ export function initSentry(): void {
     environment: import.meta.env.MODE,
     release: `sleepcore-mini-app@${import.meta.env.VITE_APP_VERSION || '1.0.0'}`,
 
-    // Performance monitoring
-    tracesSampleRate: 0.1, // 10% of transactions
+    // Performance monitoring (2025 best practice: 10-30% for production)
+    tracesSampleRate: 0.2, // 20% of transactions
 
-    // Session replay for debugging (GDPR: minimal, no text)
-    replaysSessionSampleRate: 0.0, // Disabled by default
-    replaysOnErrorSampleRate: 0.1, // 10% on error
+    // Session replay for debugging
+    // Best practice 2025: low session rate, high error rate
+    replaysSessionSampleRate: 0.05, // 5% of sessions for baseline
+    replaysOnErrorSampleRate: 1.0, // 100% on error for full context
 
     // HIPAA/GDPR: Anonymize user data
     beforeSend(event) {
@@ -59,13 +77,32 @@ export function initSentry(): void {
       return event;
     },
 
+    // Filter sensitive transactions (HIPAA compliance)
+    beforeSendTransaction(event) {
+      const transactionName = event.transaction || '';
+
+      // Redact sensitive route names
+      for (const pattern of SENSITIVE_ROUTE_PATTERNS) {
+        if (pattern.test(transactionName)) {
+          event.transaction = transactionName.replace(pattern, '/[REDACTED]');
+        }
+      }
+
+      return event;
+    },
+
     // Integrations
     integrations: [
-      Sentry.browserTracingIntegration(),
+      Sentry.browserTracingIntegration({
+        // Enable interaction tracing for INP insights
+        enableInp: true,
+      }),
       Sentry.replayIntegration({
-        // GDPR: Mask all text to prevent PHI capture
+        // GDPR/HIPAA: Mask all text to prevent PHI capture
         maskAllText: true,
         blockAllMedia: true,
+        // Block sensitive form inputs
+        maskAllInputs: true,
       }),
     ],
   });

@@ -49,6 +49,10 @@ const { mockUser, mockTelegram, mockThemeCallback } = vi.hoisted(() => {
       isIOS: vi.fn().mockReturnValue(true),
       isAndroid: vi.fn().mockReturnValue(false),
       isDesktop: vi.fn().mockReturnValue(false),
+      // Performance detection (2025)
+      getPerformanceClass: vi.fn().mockReturnValue('high'),
+      shouldReduceAnimations: vi.fn().mockReturnValue(false),
+      getAnimationDurationMultiplier: vi.fn().mockReturnValue(1.0),
       showMainButton: vi.fn(),
       hideMainButton: vi.fn(),
       showBackButton: vi.fn(),

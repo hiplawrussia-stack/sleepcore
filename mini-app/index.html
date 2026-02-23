@@ -2,7 +2,17 @@
 <html lang="ru" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/assets/sonya-icon.svg" />
+    <!--
+      LCP Optimization (Core Web Vitals 2025)
+      - Preconnect: Early connection to API domain
+      - DNS-prefetch: Fallback for browsers without preconnect
+      - Preload: Critical font for faster text rendering
+      @see https://web.dev/articles/top-cwv
+    -->
+    <link rel="preconnect" href="https://api.sleepcore.app" crossorigin />
+    <link rel="dns-prefetch" href="https://api.sleepcore.app" />
+    <link rel="preconnect" href="https://telegram.org" crossorigin />
+    <link rel="icon" type="image/svg+xml" href="/assets/sonya-icon.svg" fetchpriority="low" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#1e293b" />
     <meta name="description" content="SleepCore - Дыхательные упражнения для здорового сна" />

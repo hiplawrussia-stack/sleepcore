@@ -16,6 +16,10 @@ interface UseTelegramReturn {
   isIOS: boolean;
   isAndroid: boolean;
   isDesktop: boolean;
+  // Performance detection (2025 best practice for Telegram Mini Apps)
+  performanceClass: 'low' | 'medium' | 'high';
+  shouldReduceAnimations: boolean;
+  animationMultiplier: number;
   showMainButton: (text: string, onClick: () => void) => void;
   hideMainButton: () => void;
   showBackButton: (onClick: () => void) => void;
@@ -87,6 +91,10 @@ export const useTelegram = (): UseTelegramReturn => {
     isIOS: telegram.isIOS(),
     isAndroid: telegram.isAndroid(),
     isDesktop: telegram.isDesktop(),
+    // Performance detection
+    performanceClass: telegram.getPerformanceClass(),
+    shouldReduceAnimations: telegram.shouldReduceAnimations(),
+    animationMultiplier: telegram.getAnimationDurationMultiplier(),
     showMainButton,
     hideMainButton,
     showBackButton,
