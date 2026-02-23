@@ -41,9 +41,10 @@ export class BreathingPage extends BasePage {
   constructor(page: Page) {
     super(page);
 
-    this.patternSelector = page.locator('text=Выбери технику дыхания').locator('..');
+    this.patternSelector = page.locator('h2:has-text("Выбери технику дыхания")').locator('..');
     this.patternButtons = page.locator('button').filter({ has: page.locator('.text-2xl') });
-    this.cycleSelector = page.locator('text=Количество циклов').locator('..');
+    // Cycle selector: go up from "Количество циклов" twice to reach the container
+    this.cycleSelector = page.locator('text=Количество циклов').locator('..').locator('..');
     this.breathingCircle = page.locator('[class*="rounded-full"]').filter({ hasText: /вдох|выдох|задержка/i }).first();
     this.progressIndicator = page.locator('text=/Цикл \\d+ из \\d+/');
     this.completionOverlay = page.locator('text=Отлично!').locator('..');
@@ -53,6 +54,8 @@ export class BreathingPage extends BasePage {
     const url = patternId ? `/breathing?pattern=${patternId}` : '/breathing';
     await this.page.goto(url);
     await this.waitForLoad();
+    // Wait for React app to initialize and set up Telegram MainButton
+    await this.page.waitForTimeout(500);
   }
 
   /**
@@ -169,23 +172,40 @@ export class BreathingPage extends BasePage {
   }
 
   /**
-   * Wait for exercise completion
-   * Uses Clock API to fast-forward time in tests
+   * Install fake timers for exercise completion testing.
+   * MUST be called BEFORE startExercise() for clock API to work.
    */
-  async waitForCompletion(useFastClock = true): Promise<void> {
-    if (useFastClock) {
-      // Install fake timers
-      await this.page.clock.install({ time: Date.now() });
+  async installClock(): Promise<void> {
+    await this.page.clock.install({ time: Date.now() });
+  }
 
-      // Fast-forward until completion overlay appears
-      while (!(await this.isVisible(this.completionOverlay, 100))) {
-        await this.page.clock.fastForward(1000);
-        await this.page.waitForTimeout(10); // Small real delay for React to update
+  /**
+   * Wait for exercise completion by fast-forwarding time.
+   * Requires clock to be installed before exercise started.
+   * @param timeoutMs Maximum total time to fast-forward (default 10 minutes)
+   */
+  async waitForCompletionWithClock(timeoutMs = 600000): Promise<void> {
+    const stepMs = 500;
+    let totalAdvanced = 0;
+
+    while (!(await this.isVisible(this.completionOverlay, 50))) {
+      await this.page.clock.fastForward(stepMs);
+      // Small real delay to let React process state updates
+      await this.page.waitForTimeout(5);
+      totalAdvanced += stepMs;
+
+      if (totalAdvanced >= timeoutMs) {
+        throw new Error(`Exercise did not complete after ${timeoutMs}ms of fast-forwarded time`);
       }
-    } else {
-      // Wait for real completion (slow, use for specific tests)
-      await this.completionOverlay.waitFor({ timeout: 120000 });
     }
+  }
+
+  /**
+   * Wait for exercise completion (real-time, slow)
+   * Use for specific real-time verification tests
+   */
+  async waitForCompletionRealTime(timeoutMs = 120000): Promise<void> {
+    await this.completionOverlay.waitFor({ timeout: timeoutMs });
   }
 
   /**
@@ -212,8 +232,8 @@ export class BreathingPage extends BasePage {
   }
 
   /**
-   * Run a complete breathing exercise flow
-   * Uses Clock API for fast testing
+   * Run a complete breathing exercise flow with fast clock.
+   * Installs clock API, runs exercise, and fast-forwards to completion.
    */
   async runCompleteExercise(
     patternName?: string,
@@ -227,11 +247,14 @@ export class BreathingPage extends BasePage {
     // Select cycles
     await this.selectCycles(cycles);
 
-    // Start exercise
+    // Install clock BEFORE starting exercise
+    await this.installClock();
+
+    // Start exercise (timers now use fake clock)
     await this.startExercise();
 
-    // Wait for completion
-    await this.waitForCompletion();
+    // Fast-forward to completion
+    await this.waitForCompletionWithClock();
 
     // Verify completion
     expect(await this.isCompleted()).toBe(true);

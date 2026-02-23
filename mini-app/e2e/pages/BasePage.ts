@@ -88,9 +88,21 @@ export abstract class BasePage {
   }
 
   /**
-   * Assert MainButton has specific text
+   * Assert MainButton has specific text.
+   * Waits for the button to become visible with the expected text.
    */
-  async expectMainButton(text: string): Promise<void> {
+  async expectMainButton(text: string, timeout = 5000): Promise<void> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeout) {
+      const state = await this.getMainButtonState();
+      if (state.visible && state.text === text) {
+        return;
+      }
+      await this.page.waitForTimeout(100);
+    }
+
+    // Final check with proper assertion
     const state = await this.getMainButtonState();
     expect(state.visible).toBe(true);
     expect(state.text).toBe(text);

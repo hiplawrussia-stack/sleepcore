@@ -76,7 +76,12 @@ function generateMockInitData(user: MockTelegramUser): string {
 }
 
 /**
- * Injects Telegram WebApp mock into the page
+ * Injects Telegram WebApp mock into the page.
+ *
+ * Strategy: The @twa-dev/sdk overwrites window.Telegram.WebApp when it loads.
+ * Instead of fighting this, we:
+ * 1. Inject initData BEFORE the SDK loads (so SDK parses it correctly)
+ * 2. After page load, wrap the SDK's MainButton/BackButton to track state
  */
 async function injectTelegramMock(
   page: Page,
@@ -85,315 +90,232 @@ async function injectTelegramMock(
 ): Promise<void> {
   const initData = generateMockInitData(user);
 
-  await page.addInitScript(({ initData, user, theme }) => {
-    // Track MainButton state
-    let mainButtonText = '';
-    let mainButtonVisible = false;
-    let mainButtonCallback: (() => void) | null = null;
+  // Step 1: Inject initData and user data BEFORE the page/SDK loads
+  // This allows the SDK to parse initData correctly
+  await page.addInitScript(({ initData, user }) => {
+    // Create minimal Telegram object with initData
+    // The SDK will check for initData to determine if running in Telegram
+    (window as unknown as {
+      __tg_initData: string;
+      __tg_initDataUser: typeof user;
+    }).__tg_initData = initData;
+    (window as unknown as { __tg_initDataUser: typeof user }).__tg_initDataUser = user;
 
-    // Track BackButton state
-    let backButtonVisible = false;
-    let backButtonCallback: (() => void) | null = null;
-
-    // Create mock WebApp object
-    const mockWebApp = {
-      // Basic info
-      initData,
-      initDataUnsafe: {
-        user,
-        auth_date: Math.floor(Date.now() / 1000),
-        hash: 'test_hash',
-      },
-      version: '7.0',
-      platform: 'tdesktop',
-      colorScheme: 'dark' as const,
-      themeParams: theme,
-      isExpanded: true,
-      viewportHeight: window.innerHeight,
-      viewportStableHeight: window.innerHeight,
-      headerColor: theme.bg_color,
-      backgroundColor: theme.bg_color,
-
-      // Ready state
-      isReady: false,
-      ready: function () {
-        this.isReady = true;
-        console.log('[TelegramMock] WebApp ready');
-      },
-
-      // Expand
-      expand: function () {
-        this.isExpanded = true;
-        console.log('[TelegramMock] WebApp expanded');
-      },
-
-      // Close
-      close: function () {
-        console.log('[TelegramMock] WebApp close requested');
-      },
-
-      // MainButton
-      MainButton: {
-        text: '',
-        color: theme.button_color,
-        textColor: theme.button_text_color,
-        isVisible: false,
-        isActive: true,
-        isProgressVisible: false,
-
-        setText: function (text: string) {
-          this.text = text;
-          mainButtonText = text;
-          console.log('[TelegramMock] MainButton text:', text);
-          return this;
-        },
-        onClick: function (callback: () => void) {
-          mainButtonCallback = callback;
-          console.log('[TelegramMock] MainButton onClick registered');
-          return this;
-        },
-        offClick: function (_callback: () => void) {
-          mainButtonCallback = null;
-          return this;
-        },
-        show: function () {
-          this.isVisible = true;
-          mainButtonVisible = true;
-          console.log('[TelegramMock] MainButton shown:', mainButtonText);
-          return this;
-        },
-        hide: function () {
-          this.isVisible = false;
-          mainButtonVisible = false;
-          console.log('[TelegramMock] MainButton hidden');
-          return this;
-        },
-        enable: function () {
-          this.isActive = true;
-          return this;
-        },
-        disable: function () {
-          this.isActive = false;
-          return this;
-        },
-        showProgress: function () {
-          this.isProgressVisible = true;
-          return this;
-        },
-        hideProgress: function () {
-          this.isProgressVisible = false;
-          return this;
-        },
-        setParams: function (params: { text?: string; color?: string; text_color?: string }) {
-          if (params.text) this.setText(params.text);
-          if (params.color) this.color = params.color;
-          if (params.text_color) this.textColor = params.text_color;
-          return this;
-        },
-      },
-
-      // BackButton
-      BackButton: {
-        isVisible: false,
-        onClick: function (callback: () => void) {
-          backButtonCallback = callback;
-          console.log('[TelegramMock] BackButton onClick registered');
-          return this;
-        },
-        offClick: function (_callback: () => void) {
-          backButtonCallback = null;
-          return this;
-        },
-        show: function () {
-          this.isVisible = true;
-          backButtonVisible = true;
-          console.log('[TelegramMock] BackButton shown');
-          return this;
-        },
-        hide: function () {
-          this.isVisible = false;
-          backButtonVisible = false;
-          console.log('[TelegramMock] BackButton hidden');
-          return this;
-        },
-      },
-
-      // Haptic feedback (mock)
-      HapticFeedback: {
-        impactOccurred: function (style: string) {
-          console.log('[TelegramMock] Haptic impact:', style);
-          return this;
-        },
-        notificationOccurred: function (type: string) {
-          console.log('[TelegramMock] Haptic notification:', type);
-          return this;
-        },
-        selectionChanged: function () {
-          console.log('[TelegramMock] Haptic selection');
-          return this;
-        },
-      },
-
-      // Cloud storage (mock)
-      CloudStorage: {
-        setItem: function (key: string, value: string, callback?: (error: Error | null, success: boolean) => void) {
-          try {
-            localStorage.setItem(`tg_cloud_${key}`, value);
-            callback?.(null, true);
-          } catch (e) {
-            callback?.(e as Error, false);
-          }
-        },
-        getItem: function (key: string, callback: (error: Error | null, value: string | null) => void) {
-          try {
-            const value = localStorage.getItem(`tg_cloud_${key}`);
-            callback(null, value);
-          } catch (e) {
-            callback(e as Error, null);
-          }
-        },
-        getItems: function (keys: string[], callback: (error: Error | null, values: Record<string, string>) => void) {
-          try {
-            const values: Record<string, string> = {};
-            keys.forEach(key => {
-              const value = localStorage.getItem(`tg_cloud_${key}`);
-              if (value) values[key] = value;
-            });
-            callback(null, values);
-          } catch (e) {
-            callback(e as Error, {});
-          }
-        },
-        removeItem: function (key: string, callback?: (error: Error | null, success: boolean) => void) {
-          try {
-            localStorage.removeItem(`tg_cloud_${key}`);
-            callback?.(null, true);
-          } catch (e) {
-            callback?.(e as Error, false);
-          }
-        },
-        getKeys: function (callback: (error: Error | null, keys: string[]) => void) {
-          try {
-            const keys: string[] = [];
-            for (let i = 0; i < localStorage.length; i++) {
-              const key = localStorage.key(i);
-              if (key?.startsWith('tg_cloud_')) {
-                keys.push(key.replace('tg_cloud_', ''));
-              }
-            }
-            callback(null, keys);
-          } catch (e) {
-            callback(e as Error, []);
-          }
-        },
-      },
-
-      // Event handlers
-      onEvent: function (eventType: string, callback: () => void) {
-        console.log('[TelegramMock] Event registered:', eventType);
-        document.addEventListener(`telegram:${eventType}`, callback);
-      },
-      offEvent: function (eventType: string, callback: () => void) {
-        document.removeEventListener(`telegram:${eventType}`, callback);
-      },
-
-      // Request write access
-      requestWriteAccess: function (callback?: (access: boolean) => void) {
-        callback?.(true);
-      },
-
-      // Request contact
-      requestContact: function (callback?: (contact: unknown) => void) {
-        callback?.(null);
-      },
-
-      // Open link
-      openLink: function (url: string, options?: { try_instant_view?: boolean }) {
-        console.log('[TelegramMock] Open link:', url, options);
-      },
-
-      // Open Telegram link
-      openTelegramLink: function (url: string) {
-        console.log('[TelegramMock] Open Telegram link:', url);
-      },
-
-      // Show popup
-      showPopup: function (params: { message: string }, callback?: (buttonId: string) => void) {
-        console.log('[TelegramMock] Show popup:', params.message);
-        callback?.('ok');
-      },
-
-      // Show alert
-      showAlert: function (message: string, callback?: () => void) {
-        console.log('[TelegramMock] Show alert:', message);
-        callback?.();
-      },
-
-      // Show confirm
-      showConfirm: function (message: string, callback?: (confirmed: boolean) => void) {
-        console.log('[TelegramMock] Show confirm:', message);
-        callback?.(true);
-      },
-
-      // Set header color
-      setHeaderColor: function (color: string) {
-        this.headerColor = color;
-      },
-
-      // Set background color
-      setBackgroundColor: function (color: string) {
-        this.backgroundColor = color;
-      },
-
-      // Enable/disable closing confirmation
-      enableClosingConfirmation: function () {
-        console.log('[TelegramMock] Closing confirmation enabled');
-      },
-      disableClosingConfirmation: function () {
-        console.log('[TelegramMock] Closing confirmation disabled');
+    // We need to mock the postEvent mechanism since we're not in Telegram
+    // The SDK uses this to communicate with Telegram client
+    (window as unknown as { TelegramWebviewProxy: { postEvent: (eventType: string, eventData: string) => void } }).TelegramWebviewProxy = {
+      postEvent: (eventType: string, eventData: string) => {
+        console.log('[TelegramMock] postEvent:', eventType, eventData);
       },
     };
 
-    // Expose to window
-    (window as unknown as { Telegram: { WebApp: typeof mockWebApp } }).Telegram = {
-      WebApp: mockWebApp,
-    };
+    console.log('[TelegramMock] Pre-init data injected');
+  }, { initData, user });
 
-    // Expose helper functions for E2E tests
-    (window as unknown as { __e2e_clickMainButton: () => void }).__e2e_clickMainButton = () => {
-      if (mainButtonVisible && mainButtonCallback) {
-        mainButtonCallback();
-      }
-    };
-
-    (window as unknown as { __e2e_clickBackButton: () => void }).__e2e_clickBackButton = () => {
-      if (backButtonVisible && backButtonCallback) {
-        backButtonCallback();
-      }
-    };
-
-    (window as unknown as { __e2e_getMainButtonState: () => { text: string; visible: boolean } }).__e2e_getMainButtonState = () => ({
-      text: mainButtonText,
-      visible: mainButtonVisible,
-    });
-
-    console.log('[TelegramMock] Injected successfully');
-  }, { initData, user, theme });
+  // Step 2: After page loads, wrap the SDK's WebApp to track state
+  // This is done via page.evaluate after navigation
 }
 
 /**
- * Extended test fixture with Telegram mock
+ * Wraps the Telegram WebApp SDK's MainButton/BackButton after page load
+ * to enable E2E testing of button interactions
+ */
+async function wrapTelegramWebApp(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    // Wait a tick for SDK to initialize
+    const checkAndWrap = () => {
+      const webApp = (window as unknown as { Telegram?: { WebApp?: unknown } }).Telegram?.WebApp as {
+        MainButton?: {
+          text: string;
+          isVisible: boolean;
+          setText: (text: string) => unknown;
+          onClick: (cb: () => void) => unknown;
+          offClick: (cb: () => void) => unknown;
+          show: () => unknown;
+          hide: () => unknown;
+        };
+        BackButton?: {
+          isVisible: boolean;
+          onClick: (cb: () => void) => unknown;
+          offClick: (cb: () => void) => unknown;
+          show: () => unknown;
+          hide: () => unknown;
+        };
+        initData?: string;
+        initDataUnsafe?: { user?: unknown };
+      } | undefined;
+
+      if (!webApp) {
+        console.log('[TelegramMock] WebApp not found, retrying...');
+        setTimeout(checkAndWrap, 50);
+        return;
+      }
+
+      // Track state for E2E helpers
+      let mainButtonCallback: (() => void) | null = null;
+      let backButtonCallback: (() => void) | null = null;
+
+      // Store original methods
+      const originalMainButton = webApp.MainButton;
+      const originalBackButton = webApp.BackButton;
+
+      if (originalMainButton) {
+        const origOnClick = originalMainButton.onClick.bind(originalMainButton);
+        const origOffClick = originalMainButton.offClick.bind(originalMainButton);
+
+        originalMainButton.onClick = function(cb: () => void) {
+          mainButtonCallback = cb;
+          console.log('[TelegramMock] MainButton onClick registered');
+          return origOnClick(cb);
+        };
+
+        originalMainButton.offClick = function(cb: () => void) {
+          if (mainButtonCallback === cb) {
+            mainButtonCallback = null;
+          }
+          return origOffClick(cb);
+        };
+      }
+
+      if (originalBackButton) {
+        const origOnClick = originalBackButton.onClick.bind(originalBackButton);
+        const origOffClick = originalBackButton.offClick.bind(originalBackButton);
+
+        originalBackButton.onClick = function(cb: () => void) {
+          backButtonCallback = cb;
+          console.log('[TelegramMock] BackButton onClick registered');
+          return origOnClick(cb);
+        };
+
+        originalBackButton.offClick = function(cb: () => void) {
+          if (backButtonCallback === cb) {
+            backButtonCallback = null;
+          }
+          return origOffClick(cb);
+        };
+      }
+
+      // E2E helper functions
+      (window as unknown as { __e2e_clickMainButton: () => void }).__e2e_clickMainButton = () => {
+        if (originalMainButton?.isVisible && mainButtonCallback) {
+          console.log('[TelegramMock] Clicking MainButton');
+          mainButtonCallback();
+        } else {
+          console.log('[TelegramMock] MainButton not clickable:', {
+            isVisible: originalMainButton?.isVisible,
+            hasCallback: !!mainButtonCallback
+          });
+        }
+      };
+
+      (window as unknown as { __e2e_clickBackButton: () => void }).__e2e_clickBackButton = () => {
+        if (originalBackButton?.isVisible && backButtonCallback) {
+          console.log('[TelegramMock] Clicking BackButton');
+          backButtonCallback();
+        }
+      };
+
+      (window as unknown as { __e2e_getMainButtonState: () => { text: string; visible: boolean } }).__e2e_getMainButtonState = () => ({
+        text: originalMainButton?.text || '',
+        visible: originalMainButton?.isVisible || false,
+      });
+
+      console.log('[TelegramMock] WebApp wrapped successfully');
+    };
+
+    // Start checking
+    checkAndWrap();
+  });
+}
+
+/**
+ * API request capture for verification
+ */
+export interface CapturedRequest {
+  url: string;
+  method: string;
+  body: unknown;
+  timestamp: number;
+}
+
+/**
+ * API mock configuration
+ */
+export interface ApiMockConfig {
+  /** Glob pattern to match API URLs */
+  pattern: string;
+  /** Response status code */
+  status?: number;
+  /** Response body */
+  response?: unknown;
+  /** Capture requests for verification */
+  capture?: boolean;
+}
+
+/**
+ * Extended test fixture with Telegram mock and API helpers
  */
 export const test = base.extend<{
   telegramPage: Page;
   telegramUser: MockTelegramUser;
+  /** Captured API requests for verification */
+  capturedRequests: CapturedRequest[];
+  /** Set up API mock with optional request capture */
+  mockApi: (config: ApiMockConfig) => Promise<void>;
 }>({
   telegramUser: [DEFAULT_USER, { option: true }],
 
+  // Shared captured requests array
+  capturedRequests: async ({}, use) => {
+    const requests: CapturedRequest[] = [];
+    await use(requests);
+  },
+
+  // API mocking helper
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture
+  mockApi: async ({ telegramPage, capturedRequests }, use) => {
+    const mockApi = async (config: ApiMockConfig) => {
+      await telegramPage.route(config.pattern, async (route) => {
+        const request = route.request();
+
+        // Capture request if enabled
+        if (config.capture !== false) {
+          let body: unknown = null;
+          try {
+            body = request.postDataJSON();
+          } catch {
+            body = request.postData();
+          }
+
+          capturedRequests.push({
+            url: request.url(),
+            method: request.method(),
+            body,
+            timestamp: Date.now(),
+          });
+        }
+
+        // Fulfill with mock response
+        await route.fulfill({
+          status: config.status ?? 200,
+          contentType: 'application/json',
+          body: JSON.stringify(config.response ?? { success: true }),
+        });
+      });
+    };
+
+    await use(mockApi);
+  },
+
   // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture, not React hook
   telegramPage: async ({ page, telegramUser }, use) => {
-    // Inject mock before navigation
+    // Inject mock data before navigation (for SDK to parse initData)
     await injectTelegramMock(page, telegramUser);
+
+    // Intercept all navigations to wrap WebApp after load
+    page.on('load', async () => {
+      await wrapTelegramWebApp(page);
+    });
 
     // Use the page
     await use(page);

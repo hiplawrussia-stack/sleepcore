@@ -18,6 +18,12 @@ import { defineConfig, devices } from '@playwright/test';
  */
 const baseURL = process.env.E2E_BASE_URL || 'http://localhost:5173';
 
+/**
+ * Safari/WebKit is only reliably available on macOS.
+ * Skip Safari tests on Windows/Linux.
+ */
+const isMacOS = process.platform === 'darwin';
+
 export default defineConfig({
   // Test directory
   testDir: './e2e/tests',
@@ -61,16 +67,17 @@ export default defineConfig({
   timeout: 60000,
 
   // Projects configuration - mobile-first approach
+  // Note: Safari tests only run on macOS where WebKit is reliably available
   projects: [
-    // Primary: Mobile Safari (iOS)
-    {
+    // Primary: Mobile Safari (iOS) - macOS only
+    ...(isMacOS ? [{
       name: 'Mobile Safari',
       use: {
         ...devices['iPhone 14'],
         // Telegram Mini App viewport
         viewport: { width: 390, height: 844 },
       },
-    },
+    }] : []),
 
     // Secondary: Mobile Chrome (Android)
     {
