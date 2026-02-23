@@ -13,7 +13,8 @@
     "back": "Назад",
     "offline": "Офлайн",
     "syncing": "Синхронизация...",
-    "pending": "Ожидает: {{count}}"
+    "pending": "Ожидает: {{count}}",
+    "friend": "друг"
   },
   "navigation": {
     "home": "Главная",
@@ -26,6 +27,19 @@
       "afternoon": "Добрый день",
       "evening": "Добрый вечер",
       "night": "Доброй ночи"
+    },
+    "readyToPractice": "Готов к дыхательной практике?",
+    "startBreathing": "Начать дыхание",
+    "chooseTechnique": "Выбери технику и практикуй",
+    "categories": {
+      "sleep": "Для сна",
+      "stress": "От стресса",
+      "focus": "Для концентрации",
+      "energy": "Для энергии"
+    },
+    "sonya": {
+      "greeting": "Соня рада тебя видеть!",
+      "level": "Уровень"
     },
     "cards": {
       "breathing": {
@@ -67,9 +81,12 @@
       }
     },
     "phases": {
+      "ready": "Готов",
       "inhale": "Вдох",
       "hold": "Задержка",
-      "exhale": "Выдох"
+      "exhale": "Выдох",
+      "pause": "Пауза",
+      "done": "Готово!"
     },
     "progress": "Цикл {{current}} из {{total}}",
     "completion": {
@@ -87,18 +104,41 @@
     "title": "Профиль",
     "level": "Уровень {{level}}",
     "xp": "{{current}} / {{total}} XP",
+    "xpToNext": "До следующего уровня: {{xp}} XP",
     "evolution": {
       "owlet": "Совёнок",
       "youngOwl": "Молодая сова",
       "wiseOwl": "Мудрая сова",
-      "master": "Мастер"
+      "master": "Мастер",
+      "owletName": "Совёнок Соня",
+      "youngOwlName": "Молодая сова Соня",
+      "wiseOwlName": "Мудрая сова Соня",
+      "masterName": "Мастер сна Соня",
+      "owletDesc": "Только начинаем путь к здоровому сну",
+      "youngOwlDesc": "Уже многому научились вместе",
+      "wiseOwlDesc": "Мастер здорового сна",
+      "masterDesc": "Легенда здорового сна",
+      "daysActive": "{{count}} дней активности",
+      "daysToNext": "{{count}} дней до следующего уровня",
+      "progress": "Прогресс: {{percent}}%"
     },
     "stats": {
       "title": "Статистика",
       "totalSessions": "Всего сессий",
+      "totalTime": "Общее время",
       "totalMinutes": "Минут практики",
       "currentStreak": "Текущая серия",
-      "longestStreak": "Лучшая серия"
+      "longestStreak": "Лучшая серия",
+      "weekActivity": "Активность за неделю",
+      "days": {
+        "mon": "Пн",
+        "tue": "Вт",
+        "wed": "Ср",
+        "thu": "Чт",
+        "fri": "Пт",
+        "sat": "Сб",
+        "sun": "Вс"
+      }
     },
     "settings": {
       "title": "Настройки",

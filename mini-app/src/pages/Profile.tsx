@@ -8,12 +8,14 @@
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Card, PrivacyCenter } from '@/components/common';
 import { QuestsPanel } from '@/components/gamification';
 import { useTelegram, useHaptics, useUserProfile, useBreathingStats, useEvolution } from '@/hooks';
 import { formatDuration } from '@/components/breathing/patterns';
 
 export const Profile: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, showBackButton, hideBackButton } = useTelegram();
   const { isEnabled: hapticsEnabled, setEnabled: setHapticsEnabled, isAvailable: hapticsAvailable } = useHaptics();
@@ -43,8 +45,8 @@ export const Profile: React.FC = () => {
         emoji: evolution.stageEmoji,
         name: evolution.stageName,
         description: evolution.nextStage
-          ? `${evolution.daysActive} дней активности`
-          : 'Мастер здорового сна',
+          ? t('profile.evolution.daysActive', { count: evolution.daysActive })
+          : t('profile.evolution.wiseOwlDesc'),
         progress: evolution.progress,
         nextStage: evolution.nextStage,
         daysToNext: evolution.daysToNext,
@@ -57,32 +59,32 @@ export const Profile: React.FC = () => {
     const stages = {
       owlet: {
         emoji: '🐣',
-        name: 'Совёнок Соня',
-        description: 'Только начинаем путь к здоровому сну',
+        name: t('profile.evolution.owletName'),
+        description: t('profile.evolution.owletDesc'),
         nextStage: 'young_owl',
         progress: 0,
         daysToNext: null,
       },
       young_owl: {
         emoji: '🦉',
-        name: 'Молодая сова Соня',
-        description: 'Уже многому научились вместе',
+        name: t('profile.evolution.youngOwlName'),
+        description: t('profile.evolution.youngOwlDesc'),
         nextStage: 'wise_owl',
         progress: 0,
         daysToNext: null,
       },
       wise_owl: {
         emoji: '🦉✨',
-        name: 'Мудрая сова Соня',
-        description: 'Мастер здорового сна',
+        name: t('profile.evolution.wiseOwlName'),
+        description: t('profile.evolution.wiseOwlDesc'),
         nextStage: null,
         progress: 100,
         daysToNext: null,
       },
       master: {
         emoji: '🏆🦉',
-        name: 'Мастер сна Соня',
-        description: 'Легенда здорового сна',
+        name: t('profile.evolution.masterName'),
+        description: t('profile.evolution.masterDesc'),
         nextStage: null,
         progress: 100,
         daysToNext: null,
@@ -161,8 +163,8 @@ export const Profile: React.FC = () => {
                 </div>
                 <div className="text-xs text-night-500">
                   {evolutionInfo.daysToNext
-                    ? `${evolutionInfo.daysToNext} дней до следующего уровня`
-                    : `Прогресс: ${evolutionInfo.progress}%`}
+                    ? t('profile.evolution.daysToNext', { count: evolutionInfo.daysToNext })
+                    : t('profile.evolution.progress', { percent: evolutionInfo.progress })}
                 </div>
               </>
             )}
@@ -182,25 +184,25 @@ export const Profile: React.FC = () => {
             <div className="text-2xl font-bold text-primary-400">
               {stats.totalSessions}
             </div>
-            <div className="text-xs text-night-400">всего сессий</div>
+            <div className="text-xs text-night-400">{t('profile.stats.totalSessions')}</div>
           </Card>
           <Card className="text-center">
             <div className="text-2xl font-bold text-calm-blue">
               {formatDuration(stats.totalMinutes * 60)}
             </div>
-            <div className="text-xs text-night-400">общее время</div>
+            <div className="text-xs text-night-400">{t('profile.stats.totalTime')}</div>
           </Card>
           <Card className="text-center">
             <div className="text-2xl font-bold text-calm-green">
               {stats.currentStreak}
             </div>
-            <div className="text-xs text-night-400">текущий streak</div>
+            <div className="text-xs text-night-400">{t('profile.stats.currentStreak')}</div>
           </Card>
           <Card className="text-center">
             <div className="text-2xl font-bold text-calm-amber">
               {stats.longestStreak}
             </div>
-            <div className="text-xs text-night-400">рекорд streak</div>
+            <div className="text-xs text-night-400">{t('profile.stats.longestStreak')}</div>
           </Card>
         </motion.div>
       )}
@@ -225,13 +227,13 @@ export const Profile: React.FC = () => {
         >
           <Card>
             <div className="text-sm font-medium text-night-300 mb-3">
-              Активность за неделю
+              {t('profile.stats.weekActivity')}
             </div>
             <div className="flex items-end justify-between h-16 gap-1">
               {stats.weeklyProgress.map((minutes, index) => {
                 const maxMinutes = Math.max(...stats.weeklyProgress, 1);
                 const height = (minutes / maxMinutes) * 100;
-                const days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+                const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
                 return (
                   <div key={index} className="flex-1 flex flex-col items-center">
@@ -244,7 +246,7 @@ export const Profile: React.FC = () => {
                       }`}
                     />
                     <span className="text-[10px] text-night-500 mt-1">
-                      {days[index]}
+                      {t(`profile.stats.days.${dayKeys[index]}`)}
                     </span>
                   </div>
                 );
@@ -264,7 +266,7 @@ export const Profile: React.FC = () => {
         >
           <Card>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-night-300">Уровень {profile.level}</span>
+              <span className="text-night-300">{t('profile.level', { level: profile.level })}</span>
               <span className="font-bold text-primary-400">{profile.xp} XP</span>
             </div>
             <div className="h-2 bg-night-700 rounded-full overflow-hidden">
@@ -276,7 +278,7 @@ export const Profile: React.FC = () => {
               />
             </div>
             <div className="text-xs text-night-500 mt-1">
-              До следующего уровня: {100 - (profile.xp % 100)} XP
+              {t('profile.xpToNext', { xp: 100 - (profile.xp % 100) })}
             </div>
           </Card>
         </motion.div>
@@ -289,24 +291,24 @@ export const Profile: React.FC = () => {
         transition={{ delay: 0.4 }}
       >
         <h3 className="text-lg font-semibold text-night-100 mb-3">
-          Настройки
+          {t('profile.settings.title')}
         </h3>
 
         <Card className="space-y-4">
           {/* Haptics toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-night-100">Вибрация</div>
+              <div className="font-medium text-night-100">{t('profile.settings.haptics.title')}</div>
               <div className="text-xs text-night-400">
                 {hapticsAvailable
-                  ? 'Тактильная обратная связь при дыхании'
-                  : 'Недоступно на этом устройстве'}
+                  ? t('profile.settings.haptics.description')
+                  : t('profile.settings.haptics.unavailable')}
               </div>
             </div>
             <button
               onClick={() => setHapticsEnabled(!hapticsEnabled)}
               disabled={!hapticsAvailable}
-              aria-label="Вибрация"
+              aria-label={t('profile.settings.haptics.title')}
               aria-checked={hapticsEnabled}
               role="switch"
               className={`w-12 h-7 rounded-full transition-colors relative ${
@@ -343,7 +345,7 @@ export const Profile: React.FC = () => {
           className="mt-6"
         >
           <h3 className="text-lg font-semibold text-night-100 mb-3">
-            Достижения
+            {t('profile.badges.title')}
           </h3>
           <div className="flex flex-wrap gap-2">
             {profile.badges.map((badge, index) => (

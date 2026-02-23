@@ -8,6 +8,7 @@
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/common';
 import { useTelegram } from '@/hooks';
 import { useUserStore } from '@/store';
@@ -20,6 +21,7 @@ import {
 } from '@/components/breathing/patterns';
 
 export const Home: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useTelegram();
   const { profile, stats, loadProfile, loadStats } = useUserStore();
@@ -33,11 +35,11 @@ export const Home: React.FC = () => {
   // Get greeting based on time of day
   const getGreeting = (): string => {
     const hour = new Date().getHours();
-    if (hour < 6) return 'Доброй ночи';
-    if (hour < 12) return 'Доброе утро';
-    if (hour < 18) return 'Добрый день';
-    if (hour < 22) return 'Добрый вечер';
-    return 'Доброй ночи';
+    if (hour < 6) return t('home.greeting.night');
+    if (hour < 12) return t('home.greeting.morning');
+    if (hour < 18) return t('home.greeting.afternoon');
+    if (hour < 22) return t('home.greeting.evening');
+    return t('home.greeting.night');
   };
 
   // Quick access patterns (by category)
@@ -53,10 +55,10 @@ export const Home: React.FC = () => {
         className="mb-6"
       >
         <h1 className="text-2xl font-bold text-night-100">
-          {getGreeting()}, {user?.firstName || 'друг'}!
+          {getGreeting()}, {user?.firstName || t('common.friend', 'друг')}!
         </h1>
         <p className="text-night-400 mt-1">
-          Готов к дыхательной практике?
+          {t('home.readyToPractice')}
         </p>
       </motion.div>
 
@@ -72,13 +74,13 @@ export const Home: React.FC = () => {
             <div className="text-3xl font-bold text-primary-400">
               {stats.totalSessions}
             </div>
-            <div className="text-sm text-night-400">сессий</div>
+            <div className="text-sm text-night-400">{t('home.stats.sessions')}</div>
           </Card>
           <Card variant="glass" className="text-center">
             <div className="text-3xl font-bold text-calm-green">
               {stats.currentStreak}
             </div>
-            <div className="text-sm text-night-400">дней подряд</div>
+            <div className="text-sm text-night-400">{t('home.stats.streak')}</div>
           </Card>
         </motion.div>
       )}
@@ -108,10 +110,10 @@ export const Home: React.FC = () => {
             </div>
             <div className="flex-1">
               <h2 className="text-lg font-semibold text-night-100">
-                Начать дыхание
+                {t('home.startBreathing')}
               </h2>
               <p className="text-sm text-night-400">
-                Выбери технику и практикуй
+                {t('home.chooseTechnique')}
               </p>
             </div>
             <svg
@@ -139,7 +141,7 @@ export const Home: React.FC = () => {
         className="mb-6"
       >
         <h3 className="text-lg font-semibold text-night-100 mb-3 flex items-center gap-2">
-          {CATEGORY_ICONS.sleep} Для сна
+          {CATEGORY_ICONS.sleep} {t('home.categories.sleep')}
         </h3>
         <div className="space-y-2">
           {sleepPatterns.map((pattern) => (
@@ -172,7 +174,7 @@ export const Home: React.FC = () => {
         className="mb-6"
       >
         <h3 className="text-lg font-semibold text-night-100 mb-3 flex items-center gap-2">
-          {CATEGORY_ICONS.stress} От стресса
+          {CATEGORY_ICONS.stress} {t('home.categories.stress')}
         </h3>
         <div className="space-y-2">
           {stressPatterns.map((pattern) => (
@@ -214,15 +216,15 @@ export const Home: React.FC = () => {
             </div>
             <div>
               <div className="font-medium text-night-100">
-                Соня рада тебя видеть!
+                {t('home.sonya.greeting')}
               </div>
               <div className="text-sm text-night-400">
-                {profile.xp} XP • Уровень:{' '}
+                {profile.xp} XP • {t('home.sonya.level')}:{' '}
                 {profile.evolutionStage === 'wise_owl'
-                  ? 'Мудрая сова'
+                  ? t('profile.evolution.wiseOwl')
                   : profile.evolutionStage === 'young_owl'
-                  ? 'Молодая сова'
-                  : 'Совёнок'}
+                  ? t('profile.evolution.youngOwl')
+                  : t('profile.evolution.owlet')}
               </div>
             </div>
           </Card>

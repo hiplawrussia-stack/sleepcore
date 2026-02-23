@@ -13,7 +13,8 @@
     "back": "Back",
     "offline": "Offline",
     "syncing": "Syncing...",
-    "pending": "Pending: {{count}}"
+    "pending": "Pending: {{count}}",
+    "friend": "friend"
   },
   "navigation": {
     "home": "Home",
@@ -26,6 +27,19 @@
       "afternoon": "Good afternoon",
       "evening": "Good evening",
       "night": "Good night"
+    },
+    "readyToPractice": "Ready for breathing practice?",
+    "startBreathing": "Start Breathing",
+    "chooseTechnique": "Choose a technique and practice",
+    "categories": {
+      "sleep": "For Sleep",
+      "stress": "Stress Relief",
+      "focus": "For Focus",
+      "energy": "For Energy"
+    },
+    "sonya": {
+      "greeting": "Sonya is happy to see you!",
+      "level": "Level"
     },
     "cards": {
       "breathing": {
@@ -67,9 +81,12 @@
       }
     },
     "phases": {
+      "ready": "Ready",
       "inhale": "Inhale",
       "hold": "Hold",
-      "exhale": "Exhale"
+      "exhale": "Exhale",
+      "pause": "Pause",
+      "done": "Done!"
     },
     "progress": "Cycle {{current}} of {{total}}",
     "completion": {
@@ -87,18 +104,41 @@
     "title": "Profile",
     "level": "Level {{level}}",
     "xp": "{{current}} / {{total}} XP",
+    "xpToNext": "To next level: {{xp}} XP",
     "evolution": {
       "owlet": "Owlet",
       "youngOwl": "Young Owl",
       "wiseOwl": "Wise Owl",
-      "master": "Master"
+      "master": "Master",
+      "owletName": "Owlet Sonya",
+      "youngOwlName": "Young Owl Sonya",
+      "wiseOwlName": "Wise Owl Sonya",
+      "masterName": "Sleep Master Sonya",
+      "owletDesc": "Just starting the path to healthy sleep",
+      "youngOwlDesc": "We've learned a lot together",
+      "wiseOwlDesc": "Master of healthy sleep",
+      "masterDesc": "Legend of healthy sleep",
+      "daysActive": "{{count}} days of activity",
+      "daysToNext": "{{count}} days to next level",
+      "progress": "Progress: {{percent}}%"
     },
     "stats": {
       "title": "Statistics",
       "totalSessions": "Total sessions",
+      "totalTime": "Total time",
       "totalMinutes": "Minutes practiced",
       "currentStreak": "Current streak",
-      "longestStreak": "Best streak"
+      "longestStreak": "Best streak",
+      "weekActivity": "Week activity",
+      "days": {
+        "mon": "Mo",
+        "tue": "Tu",
+        "wed": "We",
+        "thu": "Th",
+        "fri": "Fr",
+        "sat": "Sa",
+        "sun": "Su"
+      }
     },
     "settings": {
       "title": "Settings",

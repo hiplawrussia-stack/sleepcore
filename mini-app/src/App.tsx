@@ -9,6 +9,7 @@
 
 import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { ErrorBoundary } from '@/components/common';
 import { telegram } from '@/services/telegram';
@@ -21,12 +22,13 @@ const Profile = React.lazy(() => import('@/pages/Profile'));
 
 // Bottom navigation component
 const BottomNav: React.FC = () => {
+  const { t } = useTranslation();
   const location = useLocation();
 
   const navItems = [
-    { path: '/', icon: '🏠', label: 'Главная' },
-    { path: '/breathing', icon: '🌬️', label: 'Дыхание' },
-    { path: '/profile', icon: '👤', label: 'Профиль' },
+    { path: '/', icon: '🏠', label: t('navigation.home') },
+    { path: '/breathing', icon: '🌬️', label: t('navigation.breathing') },
+    { path: '/profile', icon: '👤', label: t('navigation.profile') },
   ];
 
   return (
@@ -53,6 +55,7 @@ const BottomNav: React.FC = () => {
 
 // Sync status indicator (optional - shows when offline or syncing)
 const SyncIndicator: React.FC = () => {
+  const { t } = useTranslation();
   const { isOnline, isSyncing, pendingCount } = useSync();
 
   if (isOnline && !isSyncing && pendingCount === 0) {
@@ -63,13 +66,13 @@ const SyncIndicator: React.FC = () => {
     <div className="fixed top-0 left-0 right-0 z-50 flex justify-center py-1 safe-area-top">
       <div className="px-3 py-1 rounded-full text-xs font-medium bg-night-800/90 backdrop-blur-sm border border-night-700">
         {!isOnline && (
-          <span className="text-amber-400">Офлайн</span>
+          <span className="text-amber-400">{t('common.offline')}</span>
         )}
         {isOnline && isSyncing && (
-          <span className="text-primary-400">Синхронизация...</span>
+          <span className="text-primary-400">{t('common.syncing')}</span>
         )}
         {isOnline && !isSyncing && pendingCount > 0 && (
-          <span className="text-amber-400">Ожидает: {pendingCount}</span>
+          <span className="text-amber-400">{t('common.pending', { count: pendingCount })}</span>
         )}
       </div>
     </div>
@@ -78,11 +81,12 @@ const SyncIndicator: React.FC = () => {
 
 // Auth loading screen
 const AuthLoading: React.FC = () => {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-night-900 flex items-center justify-center">
       <div className="text-center">
         <div className="text-4xl mb-4 animate-pulse">🦉</div>
-        <p className="text-night-400 text-sm">Загрузка...</p>
+        <p className="text-night-400 text-sm">{t('common.loading')}</p>
       </div>
     </div>
   );
@@ -99,6 +103,7 @@ const PageLoading: React.FC = () => {
 
 // Not in Telegram screen
 const NotInTelegram: React.FC = () => {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-night-900 flex items-center justify-center p-4">
       <div className="text-center max-w-sm">
@@ -107,13 +112,13 @@ const NotInTelegram: React.FC = () => {
           SleepCore
         </h1>
         <p className="text-night-400 text-base mb-6">
-          Это приложение работает только внутри Telegram.
+          {t('errors.notInTelegram')}
         </p>
         <a
           href="https://t.me/SleepCore_Bot"
           className="inline-block px-6 py-3 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-colors font-medium"
         >
-          Открыть в Telegram
+          {t('errors.openInTelegram')}
         </a>
       </div>
     </div>
@@ -125,19 +130,20 @@ const AuthError: React.FC<{ error: string; onRetry: () => void }> = ({
   error,
   onRetry,
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-night-900 flex items-center justify-center p-4">
       <div className="text-center max-w-sm">
         <div className="text-4xl mb-4">😔</div>
         <h2 className="text-lg font-medium text-night-100 mb-2">
-          Ошибка авторизации
+          {t('errors.auth')}
         </h2>
         <p className="text-night-400 text-sm mb-4">{error}</p>
         <button
           onClick={onRetry}
           className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
         >
-          Попробовать снова
+          {t('common.retry')}
         </button>
       </div>
     </div>

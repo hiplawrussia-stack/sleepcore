@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useTranslation } from 'react-i18next';
 import { BreathingCircle, type BreathingPhase } from './BreathingCircle';
 import {
   type BreathingPattern,
@@ -18,7 +19,6 @@ import {
   getFreePatterns,
   getTotalDuration,
   formatDuration,
-  CATEGORY_LABELS,
 } from './patterns';
 import { haptics } from '@/services/haptics';
 import { telegram } from '@/services/telegram';
@@ -34,6 +34,9 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
   onCancel,
   initialPatternId = '478',
 }) => {
+  const { t, i18n } = useTranslation();
+  const isRu = i18n.language === 'ru';
+
   // State
   const [selectedPattern, setSelectedPattern] = useState<BreathingPattern>(
     BREATHING_PATTERNS.find(p => p.id === initialPatternId) || BREATHING_PATTERNS[0]
@@ -194,20 +197,20 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
   // Setup Telegram MainButton
   useEffect(() => {
     if (isRunning) {
-      telegram.showMainButton('Остановить', stopExercise);
+      telegram.showMainButton(t('breathing.buttons.stop'), stopExercise);
     } else if (phase === 'complete') {
-      telegram.showMainButton('Готово', () => {
+      telegram.showMainButton(t('breathing.buttons.done'), () => {
         resetExercise();
         telegram.hideMainButton();
       });
     } else {
-      telegram.showMainButton('Начать', startExercise);
+      telegram.showMainButton(t('breathing.buttons.start'), startExercise);
     }
 
     return () => {
       telegram.hideMainButton();
     };
-  }, [isRunning, phase, startExercise, stopExercise, resetExercise]);
+  }, [isRunning, phase, startExercise, stopExercise, resetExercise, t]);
 
   // Calculate estimated duration
   const estimatedDuration = getTotalDuration(selectedPattern, totalCycles);
@@ -225,7 +228,7 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
           >
             {/* Header */}
             <h2 className="text-xl font-semibold text-night-100 mb-4 text-center">
-              Выбери технику дыхания
+              {t('breathing.title')}
             </h2>
 
             {/* Pattern buttons */}
@@ -246,13 +249,13 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
                   <span className="text-2xl">{pattern.icon}</span>
                   <div className="flex-1 text-left">
                     <div className="font-medium text-night-100">
-                      {pattern.nameRu}
+                      {isRu ? pattern.nameRu : pattern.name}
                     </div>
                     <div className="text-sm text-night-400">
                       {pattern.inhale}-{pattern.hold}-{pattern.exhale}
-                      {pattern.hold2 ? `-${pattern.hold2}` : ''} сек
+                      {pattern.hold2 ? `-${pattern.hold2}` : ''} {t('breathing.sec', 'сек')}
                       <span className="mx-2">•</span>
-                      {CATEGORY_LABELS[pattern.category]}
+                      {t(`home.categories.${pattern.category}`)}
                     </div>
                   </div>
                   {selectedPattern.id === pattern.id && (
@@ -273,7 +276,7 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
             {/* Cycles selector */}
             <div className="mt-6">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-night-300">Количество циклов</span>
+                <span className="text-night-300">{t('breathing.cycles.title')}</span>
                 <span className="text-night-400 text-sm">
                   ~{formatDuration(estimatedDuration)}
                 </span>
@@ -306,7 +309,7 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
               className="mt-6 p-4 bg-night-800/50 rounded-xl"
             >
               <p className="text-night-300 text-sm">
-                {selectedPattern.benefitRu}
+                {isRu ? selectedPattern.benefitRu : selectedPattern.benefit}
               </p>
             </motion.div>
           </motion.div>
@@ -331,7 +334,7 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
           className="text-center mb-8"
         >
           <div className="text-night-400 mb-2">
-            Цикл {currentCycle} из {totalCycles}
+            {t('breathing.progress', { current: currentCycle, total: totalCycles })}
           </div>
           {/* Progress dots */}
           <div className="flex justify-center gap-2">
@@ -370,13 +373,13 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
                 🎉
               </motion.div>
               <h2 className="text-2xl font-bold text-night-100 mb-2">
-                Отлично!
+                {t('breathing.completion.title')}
               </h2>
               <p className="text-night-300 mb-2">
-                Ты выполнил {totalCycles} циклов дыхания
+                {t('breathing.completion.message', { cycles: totalCycles })}
               </p>
               <p className="text-primary-400">
-                {selectedPattern.benefitRu}
+                {isRu ? selectedPattern.benefitRu : selectedPattern.benefit}
               </p>
             </div>
           </motion.div>

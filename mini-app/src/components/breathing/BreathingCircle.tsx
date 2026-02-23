@@ -6,6 +6,7 @@
  */
 
 import { motion } from 'motion/react';
+import { useTranslation } from 'react-i18next';
 import type { BreathingPattern } from './patterns';
 
 export type BreathingPhase = 'idle' | 'inhale' | 'hold' | 'exhale' | 'hold2' | 'complete';
@@ -43,6 +44,8 @@ export const BreathingCircle: React.FC<BreathingCircleProps> = ({
   pattern,
   size = 280,
 }) => {
+  const { t } = useTranslation();
+
   // Calculate scale based on phase
   const getScale = (): number => {
     switch (phase) {
@@ -79,21 +82,21 @@ export const BreathingCircle: React.FC<BreathingCircleProps> = ({
     }
   };
 
-  // Get phase label in Russian
+  // Get phase label
   const getPhaseLabel = (): string => {
     switch (phase) {
       case 'idle':
-        return 'Готов';
+        return t('breathing.phases.ready');
       case 'inhale':
-        return 'Вдох';
+        return t('breathing.phases.inhale');
       case 'hold':
-        return 'Задержка';
+        return t('breathing.phases.hold');
       case 'exhale':
-        return 'Выдох';
+        return t('breathing.phases.exhale');
       case 'hold2':
-        return 'Пауза';
+        return t('breathing.phases.pause');
       case 'complete':
-        return 'Готово!';
+        return t('breathing.phases.done');
       default:
         return '';
     }
