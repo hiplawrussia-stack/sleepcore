@@ -1,22 +1,27 @@
 /**
  * Wearable Integration Module
  *
- * Provides Health Connect API integration for receiving
- * sleep and HRV data from Samsung and other wearable devices.
+ * Provides multi-source wearable data integration:
+ * - Health Connect API (Android native)
+ * - Open Wearables API (200+ devices via unified API)
  *
  * @packageDocumentation
  * @module wearable
  *
  * Architecture:
- * - Types: Data structures matching Health Connect API
+ * - Types: Data structures for all wearable sources
  * - WearableIngestionService: Validates and processes incoming data
- * - WearableRepository: Persistence layer (to be implemented)
+ * - WearablePATIntegration: Phenotyping from wearable data
+ * - OpenWearablesService: Integration with Open Wearables API
  *
- * Integration path:
- * 1. Android Companion App reads Health Connect
- * 2. App syncs data to SleepCore backend via API
- * 3. WearableIngestionService validates and stores
- * 4. PAT Adapter uses real wearable data for phenotyping
+ * Integration paths:
+ * 1. Health Connect (Android): Companion App -> API -> WearableIngestionService
+ * 2. Open Wearables: OAuth -> OpenWearablesService -> WearableIngestionService
+ *
+ * Both paths normalize data to IWearableSleepData and integrate
+ * with PAT for Blanken phenotyping.
+ *
+ * @since 2026-02: Added Open Wearables API integration
  */
 
 // Types
@@ -43,3 +48,23 @@ export type {
   IWearableSleepFeatures,
   IBlankenPhenotypeHints,
 } from './WearablePATIntegration';
+
+// Open Wearables API Integration (2026-02)
+export {
+  OpenWearablesClient,
+  OpenWearablesAdapter,
+  OpenWearablesService,
+  OpenWearablesAPIError,
+  createOpenWearablesClient,
+  createOpenWearablesAdapter,
+  createOpenWearablesService,
+} from './open-wearables';
+export type {
+  IOpenWearablesConfig,
+  IOpenWearablesServiceConfig,
+  IOpenWearablesSyncResult,
+  IOpenWearablesConnection,
+  IOpenWearablesSleepSession,
+  OpenWearablesProvider,
+  IAdaptedSleepData,
+} from './open-wearables';

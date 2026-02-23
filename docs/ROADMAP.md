@@ -1,8 +1,8 @@
 # SleepCore Unified Roadmap
 
-**Version**: 4.3
-**Updated**: 2026-02-22
-**Status**: Active Development — Wearable Strategy Phase 1 ✅
+**Version**: 4.4
+**Updated**: 2026-02-23
+**Status**: Active Development — Open Wearables API ✅
 
 ---
 
@@ -409,12 +409,12 @@
 
 #### Фаза 2: Multi-Device Support (Q2 2026) 🟡
 
-| Задача | Описание | Приоритет |
-|--------|----------|-----------|
-| **Open Wearables API** | MIT-licensed, 200+ устройств, self-hosted | 🟡 High |
-| **Colmi R02 Ring** | $20, прямой BLE, open-source, PPG/SpO2 | 🟡 High |
-| **Multi-device fusion** | Объединение данных с нескольких устройств | 🟡 High |
-| **Gadgetbridge интеграция** | Mi Band, Amazfit без облака | 🟢 Medium |
+| Задача | Описание | Приоритет | Статус |
+|--------|----------|-----------|--------|
+| **Open Wearables API** | MIT-licensed, 200+ устройств, self-hosted | 🟡 High | ✅ Core done |
+| **Colmi R02 Ring** | $20, прямой BLE, open-source, PPG/SpO2 | 🟡 High | 🔜 |
+| **Multi-device fusion** | Объединение данных с нескольких устройств | 🟡 High | ✅ Core done |
+| **Gadgetbridge интеграция** | Mi Band, Amazfit без облака | 🟢 Medium | 🔜 |
 
 #### Фаза 3: Standards & Compliance (Q3 2026) 🟡
 
@@ -691,6 +691,16 @@
 ---
 
 ## Changelog
+
+### 2026-02-23 — Open Wearables API Integration (v4.4)
+- 🔌 **Open Wearables API** integration implemented (200+ wearable devices)
+- 📦 **OpenWearablesClient**: HTTP client with retry, timeout, rate limiting
+- 🔄 **OpenWearablesAdapter**: Data normalization for 20+ providers
+- 🔗 **OpenWearablesService**: High-level orchestration with caching and fusion
+- 🧪 **47 new tests** for Open Wearables module
+- 📊 **Multi-source fusion**: Automatic data merging from multiple devices
+- 🎯 **Provider quality scores**: Confidence-based prioritization (Oura 0.95, WHOOP 0.92, Garmin 0.88)
+- 🔬 **Scientific validation**: Based on 2024-2025 HRV validation studies
 
 ### 2026-02-22 — Wearable Strategy Phase 1 Complete (v4.3)
 - ✅ **Phase 1 COMPLETE**: All critical wearable fixes implemented

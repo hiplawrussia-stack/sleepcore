@@ -23,6 +23,7 @@ export type WearableSource =
   | 'apple_health'  // Via 3rd party sync
   | 'polar'
   | 'whoop'
+  | 'open_wearables'  // Open Wearables API (200+ devices)
   | 'manual';
 
 /**
