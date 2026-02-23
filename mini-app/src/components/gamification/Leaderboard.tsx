@@ -19,7 +19,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { Card } from '@/components/common';
 import { useTelegram } from '@/hooks';
 import { haptics } from '@/services/haptics';
@@ -77,7 +77,7 @@ const LeaderboardEntry: React.FC<{
   entry: LeaderboardEntry;
   index: number;
 }> = ({ entry, index }) => (
-  <motion.div
+  <m.div
     initial={{ opacity: 0, x: -20 }}
     animate={{ opacity: 1, x: 0 }}
     transition={{ delay: index * 0.05 }}
@@ -118,7 +118,7 @@ const LeaderboardEntry: React.FC<{
         🔥 {entry.streak}
       </div>
     </div>
-  </motion.div>
+  </m.div>
 );
 
 const OptInPrompt: React.FC<{

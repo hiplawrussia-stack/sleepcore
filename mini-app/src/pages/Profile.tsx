@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card, PrivacyCenter } from '@/components/common';
@@ -112,7 +112,7 @@ export const Profile: React.FC = () => {
   return (
     <div className="min-h-screen bg-night-900 px-4 py-6 pb-20">
       {/* Header with avatar */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-6"
@@ -129,11 +129,11 @@ export const Profile: React.FC = () => {
         {(profile?.username || user?.username) && (
           <p className="text-night-400">@{profile?.username || user?.username}</p>
         )}
-      </motion.div>
+      </m.div>
 
       {/* Evolution card */}
       {evolutionInfo && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -154,7 +154,7 @@ export const Profile: React.FC = () => {
             {evolutionInfo.nextStage && (
               <>
                 <div className="h-2 bg-night-700 rounded-full overflow-hidden mb-2">
-                  <motion.div
+                  <m.div
                     initial={{ width: 0 }}
                     animate={{ width: `${evolutionInfo.progress}%` }}
                     transition={{ duration: 0.5, delay: 0.3 }}
@@ -169,12 +169,12 @@ export const Profile: React.FC = () => {
               </>
             )}
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Stats grid */}
       {stats && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -204,22 +204,22 @@ export const Profile: React.FC = () => {
             </div>
             <div className="text-xs text-night-400">{t('profile.stats.longestStreak')}</div>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Quests Panel */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.22 }}
         className="mb-6"
       >
         <QuestsPanel limit={3} activeOnly />
-      </motion.div>
+      </m.div>
 
       {/* Weekly progress chart */}
       {stats?.weeklyProgress && stats.weeklyProgress.length > 0 && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
@@ -237,7 +237,7 @@ export const Profile: React.FC = () => {
 
                 return (
                   <div key={index} className="flex-1 flex flex-col items-center">
-                    <motion.div
+                    <m.div
                       initial={{ height: 0 }}
                       animate={{ height: `${Math.max(height, 4)}%` }}
                       transition={{ duration: 0.3, delay: 0.4 + index * 0.05 }}
@@ -253,12 +253,12 @@ export const Profile: React.FC = () => {
               })}
             </div>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* XP progress */}
       {profile && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
@@ -270,7 +270,7 @@ export const Profile: React.FC = () => {
               <span className="font-bold text-primary-400">{profile.xp} XP</span>
             </div>
             <div className="h-2 bg-night-700 rounded-full overflow-hidden">
-              <motion.div
+              <m.div
                 initial={{ width: 0 }}
                 animate={{ width: `${Math.min(100, (profile.xp % 100))}%` }}
                 transition={{ duration: 0.5, delay: 0.5 }}
@@ -281,11 +281,11 @@ export const Profile: React.FC = () => {
               {t('profile.xpToNext', { xp: 100 - (profile.xp % 100) })}
             </div>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Settings */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
@@ -317,28 +317,28 @@ export const Profile: React.FC = () => {
                   : 'bg-night-600'
               } ${!hapticsAvailable ? 'opacity-50' : ''}`}
             >
-              <motion.div
+              <m.div
                 animate={{ x: hapticsEnabled && hapticsAvailable ? 20 : 2 }}
                 className="w-5 h-5 rounded-full bg-white absolute top-1"
               />
             </button>
           </div>
         </Card>
-      </motion.div>
+      </m.div>
 
       {/* Privacy & Data section (GDPR) */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.45 }}
         className="mt-6"
       >
         <PrivacyCenter />
-      </motion.div>
+      </m.div>
 
       {/* Badges section */}
       {profile && profile.badges.length > 0 && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
@@ -357,7 +357,7 @@ export const Profile: React.FC = () => {
               </div>
             ))}
           </div>
-        </motion.div>
+        </m.div>
       )}
     </div>
   );

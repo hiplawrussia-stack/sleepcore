@@ -3,13 +3,15 @@
  * =============
  * Root component with routing, Telegram initialization, and TanStack Query.
  *
- * Performance: Uses React.lazy() for code-splitting pages.
- * This reduces initial bundle size by ~15-20%.
+ * Performance optimizations:
+ * - React.lazy() for code-splitting pages (~15-20% initial bundle reduction)
+ * - LazyMotion for deferred animation loading (~30KB -> ~5KB initial)
  */
 
 import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { LazyMotion, domAnimation } from 'motion/react';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { ErrorBoundary } from '@/components/common';
 import { telegram } from '@/services/telegram';
@@ -206,11 +208,13 @@ export const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <QueryProvider>
-        <BrowserRouter>
-          <div className="min-h-screen bg-night-900">
-            <AppContent />
-          </div>
-        </BrowserRouter>
+        <LazyMotion features={domAnimation} strict>
+          <BrowserRouter>
+            <div className="min-h-screen bg-night-900">
+              <AppContent />
+            </div>
+          </BrowserRouter>
+        </LazyMotion>
       </QueryProvider>
     </ErrorBoundary>
   );

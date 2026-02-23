@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 
 interface CardProps {
   children: React.ReactNode;
@@ -36,7 +36,7 @@ export const Card: React.FC<CardProps> = ({
   padding = 'md',
   className = '',
 }) => {
-  const Component = onClick ? motion.button : motion.div;
+  const Component = onClick ? m.button : m.div;
 
   return (
     <Component

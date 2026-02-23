@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/common';
@@ -49,7 +49,7 @@ export const Home: React.FC = () => {
   return (
     <div className="min-h-screen bg-night-900 px-4 py-6 pb-20">
       {/* Header */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="mb-6"
@@ -60,11 +60,11 @@ export const Home: React.FC = () => {
         <p className="text-night-400 mt-1">
           {t('home.readyToPractice')}
         </p>
-      </motion.div>
+      </m.div>
 
       {/* Stats cards */}
       {stats && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -82,11 +82,11 @@ export const Home: React.FC = () => {
             </div>
             <div className="text-sm text-night-400">{t('home.stats.streak')}</div>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Main CTA - Start breathing */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.2 }}
@@ -131,10 +131,10 @@ export const Home: React.FC = () => {
             </svg>
           </div>
         </Card>
-      </motion.div>
+      </m.div>
 
       {/* Quick patterns - For Sleep */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
@@ -164,10 +164,10 @@ export const Home: React.FC = () => {
             </Card>
           ))}
         </div>
-      </motion.div>
+      </m.div>
 
       {/* Quick patterns - Stress relief */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
@@ -197,11 +197,11 @@ export const Home: React.FC = () => {
             </Card>
           ))}
         </div>
-      </motion.div>
+      </m.div>
 
       {/* Sonya greeting */}
       {profile && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
@@ -228,7 +228,7 @@ export const Home: React.FC = () => {
               </div>
             </div>
           </Card>
-        </motion.div>
+        </m.div>
       )}
     </div>
   );

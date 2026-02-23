@@ -46,10 +46,34 @@ export default defineConfig({
     minify: 'terser',
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          query: ['@tanstack/react-query'],
-          motion: ['motion'],
+        manualChunks: (id) => {
+          // Core React runtime - always needed
+          if (id.includes('node_modules/react-dom') ||
+              id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-router-dom') ||
+              id.includes('node_modules/scheduler')) {
+            return 'vendor';
+          }
+          // TanStack Query - loaded with first API call
+          if (id.includes('@tanstack/react-query')) {
+            return 'query';
+          }
+          // Motion/Framer - only needed on Breathing page
+          if (id.includes('node_modules/motion') || id.includes('node_modules/framer-motion')) {
+            return 'motion';
+          }
+          // Sentry - monitoring, can load async
+          if (id.includes('@sentry')) {
+            return 'sentry';
+          }
+          // i18n - translations, small but separate
+          if (id.includes('i18next') || id.includes('react-i18next')) {
+            return 'i18n';
+          }
+          // State management - small, core dependency
+          if (id.includes('zustand')) {
+            return 'state';
+          }
         },
       },
       plugins: [

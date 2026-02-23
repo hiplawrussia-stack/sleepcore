@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { haptics } from '@/services/haptics';
 
 interface ButtonProps {
@@ -51,7 +51,7 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   return (
-    <motion.button
+    <m.button
       whileTap={{ scale: disabled ? 1 : 0.97 }}
       onClick={handleClick}
       disabled={disabled || loading}
@@ -65,7 +65,7 @@ export const Button: React.FC<ButtonProps> = ({
       `}
     >
       {loading ? (
-        <motion.div
+        <m.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
           className="w-5 h-5 border-2 border-current border-t-transparent rounded-full"
@@ -76,7 +76,7 @@ export const Button: React.FC<ButtonProps> = ({
           {children}
         </>
       )}
-    </motion.button>
+    </m.button>
   );
 };
 

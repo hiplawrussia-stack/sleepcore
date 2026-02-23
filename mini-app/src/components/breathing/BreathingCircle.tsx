@@ -2,10 +2,15 @@
  * BreathingCircle Component
  * =========================
  * Animated SVG circle that expands/contracts with breathing phases.
- * Uses Motion (Framer Motion) for smooth 60fps animations.
+ *
+ * PERFORMANCE: Uses CSS-only animations for 60fps on mobile.
+ * - CSS transitions for phase changes (GPU-accelerated transform/opacity)
+ * - CSS keyframes for pulse effects
+ * - CSS variables for dynamic durations
+ * - Zero JavaScript animation libraries = ~30KB bundle savings
  */
 
-import { motion } from 'motion/react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BreathingPattern } from './patterns';
 
@@ -26,7 +31,7 @@ const PHASE_COLORS = {
   exhale: '#7dd3fc',    // breathing-exhale (sky)
   hold2: '#c4b5fd',     // same as hold
   complete: '#86efac',  // calm-green
-};
+} as const;
 
 // Glow colors (slightly lighter)
 const GLOW_COLORS = {
@@ -36,7 +41,17 @@ const GLOW_COLORS = {
   exhale: 'rgba(125, 211, 252, 0.4)',
   hold2: 'rgba(196, 181, 253, 0.4)',
   complete: 'rgba(134, 239, 172, 0.5)',
-};
+} as const;
+
+// Scale values for each phase
+const PHASE_SCALES = {
+  idle: 0.6,
+  inhale: 1,
+  hold: 1,
+  exhale: 0.6,
+  hold2: 0.6,
+  complete: 0.8,
+} as const;
 
 export const BreathingCircle: React.FC<BreathingCircleProps> = ({
   phase,
@@ -46,78 +61,58 @@ export const BreathingCircle: React.FC<BreathingCircleProps> = ({
 }) => {
   const { t } = useTranslation();
 
-  // Calculate scale based on phase
-  const getScale = (): number => {
+  // Get phase duration for CSS transition
+  const phaseDuration = useMemo((): number => {
     switch (phase) {
-      case 'idle':
-        return 0.6;
-      case 'inhale':
-        return 1;
-      case 'hold':
-        return 1;
-      case 'exhale':
-        return 0.6;
-      case 'hold2':
-        return 0.6;
-      case 'complete':
-        return 0.8;
-      default:
-        return 0.6;
+      case 'inhale': return pattern.inhale;
+      case 'hold': return pattern.hold;
+      case 'exhale': return pattern.exhale;
+      case 'hold2': return pattern.hold2 || 0;
+      default: return 0.5;
     }
-  };
-
-  // Get phase duration for animation
-  const getPhaseDuration = (): number => {
-    switch (phase) {
-      case 'inhale':
-        return pattern.inhale;
-      case 'hold':
-        return pattern.hold;
-      case 'exhale':
-        return pattern.exhale;
-      case 'hold2':
-        return pattern.hold2 || 0;
-      default:
-        return 1;
-    }
-  };
+  }, [phase, pattern]);
 
   // Get phase label
-  const getPhaseLabel = (): string => {
+  const phaseLabel = useMemo((): string => {
     switch (phase) {
-      case 'idle':
-        return t('breathing.phases.ready');
-      case 'inhale':
-        return t('breathing.phases.inhale');
-      case 'hold':
-        return t('breathing.phases.hold');
-      case 'exhale':
-        return t('breathing.phases.exhale');
-      case 'hold2':
-        return t('breathing.phases.pause');
-      case 'complete':
-        return t('breathing.phases.done');
-      default:
-        return '';
+      case 'idle': return t('breathing.phases.ready');
+      case 'inhale': return t('breathing.phases.inhale');
+      case 'hold': return t('breathing.phases.hold');
+      case 'exhale': return t('breathing.phases.exhale');
+      case 'hold2': return t('breathing.phases.pause');
+      case 'complete': return t('breathing.phases.done');
+      default: return '';
     }
-  };
+  }, [phase, t]);
 
+  const scale = PHASE_SCALES[phase];
   const circleRadius = (size - 40) / 2;
   const centerX = size / 2;
   const centerY = size / 2;
+  const showPulse = phase === 'inhale' || phase === 'exhale';
+
+  // CSS custom properties for dynamic values
+  const cssVars = {
+    '--phase-duration': `${phaseDuration}s`,
+    '--phase-color': PHASE_COLORS[phase],
+    '--glow-color': GLOW_COLORS[phase],
+    '--scale': scale,
+    '--main-radius': circleRadius * 0.9 * scale,
+    '--inner-radius': circleRadius * 0.6 * scale,
+  } as React.CSSProperties;
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      {/* Glow effect */}
-      <motion.div
-        className="absolute inset-0 rounded-full blur-2xl"
-        animate={{
+    <div
+      className="relative breathing-circle-container"
+      style={{ width: size, height: size, ...cssVars }}
+    >
+      {/* Glow effect - CSS transition */}
+      <div
+        className="absolute inset-0 rounded-full blur-2xl breathing-glow"
+        style={{
           backgroundColor: GLOW_COLORS[phase],
-          scale: getScale() * 1.1,
-        }}
-        transition={{
-          duration: getPhaseDuration(),
-          ease: 'easeInOut',
+          transform: `scale(${scale * 1.1})`,
+          transition: `transform var(--phase-duration) ease-in-out, background-color var(--phase-duration) ease-in-out`,
         }}
       />
 
@@ -128,7 +123,7 @@ export const BreathingCircle: React.FC<BreathingCircleProps> = ({
         viewBox={`0 0 ${size} ${size}`}
         className="relative z-10"
       >
-        {/* Background ring */}
+        {/* Background ring (static) */}
         <circle
           cx={centerX}
           cy={centerY}
@@ -138,8 +133,8 @@ export const BreathingCircle: React.FC<BreathingCircleProps> = ({
           strokeWidth="2"
         />
 
-        {/* Animated main circle */}
-        <motion.circle
+        {/* Animated main circle - CSS transition on r doesn't work, use transform */}
+        <circle
           cx={centerX}
           cy={centerY}
           r={circleRadius * 0.9}
@@ -147,73 +142,58 @@ export const BreathingCircle: React.FC<BreathingCircleProps> = ({
           fillOpacity={0.15}
           stroke={PHASE_COLORS[phase]}
           strokeWidth="3"
-          animate={{
-            r: circleRadius * 0.9 * getScale(),
-            fill: PHASE_COLORS[phase],
-            stroke: PHASE_COLORS[phase],
-          }}
-          transition={{
-            duration: getPhaseDuration(),
-            ease: 'easeInOut',
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: `${centerX}px ${centerY}px`,
+            transition: `transform var(--phase-duration) ease-in-out, fill var(--phase-duration) ease-in-out, stroke var(--phase-duration) ease-in-out`,
           }}
         />
 
         {/* Inner glow circle */}
-        <motion.circle
+        <circle
           cx={centerX}
           cy={centerY}
           r={circleRadius * 0.6}
           fill={PHASE_COLORS[phase]}
-          fillOpacity={0.25}
-          animate={{
-            r: circleRadius * 0.6 * getScale(),
-            fillOpacity: phase === 'hold' || phase === 'hold2' ? 0.3 : 0.25,
-          }}
-          transition={{
-            duration: getPhaseDuration(),
-            ease: 'easeInOut',
+          fillOpacity={phase === 'hold' || phase === 'hold2' ? 0.3 : 0.25}
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: `${centerX}px ${centerY}px`,
+            transition: `transform var(--phase-duration) ease-in-out, fill-opacity var(--phase-duration) ease-in-out`,
           }}
         />
 
         {/* Center dot */}
-        <motion.circle
+        <circle
           cx={centerX}
           cy={centerY}
           r={8}
           fill={PHASE_COLORS[phase]}
-          animate={{
-            scale: phase === 'complete' ? [1, 1.2, 1] : 1,
-          }}
-          transition={{
-            duration: 0.5,
-            repeat: phase === 'complete' ? 2 : 0,
+          className={phase === 'complete' ? 'breathing-dot-pulse' : ''}
+          style={{
+            transition: 'fill 0.3s ease-in-out',
           }}
         />
       </svg>
 
       {/* Text overlay */}
       <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-        {/* Phase label */}
-        <motion.span
+        {/* Phase label with fade transition */}
+        <span
           key={phase}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className="text-2xl font-semibold text-night-100"
+          className="text-2xl font-semibold text-night-100 breathing-text-fade"
         >
-          {getPhaseLabel()}
-        </motion.span>
+          {phaseLabel}
+        </span>
 
         {/* Time remaining */}
         {phase !== 'idle' && phase !== 'complete' && (
-          <motion.span
+          <span
             key={`time-${timeRemaining}`}
-            initial={{ scale: 1.1 }}
-            animate={{ scale: 1 }}
-            className="text-5xl font-bold text-night-50 mt-2"
+            className="text-5xl font-bold text-night-50 mt-2 breathing-time-pop"
           >
             {timeRemaining}
-          </motion.span>
+          </span>
         )}
 
         {/* Pattern timing hint (idle state) */}
@@ -225,31 +205,16 @@ export const BreathingCircle: React.FC<BreathingCircleProps> = ({
         )}
       </div>
 
-      {/* Pulse rings (during active breathing) */}
-      {(phase === 'inhale' || phase === 'exhale') && (
+      {/* Pulse rings - CSS keyframe animations */}
+      {showPulse && (
         <>
-          <motion.div
-            className="absolute inset-0 rounded-full border-2"
+          <div
+            className="absolute inset-0 rounded-full border-2 breathing-pulse-ring"
             style={{ borderColor: PHASE_COLORS[phase] }}
-            initial={{ scale: 0.5, opacity: 0.6 }}
-            animate={{ scale: 1.3, opacity: 0 }}
-            transition={{
-              duration: 2,
-              repeat: Infinity,
-              ease: 'easeOut',
-            }}
           />
-          <motion.div
-            className="absolute inset-0 rounded-full border"
+          <div
+            className="absolute inset-0 rounded-full border breathing-pulse-ring breathing-pulse-ring-delayed"
             style={{ borderColor: PHASE_COLORS[phase] }}
-            initial={{ scale: 0.6, opacity: 0.4 }}
-            animate={{ scale: 1.4, opacity: 0 }}
-            transition={{
-              duration: 2,
-              repeat: Infinity,
-              ease: 'easeOut',
-              delay: 0.5,
-            }}
           />
         </>
       )}

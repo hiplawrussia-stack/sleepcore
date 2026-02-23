@@ -13,7 +13,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { haptics } from '@/services/haptics';
 
 interface EvolutionCelebrationModalProps {
@@ -39,7 +39,7 @@ const STAGE_ICONS: Record<string, string> = {
 
 /** Confetti particle component */
 const ConfettiParticle: React.FC<{ delay: number; x: number }> = ({ delay, x }) => (
-  <motion.div
+  <m.div
     initial={{ y: -20, x: x, opacity: 1, rotate: 0 }}
     animate={{
       y: 400,
@@ -55,7 +55,7 @@ const ConfettiParticle: React.FC<{ delay: number; x: number }> = ({ delay, x }) 
     style={{ left: `${x}%` }}
   >
     {['🎉', '⭐', '✨', '🌟', '💫'][Math.floor(Math.random() * 5)]}
-  </motion.div>
+  </m.div>
 );
 
 export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps> = ({
@@ -91,7 +91,7 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
   return (
     <AnimatePresence>
       {isVisible && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -111,7 +111,7 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
           </div>
 
           {/* Modal content */}
-          <motion.div
+          <m.div
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.8, opacity: 0 }}
@@ -125,7 +125,7 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
             onClick={(e) => e.stopPropagation()}
           >
             {/* Evolution icon with scale animation */}
-            <motion.div
+            <m.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{
@@ -137,20 +137,20 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
               className="text-7xl mb-4"
             >
               {newIcon}
-            </motion.div>
+            </m.div>
 
             {/* Title */}
-            <motion.h2
+            <m.h2
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.3 }}
               className="text-2xl font-bold text-primary-400 mb-2"
             >
               Эволюция!
-            </motion.h2>
+            </m.h2>
 
             {/* Evolution progress */}
-            <motion.div
+            <m.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.4 }}
@@ -165,20 +165,20 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
               <div className="text-xl font-semibold text-night-100 mt-2">
                 {newName}
               </div>
-            </motion.div>
+            </m.div>
 
             {/* Congratulation message */}
-            <motion.p
+            <m.p
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.5 }}
               className="text-night-300 text-sm mb-6"
             >
               Твой прогресс впечатляет! Продолжай практиковать дыхательные упражнения для достижения нового уровня.
-            </motion.p>
+            </m.p>
 
             {/* Close button */}
-            <motion.button
+            <m.button
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.6 }}
@@ -186,9 +186,9 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
               className="w-full py-3 px-6 rounded-xl bg-primary-500 text-white font-medium hover:bg-primary-600 transition-colors"
             >
               Отлично!
-            </motion.button>
-          </motion.div>
-        </motion.div>
+            </m.button>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

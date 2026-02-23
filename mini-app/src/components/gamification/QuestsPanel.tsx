@@ -14,7 +14,7 @@
  */
 
 import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { Card } from '@/components/common';
 import { useQuests } from '@/hooks/useEvolution';
 import { haptics } from '@/services/haptics';
@@ -49,7 +49,7 @@ const QuestCard: React.FC<QuestCardProps> = ({ quest, index }) => {
   const isExpired = quest.status === 'expired';
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
@@ -90,7 +90,7 @@ const QuestCard: React.FC<QuestCardProps> = ({ quest, index }) => {
                   <span>{Math.round(progressPercent)}%</span>
                 </div>
                 <div className="h-2 bg-night-700 rounded-full overflow-hidden">
-                  <motion.div
+                  <m.div
                     initial={{ width: 0 }}
                     animate={{ width: `${progressPercent}%` }}
                     transition={{ duration: 0.5, delay: 0.2 + index * 0.1 }}
@@ -118,7 +118,7 @@ const QuestCard: React.FC<QuestCardProps> = ({ quest, index }) => {
           </div>
         </div>
       </Card>
-    </motion.div>
+    </m.div>
   );
 };
 
@@ -258,7 +258,7 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
 
       {/* Show more link */}
       {limit && quests && quests.length > limit && !compact && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
@@ -267,7 +267,7 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
           <span className="text-sm text-night-500">
             +{quests.length - limit} ещё
           </span>
-        </motion.div>
+        </m.div>
       )}
     </div>
   );

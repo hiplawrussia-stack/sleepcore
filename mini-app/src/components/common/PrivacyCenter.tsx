@@ -16,7 +16,7 @@
  */
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { Card } from './Card';
 import { useTelegram } from '@/hooks';
 import { useAuthStore } from '@/store/authStore';
@@ -212,19 +212,19 @@ export const PrivacyCenter: React.FC = () => {
             </div>
           </div>
         </div>
-        <motion.span
+        <m.span
           animate={{ rotate: isExpanded ? 180 : 0 }}
           transition={{ duration: 0.2 }}
           className="text-night-400"
         >
           ▼
-        </motion.span>
+        </m.span>
       </button>
 
       {/* Expandable content */}
       <AnimatePresence>
         {isExpanded && (
-          <motion.div
+          <m.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -302,7 +302,7 @@ export const PrivacyCenter: React.FC = () => {
                 удаление и переносимость ваших данных
               </div>
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </Card>

@@ -6,7 +6,8 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { HapticBreathing, getPatternById } from '@/components/breathing';
+import { HapticBreathing } from '@/components/breathing';
+import { getPatternById } from '@/components/breathing/patterns';
 import { EvolutionCelebrationModal } from '@/components/common';
 import { useTelegram } from '@/hooks';
 import { useUserStore } from '@/store';
