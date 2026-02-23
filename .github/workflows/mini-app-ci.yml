@@ -175,13 +175,39 @@ jobs:
       - name: Coverage threshold check
         run: |
           # Extract coverage from vitest output
-          COVERAGE=$(cat coverage/coverage-summary.json | jq '.total.statements.pct')
-          echo "Coverage: $COVERAGE%"
-          if (( $(echo "$COVERAGE < 70" | bc -l) )); then
-            echo "::error::Coverage below 70% threshold"
-            exit 1
+          # Vitest enforces 80% threshold in vitest.config.ts
+          STATEMENTS=$(cat coverage/coverage-summary.json | jq '.total.statements.pct')
+          BRANCHES=$(cat coverage/coverage-summary.json | jq '.total.branches.pct')
+          FUNCTIONS=$(cat coverage/coverage-summary.json | jq '.total.functions.pct')
+          LINES=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Coverage | Threshold |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|----------|-----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Statements | ${STATEMENTS}% | 80% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branches | ${BRANCHES}% | 80% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Functions | ${FUNCTIONS}% | 80% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lines | ${LINES}% | 80% |" >> $GITHUB_STEP_SUMMARY
+
+          # Check all thresholds (IEC 62304 requirement)
+          FAILED=0
+          if (( $(echo "$STATEMENTS < 80" | bc -l) )); then
+            echo "::error::Statements coverage ${STATEMENTS}% below 80% threshold"
+            FAILED=1
           fi
-        continue-on-error: true
+          if (( $(echo "$BRANCHES < 80" | bc -l) )); then
+            echo "::error::Branches coverage ${BRANCHES}% below 80% threshold"
+            FAILED=1
+          fi
+          if (( $(echo "$FUNCTIONS < 80" | bc -l) )); then
+            echo "::error::Functions coverage ${FUNCTIONS}% below 80% threshold"
+            FAILED=1
+          fi
+          if (( $(echo "$LINES < 80" | bc -l) )); then
+            echo "::error::Lines coverage ${LINES}% below 80% threshold"
+            FAILED=1
+          fi
+          exit $FAILED
 
   # ============================================
   # Stage 3: Build with Integrity Verification
@@ -263,7 +289,57 @@ jobs:
           retention-days: 365  # FDA requires long-term retention
 
   # ============================================
-  # Stage 4: E2E Tests
+  # Stage 4: Performance Audit (Lighthouse CI)
+  # ============================================
+
+  lighthouse:
+    name: Lighthouse Performance Audit
+    needs: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: ${{ env.WORKING_DIR }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ github.sha }}
+          path: ${{ env.WORKING_DIR }}/dist/
+
+      - name: Start preview server
+        run: |
+          npx vite preview --port 5173 &
+          sleep 3
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: ${{ env.WORKING_DIR }}/lighthouserc.json
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+      - name: Upload Lighthouse report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-report-${{ github.sha }}
+          path: ${{ env.WORKING_DIR }}/.lighthouseci/
+          retention-days: 30
+
+  # ============================================
+  # Stage 5: E2E Tests
   # ============================================
 
   e2e-tests:
@@ -338,7 +414,7 @@ jobs:
           retention-days: 7
 
   # ============================================
-  # Stage 5: Sentry Release (on main/master)
+  # Stage 6: Sentry Release (on main/master)
   # ============================================
 
   sentry-release:
@@ -373,7 +449,7 @@ jobs:
           set_commits: auto
 
   # ============================================
-  # Stage 6: Deploy (manual approval required)
+  # Stage 7: Deploy (manual approval required)
   # ============================================
 
   deploy:
@@ -426,7 +502,7 @@ jobs:
 
   ci-summary:
     name: CI Summary
-    needs: [lint, security-audit, license-compliance, unit-tests, build, e2e-tests]
+    needs: [lint, security-audit, license-compliance, unit-tests, build, lighthouse, e2e-tests]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -441,6 +517,7 @@ jobs:
           echo "| License | ${{ needs.license-compliance.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Unit Tests | ${{ needs.unit-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lighthouse | ${{ needs.lighthouse.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| E2E Tests | ${{ needs.e2e-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Build Hash:** \`${{ needs.build.outputs.build-hash }}\`" >> $GITHUB_STEP_SUMMARY

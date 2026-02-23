@@ -7,12 +7,13 @@
  * Uses TanStack Query for server state management.
  */
 
-import React, { useEffect, Suspense } from 'react';
+import React, { useEffect, Suspense, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/common';
 import { useTelegram, useHaptics, useUserProfile, useBreathingStats, useEvolution } from '@/hooks';
 import { formatDuration } from '@/components/breathing/patterns';
+import { haptics } from '@/services/haptics';
 
 // Lazy load heavy components
 const QuestsPanel = React.lazy(() => import('@/components/gamification/QuestsPanel'));
@@ -25,11 +26,20 @@ const ComponentLoader: React.FC = () => (
   </div>
 );
 
+/** Supported languages */
+const LANGUAGES = [
+  { code: 'ru', flag: '🇷🇺' },
+  { code: 'en', flag: '🇬🇧' },
+] as const;
+
 export const Profile: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { user, showBackButton, hideBackButton } = useTelegram();
   const { isEnabled: hapticsEnabled, setEnabled: setHapticsEnabled, isAvailable: hapticsAvailable } = useHaptics();
+
+  // Language state
+  const [currentLanguage, setCurrentLanguage] = useState(i18n.language || 'ru');
 
   // TanStack Query hooks for server state
   const { profile, isLoading: isLoadingProfile } = useUserProfile();
@@ -37,6 +47,17 @@ export const Profile: React.FC = () => {
   const { evolution, isLoading: isLoadingEvolution } = useEvolution();
 
   const isLoading = isLoadingProfile || isLoadingStats || isLoadingEvolution;
+
+  /**
+   * Handle language change
+   * Uses i18next changeLanguage API and persists to localStorage
+   */
+  const handleLanguageChange = useCallback((langCode: string) => {
+    haptics.selectionChanged();
+    i18n.changeLanguage(langCode);
+    setCurrentLanguage(langCode);
+    // i18next-browser-languagedetector handles persistence automatically
+  }, [i18n]);
 
   // Setup back button
   useEffect(() => {
@@ -315,6 +336,33 @@ export const Profile: React.FC = () => {
                 }`}
               />
             </button>
+          </div>
+
+          {/* Language selector */}
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-night-100">{t('profile.settings.language.title')}</div>
+              <div className="text-xs text-night-400">
+                {t(`profile.settings.language.${currentLanguage}`)}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {LANGUAGES.map((lang) => (
+                <button
+                  key={lang.code}
+                  onClick={() => handleLanguageChange(lang.code)}
+                  aria-label={t(`profile.settings.language.${lang.code}`)}
+                  aria-pressed={currentLanguage === lang.code}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all ${
+                    currentLanguage === lang.code
+                      ? 'bg-primary-500 scale-105'
+                      : 'bg-night-700 hover:bg-night-600'
+                  }`}
+                >
+                  {lang.flag}
+                </button>
+              ))}
+            </div>
           </div>
         </Card>
       </div>

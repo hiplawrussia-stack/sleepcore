@@ -421,3 +421,85 @@
     }
   }
 }
+
+/* ============================================
+ * Accessibility: Reduced Motion Support
+ * ============================================
+ * WCAG 2.3.3 Animation from Interactions (Level AAA)
+ * Respects user's system preference for reduced motion.
+ * Affects ~35% of adults over 40 with vestibular disorders.
+ *
+ * @see https://www.w3.org/WAI/WCAG21/Techniques/css/C39
+ * @see https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion
+ */
+@media (prefers-reduced-motion: reduce) {
+  /* Disable all CSS animations */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Disable smooth scrolling */
+  html {
+    scroll-behavior: auto;
+  }
+
+  /* Keep essential breathing animation but reduce motion */
+  .animate-breathe {
+    animation: none;
+    /* Static glow instead of pulsing */
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  /* Disable decorative pulse effects */
+  .animate-pulse,
+  .animate-pulse-glow,
+  .breathing-pulse-ring,
+  .breathing-pulse-ring-delayed {
+    animation: none;
+    opacity: 0;
+  }
+
+  /* Disable entrance animations - show immediately */
+  .animate-fade-in,
+  .animate-slide-up,
+  .breathing-text-fade,
+  .breathing-selector-enter,
+  .breathing-description-fade,
+  .breathing-progress-enter,
+  .breathing-completion-enter {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Disable celebration animations */
+  .animate-confetti-fall,
+  .animate-celebration-bounce,
+  .breathing-celebration-bounce,
+  .breathing-checkmark,
+  .breathing-dot-pulse,
+  .breathing-time-pop {
+    animation: none;
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  /* Disable scale effects on buttons */
+  .btn-soft:active,
+  .btn-primary:active {
+    transform: none;
+  }
+
+  /* Keep will-change hints off to save memory */
+  .breathing-glow,
+  .animate-confetti-fall,
+  .animate-celebration-bounce {
+    will-change: auto;
+  }
+}
