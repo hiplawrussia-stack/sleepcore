@@ -15,6 +15,7 @@
  */
 
 import * as Sentry from '@sentry/react';
+import { env } from '@/env';
 
 /**
  * Sensitive routes that should not be traced in detail
@@ -38,18 +39,17 @@ const SENSITIVE_ROUTE_PATTERNS = [
  * @see https://docs.sentry.io/platforms/javascript/guides/react/
  */
 export function initSentry(): void {
-  const dsn = import.meta.env.VITE_SENTRY_DSN;
-
-  // Skip in development or if no DSN
-  if (import.meta.env.DEV || !dsn) {
-    console.log('[Sentry] Disabled (dev mode or no DSN)');
+  // Skip in development (DSN check moved to main.tsx for graceful degradation)
+  if (env.DEV) {
+    console.log('[Sentry] Disabled in development mode');
     return;
   }
 
+  // DSN is validated by T3-Env, guaranteed to be valid URL if present
   Sentry.init({
-    dsn,
-    environment: import.meta.env.MODE,
-    release: `sleepcore-mini-app@${import.meta.env.VITE_APP_VERSION || '1.0.0'}`,
+    dsn: env.VITE_SENTRY_DSN,
+    environment: env.MODE,
+    release: `sleepcore-mini-app@${env.VITE_APP_VERSION}`,
 
     // Performance monitoring (2025 best practice: 10-30% for production)
     tracesSampleRate: 0.2, // 20% of transactions
@@ -127,7 +127,7 @@ function sanitizeMessage(message: string): string {
  * Set user context (ID only, no PHI)
  */
 export function setUser(telegramId: number): void {
-  if (import.meta.env.DEV) return;
+  if (env.DEV) return;
 
   Sentry.setUser({
     id: String(telegramId),
@@ -149,7 +149,7 @@ export function captureException(
   error: unknown,
   context?: Record<string, unknown>
 ): void {
-  if (import.meta.env.DEV) {
+  if (env.DEV) {
     console.error('[Sentry] Would capture:', error, context);
     return;
   }
@@ -166,7 +166,7 @@ export function captureMessage(
   message: string,
   level: Sentry.SeverityLevel = 'info'
 ): void {
-  if (import.meta.env.DEV) {
+  if (env.DEV) {
     console.log(`[Sentry] Would capture message (${level}):`, message);
     return;
   }

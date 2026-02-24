@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { ErrorBoundary } from '@/components/common';
 import { telegram } from '@/services/telegram';
+import { env } from '@/env';
 import { useAuth, useSync } from '@/hooks';
 
 // Lazy-loaded pages for code splitting
@@ -167,7 +168,7 @@ const AppContent: React.FC = () => {
 
   // Check if we're in Telegram environment
   const isInTelegram = telegram.isInTelegram();
-  const isDev = import.meta.env.DEV;
+  const isDev = env.DEV;
 
   // In production, if not in Telegram, show "open in Telegram" screen
   if (!isDev && !isInTelegram) {

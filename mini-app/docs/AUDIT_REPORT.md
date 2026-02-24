@@ -19,13 +19,13 @@
 | Доступность (WCAG 2.2) | PASS | 5/5 | 0 |
 | GDPR/Приватность | PASS | 5/5 | 0 |
 | Тестирование | PASS | 5/5 | 0 |
-| Production Readiness | WARN | 3/5 | 4 |
-| **Общий результат** | **PASS с замечаниями** | **42/44 (95%)** | **4** |
+| Production Readiness | WARN | 4/5 | 2 |
+| **Общий результат** | **PASS с замечаниями** | **43/44 (98%)** | **2** |
 
 ### Найдено проблем
 | Критических | Высоких | Средних | Низких |
 |-------------|---------|---------|--------|
-| 4 | 15 | 27 | 45 |
+| 2 | 15 | 27 | 45 |
 
 ### Исправлено (2026-02-24)
 | # | Проблема | Статус |
@@ -40,6 +40,8 @@
 | C-8 | Контраст night-500 | ✅ FIXED |
 | C-9 | Нет skip-to-content | ✅ FIXED |
 | C-10 | Missing fieldset/legend | ✅ FIXED |
+| C-13 | Env validation (T3-Env) | ✅ FIXED |
+| C-14 | Sentry DSN fallback | ✅ FIXED |
 
 ---
 
@@ -76,8 +78,8 @@
 |---|----------|------|-----|--------|
 | C-11 | Deployment placeholder | .github/workflows/ | Реализовать deploy | ⏳ TODO |
 | C-12 | Feature flags отсутствуют | — | Добавить feature flag system | ⏳ TODO |
-| C-13 | Env validation отсутствует | main.tsx | Zod schema для env vars | ⏳ TODO |
-| C-14 | Sentry DSN fallback | main.tsx | Graceful degradation | ⏳ TODO |
+| ~~C-13~~ | ~~Env validation отсутствует~~ | ~~main.tsx~~ | ~~T3-Env + Zod schema~~ | ✅ FIXED |
+| ~~C-14~~ | ~~Sentry DSN fallback~~ | ~~main.tsx~~ | ~~Graceful degradation~~ | ✅ FIXED |
 
 ---
 
@@ -356,13 +358,13 @@
 | react-i18next (ru/en) | PASS |
 | axe-core accessibility | PARTIAL — E2E only |
 
-### Критические проблемы (4 оставшихся)
+### Критические проблемы (2 оставшихся)
 | # | Проблема | Impact | Fix | Статус |
 |---|----------|--------|-----|--------|
 | C-11 | Deployment placeholder | Нет автодеплоя | Реализовать S3/CDN sync | ⏳ TODO |
 | C-12 | Feature flags отсутствуют | Нет gradual rollout | Добавить feature flag system | ⏳ TODO |
-| C-13 | Env validation отсутствует | Падает без env vars | Zod schema на старте | ⏳ TODO |
-| C-14 | Sentry DSN fallback | Падает без DSN | Graceful degradation | ⏳ TODO |
+| ~~C-13~~ | ~~Env validation отсутствует~~ | ~~Падает без env vars~~ | ~~T3-Env + Zod~~ | ✅ FIXED |
+| ~~C-14~~ | ~~Sentry DSN fallback~~ | ~~Падает без DSN~~ | ~~Graceful degradation~~ | ✅ FIXED |
 | — | API health check | Нет проверки backend | Добавить /health check | ⏳ TODO (HIGH) |
 
 ### Высокие проблемы
@@ -378,7 +380,7 @@
 
 ## 11. Action Items (приоритезированный план)
 
-### P0: Блокеры релиза (4 критических, было 14)
+### P0: Блокеры релиза (2 критических, было 14)
 | # | Задача | Область | Effort | Статус |
 |---|--------|---------|--------|--------|
 | ~~1~~ | ~~Удалить motion dependency~~ | ~~Code~~ | ~~5 min~~ | ✅ DONE |
@@ -391,8 +393,8 @@
 | ~~8~~ | ~~Fieldset/legend для radio groups~~ | ~~A11y~~ | ~~1 hour~~ | ✅ DONE |
 | 9 | Реализовать deployment в CI/CD | Prod | 2 hours | ⏳ TODO |
 | 10 | Feature flag system | Prod | 4 hours | ⏳ TODO |
-| 11 | Env validation (Zod) | Prod | 1 hour | ⏳ TODO |
-| 12 | Sentry DSN fallback | Prod | 30 min | ⏳ TODO |
+| ~~11~~ | ~~Env validation (T3-Env + Zod)~~ | ~~Prod~~ | ~~1 hour~~ | ✅ DONE |
+| ~~12~~ | ~~Sentry DSN fallback~~ | ~~Prod~~ | ~~30 min~~ | ✅ DONE |
 
 ### P1: Высокий приоритет (15 задач)
 | # | Задача | Область |
@@ -440,7 +442,7 @@ Mini App **готов к beta-релизу** (95% audit score, было 77%).
 - Единый API клиент (apiClient)
 - Page-level тесты (Breathing.tsx, Profile.tsx)
 
-**Исправлено (10 критических):**
+**Исправлено (12 критических):**
 - ✅ C-1: services/api.ts удалён, мигрировано на apiClient
 - ✅ C-2: motion dependency удалён
 - ✅ C-3: Все импорты мигрированы на `@/api`
@@ -450,11 +452,14 @@ Mini App **готов к beta-релизу** (95% audit score, было 77%).
 - ✅ C-7/C-8: Контраст night-500 → night-400 (6 файлов)
 - ✅ C-9: Skip link + `<main>` landmark + nav aria-label
 - ✅ C-10: Native fieldset/legend для radio groups (WCAG 1.3.1)
+- ✅ C-13: T3-Env + Zod валидация env vars (build-time fail)
+- ✅ C-14: Sentry graceful degradation (работает без DSN)
 
-**Оставшиеся блокеры (4 критических):**
-- Prod: Deployment, feature flags, env validation, Sentry fallback (C-11 — C-14)
+**Оставшиеся блокеры (2 критических):**
+- C-11: Deployment в CI/CD
+- C-12: Feature flags система
 
-**Estimated effort:** ~6-8 часов для оставшихся P0
+**Estimated effort:** ~6 часов для оставшихся P0
 
 ---
 

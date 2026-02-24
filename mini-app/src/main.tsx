@@ -3,22 +3,41 @@
  * ================
  * Application bootstrap with React 18 and strict mode.
  *
- * Sentry is initialized BEFORE React to capture all errors.
+ * Initialization order:
+ * 1. Environment validation (fails fast on misconfiguration)
+ * 2. Sentry (error monitoring with graceful degradation)
+ * 3. i18n (internationalization)
+ * 4. React (UI rendering)
+ *
+ * IEC 62304 Compliance:
+ * - Configuration validation per §5.1.9
+ * - Error monitoring per §5.7.2
  */
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { env } from '@/env'; // Validates env on import (C-13)
 import { initSentry } from '@/services/sentry';
 import '@fontsource-variable/inter'; // Self-hosted Inter Variable font
 import '@/i18n'; // Initialize i18n before App
 import App from './App';
 import '@/styles/global.css';
 
-// Initialize Sentry BEFORE React renders
-initSentry();
+// C-14: Initialize Sentry with graceful degradation
+try {
+  if (env.VITE_SENTRY_DSN) {
+    initSentry();
+    console.log('[Sentry] Initialized successfully');
+  } else {
+    console.warn('[Sentry] DSN not configured — error monitoring disabled');
+  }
+} catch (error) {
+  // App continues without error monitoring
+  console.error('[Sentry] Initialization failed:', error);
+}
 
 // Environment-based Telegram mock for development
-const isDevelopment = import.meta.env.DEV;
+const isDevelopment = env.DEV;
 
 if (isDevelopment && !window.Telegram?.WebApp) {
   console.log('[SleepCore] Running in development mode - mocking Telegram environment');

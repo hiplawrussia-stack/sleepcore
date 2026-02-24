@@ -20,6 +20,7 @@ import { AuthUserSchema } from '@/api/schemas';
 import { useAuthStore } from '@/store/authStore';
 import { telegram } from '@/services/telegram';
 import { setUser as setSentryUser, clearUser as clearSentryUser } from '@/services/sentry';
+import { env } from '@/env';
 
 interface UseAuthReturn {
   user: AuthUser | null;
@@ -86,7 +87,7 @@ export const useAuth = (): UseAuthReturn => {
    */
   const authenticate = useCallback(async () => {
     // Check if we're in Telegram
-    if (!telegram.isInTelegram() && !import.meta.env.DEV) {
+    if (!telegram.isInTelegram() && !env.DEV) {
       setAuthError('This app must be opened from Telegram');
       return;
     }

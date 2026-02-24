@@ -20,9 +20,10 @@
  */
 
 import { telegram } from '@/services/telegram';
+import { env } from '@/env';
 import type { z } from 'zod';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const API_BASE_URL = env.VITE_API_URL;
 
 // ========== Security Constants ==========
 

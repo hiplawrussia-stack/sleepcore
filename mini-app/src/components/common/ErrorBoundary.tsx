@@ -15,6 +15,7 @@
 
 import React from 'react';
 import { ErrorBoundary as ReactErrorBoundary, FallbackProps } from 'react-error-boundary';
+import { env } from '@/env';
 
 /**
  * Fallback UI shown when an error is caught
@@ -33,7 +34,7 @@ const ErrorFallback: React.FC<FallbackProps> = ({ error, resetErrorBoundary }) =
         <p className="text-night-400 text-sm mb-4">
           Произошла непредвиденная ошибка. Попробуйте перезагрузить приложение.
         </p>
-        {import.meta.env.DEV && (
+        {env.DEV && (
           <details className="mb-4 text-left">
             <summary className="text-night-400 text-xs cursor-pointer hover:text-night-300">
               Техническая информация
@@ -64,7 +65,7 @@ const logError = (error: unknown, info: { componentStack?: string | null }) => {
   }
 
   // Send to Sentry in production
-  if (import.meta.env.PROD) {
+  if (env.PROD) {
     import('@/services/sentry').then(({ captureException }) => {
       captureException(error, { componentStack: info.componentStack });
     });
