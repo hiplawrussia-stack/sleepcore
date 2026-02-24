@@ -50,17 +50,17 @@ export class ProfilePage extends BasePage {
   constructor(page: Page) {
     super(page);
 
-    this.userName = page.locator('h1.text-xl.font-bold');
+    this.userName = page.locator('h1.text-xl.font-bold.text-night-100');
     this.userAvatar = page.locator('.w-20.h-20.rounded-full');
     this.evolutionCard = page.locator('text=/Совёнок|Молодая сова|Мудрая сова|Мастер сна/').locator('..').locator('..');
     this.statsGrid = page.locator('.grid.grid-cols-2.gap-3');
     this.questsPanel = page.locator('text=Задания').locator('..');
-    this.weeklyChart = page.locator('text=Активность за неделю').locator('..');
+    this.weeklyChart = page.locator('text=/Активность за неделю|weekActivity/').locator('..');
     this.xpProgress = page.locator('text=/\\d+ XP/').locator('..').locator('..');
-    this.settingsSection = page.locator('text=Настройки').locator('..');
-    this.hapticsToggle = page.locator('text=Вибрация').locator('..').locator('button');
-    this.privacyCenter = page.locator('text=Конфиденциальность').locator('..');
-    this.badgesSection = page.locator('text=Достижения').locator('..');
+    this.settingsSection = page.locator('text=/Настройки|settings\\.title/').locator('..');
+    this.hapticsToggle = page.locator('role=switch[name=/Вибрация|haptics/i]');
+    this.privacyCenter = page.locator('text=Приватность и данные').locator('..').locator('..');
+    this.badgesSection = page.locator('text=/Достижения|badges\\.title/').locator('..');
   }
 
   async goto(): Promise<void> {
@@ -211,10 +211,20 @@ export class ProfilePage extends BasePage {
   }
 
   /**
+   * Expand privacy center if collapsed
+   */
+  async expandPrivacyCenter(): Promise<void> {
+    const expandButton = this.page.locator('text=Приватность и данные');
+    await expandButton.click();
+    await this.waitForAnimation();
+  }
+
+  /**
    * Click "View My Data" button (GDPR Article 15)
    */
   async clickViewMyData(): Promise<void> {
-    await this.privacyCenter.locator('text=/Просмотреть|мои данные/i').click();
+    await this.expandPrivacyCenter();
+    await this.page.locator('text=Мои данные').click();
     await this.waitForAnimation();
   }
 
@@ -222,7 +232,8 @@ export class ProfilePage extends BasePage {
    * Click "Export Data" button (GDPR Article 20)
    */
   async clickExportData(): Promise<void> {
-    await this.privacyCenter.locator('text=/Экспорт|Export/i').click();
+    await this.expandPrivacyCenter();
+    await this.page.locator('text=Экспорт данных').click();
     await this.waitForAnimation();
   }
 
@@ -230,7 +241,8 @@ export class ProfilePage extends BasePage {
    * Click "Delete Data" button (GDPR Article 17)
    */
   async clickDeleteData(): Promise<void> {
-    await this.privacyCenter.locator('text=/Удалить|Delete/i').click();
+    await this.expandPrivacyCenter();
+    await this.page.locator('text=Удалить данные').click();
     await this.waitForAnimation();
   }
 

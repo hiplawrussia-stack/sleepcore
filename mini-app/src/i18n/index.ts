@@ -37,8 +37,12 @@ const telegramLanguageDetector = {
   lookup: () => getTelegramLanguage(),
 };
 
+// Create LanguageDetector instance and add custom detector BEFORE init
+const languageDetector = new LanguageDetector();
+languageDetector.addDetector(telegramLanguageDetector);
+
 i18n
-  .use(LanguageDetector)
+  .use(languageDetector)
   .use(initReactI18next)
   .init({
     resources: {
@@ -62,9 +66,6 @@ i18n
     // Development options
     debug: import.meta.env.DEV,
   });
-
-// Register custom Telegram detector
-i18n.services.languageDetector.addDetector(telegramLanguageDetector);
 
 export default i18n;
 
