@@ -33,22 +33,30 @@ const BottomNav: React.FC = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-night-800/90 backdrop-blur-lg border-t border-night-700 safe-area-bottom">
+    <nav
+      role="navigation"
+      aria-label={t('a11y.mainNavigation')}
+      className="fixed bottom-0 left-0 right-0 bg-night-800/90 backdrop-blur-lg border-t border-night-700 safe-area-bottom"
+    >
       <div className="flex justify-around items-center h-16">
-        {navItems.map((item) => (
-          <a
-            key={item.path}
-            href={item.path}
-            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-              location.pathname === item.path
-                ? 'text-primary-400'
-                : 'text-night-400 hover:text-night-200'
-            }`}
-          >
-            <span className="text-xl mb-0.5">{item.icon}</span>
-            <span className="text-xs">{item.label}</span>
-          </a>
-        ))}
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          return (
+            <a
+              key={item.path}
+              href={item.path}
+              aria-current={isActive ? 'page' : undefined}
+              className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+                isActive
+                  ? 'text-primary-400'
+                  : 'text-night-400 hover:text-night-200'
+              }`}
+            >
+              <span className="text-xl mb-0.5" aria-hidden="true">{item.icon}</span>
+              <span className="text-xs">{item.label}</span>
+            </a>
+          );
+        })}
       </div>
     </nav>
   );
@@ -153,6 +161,7 @@ const AuthError: React.FC<{ error: string; onRetry: () => void }> = ({
 
 // App content with auth check
 const AppContent: React.FC = () => {
+  const { t } = useTranslation();
   const { isAuthenticated, isAuthenticating, authError, authenticate } = useAuth();
   const location = useLocation();
 
@@ -184,15 +193,24 @@ const AppContent: React.FC = () => {
 
   return (
     <>
+      {/* Skip to content link - WCAG 2.4.1 Bypass Blocks */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary-500 focus:text-white focus:rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-300"
+      >
+        {t('a11y.skipToContent')}
+      </a>
       <SyncIndicator />
-      <Suspense fallback={<PageLoading />}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/breathing" element={<Breathing />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+      <main id="main-content" role="main">
+        <Suspense fallback={<PageLoading />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/breathing" element={<Breathing />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </main>
       {showBottomNav && <BottomNav />}
     </>
   );

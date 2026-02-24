@@ -16,6 +16,47 @@
     "pending": "Pending: {{count}}",
     "friend": "friend"
   },
+  "a11y": {
+    "skipToContent": "Skip to content",
+    "mainNavigation": "Main navigation",
+    "navigation": {
+      "goToBreathing": "Go to breathing exercises",
+      "goToHome": "Go to home",
+      "goToProfile": "Go to profile",
+      "goBack": "Go back"
+    },
+    "breathing": {
+      "selectPattern": "Select breathing technique: {{name}}",
+      "patternSelected": "Selected: {{name}}",
+      "selectCycles": "Select number of cycles: {{count}}",
+      "cyclesSelected": "{{count}} cycles selected",
+      "progressDot": "Cycle {{number}}: {{status}}",
+      "progressCompleted": "completed",
+      "progressCurrent": "current",
+      "progressPending": "pending",
+      "circleVisualization": "Breathing visualization: {{phase}}"
+    },
+    "home": {
+      "startBreathingCard": "Start breathing exercises",
+      "patternCard": "Start exercise: {{name}}",
+      "statsCard": "Statistics: {{value}} {{label}}",
+      "evolutionCard": "Your character: {{stage}}"
+    },
+    "profile": {
+      "toggleHaptics": "Toggle haptic feedback",
+      "selectLanguage": "Select language: {{language}}",
+      "weekDayActivity": "{{day}}: {{minutes}} minutes of practice",
+      "progressBar": "Progress: {{percent}}%"
+    },
+    "quests": {
+      "refreshQuests": "Refresh quests list",
+      "questProgress": "{{title}}: {{progress}} of {{target}}"
+    },
+    "common": {
+      "loading": "Loading, please wait",
+      "closeModal": "Close dialog"
+    }
+  },
   "navigation": {
     "home": "Home",
     "breathing": "Breathing",

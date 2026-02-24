@@ -50,6 +50,11 @@ vi.mock('react-i18next', () => ({
         'breathing.sec': 'сек',
         'breathing.completion.title': 'Отлично!',
         'breathing.completion.message': 'Ты выполнил {{cycles}} циклов',
+        // Accessibility translations
+        'a11y.breathing.selectPattern': 'Выбрать технику дыхания: {{name}}',
+        'a11y.breathing.patternSelected': 'Выбрано: {{name}}',
+        'a11y.breathing.selectCycles': 'Выбрать количество циклов: {{count}}',
+        'a11y.breathing.cyclesSelected': '{{count}} циклов выбрано',
       };
       let result = translations[key];
       if (!result) {
@@ -149,7 +154,10 @@ describe('HapticBreathing', () => {
     it('should show cycle count label', () => {
       render(<HapticBreathing />);
 
-      expect(screen.getByText('Количество циклов')).toBeInTheDocument();
+      // Now there are two elements: sr-only legend and aria-hidden span
+      // Use getAllByText to verify the label is displayed
+      const labels = screen.getAllByText('Количество циклов');
+      expect(labels.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -180,9 +188,9 @@ describe('HapticBreathing', () => {
     it('should highlight selected pattern', async () => {
       render(<HapticBreathing />);
 
-      // Initially 4-7-8 should have checkmark
-      const patternButton = screen.getByText('4-7-8 Релакс').closest('button');
-      expect(patternButton).toHaveClass('bg-primary-500/20');
+      // Initially 4-7-8 should have checkmark - uses label elements now
+      const patternLabel = screen.getByText('4-7-8 Релакс').closest('label');
+      expect(patternLabel).toHaveClass('bg-primary-500/20');
     });
 
     it('should use initial pattern from props', () => {
@@ -198,7 +206,12 @@ describe('HapticBreathing', () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<HapticBreathing />);
 
-      const button5 = screen.getByRole('button', { name: '5' });
+      // Find cycle radios by filtering on name attribute
+      const cycleRadios = screen.getAllByRole('radio').filter(
+        (radio) => (radio as HTMLInputElement).name === 'breathing-cycles'
+      );
+      // Get the "5" cycle option (index 1: 3, 5, 7, 10)
+      const button5 = cycleRadios[1];
       await user.click(button5);
 
       expect(haptics.selectionChanged).toHaveBeenCalled();
@@ -208,8 +221,12 @@ describe('HapticBreathing', () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<HapticBreathing />);
 
-      // Click on 5 cycles
-      const button5 = screen.getByRole('button', { name: '5' });
+      // Find cycle radios by filtering on name attribute
+      const cycleRadios = screen.getAllByRole('radio').filter(
+        (radio) => (radio as HTMLInputElement).name === 'breathing-cycles'
+      );
+      // Get the "5" cycle option (index 1: 3, 5, 7, 10)
+      const button5 = cycleRadios[1];
       await user.click(button5);
 
       // Duration should update (4-7-8 pattern = 19 seconds per cycle, 5 cycles = 95 seconds)
@@ -440,29 +457,33 @@ describe('HapticBreathing', () => {
   });
 
   describe('accessibility', () => {
-    it('should have accessible pattern buttons', () => {
+    it('should have accessible pattern buttons with native radio inputs', () => {
       render(<HapticBreathing />);
 
-      const patternButtons = screen.getAllByRole('button').filter((btn) =>
-        btn.className.includes('rounded-2xl')
-      );
+      // Native radio inputs inside fieldset with legend
+      // Pattern radios are grouped by name="breathing-pattern"
+      const patternRadios = screen.getAllByRole('radio');
+      expect(patternRadios.length).toBeGreaterThan(0);
 
-      expect(patternButtons.length).toBeGreaterThan(0);
+      // Should have fieldset with legend for pattern selection
+      const patternFieldset = screen.getByRole('group', { name: /выбери технику дыхания/i });
+      expect(patternFieldset).toBeInTheDocument();
     });
 
-    it('should have accessible cycle count buttons', () => {
+    it('should have accessible cycle count buttons with native radio inputs', () => {
       render(<HapticBreathing />);
 
-      const cycleButtons = [
-        screen.getByRole('button', { name: '3' }),
-        screen.getByRole('button', { name: '5' }),
-        screen.getByRole('button', { name: '7' }),
-        screen.getByRole('button', { name: '10' }),
-      ];
+      // Native radio inputs with label text as accessible name
+      // Cycle radios are grouped by name="breathing-cycles"
+      const cycleRadios = screen.getAllByRole('radio').filter(
+        (radio) => (radio as HTMLInputElement).name === 'breathing-cycles'
+      );
 
-      cycleButtons.forEach((btn) => {
-        expect(btn).toBeInTheDocument();
-      });
+      expect(cycleRadios).toHaveLength(4); // 3, 5, 7, 10
+
+      // Should have fieldset with legend for cycle selection
+      const cycleFieldset = screen.getByRole('group', { name: /количество циклов/i });
+      expect(cycleFieldset).toBeInTheDocument();
     });
   });
 

@@ -22,7 +22,7 @@ import { Card } from './Card';
 import { useTelegram } from '@/hooks';
 import { useAuthStore } from '@/store/authStore';
 import { useSyncStore } from '@/store/syncStore';
-import { api } from '@/services/api';
+import { apiClient } from '@/api';
 
 interface UserDataExport {
   exportDate: string;
@@ -165,16 +165,17 @@ export const PrivacyCenter: React.FC = () => {
       keysToRemove.forEach(key => localStorage.removeItem(key));
 
       // GDPR Article 17: Delete server-side data
-      const deleteResult = await api.deleteUserData();
-
-      if (deleteResult.success) {
+      try {
+        await apiClient.request<{ deleted: boolean; message: string }>('/user/data', {
+          method: 'DELETE',
+        });
         await showAlert(
           '✅ Все данные удалены\n\n' +
           'Локальные и серверные данные успешно удалены согласно GDPR Article 17.'
         );
-      } else {
+      } catch (deleteError) {
         // Local data deleted, but server deletion failed
-        console.error('[PrivacyCenter] Server deletion failed:', deleteResult.error);
+        console.error('[PrivacyCenter] Server deletion failed:', deleteError);
         await showAlert(
           '⚠️ Локальные данные удалены\n\n' +
           'Не удалось удалить данные с сервера. ' +
@@ -203,9 +204,11 @@ export const PrivacyCenter: React.FC = () => {
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full flex items-center justify-between text-left"
+        aria-expanded={isExpanded}
+        aria-controls="privacy-content"
       >
         <div className="flex items-center gap-3">
-          <span className="text-xl">🔒</span>
+          <span className="text-xl" aria-hidden="true">🔒</span>
           <div>
             <div className="font-medium text-night-100">Приватность и данные</div>
             <div className="text-xs text-night-400">
@@ -217,6 +220,7 @@ export const PrivacyCenter: React.FC = () => {
           className={`text-night-400 transition-transform duration-200 ${
             isExpanded ? 'rotate-180' : ''
           }`}
+          aria-hidden="true"
         >
           ▼
         </span>
@@ -224,17 +228,20 @@ export const PrivacyCenter: React.FC = () => {
 
       {/* Expandable content - CSS transition */}
       <div
+        id="privacy-content"
         className={`overflow-hidden transition-all duration-200 ease-out ${
           isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
         }`}
+        aria-hidden={!isExpanded}
       >
         <div className="pt-4 space-y-3">
           {/* Article 15: Right of Access */}
           <button
             onClick={handleViewData}
+            aria-label="Просмотреть мои сохранённые данные"
             className="w-full flex items-center gap-3 p-3 rounded-xl bg-night-700/50 hover:bg-night-700 transition-colors text-left"
           >
-            <span className="text-lg">📋</span>
+            <span className="text-lg" aria-hidden="true">📋</span>
             <div className="flex-1">
               <div className="text-sm font-medium text-night-100">Мои данные</div>
               <div className="text-xs text-night-400">
@@ -247,9 +254,11 @@ export const PrivacyCenter: React.FC = () => {
           <button
             onClick={handleExportData}
             disabled={isExporting}
+            aria-label={isExporting ? 'Экспортируем данные' : 'Экспортировать данные в JSON'}
+            aria-busy={isExporting}
             className="w-full flex items-center gap-3 p-3 rounded-xl bg-night-700/50 hover:bg-night-700 transition-colors text-left disabled:opacity-50"
           >
-            <span className="text-lg">{isExporting ? '⏳' : '📥'}</span>
+            <span className="text-lg" aria-hidden="true">{isExporting ? '⏳' : '📥'}</span>
             <div className="flex-1">
               <div className="text-sm font-medium text-night-100">
                 {isExporting ? 'Экспортируем...' : 'Экспорт данных'}
@@ -264,9 +273,11 @@ export const PrivacyCenter: React.FC = () => {
           <button
             onClick={handleDeleteData}
             disabled={isDeleting}
+            aria-label={isDeleting ? 'Удаляем данные' : 'Удалить все персональные данные'}
+            aria-busy={isDeleting}
             className="w-full flex items-center gap-3 p-3 rounded-xl bg-red-900/20 hover:bg-red-900/30 transition-colors text-left disabled:opacity-50"
           >
-            <span className="text-lg">{isDeleting ? '⏳' : '🗑️'}</span>
+            <span className="text-lg" aria-hidden="true">{isDeleting ? '⏳' : '🗑️'}</span>
             <div className="flex-1">
               <div className="text-sm font-medium text-red-400">
                 {isDeleting ? 'Удаляем...' : 'Удалить данные'}
@@ -280,9 +291,10 @@ export const PrivacyCenter: React.FC = () => {
           {/* Privacy Policy Link */}
           <button
             onClick={handleOpenPrivacyPolicy}
+            aria-label="Открыть политику конфиденциальности"
             className="w-full flex items-center gap-3 p-3 rounded-xl bg-night-700/50 hover:bg-night-700 transition-colors text-left"
           >
-            <span className="text-lg">📜</span>
+            <span className="text-lg" aria-hidden="true">📜</span>
             <div className="flex-1">
               <div className="text-sm font-medium text-night-100">
                 Политика конфиденциальности
@@ -294,7 +306,7 @@ export const PrivacyCenter: React.FC = () => {
           </button>
 
           {/* GDPR Notice */}
-          <div className="pt-2 text-xs text-night-500 text-center">
+          <div className="pt-2 text-xs text-night-400 text-center">
             Согласно GDPR (ст. 15, 17, 20) вы имеете право на доступ,
             удаление и переносимость ваших данных
           </div>

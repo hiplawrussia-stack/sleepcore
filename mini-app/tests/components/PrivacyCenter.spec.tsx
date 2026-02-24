@@ -23,7 +23,7 @@ const { mockShowAlert, mockShowConfirm, mockOpenLink, mockLogout, mockClearPendi
   mockOpenLink: vi.fn(),
   mockLogout: vi.fn(),
   mockClearPendingChanges: vi.fn(),
-  mockDeleteUserData: vi.fn().mockResolvedValue({ success: true }),
+  mockDeleteUserData: vi.fn().mockResolvedValue({ deleted: true, message: 'Data deleted' }),
   mockUserState: {
     user: {
       id: 'user-123',
@@ -76,10 +76,10 @@ vi.mock('../../src/store/syncStore', () => ({
   }),
 }));
 
-// Mock api service
-vi.mock('../../src/services/api', () => ({
-  api: {
-    deleteUserData: mockDeleteUserData,
+// Mock apiClient - uses @/api after C-1 migration
+vi.mock('@/api', () => ({
+  apiClient: {
+    request: mockDeleteUserData,
   },
 }));
 
@@ -111,7 +111,7 @@ describe('PrivacyCenter', () => {
     // Reset mock implementations
     mockShowAlert.mockResolvedValue(undefined);
     mockShowConfirm.mockResolvedValue(true);
-    mockDeleteUserData.mockResolvedValue({ success: true });
+    mockDeleteUserData.mockResolvedValue({ deleted: true, message: 'Data deleted' });
 
     // Mock URL methods for jsdom
     globalThis.URL.createObjectURL = vi.fn().mockReturnValue('blob:test');
@@ -438,10 +438,8 @@ describe('PrivacyCenter', () => {
 
     it('should handle server deletion failure', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      mockDeleteUserData.mockResolvedValue({
-        success: false,
-        error: 'Server error',
-      });
+      // API request throws → inner catch → "Локальные данные удалены"
+      mockDeleteUserData.mockRejectedValue(new Error('Server error'));
 
       render(<PrivacyCenter />);
 
@@ -461,7 +459,10 @@ describe('PrivacyCenter', () => {
 
     it('should handle delete error gracefully', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      mockDeleteUserData.mockRejectedValue(new Error('Network error'));
+      // Logout throws → outer catch → "Ошибка при удалении данных"
+      mockLogout.mockImplementationOnce(() => {
+        throw new Error('Logout failed');
+      });
 
       render(<PrivacyCenter />);
 

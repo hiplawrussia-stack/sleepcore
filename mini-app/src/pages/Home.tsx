@@ -93,13 +93,14 @@ export const Home: React.FC = () => {
             haptics.impact('medium');
             navigate('/breathing');
           }}
+          aria-label={t('a11y.home.startBreathingCard')}
           className="relative overflow-hidden"
         >
           {/* Background glow */}
           <div className="absolute inset-0 bg-gradient-to-br from-primary-500/20 to-transparent" />
 
           <div className="relative z-10 flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-primary-500/20 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-2xl bg-primary-500/20 flex items-center justify-center" aria-hidden="true">
               <span className="text-3xl">🌙</span>
             </div>
             <div className="flex-1">
@@ -115,6 +116,7 @@ export const Home: React.FC = () => {
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -143,9 +145,10 @@ export const Home: React.FC = () => {
                 haptics.selectionChanged();
                 navigate(`/breathing?pattern=${pattern.id}`);
               }}
+              aria-label={t('a11y.home.patternCard', { name: pattern.nameRu })}
               className="flex items-center gap-3"
             >
-              <span className="text-2xl">{pattern.icon}</span>
+              <span className="text-2xl" aria-hidden="true">{pattern.icon}</span>
               <div className="flex-1">
                 <div className="font-medium text-night-100">{pattern.nameRu}</div>
                 <div className="text-xs text-night-400">
@@ -174,9 +177,10 @@ export const Home: React.FC = () => {
                 haptics.selectionChanged();
                 navigate(`/breathing?pattern=${pattern.id}`);
               }}
+              aria-label={t('a11y.home.patternCard', { name: pattern.nameRu })}
               className="flex items-center gap-3"
             >
-              <span className="text-2xl">{pattern.icon}</span>
+              <span className="text-2xl" aria-hidden="true">{pattern.icon}</span>
               <div className="flex-1">
                 <div className="font-medium text-night-100">{pattern.nameRu}</div>
                 <div className="text-xs text-night-400">

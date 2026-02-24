@@ -122,6 +122,8 @@ export const BreathingCircle: React.FC<BreathingCircleProps> = ({
         height={size}
         viewBox={`0 0 ${size} ${size}`}
         className="relative z-10"
+        role="img"
+        aria-label={t('a11y.breathing.circleVisualization', { phase: phaseLabel })}
       >
         {/* Background ring (static) */}
         <circle

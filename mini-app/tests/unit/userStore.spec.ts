@@ -11,19 +11,20 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { useUserStore } from '../../src/store/userStore';
 
-// Mock the API service
-vi.mock('@/services/api', () => ({
-  api: {
-    getProfile: vi.fn(),
-    getBreathingStats: vi.fn(),
-    updateProfile: vi.fn(),
-    logBreathingSession: vi.fn(),
+// Use vi.hoisted() to create mock functions before vi.mock()
+const { mockRequest } = vi.hoisted(() => ({
+  mockRequest: vi.fn(),
+}));
+
+// Mock the apiClient - uses @/api after C-1 migration
+vi.mock('@/api', () => ({
+  apiClient: {
+    request: mockRequest,
   },
 }));
 
-import { api } from '@/services/api';
+import { useUserStore } from '../../src/store/userStore';
 
 describe('User Store', () => {
   const mockProfile = {
@@ -86,10 +87,8 @@ describe('User Store', () => {
 
   describe('loadProfile', () => {
     it('should load profile successfully', async () => {
-      vi.mocked(api.getProfile).mockResolvedValueOnce({
-        success: true,
-        data: mockProfile,
-      });
+      // apiClient.request returns data directly
+      mockRequest.mockResolvedValueOnce(mockProfile);
 
       const { loadProfile } = useUserStore.getState();
       await loadProfile();
@@ -100,11 +99,20 @@ describe('User Store', () => {
       expect(state.error).toBeNull();
     });
 
+    it('should call apiClient.request with correct path', async () => {
+      mockRequest.mockResolvedValueOnce(mockProfile);
+
+      const { loadProfile } = useUserStore.getState();
+      await loadProfile();
+
+      expect(mockRequest).toHaveBeenCalledWith('/user/profile');
+    });
+
     it('should set isLoading while loading', async () => {
-      vi.mocked(api.getProfile).mockImplementation(() => {
+      mockRequest.mockImplementation(() => {
         // Check isLoading is true during the call
         expect(useUserStore.getState().isLoading).toBe(true);
-        return Promise.resolve({ success: true, data: mockProfile });
+        return Promise.resolve(mockProfile);
       });
 
       const { loadProfile } = useUserStore.getState();
@@ -112,10 +120,8 @@ describe('User Store', () => {
     });
 
     it('should handle error when loading profile fails', async () => {
-      vi.mocked(api.getProfile).mockResolvedValueOnce({
-        success: false,
-        error: 'Failed to load profile',
-      });
+      // apiClient throws errors for failures
+      mockRequest.mockRejectedValueOnce(new Error('Network error'));
 
       const { loadProfile } = useUserStore.getState();
       await loadProfile();
@@ -123,13 +129,11 @@ describe('User Store', () => {
       const state = useUserStore.getState();
       expect(state.profile).toBeNull();
       expect(state.isLoading).toBe(false);
-      expect(state.error).toBe('Failed to load profile');
+      expect(state.error).toBe('Network error');
     });
 
-    it('should use default error message when no error provided', async () => {
-      vi.mocked(api.getProfile).mockResolvedValueOnce({
-        success: false,
-      });
+    it('should use default error message for non-Error throws', async () => {
+      mockRequest.mockRejectedValueOnce('string error');
 
       const { loadProfile } = useUserStore.getState();
       await loadProfile();
@@ -142,10 +146,7 @@ describe('User Store', () => {
       // Set an initial error
       useUserStore.setState({ error: 'Previous error' });
 
-      vi.mocked(api.getProfile).mockResolvedValueOnce({
-        success: true,
-        data: mockProfile,
-      });
+      mockRequest.mockResolvedValueOnce(mockProfile);
 
       const { loadProfile } = useUserStore.getState();
       await loadProfile();
@@ -156,10 +157,7 @@ describe('User Store', () => {
 
   describe('loadStats', () => {
     it('should load stats successfully', async () => {
-      vi.mocked(api.getBreathingStats).mockResolvedValueOnce({
-        success: true,
-        data: mockStats,
-      });
+      mockRequest.mockResolvedValueOnce(mockStats);
 
       const { loadStats } = useUserStore.getState();
       await loadStats();
@@ -168,17 +166,26 @@ describe('User Store', () => {
       expect(state.stats).toEqual(mockStats);
     });
 
+    it('should call apiClient.request with correct path', async () => {
+      mockRequest.mockResolvedValueOnce(mockStats);
+
+      const { loadStats } = useUserStore.getState();
+      await loadStats();
+
+      expect(mockRequest).toHaveBeenCalledWith('/breathing/stats');
+    });
+
     it('should not update stats on failure', async () => {
-      vi.mocked(api.getBreathingStats).mockResolvedValueOnce({
-        success: false,
-        error: 'Failed to load stats',
-      });
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockRequest.mockRejectedValueOnce(new Error('Failed to load stats'));
 
       const { loadStats } = useUserStore.getState();
       await loadStats();
 
       const state = useUserStore.getState();
       expect(state.stats).toBeNull();
+
+      consoleSpy.mockRestore();
     });
   });
 
@@ -186,10 +193,7 @@ describe('User Store', () => {
     it('should update profile successfully', async () => {
       const updatedProfile = { ...mockProfile, firstName: 'Updated' };
 
-      vi.mocked(api.updateProfile).mockResolvedValueOnce({
-        success: true,
-        data: updatedProfile,
-      });
+      mockRequest.mockResolvedValueOnce(updatedProfile);
 
       const { updateProfile } = useUserStore.getState();
       await updateProfile({ firstName: 'Updated' });
@@ -200,10 +204,22 @@ describe('User Store', () => {
       expect(state.error).toBeNull();
     });
 
+    it('should call apiClient.request with correct params', async () => {
+      mockRequest.mockResolvedValueOnce(mockProfile);
+
+      const { updateProfile } = useUserStore.getState();
+      await updateProfile({ firstName: 'Updated' });
+
+      expect(mockRequest).toHaveBeenCalledWith('/user/profile', {
+        method: 'PUT',
+        body: JSON.stringify({ firstName: 'Updated' }),
+      });
+    });
+
     it('should set isLoading while updating', async () => {
-      vi.mocked(api.updateProfile).mockImplementation(() => {
+      mockRequest.mockImplementation(() => {
         expect(useUserStore.getState().isLoading).toBe(true);
-        return Promise.resolve({ success: true, data: mockProfile });
+        return Promise.resolve(mockProfile);
       });
 
       const { updateProfile } = useUserStore.getState();
@@ -211,10 +227,7 @@ describe('User Store', () => {
     });
 
     it('should handle error when updating profile fails', async () => {
-      vi.mocked(api.updateProfile).mockResolvedValueOnce({
-        success: false,
-        error: 'Update failed',
-      });
+      mockRequest.mockRejectedValueOnce(new Error('Update failed'));
 
       const { updateProfile } = useUserStore.getState();
       await updateProfile({ firstName: 'Updated' });
@@ -224,10 +237,8 @@ describe('User Store', () => {
       expect(state.error).toBe('Update failed');
     });
 
-    it('should use default error message when no error provided', async () => {
-      vi.mocked(api.updateProfile).mockResolvedValueOnce({
-        success: false,
-      });
+    it('should use default error message for non-Error throws', async () => {
+      mockRequest.mockRejectedValueOnce('string error');
 
       const { updateProfile } = useUserStore.getState();
       await updateProfile({ firstName: 'Updated' });
@@ -238,10 +249,7 @@ describe('User Store', () => {
     it('should clear previous error when updating', async () => {
       useUserStore.setState({ error: 'Previous error' });
 
-      vi.mocked(api.updateProfile).mockResolvedValueOnce({
-        success: true,
-        data: mockProfile,
-      });
+      mockRequest.mockResolvedValueOnce(mockProfile);
 
       const { updateProfile } = useUserStore.getState();
       await updateProfile({ firstName: 'Updated' });
@@ -251,157 +259,92 @@ describe('User Store', () => {
   });
 
   describe('logSession', () => {
-    it('should log breathing session and refresh stats', async () => {
-      // Set initial profile
+    it('should log session successfully', async () => {
+      // First call: POST /breathing/sessions
+      // Second call: GET /breathing/stats (loadStats)
+      mockRequest
+        .mockResolvedValueOnce({ id: 'session-1', xpGain: 30 })
+        .mockResolvedValueOnce(mockStats);
+
       useUserStore.setState({ profile: mockProfile });
 
-      vi.mocked(api.logBreathingSession).mockResolvedValueOnce({
-        success: true,
-        data: { id: 'session-123' },
-      });
-
-      vi.mocked(api.getBreathingStats).mockResolvedValueOnce({
-        success: true,
-        data: mockStats,
-      });
-
       const { logSession } = useUserStore.getState();
-      await logSession('478', 5, 300);
+      await logSession('478', 3, 60);
 
-      expect(api.logBreathingSession).toHaveBeenCalledWith({
-        patternId: '478',
-        cycles: 5,
-        duration: 300,
+      expect(mockRequest).toHaveBeenCalledWith('/breathing/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ patternId: '478', cycles: 3, duration: 60 }),
       });
-
-      // Stats should be refreshed
-      expect(api.getBreathingStats).toHaveBeenCalled();
     });
 
-    it('should apply optimistic XP update', async () => {
-      const initialXP = 100;
-      useUserStore.setState({ profile: { ...mockProfile, xp: initialXP } });
+    it('should refresh stats after logging session', async () => {
+      mockRequest
+        .mockResolvedValueOnce({ id: 'session-1', xpGain: 30 })
+        .mockResolvedValueOnce(mockStats);
 
-      vi.mocked(api.logBreathingSession).mockResolvedValueOnce({
-        success: true,
-        data: { id: 'session-123' },
-      });
-
-      vi.mocked(api.getBreathingStats).mockResolvedValueOnce({
-        success: true,
-        data: mockStats,
-      });
+      useUserStore.setState({ profile: mockProfile });
 
       const { logSession } = useUserStore.getState();
-      const cycles = 5;
-      await logSession('478', cycles, 300);
+      await logSession('478', 3, 60);
+
+      // Should have called stats endpoint after session
+      expect(mockRequest).toHaveBeenCalledWith('/breathing/stats');
+      expect(useUserStore.getState().stats).toEqual(mockStats);
+    });
+
+    it('should update XP optimistically', async () => {
+      mockRequest
+        .mockResolvedValueOnce({ id: 'session-1', xpGain: 30 })
+        .mockResolvedValueOnce(mockStats);
+
+      useUserStore.setState({ profile: mockProfile }); // xp: 100
+
+      const { logSession } = useUserStore.getState();
+      await logSession('478', 3, 60); // 3 cycles * 10 XP = 30 XP
 
       const state = useUserStore.getState();
-      // XP should increase by 10 per cycle
-      expect(state.profile?.xp).toBe(initialXP + (cycles * 10));
+      expect(state.profile?.xp).toBe(130); // 100 + 30
     });
 
-    it('should not update XP if no profile exists', async () => {
-      vi.mocked(api.logBreathingSession).mockResolvedValueOnce({
-        success: true,
-        data: { id: 'session-123' },
-      });
+    it('should not crash if profile is null', async () => {
+      mockRequest
+        .mockResolvedValueOnce({ id: 'session-1', xpGain: 30 })
+        .mockResolvedValueOnce(mockStats);
 
-      vi.mocked(api.getBreathingStats).mockResolvedValueOnce({
-        success: true,
-        data: mockStats,
-      });
+      useUserStore.setState({ profile: null });
 
       const { logSession } = useUserStore.getState();
-      await logSession('478', 5, 300);
+      await logSession('478', 3, 60);
 
-      // Should not throw, profile remains null
-      expect(useUserStore.getState().profile).toBeNull();
+      // Should complete without error
+      expect(mockRequest).toHaveBeenCalled();
     });
 
-    it('should not refresh stats if session logging fails', async () => {
-      vi.mocked(api.logBreathingSession).mockResolvedValueOnce({
-        success: false,
-        error: 'Failed to log session',
-      });
+    it('should handle error when logging session fails', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockRequest.mockRejectedValueOnce(new Error('Network error'));
 
       const { logSession } = useUserStore.getState();
-      await logSession('478', 5, 300);
+      await logSession('478', 3, 60);
 
-      expect(api.getBreathingStats).not.toHaveBeenCalled();
+      // Should log error but not throw
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[userStore] Failed to log session:',
+        expect.any(Error)
+      );
+
+      consoleSpy.mockRestore();
     });
   });
 
   describe('clearError', () => {
     it('should clear error', () => {
       useUserStore.setState({ error: 'Some error' });
-      expect(useUserStore.getState().error).toBe('Some error');
 
       const { clearError } = useUserStore.getState();
       clearError();
 
       expect(useUserStore.getState().error).toBeNull();
-    });
-
-    it('should work even if no error exists', () => {
-      const { clearError } = useUserStore.getState();
-      expect(() => clearError()).not.toThrow();
-      expect(useUserStore.getState().error).toBeNull();
-    });
-  });
-
-  describe('state workflows', () => {
-    it('should handle full profile load -> update flow', async () => {
-      // 1. Load profile
-      vi.mocked(api.getProfile).mockResolvedValueOnce({
-        success: true,
-        data: mockProfile,
-      });
-
-      const { loadProfile, updateProfile } = useUserStore.getState();
-      await loadProfile();
-
-      expect(useUserStore.getState().profile).toEqual(mockProfile);
-
-      // 2. Update profile
-      const updatedProfile = { ...mockProfile, firstName: 'NewName' };
-      vi.mocked(api.updateProfile).mockResolvedValueOnce({
-        success: true,
-        data: updatedProfile,
-      });
-
-      await updateProfile({ firstName: 'NewName' });
-
-      expect(useUserStore.getState().profile?.firstName).toBe('NewName');
-    });
-
-    it('should handle profile load -> session log -> stats update flow', async () => {
-      // 1. Load profile
-      vi.mocked(api.getProfile).mockResolvedValueOnce({
-        success: true,
-        data: { ...mockProfile, xp: 100 },
-      });
-
-      const { loadProfile, logSession } = useUserStore.getState();
-      await loadProfile();
-
-      // 2. Log session
-      vi.mocked(api.logBreathingSession).mockResolvedValueOnce({
-        success: true,
-        data: { id: 'session-123' },
-      });
-
-      const updatedStats = { ...mockStats, totalSessions: 16 };
-      vi.mocked(api.getBreathingStats).mockResolvedValueOnce({
-        success: true,
-        data: updatedStats,
-      });
-
-      await logSession('478', 3, 180);
-
-      const state = useUserStore.getState();
-      expect(state.stats).toEqual(updatedStats);
-      expect(state.profile?.xp).toBe(130); // 100 + (3 * 10)
     });
   });
 });

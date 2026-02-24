@@ -106,7 +106,7 @@ const LeaderboardEntryRow: React.FC<{
           {entry.isCurrentUser && ' (вы)'}
         </span>
       </div>
-      <div className="text-xs text-night-500">
+      <div className="text-xs text-night-400">
         {entry.totalSessions} сессий • {entry.totalMinutes} мин
       </div>
     </div>
@@ -152,7 +152,7 @@ const OptInPrompt: React.FC<{
       </div>
 
       {showAnonymous && (
-        <p className="text-xs text-night-500 mb-4">
+        <p className="text-xs text-night-400 mb-4">
           Твоё имя будет показано как «Участник #XXX»
         </p>
       )}
@@ -270,7 +270,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
         <button
           onClick={handleOptOut}
           disabled={isOptingOut}
-          className="text-xs text-night-500 hover:text-night-400"
+          className="text-xs text-night-400 hover:text-night-300"
         >
           {isOptingOut ? '...' : 'Выйти'}
         </button>

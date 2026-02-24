@@ -203,6 +203,23 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
     setShowCompletion(false);
   }, []);
 
+  // Handle Escape key for completion modal
+  useEffect(() => {
+    if (!showCompletion) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        resetExercise();
+        telegram.hideMainButton();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showCompletion, resetExercise]);
+
   // Setup Telegram MainButton
   useEffect(() => {
     if (isRunning) {
@@ -229,76 +246,99 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
       {/* Pattern Selector - CSS transitions */}
       {showPatternSelector && phase === 'idle' && (
         <div className="w-full max-w-md mb-6 breathing-selector-enter">
-          {/* Header */}
-          <h2 className="text-xl font-semibold text-night-100 mb-4 text-center">
-            {t('breathing.title')}
-          </h2>
+          {/* Pattern selector - Native fieldset/legend for WCAG 1.3.1 */}
+          <fieldset className="border-0 p-0 m-0">
+            <legend className="text-xl font-semibold text-night-100 mb-4 text-center w-full">
+              {t('breathing.title')}
+            </legend>
 
-          {/* Pattern buttons */}
-          <div className="space-y-2">
-            {getFreePatterns().map((pattern) => (
-              <button
-                key={pattern.id}
-                onClick={() => {
-                  setSelectedPattern(pattern);
-                  haptics.selectionChanged();
-                }}
-                className={`w-full p-4 rounded-2xl flex items-center gap-3 transition-all duration-200 ${
-                  selectedPattern.id === pattern.id
-                    ? 'bg-primary-500/20 border-2 border-primary-500'
-                    : 'bg-night-800 border-2 border-transparent hover:border-night-600'
-                }`}
-              >
-                <span className="text-2xl">{pattern.icon}</span>
-                <div className="flex-1 text-left">
-                  <div className="font-medium text-night-100">
-                    {isRu ? pattern.nameRu : pattern.name}
-                  </div>
-                  <div className="text-sm text-night-400">
-                    {pattern.inhale}-{pattern.hold}-{pattern.exhale}
-                    {pattern.hold2 ? `-${pattern.hold2}` : ''} {t('breathing.sec', 'сек')}
-                    <span className="mx-2">•</span>
-                    {t(`home.categories.${pattern.category}`)}
-                  </div>
-                </div>
-                {selectedPattern.id === pattern.id && (
-                  <div className="w-6 h-6 rounded-full bg-primary-500 flex items-center justify-center breathing-checkmark">
-                    <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
+            <div className="space-y-2">
+              {getFreePatterns().map((pattern) => {
+                const patternName = isRu ? pattern.nameRu : pattern.name;
+                const isSelected = selectedPattern.id === pattern.id;
+                return (
+                  <label
+                    key={pattern.id}
+                    className={`relative w-full p-4 rounded-2xl flex items-center gap-3 cursor-pointer transition-all duration-200 ${
+                      isSelected
+                        ? 'bg-primary-500/20 border-2 border-primary-500'
+                        : 'bg-night-800 border-2 border-transparent hover:border-night-600'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="breathing-pattern"
+                      value={pattern.id}
+                      checked={isSelected}
+                      onChange={() => {
+                        setSelectedPattern(pattern);
+                        haptics.selectionChanged();
+                      }}
+                      className="absolute opacity-0 w-full h-full top-0 left-0 cursor-pointer"
+                    />
+                    <span className="text-2xl" aria-hidden="true">{pattern.icon}</span>
+                    <div className="flex-1 text-left">
+                      <div className="font-medium text-night-100">
+                        {patternName}
+                      </div>
+                      <div className="text-sm text-night-400">
+                        {pattern.inhale}-{pattern.hold}-{pattern.exhale}
+                        {pattern.hold2 ? `-${pattern.hold2}` : ''} {t('breathing.sec', 'сек')}
+                        <span className="mx-2">•</span>
+                        {t(`home.categories.${pattern.category}`)}
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <div className="w-6 h-6 rounded-full bg-primary-500 flex items-center justify-center breathing-checkmark" aria-hidden="true">
+                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
 
-          {/* Cycles selector */}
-          <div className="mt-6">
+          {/* Cycles selector - Native fieldset/legend for WCAG 1.3.1 */}
+          <fieldset className="mt-6 border-0 p-0 m-0">
+            <legend className="sr-only">{t('breathing.cycles.title')}</legend>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-night-300">{t('breathing.cycles.title')}</span>
+              <span className="text-night-300" aria-hidden="true">{t('breathing.cycles.title')}</span>
               <span className="text-night-400 text-sm">
                 ~{formatDuration(estimatedDuration)}
               </span>
             </div>
             <div className="flex gap-2">
-              {[3, 5, 7, 10].map((num) => (
-                <button
-                  key={num}
-                  onClick={() => {
-                    setTotalCycles(num);
-                    haptics.selectionChanged();
-                  }}
-                  className={`flex-1 py-3 rounded-xl font-medium transition-all duration-200 ${
-                    totalCycles === num
-                      ? 'bg-primary-500 text-white'
-                      : 'bg-night-800 text-night-300 hover:bg-night-700'
-                  }`}
-                >
-                  {num}
-                </button>
-              ))}
+              {[3, 5, 7, 10].map((num) => {
+                const isSelected = totalCycles === num;
+                return (
+                  <label
+                    key={num}
+                    className={`relative flex-1 py-3 rounded-xl font-medium text-center cursor-pointer transition-all duration-200 ${
+                      isSelected
+                        ? 'bg-primary-500 text-white'
+                        : 'bg-night-800 text-night-300 hover:bg-night-700'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="breathing-cycles"
+                      value={num}
+                      checked={isSelected}
+                      onChange={() => {
+                        setTotalCycles(num);
+                        haptics.selectionChanged();
+                      }}
+                      className="absolute opacity-0 w-full h-full top-0 left-0 cursor-pointer"
+                    />
+                    {num}
+                  </label>
+                );
+              })}
             </div>
-          </div>
+          </fieldset>
 
           {/* Pattern description */}
           <div
@@ -324,12 +364,12 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
 
       {/* Progress indicator */}
       {isRunning && (
-        <div className="text-center mb-8 breathing-progress-enter">
+        <div className="text-center mb-8 breathing-progress-enter" role="status" aria-live="polite">
           <div className="text-night-400 mb-2">
             {t('breathing.progress', { current: currentCycle, total: totalCycles })}
           </div>
           {/* Progress dots */}
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-2" aria-hidden="true">
             {Array.from({ length: totalCycles }).map((_, i) => (
               <div
                 key={i}
@@ -348,12 +388,17 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
 
       {/* Completion message - CSS animation */}
       {showCompletion && (
-        <div className="absolute inset-0 flex items-center justify-center bg-night-900/90 z-30 breathing-completion-enter">
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-night-900/90 z-30 breathing-completion-enter"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="completion-title"
+        >
           <div className="text-center px-6">
-            <div className="text-6xl mb-4 breathing-celebration-bounce">
+            <div className="text-6xl mb-4 breathing-celebration-bounce" aria-hidden="true">
               🎉
             </div>
-            <h2 className="text-2xl font-bold text-night-100 mb-2">
+            <h2 id="completion-title" className="text-2xl font-bold text-night-100 mb-2">
               {t('breathing.completion.title')}
             </h2>
             <p className="text-night-300 mb-2">

@@ -15,7 +15,8 @@
  * @module @sleepcore/mini-app/components
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { haptics } from '@/services/haptics';
 
 interface EvolutionCelebrationModalProps {
@@ -60,6 +61,34 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
 }) => {
   const [confettiParticles, setConfettiParticles] = useState<Array<{ id: number; delay: number; x: number; emoji: string }>>([]);
   const [isAnimating, setIsAnimating] = useState(false);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // Handle Escape key press
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      onClose();
+    }
+  }, [onClose]);
+
+  // Focus trap - keep focus within modal
+  const handleFocusTrap = useCallback((event: KeyboardEvent) => {
+    if (event.key !== 'Tab' || !modalRef.current) return;
+
+    const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    if (event.shiftKey && document.activeElement === firstElement) {
+      event.preventDefault();
+      lastElement?.focus();
+    } else if (!event.shiftKey && document.activeElement === lastElement) {
+      event.preventDefault();
+      firstElement?.focus();
+    }
+  }, []);
 
   // Generate confetti particles when modal becomes visible
   useEffect(() => {
@@ -77,14 +106,29 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
         emoji: emojis[Math.floor(Math.random() * emojis.length)],
       }));
       setConfettiParticles(particles);
+
+      // Focus the close button when modal opens
+      setTimeout(() => {
+        closeButtonRef.current?.focus();
+      }, 100);
+
+      // Add keyboard event listeners
+      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keydown', handleFocusTrap);
+
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+        document.removeEventListener('keydown', handleFocusTrap);
+      };
     } else {
       setIsAnimating(false);
       setConfettiParticles([]);
     }
-  }, [isVisible]);
+  }, [isVisible, handleKeyDown, handleFocusTrap]);
 
   if (!isVisible) return null;
 
+  const { t } = useTranslation();
   const previousName = STAGE_NAMES[previousStage] || previousStage;
   const newName = STAGE_NAMES[newStage] || newStage;
   const newIcon = STAGE_ICONS[newStage] || '🦉';
@@ -95,9 +139,12 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
         isAnimating ? 'opacity-100' : 'opacity-0'
       }`}
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="evolution-modal-title"
     >
       {/* Confetti layer */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
         {confettiParticles.map((particle) => (
           <ConfettiParticle
             key={particle.id}
@@ -110,6 +157,7 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
 
       {/* Modal content */}
       <div
+        ref={modalRef}
         className={`relative z-10 mx-4 p-6 rounded-3xl bg-gradient-to-b from-primary-500/20 to-night-800 border border-primary-500/30 max-w-sm w-full text-center transition-all duration-400 ${
           isAnimating ? 'scale-100 opacity-100' : 'scale-50 opacity-0'
         }`}
@@ -119,12 +167,14 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
         <div
           className="text-7xl mb-4 animate-celebration-bounce"
           style={{ animationDelay: '0.2s' }}
+          aria-hidden="true"
         >
           {newIcon}
         </div>
 
         {/* Title */}
         <h2
+          id="evolution-modal-title"
           className="text-2xl font-bold text-primary-400 mb-2 animate-slide-up"
           style={{ animationDelay: '0.3s' }}
         >
@@ -139,7 +189,7 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
           <div className="text-night-400 text-sm mb-2">
             {previousName}
           </div>
-          <div className="flex items-center justify-center gap-2 text-night-300">
+          <div className="flex items-center justify-center gap-2 text-night-300" aria-hidden="true">
             <span>→</span>
           </div>
           <div className="text-xl font-semibold text-night-100 mt-2">
@@ -157,11 +207,13 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
 
         {/* Close button */}
         <button
+          ref={closeButtonRef}
           onClick={onClose}
+          aria-label={t('a11y.common.closeModal')}
           className="w-full py-3 px-6 rounded-xl bg-primary-500 text-white font-medium hover:bg-primary-600 transition-colors animate-slide-up"
           style={{ animationDelay: '0.6s' }}
         >
-          Отлично!
+          {t('common.done')}
         </button>
       </div>
     </div>

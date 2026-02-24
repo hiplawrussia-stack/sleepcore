@@ -165,9 +165,9 @@ export const Profile: React.FC = () => {
           className="mb-6 animate-slide-up"
           style={{ animationDelay: '0.1s' }}
         >
-          <Card variant="glass">
+          <Card variant="glass" aria-label={t('a11y.home.evolutionCard', { stage: evolutionInfo.name })}>
             <div className="flex items-center gap-4 mb-3">
-              <span className="text-4xl">{evolutionInfo.emoji}</span>
+              <span className="text-4xl" aria-hidden="true">{evolutionInfo.emoji}</span>
               <div className="flex-1">
                 <div className="font-semibold text-night-100">
                   {evolutionInfo.name}
@@ -179,13 +179,20 @@ export const Profile: React.FC = () => {
             </div>
             {evolutionInfo.nextStage && (
               <>
-                <div className="h-2 bg-night-700 rounded-full overflow-hidden mb-2">
+                <div
+                  className="h-2 bg-night-700 rounded-full overflow-hidden mb-2"
+                  role="progressbar"
+                  aria-valuenow={evolutionInfo.progress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={t('a11y.profile.progressBar', { percent: evolutionInfo.progress })}
+                >
                   <div
                     style={{ width: `${evolutionInfo.progress}%` }}
                     className="h-full bg-gradient-to-r from-primary-500 to-calm-purple rounded-full transition-all duration-500"
                   />
                 </div>
-                <div className="text-xs text-night-500">
+                <div className="text-xs text-night-400">
                   {evolutionInfo.daysToNext
                     ? t('profile.evolution.daysToNext', { count: evolutionInfo.daysToNext })
                     : t('profile.evolution.progress', { percent: evolutionInfo.progress })}
@@ -263,7 +270,7 @@ export const Profile: React.FC = () => {
                         minutes > 0 ? 'bg-primary-500' : 'bg-night-700'
                       }`}
                     />
-                    <span className="text-[10px] text-night-500 mt-1">
+                    <span className="text-[10px] text-night-400 mt-1">
                       {t(`profile.stats.days.${dayKeys[index]}`)}
                     </span>
                   </div>
@@ -285,13 +292,20 @@ export const Profile: React.FC = () => {
               <span className="text-night-300">{t('profile.level', { level: profile.level })}</span>
               <span className="font-bold text-primary-400">{profile.xp} XP</span>
             </div>
-            <div className="h-2 bg-night-700 rounded-full overflow-hidden">
+            <div
+              className="h-2 bg-night-700 rounded-full overflow-hidden"
+              role="progressbar"
+              aria-valuenow={profile.xp % 100}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={t('a11y.profile.progressBar', { percent: profile.xp % 100 })}
+            >
               <div
                 style={{ width: `${Math.min(100, (profile.xp % 100))}%` }}
                 className="h-full bg-primary-500 rounded-full transition-all duration-500"
               />
             </div>
-            <div className="text-xs text-night-500 mt-1">
+            <div className="text-xs text-night-400 mt-1">
               {t('profile.xpToNext', { xp: 100 - (profile.xp % 100) })}
             </div>
           </Card>
@@ -386,13 +400,14 @@ export const Profile: React.FC = () => {
           <h3 className="text-lg font-semibold text-night-100 mb-3">
             {t('profile.badges.title')}
           </h3>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" role="list" aria-label={t('profile.badges.title')}>
             {profile.badges.map((badge, index) => (
               <div
                 key={index}
+                role="listitem"
                 className="px-3 py-1.5 bg-night-800 rounded-full text-sm text-night-300"
               >
-                🏅 {badge}
+                <span aria-hidden="true">🏅</span> {badge}
               </div>
             ))}
           </div>

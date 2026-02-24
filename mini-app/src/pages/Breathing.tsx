@@ -2,6 +2,8 @@
  * Breathing Page
  * ==============
  * Full breathing exercise experience with haptic feedback.
+ *
+ * @see CLAUDE.md §6 - Mini-App Architecture
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -11,7 +13,8 @@ import { getPatternById } from '@/components/breathing/patterns';
 import { EvolutionCelebrationModal } from '@/components/common';
 import { useTelegram } from '@/hooks';
 import { useUserStore } from '@/store';
-import { api } from '@/services/api';
+import { apiClient } from '@/api';
+import type { EvolutionStatus } from '@/api';
 
 /** Default pattern ID for fallback */
 const DEFAULT_PATTERN_ID = '478';
@@ -64,13 +67,19 @@ export const Breathing: React.FC = () => {
     await logSession(patternId, cycles, durationSeconds);
 
     // Check for evolution
-    const evolutionResult = await api.checkEvolution();
-    if (evolutionResult.success && evolutionResult.data?.evolved) {
-      console.log('[Breathing] Evolution!', evolutionResult.data);
-      setEvolutionData({
-        previousStage,
-        newStage: evolutionResult.data.currentStage,
-      });
+    try {
+      const evolutionStatus = await apiClient.request<EvolutionStatus & { evolved?: boolean }>(
+        '/user/evolution'
+      );
+      if (evolutionStatus.evolved) {
+        console.log('[Breathing] Evolution!', evolutionStatus);
+        setEvolutionData({
+          previousStage,
+          newStage: evolutionStatus.currentStage,
+        });
+      }
+    } catch (error) {
+      console.error('[Breathing] Failed to check evolution:', error);
     }
   };
 

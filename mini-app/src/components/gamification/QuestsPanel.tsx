@@ -17,6 +17,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { Card } from '@/components/common';
 import { useQuests } from '@/hooks/useEvolution';
@@ -54,10 +55,11 @@ const QuestCard: React.FC<QuestCardProps> = ({ quest }) => {
     <Card
       variant={isCompleted ? 'glass' : 'default'}
       className={`${isExpired ? 'opacity-60' : ''}`}
+      aria-label={`${quest.title}: ${quest.progress} / ${quest.target}`}
     >
       <div className="flex items-start gap-3">
         {/* Category icon */}
-        <div className="text-2xl">
+        <div className="text-2xl" aria-hidden="true">
           {getCategoryIcon(quest.questId)}
         </div>
 
@@ -68,7 +70,7 @@ const QuestCard: React.FC<QuestCardProps> = ({ quest }) => {
             <h4 className="font-medium text-night-100 truncate">
               {quest.title}
             </h4>
-            <span className="text-sm shrink-0">
+            <span className="text-sm shrink-0" aria-hidden="true">
               {STATUS_ICONS[quest.status]}
             </span>
           </div>
@@ -81,11 +83,18 @@ const QuestCard: React.FC<QuestCardProps> = ({ quest }) => {
           {/* Progress bar - CSS transition instead of motion */}
           {!isExpired && (
             <div className="mb-2">
-              <div className="flex justify-between text-xs text-night-500 mb-1">
+              <div className="flex justify-between text-xs text-night-400 mb-1">
                 <span>{quest.progress} / {quest.target}</span>
                 <span>{Math.round(progressPercent)}%</span>
               </div>
-              <div className="h-2 bg-night-700 rounded-full overflow-hidden">
+              <div
+                className="h-2 bg-night-700 rounded-full overflow-hidden"
+                role="progressbar"
+                aria-valuenow={quest.progress}
+                aria-valuemin={0}
+                aria-valuemax={quest.target}
+                aria-label={`${quest.title}: ${Math.round(progressPercent)}%`}
+              >
                 <div
                   style={{ width: `${progressPercent}%` }}
                   className={`h-full rounded-full transition-all duration-500 ease-out ${
@@ -100,7 +109,7 @@ const QuestCard: React.FC<QuestCardProps> = ({ quest }) => {
 
           {/* Reward */}
           <div className="flex items-center justify-between">
-            <span className="text-xs text-night-500">
+            <span className="text-xs text-night-400">
               {isCompleted ? 'Получено' : isExpired ? 'Истекло' : 'Награда'}
             </span>
             <span className={`text-sm font-medium ${
@@ -132,6 +141,7 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
   compact = false,
   className = '',
 }) => {
+  const { t } = useTranslation();
   const { quests, isLoading, isError, refetch } = useQuests();
   const [listRef] = useAutoAnimate<HTMLDivElement>();
 
@@ -189,15 +199,16 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
     return (
       <Card className={className}>
         <div className="text-center py-4">
-          <span className="text-2xl mb-2 block">😕</span>
+          <span className="text-2xl mb-2 block" aria-hidden="true">😕</span>
           <p className="text-night-400 text-sm mb-3">
-            Не удалось загрузить задания
+            {t('errors.generic')}
           </p>
           <button
             onClick={handleRefresh}
+            aria-label={t('a11y.quests.refreshQuests')}
             className="text-primary-400 text-sm hover:underline"
           >
-            Попробовать снова
+            {t('common.retry')}
           </button>
         </div>
       </Card>
@@ -209,7 +220,7 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
     return (
       <Card className={className}>
         <div className="text-center py-4">
-          <span className="text-2xl mb-2 block">🎯</span>
+          <span className="text-2xl mb-2 block" aria-hidden="true">🎯</span>
           <p className="text-night-400 text-sm">
             {activeOnly
               ? 'Нет активных заданий'
@@ -226,13 +237,14 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
       {!compact && (
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold text-night-100">
-            Задания
+            {t('quests.title')}
           </h3>
           <button
             onClick={handleRefresh}
+            aria-label={t('a11y.quests.refreshQuests')}
             className="text-sm text-night-400 hover:text-night-300"
           >
-            Обновить
+            {t('common.retry')}
           </button>
         </div>
       )}
@@ -247,7 +259,7 @@ export const QuestsPanel: React.FC<QuestsPanelProps> = ({
       {/* Show more link */}
       {limit && quests && quests.length > limit && !compact && (
         <div className="text-center mt-3 animate-fade-in">
-          <span className="text-sm text-night-500">
+          <span className="text-sm text-night-400">
             +{quests.length - limit} ещё
           </span>
         </div>

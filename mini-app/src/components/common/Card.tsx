@@ -15,6 +15,8 @@ interface CardProps {
   variant?: 'default' | 'elevated' | 'outlined' | 'glass';
   padding?: 'none' | 'sm' | 'md' | 'lg';
   className?: string;
+  /** Accessible label for interactive cards (required when onClick is provided) */
+  'aria-label'?: string;
 }
 
 const VARIANT_CLASSES = {
@@ -37,6 +39,7 @@ export const Card: React.FC<CardProps> = ({
   variant = 'default',
   padding = 'md',
   className = '',
+  'aria-label': ariaLabel,
 }) => {
   const baseClasses = `
     rounded-2xl transition-all duration-100
@@ -49,6 +52,7 @@ export const Card: React.FC<CardProps> = ({
     return (
       <button
         onClick={onClick}
+        aria-label={ariaLabel}
         className={`${baseClasses} cursor-pointer hover:bg-night-700 active:scale-[0.98]`}
       >
         {children}

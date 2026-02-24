@@ -35,7 +35,7 @@ const ErrorFallback: React.FC<FallbackProps> = ({ error, resetErrorBoundary }) =
         </p>
         {import.meta.env.DEV && (
           <details className="mb-4 text-left">
-            <summary className="text-night-500 text-xs cursor-pointer hover:text-night-400">
+            <summary className="text-night-400 text-xs cursor-pointer hover:text-night-300">
               Техническая информация
             </summary>
             <pre className="mt-2 p-3 bg-night-800 rounded-lg text-xs text-red-400 overflow-auto max-h-32">

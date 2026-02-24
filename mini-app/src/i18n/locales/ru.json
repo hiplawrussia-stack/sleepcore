@@ -16,6 +16,47 @@
     "pending": "Ожидает: {{count}}",
     "friend": "друг"
   },
+  "a11y": {
+    "skipToContent": "Перейти к содержимому",
+    "mainNavigation": "Основная навигация",
+    "navigation": {
+      "goToBreathing": "Перейти к дыхательным упражнениям",
+      "goToHome": "Перейти на главную",
+      "goToProfile": "Перейти в профиль",
+      "goBack": "Вернуться назад"
+    },
+    "breathing": {
+      "selectPattern": "Выбрать технику дыхания: {{name}}",
+      "patternSelected": "Выбрано: {{name}}",
+      "selectCycles": "Выбрать количество циклов: {{count}}",
+      "cyclesSelected": "Выбрано {{count}} циклов",
+      "progressDot": "Цикл {{number}}: {{status}}",
+      "progressCompleted": "выполнен",
+      "progressCurrent": "текущий",
+      "progressPending": "ожидает",
+      "circleVisualization": "Визуализация дыхания: {{phase}}"
+    },
+    "home": {
+      "startBreathingCard": "Начать дыхательные упражнения",
+      "patternCard": "Начать упражнение: {{name}}",
+      "statsCard": "Статистика: {{value}} {{label}}",
+      "evolutionCard": "Ваш персонаж: {{stage}}"
+    },
+    "profile": {
+      "toggleHaptics": "Включить или выключить вибрацию",
+      "selectLanguage": "Выбрать язык: {{language}}",
+      "weekDayActivity": "{{day}}: {{minutes}} минут практики",
+      "progressBar": "Прогресс: {{percent}}%"
+    },
+    "quests": {
+      "refreshQuests": "Обновить список заданий",
+      "questProgress": "{{title}}: {{progress}} из {{target}}"
+    },
+    "common": {
+      "loading": "Загрузка, пожалуйста подождите",
+      "closeModal": "Закрыть окно"
+    }
+  },
   "navigation": {
     "home": "Главная",
     "breathing": "Дыхание",

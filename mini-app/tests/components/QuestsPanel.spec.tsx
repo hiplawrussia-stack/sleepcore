@@ -118,8 +118,9 @@ describe('QuestsPanel', () => {
 
       render(<QuestsPanel />, { wrapper: createWrapper() });
 
-      expect(screen.getByText('Не удалось загрузить задания')).toBeInTheDocument();
-      expect(screen.getByText('Попробовать снова')).toBeInTheDocument();
+      // Uses i18n: t('errors.generic') and t('common.retry')
+      expect(screen.getByText('Что-то пошло не так')).toBeInTheDocument();
+      expect(screen.getByText('Обновить')).toBeInTheDocument();
     });
   });
 

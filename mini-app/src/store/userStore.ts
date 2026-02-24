@@ -2,10 +2,13 @@
  * User Store
  * ==========
  * Global state management for user data using Zustand.
+ *
+ * @see CLAUDE.md §6 - Mini-App Architecture
  */
 
 import { create } from 'zustand';
-import { api, type UserProfile, type BreathingStats } from '@/services/api';
+import { apiClient } from '@/api';
+import type { UserProfile, BreathingStats, LogSessionResponse } from '@/api';
 
 interface UserState {
   // User data
@@ -33,21 +36,22 @@ export const useUserStore = create<UserState>((set, get) => ({
   loadProfile: async () => {
     set({ isLoading: true, error: null });
 
-    const response = await api.getProfile();
-
-    if (response.success && response.data) {
-      set({ profile: response.data, isLoading: false });
-    } else {
-      set({ error: response.error || 'Failed to load profile', isLoading: false });
+    try {
+      const profile = await apiClient.request<UserProfile>('/user/profile');
+      set({ profile, isLoading: false });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load profile';
+      set({ error: message, isLoading: false });
     }
   },
 
   // Load breathing stats
   loadStats: async () => {
-    const response = await api.getBreathingStats();
-
-    if (response.success && response.data) {
-      set({ stats: response.data });
+    try {
+      const stats = await apiClient.request<BreathingStats>('/breathing/stats');
+      set({ stats });
+    } catch (error) {
+      console.error('[userStore] Failed to load stats:', error);
     }
   },
 
@@ -55,24 +59,26 @@ export const useUserStore = create<UserState>((set, get) => ({
   updateProfile: async (data) => {
     set({ isLoading: true, error: null });
 
-    const response = await api.updateProfile(data);
-
-    if (response.success && response.data) {
-      set({ profile: response.data, isLoading: false });
-    } else {
-      set({ error: response.error || 'Failed to update profile', isLoading: false });
+    try {
+      const profile = await apiClient.request<UserProfile>('/user/profile', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      set({ profile, isLoading: false });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update profile';
+      set({ error: message, isLoading: false });
     }
   },
 
   // Log completed breathing session
   logSession: async (patternId, cycles, duration) => {
-    const response = await api.logBreathingSession({
-      patternId,
-      cycles,
-      duration,
-    });
+    try {
+      await apiClient.request<LogSessionResponse>('/breathing/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ patternId, cycles, duration }),
+      });
 
-    if (response.success) {
       // Refresh stats after logging session
       const { loadStats, profile } = get();
       await loadStats();
@@ -86,6 +92,8 @@ export const useUserStore = create<UserState>((set, get) => ({
           },
         });
       }
+    } catch (error) {
+      console.error('[userStore] Failed to log session:', error);
     }
   },
 

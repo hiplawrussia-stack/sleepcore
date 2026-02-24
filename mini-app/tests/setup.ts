@@ -8,6 +8,55 @@ import '@testing-library/jest-dom';
 import { afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
+// Mock react-i18next
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, params?: Record<string, unknown>) => {
+      // Static translations (no interpolation needed)
+      const staticTranslations: Record<string, string> = {
+        'quests.title': 'Задания',
+        'common.retry': 'Обновить',
+        'errors.generic': 'Что-то пошло не так',
+        'a11y.quests.refreshQuests': 'Обновить список заданий',
+        'a11y.home.startBreathingCard': 'Начать дыхательные упражнения',
+        'a11y.common.closeModal': 'Закрыть окно',
+        'common.done': 'Готово',
+        'breathing.title': 'Выбери технику дыхания',
+      };
+
+      // Dynamic translations (require params interpolation)
+      const dynamicTranslations: Record<string, (p: Record<string, unknown>) => string> = {
+        'a11y.home.patternCard': (p) => `Начать упражнение: ${p.name || ''}`,
+        'a11y.home.evolutionCard': (p) => `Ваш персонаж: ${p.stage || ''}`,
+        'a11y.breathing.selectPattern': (p) => `Выбрать технику дыхания: ${p.name || ''}`,
+        'a11y.breathing.patternSelected': (p) => `Выбрано: ${p.name || ''}`,
+        'a11y.breathing.selectCycles': (p) => `Выбрать количество циклов: ${p.count || ''}`,
+        'a11y.breathing.cyclesSelected': (p) => `${p.count || ''} циклов выбрано`,
+        'a11y.profile.progressBar': (p) => `Прогресс: ${p.percent || 0}%`,
+        'a11y.breathing.circleVisualization': (p) => `Визуализация дыхания: ${p.phase || ''}`,
+      };
+
+      if (staticTranslations[key]) {
+        return staticTranslations[key];
+      }
+
+      if (dynamicTranslations[key] && params) {
+        return dynamicTranslations[key](params);
+      }
+
+      return key;
+    },
+    i18n: {
+      language: 'ru',
+      changeLanguage: vi.fn(),
+    },
+  }),
+  initReactI18next: {
+    type: '3rdParty',
+    init: vi.fn(),
+  },
+}));
+
 // Clean up after each test
 afterEach(() => {
   cleanup();

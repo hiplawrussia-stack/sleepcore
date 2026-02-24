@@ -167,7 +167,8 @@ describe('EvolutionCelebrationModal', () => {
       const onClose = vi.fn();
       render(<EvolutionCelebrationModal {...defaultProps} onClose={onClose} />);
 
-      fireEvent.click(screen.getByText('Отлично!'));
+      // t('common.done') returns "Готово"
+      fireEvent.click(screen.getByText('Готово'));
 
       expect(onClose).toHaveBeenCalled();
     });
@@ -209,10 +210,14 @@ describe('EvolutionCelebrationModal', () => {
       expect(screen.getByText(/Твой прогресс впечатляет/)).toBeInTheDocument();
     });
 
-    it('should display close button text "Отлично!"', () => {
+    it('should display close button text from i18n', () => {
       render(<EvolutionCelebrationModal {...defaultProps} />);
 
-      expect(screen.getByRole('button', { name: 'Отлично!' })).toBeInTheDocument();
+      // Button has aria-label from t('a11y.common.closeModal') = "Закрыть окно"
+      // and text content from t('common.done') = "Готово"
+      const button = screen.getByRole('button', { name: 'Закрыть окно' });
+      expect(button).toBeInTheDocument();
+      expect(button).toHaveTextContent('Готово');
     });
 
     it('should display arrow between stages', () => {
@@ -254,7 +259,8 @@ describe('EvolutionCelebrationModal', () => {
     it('should have close button accessible', () => {
       render(<EvolutionCelebrationModal {...defaultProps} />);
 
-      const button = screen.getByRole('button', { name: 'Отлично!' });
+      // Button has aria-label from t('a11y.common.closeModal') = "Закрыть окно"
+      const button = screen.getByRole('button', { name: 'Закрыть окно' });
       expect(button).toBeInTheDocument();
     });
 
@@ -326,7 +332,8 @@ describe('EvolutionCelebrationModal - Integration', () => {
     });
 
     // Click close button
-    fireEvent.click(screen.getByText('Отлично!'));
+    // t('common.done') returns "Готово"
+      fireEvent.click(screen.getByText('Готово'));
     expect(onClose).toHaveBeenCalled();
   });
 });
