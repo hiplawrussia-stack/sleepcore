@@ -277,7 +277,10 @@ test.describe('Mobile Usability', () => {
   });
 
   test.describe('Touch Gestures', () => {
-    test('should respond to tap on cards', async ({ telegramPage }) => {
+    test('should respond to tap on cards', async ({ telegramPage }, testInfo) => {
+      // Skip on Desktop Chrome - no touch support
+      test.skip(testInfo.project.name === 'Desktop Chrome', 'Touch gestures require mobile device');
+
       const homePage = new HomePage(telegramPage);
 
       await homePage.goto();

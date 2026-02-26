@@ -239,6 +239,7 @@ export const PrivacyCenter: React.FC = () => {
           <button
             onClick={handleViewData}
             aria-label="Просмотреть мои сохранённые данные"
+            tabIndex={isExpanded ? 0 : -1}
             className="w-full flex items-center gap-3 p-3 rounded-xl bg-night-700/50 hover:bg-night-700 transition-colors text-left"
           >
             <span className="text-lg" aria-hidden="true">📋</span>
@@ -256,6 +257,7 @@ export const PrivacyCenter: React.FC = () => {
             disabled={isExporting}
             aria-label={isExporting ? 'Экспортируем данные' : 'Экспортировать данные в JSON'}
             aria-busy={isExporting}
+            tabIndex={isExpanded ? 0 : -1}
             className="w-full flex items-center gap-3 p-3 rounded-xl bg-night-700/50 hover:bg-night-700 transition-colors text-left disabled:opacity-50"
           >
             <span className="text-lg" aria-hidden="true">{isExporting ? '⏳' : '📥'}</span>
@@ -275,6 +277,7 @@ export const PrivacyCenter: React.FC = () => {
             disabled={isDeleting}
             aria-label={isDeleting ? 'Удаляем данные' : 'Удалить все персональные данные'}
             aria-busy={isDeleting}
+            tabIndex={isExpanded ? 0 : -1}
             className="w-full flex items-center gap-3 p-3 rounded-xl bg-red-900/20 hover:bg-red-900/30 transition-colors text-left disabled:opacity-50"
           >
             <span className="text-lg" aria-hidden="true">{isDeleting ? '⏳' : '🗑️'}</span>
@@ -292,6 +295,7 @@ export const PrivacyCenter: React.FC = () => {
           <button
             onClick={handleOpenPrivacyPolicy}
             aria-label="Открыть политику конфиденциальности"
+            tabIndex={isExpanded ? 0 : -1}
             className="w-full flex items-center gap-3 p-3 rounded-xl bg-night-700/50 hover:bg-night-700 transition-colors text-left"
           >
             <span className="text-lg" aria-hidden="true">📜</span>
