@@ -82,6 +82,8 @@ vi.mock('@/store/authStore', () => ({
     setAuthError: mockSetAuthErrorFn,
     logout: mockStoreLogoutFn,
   })),
+  AUTH_STORAGE_KEY: 'sleepcore-auth-v2',
+  clearAuthStorage: vi.fn(),
 }));
 
 vi.mock('@/services/telegram', () => ({

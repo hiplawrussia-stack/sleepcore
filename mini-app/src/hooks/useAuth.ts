@@ -7,8 +7,10 @@
  * - NO refresh tokens stored in localStorage
  * - Re-authentication via Telegram initData when token expires
  * - Memory-only token storage (XSS safe)
+ * - P1-3: Complete storage cleanup on logout (OWASP, HIPAA)
  *
  * @see client.ts for token management details
+ * @see https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
  * @module @sleepcore/mini-app/hooks
  */
 
@@ -20,6 +22,7 @@ import { AuthUserSchema } from '@/api/schemas';
 import { useAuthStore } from '@/store/authStore';
 import { telegram } from '@/services/telegram';
 import { setUser as setSentryUser, clearUser as clearSentryUser } from '@/services/sentry';
+import { clearAllUserStorage } from '@/utils/storageCleanup';
 import { env } from '@/env';
 
 interface UseAuthReturn {
@@ -108,12 +111,28 @@ export const useAuth = (): UseAuthReturn => {
     await authMutation.mutateAsync();
   }, [isAuthenticated, authMutation, refetchUser, setAuthenticating, setAuthError]);
 
-  // Logout
+  // Logout - complete session termination with storage cleanup
+  // P1-3: OWASP requires localStorage cleanup, HIPAA requires PHI removal
   const logout = useCallback(() => {
+    // 1. Clear memory tokens (XSS-safe, already in memory only)
     tokenManager.clearTokens();
+
+    // 2. Clear Sentry user context
     clearSentryUser();
+
+    // 3. Reset store state
     storeLogout();
+
+    // 4. Clear TanStack Query cache
     queryClient.clear();
+
+    // 5. P1-3: Clear all encrypted localStorage (PHI, session data)
+    // OWASP: "Clean the localStorage after logout"
+    // HIPAA: PHI must be "rendered unreadable" when session ends
+    const result = clearAllUserStorage();
+    if (!result.success) {
+      console.error('[useAuth] Partial storage cleanup:', result.errors);
+    }
   }, [storeLogout, queryClient]);
 
   // Auto-authenticate on mount if in Telegram

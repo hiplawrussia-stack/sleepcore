@@ -7,14 +7,19 @@
  * Security:
  * - Pending changes encrypted in localStorage (defense-in-depth)
  * - Uses AES-256-GCM via Web Crypto API
+ * - P1-3: Complete storage cleanup on logout (OWASP, HIPAA)
  *
  * @see CLAUDE.md §2.2 - Encryption requirements
+ * @see OWASP Session Management - localStorage cleanup
  * @module @sleepcore/mini-app/store
  */
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { createEncryptedStorage } from '@/utils/crypto';
+
+/** Storage key for sync store - exported for cleanup utilities */
+export const SYNC_STORAGE_KEY = 'sleepcore-sync-v2';
 
 interface PendingChange {
   localId: string;
@@ -104,7 +109,7 @@ export const useSyncStore = create<SyncState>()(
       setSyncError: (error) => set({ syncError: error }),
     }),
     {
-      name: 'sleepcore-sync-v2', // New name to avoid legacy data issues
+      name: SYNC_STORAGE_KEY,
       // Use encrypted storage for PII protection
       storage: createJSONStorage(() => createEncryptedStorage()),
       // Persist pending changes and last sync time
@@ -125,6 +130,30 @@ if (typeof window !== 'undefined') {
   window.addEventListener('offline', () => {
     useSyncStore.getState().setOnline(false);
   });
+}
+
+/**
+ * Clear sync storage completely from localStorage
+ *
+ * P1-3: OWASP requires localStorage cleanup on logout.
+ * Pending changes may contain session PHI that must be cleared.
+ *
+ * WARNING: This will lose any unsynced data! Should only be called
+ * after confirming sync is complete or user explicitly logs out.
+ *
+ * @see https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+ */
+export function clearSyncStorage(): void {
+  try {
+    // Reset in-memory state first
+    useSyncStore.getState().clearPendingChanges();
+    // Remove encrypted storage entry completely
+    localStorage.removeItem(SYNC_STORAGE_KEY);
+    console.log('[SyncStore] Storage cleared');
+  } catch (error) {
+    // Log but don't throw - cleanup should be best-effort
+    console.error('[SyncStore] Failed to clear storage:', error);
+  }
 }
 
 export default useSyncStore;

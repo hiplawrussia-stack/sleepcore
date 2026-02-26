@@ -7,8 +7,10 @@
  * Security:
  * - User PII encrypted in localStorage (defense-in-depth)
  * - Uses AES-256-GCM via Web Crypto API
+ * - P1-3: Complete storage cleanup on logout (OWASP, HIPAA)
  *
  * @see CLAUDE.md §2.2 - Encryption requirements
+ * @see OWASP Session Management - localStorage cleanup
  * @module @sleepcore/mini-app/store
  */
 
@@ -16,6 +18,9 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { AuthUser } from '@/api';
 import { createEncryptedStorage } from '@/utils/crypto';
+
+/** Storage key for auth store - exported for cleanup utilities */
+export const AUTH_STORAGE_KEY = 'sleepcore-auth-v2';
 
 interface AuthState {
   // State
@@ -70,7 +75,7 @@ export const useAuthStore = create<AuthState>()(
         }),
     }),
     {
-      name: 'sleepcore-auth-v2', // New name to avoid legacy data issues
+      name: AUTH_STORAGE_KEY,
       // Use encrypted storage for PII protection
       storage: createJSONStorage(() => createEncryptedStorage()),
       // Only persist user data, not loading states
@@ -81,5 +86,24 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+
+/**
+ * Clear auth storage completely from localStorage
+ *
+ * P1-3: OWASP requires localStorage cleanup on logout.
+ * HIPAA requires PHI to be "rendered unreadable" when no longer needed.
+ *
+ * @see https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+ */
+export function clearAuthStorage(): void {
+  try {
+    // Remove encrypted storage entry completely
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    console.log('[AuthStore] Storage cleared');
+  } catch (error) {
+    // Log but don't throw - cleanup should be best-effort
+    console.error('[AuthStore] Failed to clear storage:', error);
+  }
+}
 
 export default useAuthStore;

@@ -2,7 +2,7 @@
 
 **Версия:** 1.0.0-alpha.4
 **Дата:** 2026-02-24
-**Обновлено:** 2026-02-24
+**Обновлено:** 2026-02-26
 **Стандарт:** IEC 62304:2006/AMD1:2015 (Class B)
 **Аудит:** Deep audit (6 направлений)
 
@@ -42,6 +42,9 @@
 | C-10 | Missing fieldset/legend | ✅ FIXED |
 | C-13 | Env validation (T3-Env) | ✅ FIXED |
 | C-14 | Sentry DSN fallback | ✅ FIXED |
+| P1-1 | URL protocol validation (XSS) | ✅ FIXED |
+| P1-2 | Crypto fail-closed (HIPAA) | ✅ FIXED |
+| P1-3 | Logout storage cleanup (OWASP/HIPAA) | ✅ FIXED |
 
 ---
 
@@ -126,10 +129,10 @@
 | Риск | Проблема | Файл | Рекомендация | Статус |
 |------|----------|------|--------------|--------|
 | ~~HIGH~~ | ~~CSP 'unsafe-inline'~~ | ~~index.html:33~~ | ~~Удалить unsafe-inline~~ | ✅ FIXED |
-| HIGH | URL protocol не валидируется | telegram.ts:276 | Whitelist https://, tg://, mailto: | ⏳ TODO |
-| MEDIUM | Crypto fallback к plaintext | crypto.ts:109 | Reject вместо fallback | ⏳ TODO |
+| ~~HIGH~~ | ~~URL protocol не валидируется~~ | ~~telegram.ts:276~~ | ~~Whitelist https://, tg://, mailto:~~ | ✅ FIXED (P1-1) |
+| ~~MEDIUM~~ | ~~Crypto fallback к plaintext~~ | ~~crypto.ts:109~~ | ~~Fail-closed, throw on error~~ | ✅ FIXED (P1-2) |
 | MEDIUM | auth_date window 24h | client.ts:35 | Уменьшить до 5-10 min | ⏳ TODO |
-| MEDIUM | Logout не очищает storage | useAuth.ts:100 | Verify encrypted storage cleanup | ⏳ TODO |
+| ~~MEDIUM~~ | ~~Logout не очищает storage~~ | ~~useAuth.ts~~ | ~~clearAllUserStorage()~~ | ✅ FIXED (P1-3) |
 
 ---
 
@@ -231,9 +234,9 @@
 
 | Тип | Количество |
 |-----|------------|
-| Unit tests | 675 |
+| Unit tests | 770 |
 | E2E tests | 62 |
-| **Всего** | **737** |
+| **Всего** | **832** |
 
 | Покрытие | Значение | Порог |
 |----------|----------|-------|
@@ -396,12 +399,12 @@
 | ~~11~~ | ~~Env validation (T3-Env + Zod)~~ | ~~Prod~~ | ~~1 hour~~ | ✅ DONE |
 | ~~12~~ | ~~Sentry DSN fallback~~ | ~~Prod~~ | ~~30 min~~ | ✅ DONE |
 
-### P1: Высокий приоритет (15 задач)
+### P1: Высокий приоритет (13 задач, было 15)
 | # | Задача | Область |
 |---|--------|---------|
-| 1 | URL protocol validation в openLink() | Security |
-| 2 | Crypto: reject вместо plaintext fallback | Security |
-| 3 | Logout: verify encrypted storage cleanup | Security |
+| ~~1~~ | ~~URL protocol validation в openLink()~~ | ~~Security~~ ✅ FIXED |
+| ~~2~~ | ~~Crypto: reject вместо plaintext fallback~~ | ~~Security~~ ✅ FIXED (P1-2) |
+| ~~3~~ | ~~Logout: verify encrypted storage cleanup~~ | ~~Security~~ ✅ FIXED (P1-3) |
 | 4 | Sentry service tests | Testing |
 | 5 | useSync edge cases tests | Testing |
 | 6 | aria-live="assertive" для активной сессии | A11y |
@@ -433,7 +436,7 @@ Mini App **готов к beta-релизу** (95% audit score, было 77%).
 **Сильные стороны:**
 - Security fundamentals (JWT memory-only, AES-256-GCM, Zod, CSP hardened)
 - GDPR 5/5 (PrivacyCenter с Art. 15/17/20/21)
-- 737 тестов (675 unit + 62 E2E)
+- 832 теста (770 unit + 62 E2E)
 - Bundle 128 KB (was 178 KB, -28%)
 - CI/CD IEC 62304 compliant (SBOM, Sentry)
 - CSS-only animations (excellent performance)
@@ -442,7 +445,7 @@ Mini App **готов к beta-релизу** (95% audit score, было 77%).
 - Единый API клиент (apiClient)
 - Page-level тесты (Breathing.tsx, Profile.tsx)
 
-**Исправлено (12 критических):**
+**Исправлено (15 критических/высоких):**
 - ✅ C-1: services/api.ts удалён, мигрировано на apiClient
 - ✅ C-2: motion dependency удалён
 - ✅ C-3: Все импорты мигрированы на `@/api`
@@ -454,6 +457,9 @@ Mini App **готов к beta-релизу** (95% audit score, было 77%).
 - ✅ C-10: Native fieldset/legend для radio groups (WCAG 1.3.1)
 - ✅ C-13: T3-Env + Zod валидация env vars (build-time fail)
 - ✅ C-14: Sentry graceful degradation (работает без DSN)
+- ✅ P1-1: URL protocol validation (XSS prevention)
+- ✅ P1-2: Crypto fail-closed (HIPAA compliance)
+- ✅ P1-3: Logout storage cleanup (OWASP/HIPAA — clearAllUserStorage)
 
 **Оставшиеся блокеры (2 критических):**
 - C-11: Deployment в CI/CD
@@ -464,4 +470,4 @@ Mini App **готов к beta-релизу** (95% audit score, было 77%).
 ---
 
 *Deep audit: 6 направлений (код, security, testing, perf, a11y, prod)*
-*Последнее обновление: 2026-02-24*
+*Последнее обновление: 2026-02-26*

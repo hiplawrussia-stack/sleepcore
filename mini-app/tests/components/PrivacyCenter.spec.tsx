@@ -66,6 +66,8 @@ vi.mock('../../src/store/authStore', () => ({
     user: mockUserState.user,
     logout: mockLogout,
   }),
+  AUTH_STORAGE_KEY: 'sleepcore-auth-v2',
+  clearAuthStorage: vi.fn(),
 }));
 
 vi.mock('../../src/store/syncStore', () => ({
@@ -74,6 +76,8 @@ vi.mock('../../src/store/syncStore', () => ({
     lastSyncTime: mockSyncState.lastSyncTime,
     clearPendingChanges: mockClearPendingChanges,
   }),
+  SYNC_STORAGE_KEY: 'sleepcore-sync-v2',
+  clearSyncStorage: vi.fn(),
 }));
 
 // Mock apiClient - uses @/api after C-1 migration
