@@ -3,9 +3,16 @@
  * =============================
  * Wrapper for Telegram WebApp SDK with TypeScript support.
  * Provides unified interface for all Telegram Mini App features.
+ *
+ * Security:
+ * - URL validation via protocol allowlist (OWASP recommended)
+ * - Blocks javascript:, data:, vbscript: protocols
+ *
+ * @see CLAUDE.md §1 - Security Priority
  */
 
 import WebApp from '@twa-dev/sdk';
+import { validateUrl, validateTelegramUrl, type UrlValidationResult } from '@/utils/url';
 
 export interface TelegramUser {
   id: number;
@@ -271,21 +278,70 @@ class TelegramService {
   }
 
   /**
-   * Open external link
+   * Open external link with URL validation
+   *
+   * Security: Validates URL against protocol allowlist before opening.
+   * Blocks javascript:, data:, vbscript: and other dangerous protocols.
+   *
+   * @param url - URL to open (must be https:, http:, tg:, mailto:, or tel:)
+   * @param options - Telegram openLink options
+   * @returns Validation result (for error handling)
+   *
+   * @example
+   * ```ts
+   * telegram.openLink('https://example.com'); // Opens
+   * telegram.openLink('javascript:alert(1)'); // Blocked, logs warning
+   * ```
    */
-  openLink(url: string, options?: { try_instant_view?: boolean }): void {
+  openLink(url: string, options?: { try_instant_view?: boolean }): UrlValidationResult {
+    const validation = validateUrl(url);
+
+    if (!validation.isValid) {
+      console.warn(
+        '[TelegramService] Blocked unsafe URL:',
+        validation.reason,
+        '| Protocol:', validation.protocol || 'unknown'
+      );
+      return validation;
+    }
+
     if (options) {
       this.webApp.openLink(url, options as Parameters<typeof this.webApp.openLink>[1]);
     } else {
       this.webApp.openLink(url);
     }
+
+    return validation;
   }
 
   /**
-   * Open Telegram link
+   * Open Telegram link with validation
+   *
+   * Security: Only allows https: (t.me, telegram.me, telegram.org) and tg: protocols.
+   *
+   * @param url - Telegram URL to open
+   * @returns Validation result
+   *
+   * @example
+   * ```ts
+   * telegram.openTelegramLink('https://t.me/SleepCore_Bot'); // Opens
+   * telegram.openTelegramLink('https://evil.com'); // Blocked
+   * ```
    */
-  openTelegramLink(url: string): void {
+  openTelegramLink(url: string): UrlValidationResult {
+    const validation = validateTelegramUrl(url);
+
+    if (!validation.isValid) {
+      console.warn(
+        '[TelegramService] Blocked unsafe Telegram URL:',
+        validation.reason,
+        '| Protocol:', validation.protocol || 'unknown'
+      );
+      return validation;
+    }
+
     this.webApp.openTelegramLink(url);
+    return validation;
   }
 
   // ========== Performance Detection ==========

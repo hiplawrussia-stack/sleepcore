@@ -2,10 +2,15 @@
  * useTelegram Hook
  * ================
  * React hook for accessing Telegram Mini App SDK features.
+ *
+ * Security:
+ * - openLink validates URLs against protocol allowlist
+ * - Blocks javascript:, data:, vbscript: protocols
  */
 
 import { useEffect, useState, useCallback } from 'react';
 import { telegram, type TelegramUser } from '@/services/telegram';
+import type { UrlValidationResult } from '@/utils/url';
 
 interface UseTelegramReturn {
   user: TelegramUser | null;
@@ -26,7 +31,7 @@ interface UseTelegramReturn {
   hideBackButton: () => void;
   showAlert: (message: string) => Promise<void>;
   showConfirm: (message: string) => Promise<boolean>;
-  openLink: (url: string) => void;
+  openLink: (url: string) => UrlValidationResult;
   close: () => void;
 }
 
@@ -74,8 +79,8 @@ export const useTelegram = (): UseTelegramReturn => {
     return telegram.showConfirm(message);
   }, []);
 
-  const openLink = useCallback((url: string) => {
-    telegram.openLink(url);
+  const openLink = useCallback((url: string): UrlValidationResult => {
+    return telegram.openLink(url);
   }, []);
 
   const close = useCallback(() => {
