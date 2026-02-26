@@ -57,6 +57,14 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef(false);
 
+  // E2E test speed multiplier (window.__E2E_SPEED_MULTIPLIER__ = 100 means 100x faster)
+  const getSpeedMultiplier = useCallback(() => {
+    if (typeof window !== 'undefined' && '__E2E_SPEED_MULTIPLIER__' in window) {
+      return (window as unknown as { __E2E_SPEED_MULTIPLIER__: number }).__E2E_SPEED_MULTIPLIER__ || 1;
+    }
+    return 1;
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -73,33 +81,46 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
   ): Promise<void> => {
     if (abortRef.current) return;
 
+    const speedMultiplier = getSpeedMultiplier();
+    // With 100x speed: 4000ms phase completes in 40ms real time
+    // tickInterval: min 10ms for browser stability
+    const tickInterval = Math.max(10, Math.round(100 / speedMultiplier));
+    // Each tick advances by: tickInterval * speedMultiplier ms of "original time"
+    // E.g., 100x speed, 10ms tick = 1000ms original time per tick
+    const decrementPerTick = tickInterval * speedMultiplier;
+
     setPhase(phaseName);
-    setTimeRemaining(Math.ceil(durationMs / 1000));
+    setTimeRemaining(Math.ceil(durationMs / 1000)); // Display original duration
 
-    // Start haptic pattern (runs in parallel)
-    hapticFn();
+    // Start haptic pattern (runs in parallel) - skip in fast mode
+    if (speedMultiplier === 1) {
+      hapticFn();
+    }
 
-    // Countdown timer
+    // Countdown timer - use local interval ID for proper cleanup
     return new Promise((resolve, reject) => {
-      let remaining = durationMs;
+      let remainingOriginal = durationMs;
 
-      timerRef.current = setInterval(() => {
+      const intervalId = setInterval(() => {
         if (abortRef.current) {
-          if (timerRef.current) clearInterval(timerRef.current);
+          clearInterval(intervalId);
           reject(new Error('Aborted'));
           return;
         }
 
-        remaining -= 100;
-        setTimeRemaining(Math.max(0, Math.ceil(remaining / 1000)));
+        remainingOriginal -= decrementPerTick;
+        setTimeRemaining(Math.max(0, Math.ceil(remainingOriginal / 1000)));
 
-        if (remaining <= 0) {
-          if (timerRef.current) clearInterval(timerRef.current);
+        if (remainingOriginal <= 0) {
+          clearInterval(intervalId);
           resolve();
         }
-      }, 100);
+      }, tickInterval);
+
+      // Store for unmount cleanup
+      timerRef.current = intervalId;
     });
-  }, []);
+  }, [getSpeedMultiplier]);
 
   // Run a complete breathing cycle
   const runCycle = useCallback(async (): Promise<void> => {

@@ -177,41 +177,11 @@ export class BreathingPage extends BasePage {
   }
 
   /**
-   * Install fake timers for exercise completion testing.
-   * MUST be called BEFORE startExercise() for clock API to work.
+   * Wait for exercise completion.
+   * Uses E2E speed multiplier (100x) set in fixture, so actual wait is ~1-2 seconds.
+   * @param timeoutMs Maximum wait time (default 30 seconds with 100x speed = ~50 min equivalent)
    */
-  async installClock(): Promise<void> {
-    await this.page.clock.install({ time: Date.now() });
-  }
-
-  /**
-   * Wait for exercise completion by advancing fake timers.
-   * Uses smaller steps to ensure React can process state updates.
-   * @param timeoutMs Maximum total time to fast-forward (default 5 minutes)
-   */
-  async waitForCompletionWithClock(timeoutMs = 300000): Promise<void> {
-    // Use 1-second steps matching the timer's 100ms intervals
-    const stepMs = 1000;
-    let totalAdvanced = 0;
-
-    while (!(await this.isVisible(this.completionOverlay, 50))) {
-      // Advance time using fastForward which triggers setInterval callbacks
-      await this.page.clock.fastForward(stepMs);
-      // Give React time to process state updates in the real event loop
-      await this.page.waitForTimeout(10);
-      totalAdvanced += stepMs;
-
-      if (totalAdvanced >= timeoutMs) {
-        throw new Error(`Exercise did not complete after ${timeoutMs}ms of fast-forwarded time`);
-      }
-    }
-  }
-
-  /**
-   * Wait for exercise completion (real-time, slow)
-   * Use for specific real-time verification tests
-   */
-  async waitForCompletionRealTime(timeoutMs = 120000): Promise<void> {
+  async waitForCompletion(timeoutMs = 30000): Promise<void> {
     await this.completionOverlay.waitFor({ timeout: timeoutMs });
   }
 
@@ -239,17 +209,14 @@ export class BreathingPage extends BasePage {
   }
 
   /**
-   * Run a complete breathing exercise flow with fast clock.
-   * Installs clock API BEFORE page load, then fast-forwards to completion.
+   * Run a complete breathing exercise flow.
+   * Uses E2E speed multiplier (100x) from fixture for fast execution.
+   * 3 cycles of 4-7-8 (19s each) = 57s real → ~0.6s with 100x speed
    */
   async runCompleteExercise(
     patternName?: string,
     cycles: 3 | 5 | 7 | 10 = 3
   ): Promise<void> {
-    // Clock must be installed BEFORE page loads to intercept timers
-    await this.page.clock.install({ time: Date.now() });
-
-    // Now navigate (timers will be fake from the start)
     await this.goto();
 
     // Select pattern if specified
@@ -260,11 +227,11 @@ export class BreathingPage extends BasePage {
     // Select cycles
     await this.selectCycles(cycles);
 
-    // Start exercise (timers are fake)
+    // Start exercise
     await this.startExercise();
 
-    // Fast-forward to completion
-    await this.waitForCompletionWithClock();
+    // Wait for completion (fast due to E2E speed multiplier)
+    await this.waitForCompletion();
 
     // Verify completion
     expect(await this.isCompleted()).toBe(true);

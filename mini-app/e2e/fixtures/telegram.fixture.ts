@@ -176,9 +176,12 @@ export const test = base.extend<{
     const mockInitData = generateMockInitData(telegramUser);
     const telegramHash = generateTelegramHash(telegramUser, mockInitData);
 
-    // Set language in localStorage BEFORE navigation to ensure i18n uses Russian
+    // Set language in localStorage and E2E speed multiplier BEFORE navigation
     await page.addInitScript(({ languageCode }) => {
       localStorage.setItem('sleepcore_language', languageCode);
+      // E2E speed multiplier for breathing tests (100x faster)
+      (window as unknown as { __E2E_SPEED_MULTIPLIER__: number }).__E2E_SPEED_MULTIPLIER__ = 100;
+      console.log('[E2E] Speed multiplier set to 100x');
     }, { languageCode: telegramUser.language_code || 'ru' });
 
     // Set up default API mocks that all tests need
