@@ -1,63 +1,52 @@
 # SleepCore Mini App
 
-Telegram Mini App для дыхательных упражнений с тактильной обратной связью (haptic feedback).
+Telegram Mini App для дыхательных упражнений с тактильной обратной связью.
 
-## Особенности
+## Стек
 
-- **Haptic Breathing** — дыхательные упражнения с вибрационной обратной связью
-- **5 дыхательных паттернов** — 4-7-8, Box, Relaxing, Coherent, Energizing
-- **Motion анимации** — плавные 60fps анимации с Framer Motion
-- **Dark Mode** — оптимизирован для вечернего использования
-- **Telegram интеграция** — нативные кнопки, Cloud Storage, платежи
+| Технология | Версия | Назначение |
+|------------|--------|------------|
+| React | 18 | UI framework |
+| TypeScript | 5.x | Type safety |
+| Vite | 6 | Build tool |
+| TanStack Query | 5 | Server state |
+| Zustand | 4 | Client state |
+| Tailwind CSS | 3 | Styling |
+| @twa-dev/sdk | 9.1.2 | Telegram SDK |
 
-## Технологии
-
-- **React 18** + TypeScript
-- **Vite 6** — быстрая сборка
-- **Motion** (Framer Motion) — анимации
-- **Tailwind CSS** — стилизация
-- **Zustand** — state management
-- **@twa-dev/sdk** — Telegram Mini App SDK
+**Анимации:** CSS-only (GPU-accelerated, ~30KB bundle savings vs Framer Motion)
 
 ## Быстрый старт
 
 ```bash
-# Установка зависимостей
 cd mini-app
 npm install
-
-# Запуск в dev режиме
-npm run dev
-
-# Сборка для production
-npm run build
+npm run dev      # Development
+npm run build    # Production
+npm test         # 603 unit tests
+npm run test:e2e # 62 E2E tests
 ```
 
-## Структура проекта
+## Структура
 
 ```
 mini-app/
 ├── src/
+│   ├── api/            # TanStack Query client, queryKeys
 │   ├── components/
-│   │   ├── breathing/       # Дыхательные компоненты
-│   │   │   ├── HapticBreathing.tsx
-│   │   │   ├── BreathingCircle.tsx
-│   │   │   └── patterns.ts
-│   │   └── common/          # Общие компоненты
-│   ├── pages/               # Страницы приложения
-│   │   ├── Home.tsx
-│   │   ├── Breathing.tsx
-│   │   └── Profile.tsx
-│   ├── services/            # Сервисы
-│   │   ├── telegram.ts      # Telegram SDK wrapper
-│   │   ├── haptics.ts       # Haptic feedback
-│   │   └── api.ts           # Backend API
-│   ├── hooks/               # React hooks
-│   ├── store/               # Zustand stores
-│   └── styles/              # CSS стили
-├── public/
-│   └── assets/              # Статические ресурсы
-└── package.json
+│   │   ├── breathing/  # HapticBreathing, BreathingCircle, patterns
+│   │   ├── common/     # Button, Card, ErrorBoundary, PrivacyCenter
+│   │   └── gamification/ # QuestsPanel, Leaderboard
+│   ├── hooks/          # useAuth, useBreathing, useEvolution, useSync
+│   ├── pages/          # Home, Breathing, Profile
+│   ├── services/       # telegram, haptics
+│   ├── store/          # authStore, userStore, syncStore
+│   └── i18n/           # ru.json, en.json
+├── tests/              # Vitest unit tests
+├── e2e/                # Playwright E2E tests
+└── docs/
+    ├── ACCESSIBILITY_AUDIT.md  # A11y аудит (78%)
+    └── AUDIT_REPORT.md         # Полный аудит + IEC 62304
 ```
 
 ## Дыхательные паттерны
@@ -72,50 +61,35 @@ mini-app/
 
 ## Haptic Feedback
 
-Приложение использует Telegram HapticFeedback API для создания тактильных паттернов:
+Тактильные паттерны через Telegram HapticFeedback API:
+- **Вдох** — нарастающая интенсивность
+- **Задержка** — мягкие пульсы
+- **Выдох** — затухающая интенсивность
 
-- **Вдох** — нарастающая интенсивность (soft → heavy)
-- **Задержка** — мягкие ритмичные пульсы
-- **Выдох** — затухающая интенсивность (heavy → soft)
+## Тестирование
 
-Научные исследования показывают +40% улучшение в дыхательной терапии при использовании haptic feedback.
+| Тип | Количество | Инструмент |
+|-----|------------|------------|
+| Unit | 603 | Vitest + RTL |
+| E2E | 62 | Playwright |
 
-## Разработка
-
-### Локальная разработка без Telegram
-
-В dev режиме автоматически создаётся mock Telegram окружения для тестирования вне Telegram клиента.
-
-### HTTPS для тестирования в Telegram
-
-```typescript
-// Раскомментируйте в vite.config.ts
-import basicSsl from '@vitejs/plugin-basic-ssl';
-
-plugins: [
-  react(),
-  basicSsl(), // Включить HTTPS
-],
+```bash
+npm test                    # Unit tests
+npm run test:coverage       # Coverage report
+npm run test:e2e            # E2E tests
+npm run test:e2e -- --ui    # Playwright UI
 ```
 
-### Деплой
+## Документация
 
-Для деплоя Mini App можно использовать:
-- **GitHub Pages** — бесплатный хостинг
-- **Vercel** — автоматический деплой
-- **Cloudflare Pages** — CDN + хостинг
+- [ACCESSIBILITY_AUDIT.md](docs/ACCESSIBILITY_AUDIT.md) — Аудит доступности (WCAG 2.2)
+- [AUDIT_REPORT.md](docs/AUDIT_REPORT.md) — Полный аудит + IEC 62304 матрица
 
-## API интеграция
+## Деплой
 
-Mini App интегрируется с SleepCore backend через REST API:
-
-```typescript
-// Авторизация через Telegram initData
-const response = await fetch('/api/user/profile', {
-  headers: {
-    'X-Telegram-Init-Data': telegram.getInitData(),
-  },
-});
+```bash
+npm run build
+# dist/ → GitHub Pages / Vercel / Cloudflare Pages
 ```
 
 ## Лицензия

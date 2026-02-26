@@ -2,7 +2,7 @@
 
 **Версия:** 1.0.0-alpha.4
 **Дата:** 2026-02-24
-**Обновлено:** 2026-02-26
+**Обновлено:** 2026-02-26 (rev.2)
 **Стандарт:** IEC 62304:2006/AMD1:2015 (Class B)
 **Аудит:** Deep audit (6 направлений)
 
@@ -25,7 +25,7 @@
 ### Найдено проблем
 | Критических | Высоких | Средних | Низких |
 |-------------|---------|---------|--------|
-| 0 | 12 | 27 | 45 |
+| 0 | 10 | 26 | 45 |
 
 ### Исправлено (2026-02-24)
 | # | Проблема | Статус |
@@ -47,6 +47,8 @@
 | P1-1 | URL protocol validation (XSS) | ✅ FIXED |
 | P1-2 | Crypto fail-closed (HIPAA) | ✅ FIXED |
 | P1-3 | Logout storage cleanup (OWASP/HIPAA) | ✅ FIXED |
+| P1-5 | useSync edge cases tests | ✅ FIXED |
+| P1-8 | Leaderboard toggle role="switch" | ✅ FIXED |
 
 ---
 
@@ -148,7 +150,7 @@
 | BackButton | PASS |
 | HapticFeedback | PASS |
 | Telegram theme variables | WARN — частично захардкожено |
-| Safe area insets | WARN — CSS классы не определены |
+| Safe area insets | PARTIAL — только bottom (global.css:37) |
 
 ---
 
@@ -212,12 +214,12 @@
 | ~~1.3.1~~ | ~~Missing fieldset/legend~~ | ~~HapticBreathing~~ | ~~Native fieldset + legend~~ | ✅ FIXED |
 
 ### Средние проблемы
-| WCAG | Проблема | Fix |
-|------|----------|-----|
-| 4.1.3 | aria-live="polite" для активной сессии | → "assertive" |
-| 2.5.5 | Touch targets <44px | Увеличить до 44x44 |
-| 1.3.1 | Language buttons без fieldset | Обернуть в fieldset |
-| 4.1.2 | Leaderboard toggle — button вместо switch | role="switch" |
+| WCAG | Проблема | Fix | Статус |
+|------|----------|-----|--------|
+| 4.1.3 | aria-live="polite" для активной сессии | → "assertive" | ⏳ TODO |
+| 2.5.5 | Touch targets <44px | Увеличить до 44x44 | ⏳ TODO |
+| 1.3.1 | Language buttons без fieldset | Обернуть в fieldset | ⏳ TODO |
+| ~~4.1.2~~ | ~~Leaderboard toggle — button вместо switch~~ | ~~role="switch"~~ | ✅ FIXED (Profile.tsx:340) |
 
 ---
 
@@ -251,8 +253,8 @@
 |-----|----------|----------|
 | ~~Pages (Breathing.tsx, Profile.tsx)~~ | ~~58 tests~~ | ✅ FIXED |
 | ~~API client (client.ts)~~ | ~~37 tests~~ | ✅ FIXED |
-| Sentry service | 14.7% | HIGH |
-| useSync edge cases | 50% functions | MEDIUM |
+| Sentry service | 14.85% | HIGH |
+| ~~useSync edge cases~~ | ~~14 tests, 96.42% lines~~ | ✅ FIXED |
 
 ### E2E Infrastructure (сильные стороны)
 
@@ -401,33 +403,33 @@
 | ~~11~~ | ~~Env validation (T3-Env + Zod)~~ | ~~Prod~~ | ~~1 hour~~ | ✅ DONE |
 | ~~12~~ | ~~Sentry DSN fallback~~ | ~~Prod~~ | ~~30 min~~ | ✅ DONE |
 
-### P1: Высокий приоритет (13 задач, было 15)
-| # | Задача | Область |
-|---|--------|---------|
-| ~~1~~ | ~~URL protocol validation в openLink()~~ | ~~Security~~ ✅ FIXED |
-| ~~2~~ | ~~Crypto: reject вместо plaintext fallback~~ | ~~Security~~ ✅ FIXED (P1-2) |
-| ~~3~~ | ~~Logout: verify encrypted storage cleanup~~ | ~~Security~~ ✅ FIXED (P1-3) |
-| 4 | Sentry service tests | Testing |
-| 5 | useSync edge cases tests | Testing |
-| 6 | aria-live="assertive" для активной сессии | A11y |
-| 7 | Touch targets 44x44px | A11y |
-| 8 | Leaderboard toggle → role="switch" | A11y |
-| 9 | Custom privacy policy | Prod |
-| 10 | Retry для failed deletions | Prod |
-| 11 | Error categorization tags в Sentry | Prod |
-| 12 | API health check на старте | Prod |
-| 13 | Telegram init error logging | Prod |
-| 14 | Math.max() вынести из цикла | Perf |
-| 15 | React.memo для Card, ConfettiParticle | Perf |
+### P1: Высокий приоритет (10 задач осталось, было 15)
+| # | Задача | Область | Статус |
+|---|--------|---------|--------|
+| ~~1~~ | ~~URL protocol validation в openLink()~~ | ~~Security~~ | ✅ FIXED |
+| ~~2~~ | ~~Crypto: reject вместо plaintext fallback~~ | ~~Security~~ | ✅ FIXED (P1-2) |
+| ~~3~~ | ~~Logout: verify encrypted storage cleanup~~ | ~~Security~~ | ✅ FIXED (P1-3) |
+| 4 | Sentry service tests | Testing | ⏳ TODO |
+| ~~5~~ | ~~useSync edge cases tests~~ | ~~Testing~~ | ✅ FIXED (14 tests, 96.42%) |
+| 6 | aria-live="assertive" для активной сессии | A11y | ⏳ TODO |
+| 7 | Touch targets 44x44px | A11y | ⏳ TODO |
+| ~~8~~ | ~~Leaderboard toggle → role="switch"~~ | ~~A11y~~ | ✅ FIXED (Profile.tsx:340) |
+| 9 | Custom privacy policy | Prod | ⏳ TODO |
+| 10 | Retry для failed deletions | Prod | ⏳ TODO |
+| 11 | Error categorization tags в Sentry | Prod | ⏳ TODO |
+| 12 | API health check на старте | Prod | ⏳ TODO |
+| 13 | Telegram init error logging | Prod | ⏳ TODO |
+| 14 | Math.max() вынести из цикла | Perf | ⏳ TODO |
+| 15 | React.memo для Card, ConfettiParticle | Perf | ⏳ TODO |
 
-### P2: Средний приоритет
-| # | Задача |
-|---|--------|
-| 1 | Telegram theme variables |
-| 2 | Safe-area CSS классы |
-| 3 | refetchOnMount: false |
-| 4 | Language buttons в fieldset |
-| 5 | Granular error boundaries |
+### P2: Средний приоритет (4.5 задачи осталось)
+| # | Задача | Статус |
+|---|--------|--------|
+| 1 | Telegram theme variables | ⏳ TODO |
+| 2 | Safe-area CSS классы | ⚠️ PARTIAL (только bottom) |
+| 3 | refetchOnMount: false | ⏳ TODO |
+| 4 | Language buttons в fieldset | ⏳ TODO |
+| 5 | Granular error boundaries | ⏳ TODO |
 
 ---
 
@@ -449,7 +451,7 @@ Mini App **готов к production-релизу** (100% audit score, было 7
 - Page-level тесты (Breathing.tsx, Profile.tsx)
 - Feature flags system (type-safe, build-time, IEC 62304 compliant)
 
-**Исправлено (17 критических/высоких):**
+**Исправлено (19 критических/высоких):**
 - ✅ C-1: services/api.ts удалён, мигрировано на apiClient
 - ✅ C-2: motion dependency удалён
 - ✅ C-3: Все импорты мигрированы на `@/api`
@@ -466,12 +468,17 @@ Mini App **готов к production-релизу** (100% audit score, было 7
 - ✅ P1-1: URL protocol validation (XSS prevention)
 - ✅ P1-2: Crypto fail-closed (HIPAA compliance)
 - ✅ P1-3: Logout storage cleanup (OWASP/HIPAA — clearAllUserStorage)
+- ✅ P1-5: useSync edge cases (14 тестов, 96.42% coverage)
+- ✅ P1-8: Leaderboard toggle role="switch" (Profile.tsx:340)
 
 **Оставшиеся блокеры:** Нет критических блокеров.
 
-**Рекомендуемые улучшения (P1):** API health check, Sentry service tests
+**Рекомендуемые улучшения (P1):** API health check, Sentry service tests, Touch targets 44px
+
+**Прогресс P1:** 5/15 выполнено (33%)
+**Прогресс P2:** 0.5/5 выполнено (10%)
 
 ---
 
 *Deep audit: 6 направлений (код, security, testing, perf, a11y, prod)*
-*Последнее обновление: 2026-02-26*
+*Последнее обновление: 2026-02-26 (rev.2)*

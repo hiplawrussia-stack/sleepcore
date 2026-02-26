@@ -59,6 +59,19 @@ export default tseslint.config(
       'prefer-const': 'error',
       'no-var': 'error',
       eqeqeq: ['error', 'always'],
+
+      // Architecture protection: Single Source of Truth for API
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/services/api', '@/services/api.ts', '../services/api', './services/api'],
+              message: 'Use @/api instead. services/api.ts was removed — use apiClient from @/api.',
+            },
+          ],
+        },
+      ],
     },
   },
 );

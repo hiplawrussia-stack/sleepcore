@@ -18,6 +18,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { env } from '@/env'; // Validates env on import (C-13)
 import { initSentry } from '@/services/sentry';
+import { validateUrl, validateTelegramUrl } from '@/utils/url'; // P1-1: URL validation
 import '@fontsource-variable/inter'; // Self-hosted Inter Variable font
 import '@/i18n'; // Initialize i18n before App
 import App from './App';
@@ -135,8 +136,24 @@ if (isDevelopment && !window.Telegram?.WebApp) {
         alert(params.message);
         callback?.('ok');
       },
-      openLink: (url: string) => window.open(url, '_blank'),
-      openTelegramLink: (url: string) => window.open(url, '_blank'),
+      openLink: (url: string) => {
+        // P1-1: URL validation in dev mock
+        const result = validateUrl(url);
+        if (result.isValid) {
+          window.open(url, '_blank');
+        } else {
+          console.warn('[Mock] Blocked unsafe URL:', result.reason);
+        }
+      },
+      openTelegramLink: (url: string) => {
+        // P1-1: URL validation in dev mock
+        const result = validateTelegramUrl(url);
+        if (result.isValid) {
+          window.open(url, '_blank');
+        } else {
+          console.warn('[Mock] Blocked unsafe Telegram URL:', result.reason);
+        }
+      },
       sendData: (data: string) => console.log('[Mock] sendData:', data),
     },
   };
