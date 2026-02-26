@@ -1,0 +1,7 @@
+# Cloudflare Pages Redirects for SPA
+# ===================================
+# React Router requires all paths to serve index.html
+# https://developers.cloudflare.com/pages/platform/redirects/
+
+# SPA fallback - serve index.html for all routes
+/*  /index.html  200

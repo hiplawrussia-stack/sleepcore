@@ -449,19 +449,33 @@ jobs:
           set_commits: auto
 
   # ============================================
-  # Stage 7: Deploy (manual approval required)
+  # Stage 7: Deploy to Cloudflare Pages
   # ============================================
+  #
+  # Deployment strategy:
+  # - Preview deployments on PR (automatic)
+  # - Production deployment on main/master (manual approval)
+  #
+  # Required secrets:
+  # - CLOUDFLARE_API_TOKEN: API token with Pages:Edit permission
+  # - CLOUDFLARE_ACCOUNT_ID: Cloudflare account ID
+  #
+  # IEC 62304 Compliance:
+  # - Build integrity verification before deploy
+  # - Deployment audit trail via GitHub Deployments
+  # - Rollback capability via Cloudflare deployment history
 
-  deploy:
-    name: Deploy to Production
-    needs: [build, e2e-tests, sentry-release]
-    if: |
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true')
+  deploy-preview:
+    name: Deploy Preview
+    needs: [build, e2e-tests]
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: ${{ vars.PRODUCTION_URL }}
+    permissions:
+      contents: read
+      deployments: write
+      pull-requests: write
+    outputs:
+      deployment-url: ${{ steps.deploy.outputs.deployment-url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -471,28 +485,101 @@ jobs:
           name: build-${{ github.sha }}
           path: ${{ env.WORKING_DIR }}/dist/
 
-      - name: Verify build integrity
+      - name: Deploy to Cloudflare Pages (Preview)
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy ${{ env.WORKING_DIR }}/dist --project-name=sleepcore-mini-app
+
+      - name: Comment PR with preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🚀 Preview Deployment Ready\n\n**URL:** ${{ steps.deploy.outputs.deployment-url }}\n**Version:** ${{ needs.build.outputs.version }}\n**Build Hash:** \`${{ needs.build.outputs.build-hash }}\`\n\n*Deployed to Cloudflare Pages*`
+            })
+
+  deploy-production:
+    name: Deploy to Production
+    needs: [build, e2e-tests, sentry-release]
+    if: |
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.deployment-url }}
+    outputs:
+      deployment-url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ github.sha }}
+          path: ${{ env.WORKING_DIR }}/dist/
+
+      - name: Verify build integrity (IEC 62304 §5.8)
         run: |
           cd ${{ env.WORKING_DIR }}/dist
           if [ -f checksums.sha256 ]; then
             echo "Verifying build integrity..."
             sha256sum -c checksums.sha256
-            echo "Build integrity verified"
+            echo "✅ Build integrity verified"
           else
-            echo "::warning::No checksums file found"
+            echo "::error::No checksums file found - build integrity cannot be verified"
+            exit 1
           fi
 
-      - name: Deploy to hosting
-        run: |
-          echo "Deploying version ${{ needs.build.outputs.version }}"
-          echo "Build hash: ${{ needs.build.outputs.build-hash }}"
-          # Add actual deployment commands here
-          # e.g., rsync, aws s3 sync, firebase deploy, etc.
-          echo "::notice::Deployment placeholder - configure actual deployment"
+      - name: Deploy to Cloudflare Pages (Production)
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy ${{ env.WORKING_DIR }}/dist --project-name=sleepcore-mini-app --branch=main
 
-      - name: Notify deployment
+      - name: Verify deployment
         run: |
-          echo "Deployed mini-app v${{ needs.build.outputs.version }} to production"
+          echo "Verifying deployment at ${{ steps.deploy.outputs.deployment-url }}..."
+          # Wait for deployment to propagate
+          sleep 10
+          # Check if index.html is accessible
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.deploy.outputs.deployment-url }}")
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "✅ Deployment verified (HTTP $HTTP_STATUS)"
+          else
+            echo "::error::Deployment verification failed (HTTP $HTTP_STATUS)"
+            exit 1
+          fi
+
+      - name: Create deployment record (FDA audit trail)
+        run: |
+          echo "## Production Deployment Record" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ needs.build.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Hash | \`${{ needs.build.outputs.build-hash }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| URL | ${{ steps.deploy.outputs.deployment-url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Timestamp | $(date -u +"%Y-%m-%dT%H:%M:%SZ") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deployed By | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ Deployed mini-app v${{ needs.build.outputs.version }} to production"
+          echo "URL: ${{ steps.deploy.outputs.deployment-url }}"
           echo "Commit: ${{ github.sha }}"
           echo "Build hash: ${{ needs.build.outputs.build-hash }}"
 
@@ -522,6 +609,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Build Hash:** \`${{ needs.build.outputs.build-hash }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** \`${{ needs.build.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "To deploy to production, trigger workflow manually with \`deploy: true\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Fail if critical stages failed
         if: |

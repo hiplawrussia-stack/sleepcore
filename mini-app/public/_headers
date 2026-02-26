@@ -1,0 +1,45 @@
+# Cloudflare Pages Security Headers
+# ==================================
+# IEC 62304 compliant security configuration for SleepCore Mini App
+#
+# References:
+# - OWASP Secure Headers: https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html
+# - Cloudflare Headers: https://developers.cloudflare.com/pages/platform/headers/
+#
+# IMPORTANT: X-Frame-Options is intentionally NOT set to allow
+# Telegram WebApp iframe embedding.
+
+/*
+  # HTTPS enforcement (1 year, include subdomains)
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+  # Prevent MIME type sniffing
+  X-Content-Type-Options: nosniff
+
+  # XSS Protection (legacy, but still useful for older browsers)
+  X-XSS-Protection: 1; mode=block
+
+  # Control referrer information
+  Referrer-Policy: strict-origin-when-cross-origin
+
+  # Permissions Policy (formerly Feature Policy)
+  # Disable unnecessary browser features for security
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
+
+  # Cache control for HTML (no cache, always revalidate)
+  # Ensures users get latest version
+
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# Static assets - aggressive caching (1 year)
+# Vite adds content hash to filenames, so safe to cache forever
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# SBOM and checksums - no caching (compliance documents)
+/sbom.json
+  Cache-Control: no-cache
+
+/checksums.sha256
+  Cache-Control: no-cache
