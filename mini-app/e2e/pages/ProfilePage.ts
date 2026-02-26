@@ -54,9 +54,11 @@ export class ProfilePage extends BasePage {
     this.userAvatar = page.locator('.w-20.h-20.rounded-full');
     this.evolutionCard = page.locator('text=/Совёнок|Молодая сова|Мудрая сова|Мастер сна/').locator('..').locator('..');
     this.statsGrid = page.locator('.grid.grid-cols-2.gap-3');
-    this.questsPanel = page.locator('text=Задания').locator('..');
-    this.weeklyChart = page.locator('text=/Активность за неделю|weekActivity/').locator('..');
-    this.xpProgress = page.locator('text=/\\d+ XP/').locator('..').locator('..');
+    // Quests panel shows "Нет активных заданий" when empty
+    this.questsPanel = page.locator('text=/Задания|активных заданий/i').locator('..');
+    this.weeklyChart = page.locator('text=Активность за неделю').locator('..');
+    // XP progress section contains "Уровень" and "XP"
+    this.xpProgress = page.locator('text=Уровень').locator('..').locator('..');
     this.settingsSection = page.locator('text=/Настройки|settings\\.title/').locator('..');
     this.hapticsToggle = page.locator('role=switch[name=/Вибрация|haptics/i]');
     this.privacyCenter = page.locator('text=Приватность и данные').locator('..').locator('..');
@@ -215,6 +217,8 @@ export class ProfilePage extends BasePage {
    */
   async expandPrivacyCenter(): Promise<void> {
     const expandButton = this.page.locator('text=Приватность и данные');
+    // Scroll into view to avoid bottom nav overlap
+    await expandButton.scrollIntoViewIfNeeded();
     await expandButton.click();
     await this.waitForAnimation();
   }
@@ -242,7 +246,10 @@ export class ProfilePage extends BasePage {
    */
   async clickDeleteData(): Promise<void> {
     await this.expandPrivacyCenter();
-    await this.page.locator('text=Удалить данные').click();
+    const deleteButton = this.page.locator('button').filter({ hasText: 'Удалить данные' });
+    // Scroll into view and click - use force to bypass bottom nav overlap
+    await deleteButton.scrollIntoViewIfNeeded();
+    await deleteButton.click({ force: true });
     await this.waitForAnimation();
   }
 

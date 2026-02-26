@@ -103,9 +103,9 @@ test.describe('Navigation', () => {
       // Navigate with pattern parameter
       await breathingPage.goto('box');
 
-      // Pattern selector should show box breathing selected
+      // Pattern selector should show box breathing (Квадратное дыхание) selected
       const selectedPattern = await breathingPage.getSelectedPatternName();
-      expect(selectedPattern.toLowerCase()).toContain('бокс');
+      expect(selectedPattern.toLowerCase()).toContain('квадратное');
     });
 
     test('should fallback to default pattern for invalid parameter', async ({ telegramPage }) => {
