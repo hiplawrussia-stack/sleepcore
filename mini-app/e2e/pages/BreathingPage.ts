@@ -41,10 +41,12 @@ export class BreathingPage extends BasePage {
   constructor(page: Page) {
     super(page);
 
-    this.patternSelector = page.locator('h2:has-text("Выбери технику дыхания")').locator('..');
-    this.patternButtons = page.locator('button').filter({ has: page.locator('.text-2xl') });
-    // Cycle selector: go up from "Количество циклов" twice to reach the container
-    this.cycleSelector = page.locator('text=Количество циклов').locator('..').locator('..');
+    // Pattern selector is a fieldset with legend "Выбери технику дыхания"
+    this.patternSelector = page.locator('fieldset').filter({ hasText: 'Выбери технику дыхания' });
+    // Pattern items are labels containing radio inputs and emoji icons
+    this.patternButtons = page.locator('label').filter({ has: page.locator('.text-2xl') });
+    // Cycle selector: fieldset containing cycle radio buttons
+    this.cycleSelector = page.locator('fieldset').filter({ hasText: 'Количество циклов' });
     this.breathingCircle = page.locator('[class*="rounded-full"]').filter({ hasText: /вдох|выдох|задержка/i }).first();
     this.progressIndicator = page.locator('text=/Цикл \\d+ из \\d+/');
     this.completionOverlay = page.locator('text=Отлично!').locator('..');
@@ -98,7 +100,8 @@ export class BreathingPage extends BasePage {
    * Select a pattern by name
    */
   async selectPattern(patternName: string): Promise<void> {
-    await this.page.locator(`button:has-text("${patternName}")`).click();
+    // Pattern items are label elements
+    await this.page.locator(`label:has-text("${patternName}")`).click();
     await this.waitForAnimation();
   }
 
@@ -106,18 +109,20 @@ export class BreathingPage extends BasePage {
    * Get currently selected pattern name
    */
   async getSelectedPatternName(): Promise<string> {
-    const selectedButton = this.patternButtons.filter({
-      has: this.page.locator('.bg-primary-500'),
+    // Selected pattern label has border-primary-500 class
+    const selectedLabel = this.page.locator('label.border-primary-500').filter({
+      has: this.page.locator('.text-2xl'),
     }).first();
 
-    return await selectedButton.locator('.font-medium').textContent() || '';
+    return await selectedLabel.locator('.font-medium').textContent() || '';
   }
 
   /**
    * Select number of cycles
    */
   async selectCycles(cycles: 3 | 5 | 7 | 10): Promise<void> {
-    await this.cycleSelector.locator(`button:has-text("${cycles}")`).click();
+    // Cycles are label elements with radio inputs
+    await this.cycleSelector.locator(`label:has-text("${cycles}")`).click();
     await this.waitForAnimation();
   }
 
@@ -180,18 +185,20 @@ export class BreathingPage extends BasePage {
   }
 
   /**
-   * Wait for exercise completion by fast-forwarding time.
-   * Requires clock to be installed before exercise started.
-   * @param timeoutMs Maximum total time to fast-forward (default 10 minutes)
+   * Wait for exercise completion by advancing fake timers.
+   * Uses smaller steps to ensure React can process state updates.
+   * @param timeoutMs Maximum total time to fast-forward (default 5 minutes)
    */
-  async waitForCompletionWithClock(timeoutMs = 600000): Promise<void> {
-    const stepMs = 500;
+  async waitForCompletionWithClock(timeoutMs = 300000): Promise<void> {
+    // Use 1-second steps matching the timer's 100ms intervals
+    const stepMs = 1000;
     let totalAdvanced = 0;
 
     while (!(await this.isVisible(this.completionOverlay, 50))) {
+      // Advance time using fastForward which triggers setInterval callbacks
       await this.page.clock.fastForward(stepMs);
-      // Small real delay to let React process state updates
-      await this.page.waitForTimeout(5);
+      // Give React time to process state updates in the real event loop
+      await this.page.waitForTimeout(10);
       totalAdvanced += stepMs;
 
       if (totalAdvanced >= timeoutMs) {
@@ -233,12 +240,18 @@ export class BreathingPage extends BasePage {
 
   /**
    * Run a complete breathing exercise flow with fast clock.
-   * Installs clock API, runs exercise, and fast-forwards to completion.
+   * Installs clock API BEFORE page load, then fast-forwards to completion.
    */
   async runCompleteExercise(
     patternName?: string,
     cycles: 3 | 5 | 7 | 10 = 3
   ): Promise<void> {
+    // Clock must be installed BEFORE page loads to intercept timers
+    await this.page.clock.install({ time: Date.now() });
+
+    // Now navigate (timers will be fake from the start)
+    await this.goto();
+
     // Select pattern if specified
     if (patternName) {
       await this.selectPattern(patternName);
@@ -247,10 +260,7 @@ export class BreathingPage extends BasePage {
     // Select cycles
     await this.selectCycles(cycles);
 
-    // Install clock BEFORE starting exercise
-    await this.installClock();
-
-    // Start exercise (timers now use fake clock)
+    // Start exercise (timers are fake)
     await this.startExercise();
 
     // Fast-forward to completion
