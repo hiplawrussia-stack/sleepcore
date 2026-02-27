@@ -55,6 +55,9 @@
     "common": {
       "loading": "Loading, please wait",
       "closeModal": "Close dialog"
+    },
+    "sleep": {
+      "sessionCard": "Sleep data for {{date}}"
     }
   },
   "navigation": {
@@ -95,6 +98,10 @@
       "sessions": "sessions",
       "minutes": "minutes",
       "streak": "day streak"
+    },
+    "sleepStats": {
+      "title": "Sleep Statistics",
+      "description": "Data from wearables"
     }
   },
   "breathing": {
@@ -222,5 +229,34 @@
     "apiUnavailable": "API server unavailable. Please try again later.",
     "notInTelegram": "This app only works inside Telegram",
     "openInTelegram": "Open in Telegram"
+  },
+  "sleep": {
+    "title": "Sleep Statistics",
+    "subtitle": "Data from the last {{days}} days",
+    "metrics": {
+      "avgTst": "Avg sleep time",
+      "avgSe": "Sleep efficiency",
+      "sol": "Falling asleep",
+      "waso": "Wake time",
+      "awakenings": "Awakenings",
+      "hrv": "Heart rate var.",
+      "rhr": "Resting HR",
+      "spo2": "O₂ saturation"
+    },
+    "stages": {
+      "title": "Sleep Stages",
+      "deep": "Deep",
+      "rem": "REM",
+      "light": "Light"
+    },
+    "history": {
+      "title": "History"
+    },
+    "empty": {
+      "title": "No sleep data",
+      "description": "Connect Android Companion App for automatic wearable data sync",
+      "instruction": "Use /link in bot to connect"
+    },
+    "lastSync": "Synced at {{time}}"
   }
 }

@@ -29,3 +29,6 @@ export {
 
 // Sync
 export { useSync } from './useSync';
+
+// Sleep
+export { useSleep, useSleepStats, useSleepSessions } from './useSleepStats';

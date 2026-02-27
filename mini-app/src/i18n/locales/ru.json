@@ -55,6 +55,9 @@
     "common": {
       "loading": "Загрузка, пожалуйста подождите",
       "closeModal": "Закрыть окно"
+    },
+    "sleep": {
+      "sessionCard": "Данные сна за {{date}}"
     }
   },
   "navigation": {
@@ -95,6 +98,10 @@
       "sessions": "сессий",
       "minutes": "минут",
       "streak": "дней подряд"
+    },
+    "sleepStats": {
+      "title": "Статистика сна",
+      "description": "Данные с носимых устройств"
     }
   },
   "breathing": {
@@ -222,5 +229,34 @@
     "apiUnavailable": "API сервер недоступен. Попробуйте позже.",
     "notInTelegram": "Это приложение работает только внутри Telegram",
     "openInTelegram": "Открыть в Telegram"
+  },
+  "sleep": {
+    "title": "Статистика сна",
+    "subtitle": "Данные за последние {{days}} дней",
+    "metrics": {
+      "avgTst": "Среднее время сна",
+      "avgSe": "Эффективность сна",
+      "sol": "Засыпание",
+      "waso": "Пробуждения",
+      "awakenings": "Пробуждений",
+      "hrv": "Вариаб. ритма",
+      "rhr": "Пульс в покое",
+      "spo2": "Насыщение O₂"
+    },
+    "stages": {
+      "title": "Фазы сна",
+      "deep": "Глубокий",
+      "rem": "REM",
+      "light": "Лёгкий"
+    },
+    "history": {
+      "title": "История"
+    },
+    "empty": {
+      "title": "Нет данных о сне",
+      "description": "Подключите Android Companion App для автоматической синхронизации данных с носимых устройств",
+      "instruction": "Используйте /link в боте для привязки"
+    },
+    "lastSync": "Синхронизировано в {{time}}"
   }
 }

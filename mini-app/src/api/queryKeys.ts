@@ -45,6 +45,15 @@ export const queryKeys = {
     monthly: () => [...queryKeys.leaderboard.all, 'monthly'] as const,
     settings: () => [...queryKeys.leaderboard.all, 'settings'] as const,
   },
+
+  // Sleep
+  sleep: {
+    all: ['sleep'] as const,
+    stats: () => [...queryKeys.sleep.all, 'stats'] as const,
+    sessions: (params?: { limit?: number; offset?: number; days?: number }) =>
+      [...queryKeys.sleep.all, 'sessions', params] as const,
+    session: (id: string) => [...queryKeys.sleep.all, 'session', id] as const,
+  },
 } as const;
 
 // Type helpers

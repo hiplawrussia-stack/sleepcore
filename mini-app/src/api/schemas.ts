@@ -208,6 +208,59 @@ export const AuthResponseSchema = z.object({
   user: AuthUserSchema,
 });
 
+// ========== Sleep Schemas ==========
+
+export const SleepTrendSchema = z.enum(['improving', 'stable', 'declining']);
+
+export const SleepSessionSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  startTime: DateStringSchema,
+  endTime: DateStringSchema,
+  source: z.string(),
+  tst: z.number().nullable(),
+  tib: z.number().nullable(),
+  se: z.number().nullable(),
+  waso: z.number().nullable(),
+  sol: z.number().nullable(),
+  awakenings: z.number().nullable(),
+  stageWake: z.number().nullable(),
+  stageLight: z.number().nullable(),
+  stageDeep: z.number().nullable(),
+  stageRem: z.number().nullable(),
+  hrvMeanRmssd: z.number().nullable(),
+  spo2Mean: z.number().nullable(),
+  spo2Min: z.number().nullable(),
+  restingHeartRate: z.number().nullable(),
+});
+
+export const SleepSessionsResponseSchema = z.object({
+  sessions: z.array(SleepSessionSchema),
+  total: z.number().int().min(0),
+  hasMore: z.boolean(),
+});
+
+export const SleepStatsSchema = z.object({
+  avgSleepEfficiency: z.number().nullable(),
+  avgTotalSleepTime: z.number().nullable(),
+  avgTimeInBed: z.number().nullable(),
+  avgSleepOnsetLatency: z.number().nullable(),
+  avgWaso: z.number().nullable(),
+  avgAwakenings: z.number().nullable(),
+  avgStageDeep: z.number().nullable(),
+  avgStageRem: z.number().nullable(),
+  avgStageLight: z.number().nullable(),
+  avgHrvRmssd: z.number().nullable(),
+  avgRestingHeartRate: z.number().nullable(),
+  avgSpo2: z.number().nullable(),
+  minSpo2: z.number().nullable(),
+  seTrend: SleepTrendSchema.nullable(),
+  tstTrend: SleepTrendSchema.nullable(),
+  totalSessions: z.number().int().min(0),
+  sessionsThisWeek: z.number().int().min(0),
+  lastSyncAt: DateStringSchema.nullable(),
+});
+
 // ========== Type Exports ==========
 
 export type ValidatedUserProfile = z.infer<typeof UserProfileSchema>;

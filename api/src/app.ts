@@ -35,6 +35,7 @@ import {
   wearableRoutes,
   leaderboardRoutes,
   downloadRoutes,
+  sleepRoutes,
   ouraRoutes,
 } from './routes/index.js';
 
@@ -161,6 +162,7 @@ export function createApp(config: AppConfig): Hono {
   app.route('/api/sync', syncRoutes);
   app.route('/api/wearable', wearableRoutes);
   app.route('/api/leaderboard', leaderboardRoutes);
+  app.route('/api/sleep', sleepRoutes);
   app.route('/api/oura', ouraRoutes);
 
   // Root endpoint

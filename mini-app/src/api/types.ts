@@ -192,3 +192,64 @@ export interface AuthUser {
   level: number;
   streak?: number;
 }
+
+// ========== Sleep Types ==========
+
+export interface SleepSession {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  source: string;
+  tst: number | null;        // Total Sleep Time (minutes)
+  tib: number | null;        // Time In Bed (minutes)
+  se: number | null;         // Sleep Efficiency (%)
+  waso: number | null;       // Wake After Sleep Onset (minutes)
+  sol: number | null;        // Sleep Onset Latency (minutes)
+  awakenings: number | null;
+  // Sleep stages (percentages)
+  stageWake: number | null;
+  stageLight: number | null;
+  stageDeep: number | null;
+  stageRem: number | null;
+  // HRV
+  hrvMeanRmssd: number | null;
+  // SpO2
+  spo2Mean: number | null;
+  spo2Min: number | null;
+  // Additional
+  restingHeartRate: number | null;
+}
+
+export interface SleepStats {
+  // Aggregates (last 7 days)
+  avgSleepEfficiency: number | null;
+  avgTotalSleepTime: number | null;
+  avgTimeInBed: number | null;
+  avgSleepOnsetLatency: number | null;
+  avgWaso: number | null;
+  avgAwakenings: number | null;
+  // Sleep stages (averages)
+  avgStageDeep: number | null;
+  avgStageRem: number | null;
+  avgStageLight: number | null;
+  // HRV & Heart
+  avgHrvRmssd: number | null;
+  avgRestingHeartRate: number | null;
+  // SpO2
+  avgSpo2: number | null;
+  minSpo2: number | null;
+  // Trends
+  seTrend: 'improving' | 'stable' | 'declining' | null;
+  tstTrend: 'improving' | 'stable' | 'declining' | null;
+  // Counts
+  totalSessions: number;
+  sessionsThisWeek: number;
+  lastSyncAt: string | null;
+}
+
+export interface SleepSessionsResponse {
+  sessions: SleepSession[];
+  total: number;
+  hasMore: boolean;
+}
