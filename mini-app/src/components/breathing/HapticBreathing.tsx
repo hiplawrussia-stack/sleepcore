@@ -52,6 +52,8 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
   const [isRunning, setIsRunning] = useState(false);
   const [showPatternSelector, setShowPatternSelector] = useState(true);
   const [showCompletion, setShowCompletion] = useState(false);
+  // Screen reader announcement for current breathing phase
+  const [srAnnouncement, setSrAnnouncement] = useState('');
 
   // Refs for cleanup
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -73,6 +75,18 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
     };
   }, []);
 
+  // Get localized phase label for screen reader
+  const getPhaseLabel = useCallback((phaseName: BreathingPhase): string => {
+    switch (phaseName) {
+      case 'inhale': return t('breathing.phases.inhale');
+      case 'hold': return t('breathing.phases.hold');
+      case 'exhale': return t('breathing.phases.exhale');
+      case 'hold2': return t('breathing.phases.pause');
+      case 'complete': return t('breathing.phases.done');
+      default: return '';
+    }
+  }, [t]);
+
   // Run a single phase with timer countdown
   const runPhase = useCallback(async (
     phaseName: BreathingPhase,
@@ -91,6 +105,11 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
 
     setPhase(phaseName);
     setTimeRemaining(Math.ceil(durationMs / 1000)); // Display original duration
+
+    // Announce phase change to screen readers (assertive for immediate feedback)
+    const durationSec = Math.ceil(durationMs / 1000);
+    const phaseLabel = getPhaseLabel(phaseName);
+    setSrAnnouncement(`${phaseLabel}, ${durationSec} ${t('breathing.sec', 'сек')}`);
 
     // Start haptic pattern (runs in parallel) - skip in fast mode
     if (speedMultiplier === 1) {
@@ -120,7 +139,7 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
       // Store for unmount cleanup
       timerRef.current = intervalId;
     });
-  }, [getSpeedMultiplier]);
+  }, [getSpeedMultiplier, getPhaseLabel, t]);
 
   // Run a complete breathing cycle
   const runCycle = useCallback(async (): Promise<void> => {
@@ -184,6 +203,9 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
         setPhase('complete');
         setShowCompletion(true);
         haptics.celebrationFeedback();
+
+        // Announce completion to screen readers
+        setSrAnnouncement(t('breathing.completion.title'));
 
         const durationSeconds = Math.round((Date.now() - startTime) / 1000);
 
@@ -264,6 +286,16 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
 
   return (
     <div className="flex flex-col items-center min-h-screen px-4 py-6 bg-night-900">
+      {/* Screen reader live region for breathing phase announcements */}
+      <div
+        role="status"
+        aria-live="assertive"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {srAnnouncement}
+      </div>
+
       {/* Pattern Selector - CSS transitions */}
       {showPatternSelector && phase === 'idle' && (
         <div className="w-full max-w-md mb-6 breathing-selector-enter">

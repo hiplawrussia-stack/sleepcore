@@ -49,7 +49,8 @@ export class BreathingPage extends BasePage {
     this.cycleSelector = page.locator('fieldset').filter({ hasText: 'Количество циклов' });
     this.breathingCircle = page.locator('[class*="rounded-full"]').filter({ hasText: /вдох|выдох|задержка/i }).first();
     this.progressIndicator = page.locator('text=/Цикл \\d+ из \\d+/');
-    this.completionOverlay = page.locator('text=Отлично!').locator('..');
+    // Use role="dialog" to target completion overlay specifically (avoid sr-only live region)
+    this.completionOverlay = page.locator('[role="dialog"][aria-modal="true"]');
   }
 
   async goto(patternId?: string): Promise<void> {
