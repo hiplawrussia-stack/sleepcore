@@ -518,7 +518,7 @@ describe('SentryService', () => {
 
       captureMessage('Test message', 'warning');
 
-      expect(consoleSpy).toHaveBeenCalledWith('[Sentry] Would capture message (warning):', 'Test message');
+      expect(consoleSpy).toHaveBeenCalledWith('[Sentry] Would capture message:', 'Test message', 'warning');
       expect(SentryMock.captureMessage).not.toHaveBeenCalled();
 
       consoleSpy.mockRestore();

@@ -21,6 +21,7 @@ import { useAuth, useSync } from '@/hooks';
 const Home = React.lazy(() => import('@/pages/Home'));
 const Breathing = React.lazy(() => import('@/pages/Breathing'));
 const Profile = React.lazy(() => import('@/pages/Profile'));
+const PrivacyPolicy = React.lazy(() => import('@/pages/PrivacyPolicy'));
 
 // Bottom navigation component
 const BottomNav: React.FC = () => {
@@ -208,6 +209,7 @@ const AppContent: React.FC = () => {
             <Route path="/" element={<Home />} />
             <Route path="/breathing" element={<Breathing />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

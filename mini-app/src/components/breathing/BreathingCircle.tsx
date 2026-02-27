@@ -10,7 +10,7 @@
  * - Zero JavaScript animation libraries = ~30KB bundle savings
  */
 
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BreathingPattern } from './patterns';
 
@@ -53,7 +53,7 @@ const PHASE_SCALES = {
   complete: 0.8,
 } as const;
 
-export const BreathingCircle: React.FC<BreathingCircleProps> = ({
+export const BreathingCircle: React.FC<BreathingCircleProps> = React.memo(({
   phase,
   timeRemaining,
   pattern,
@@ -222,6 +222,8 @@ export const BreathingCircle: React.FC<BreathingCircleProps> = ({
       )}
     </div>
   );
-};
+});
+
+BreathingCircle.displayName = 'BreathingCircle';
 
 export default BreathingCircle;

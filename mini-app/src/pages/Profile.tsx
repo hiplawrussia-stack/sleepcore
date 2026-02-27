@@ -257,25 +257,29 @@ export const Profile: React.FC = () => {
               {t('profile.stats.weekActivity')}
             </div>
             <div className="flex items-end justify-between h-16 gap-1">
-              {stats.weeklyProgress.map((minutes, index) => {
+              {(() => {
+                // Performance: Calculate max once, not inside map loop
                 const maxMinutes = Math.max(...stats.weeklyProgress, 1);
-                const height = (minutes / maxMinutes) * 100;
-                const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+                const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
-                return (
-                  <div key={index} className="flex-1 flex flex-col items-center">
-                    <div
-                      style={{ height: `${Math.max(height, 4)}%` }}
-                      className={`w-full rounded-t transition-all duration-300 ${
-                        minutes > 0 ? 'bg-primary-500' : 'bg-night-700'
-                      }`}
-                    />
-                    <span className="text-[10px] text-night-400 mt-1">
-                      {t(`profile.stats.days.${dayKeys[index]}`)}
-                    </span>
-                  </div>
-                );
-              })}
+                return stats.weeklyProgress.map((minutes, index) => {
+                  const height = (minutes / maxMinutes) * 100;
+
+                  return (
+                    <div key={index} className="flex-1 flex flex-col items-center">
+                      <div
+                        style={{ height: `${Math.max(height, 4)}%` }}
+                        className={`w-full rounded-t transition-all duration-300 ${
+                          minutes > 0 ? 'bg-primary-500' : 'bg-night-700'
+                        }`}
+                      />
+                      <span className="text-[10px] text-night-400 mt-1">
+                        {t(`profile.stats.days.${dayKeys[index]}`)}
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </Card>
         </div>

@@ -76,9 +76,10 @@ const getRankIcon = (rank: number): string => {
   return `#${rank}`;
 };
 
+/** Memoized row to prevent re-renders in list */
 const LeaderboardEntryRow: React.FC<{
   entry: LeaderboardEntry;
-}> = ({ entry }) => (
+}> = React.memo(({ entry }) => (
   <div
     className={`flex items-center gap-3 p-3 rounded-xl ${
       entry.isCurrentUser
@@ -118,12 +119,15 @@ const LeaderboardEntryRow: React.FC<{
       </div>
     </div>
   </div>
-);
+));
 
+LeaderboardEntryRow.displayName = 'LeaderboardEntryRow';
+
+/** Memoized opt-in prompt */
 const OptInPrompt: React.FC<{
   onOptIn: (anonymous: boolean) => void;
   isLoading: boolean;
-}> = ({ onOptIn, isLoading }) => {
+}> = React.memo(({ onOptIn, isLoading }) => {
   const [showAnonymous, setShowAnonymous] = useState(false);
 
   return (
@@ -172,7 +176,9 @@ const OptInPrompt: React.FC<{
       </p>
     </Card>
   );
-};
+});
+
+OptInPrompt.displayName = 'OptInPrompt';
 
 export const Leaderboard: React.FC<LeaderboardProps> = ({
   entries = [],

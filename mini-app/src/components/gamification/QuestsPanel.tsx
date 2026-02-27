@@ -46,7 +46,8 @@ interface QuestCardProps {
   quest: Quest;
 }
 
-const QuestCard: React.FC<QuestCardProps> = ({ quest }) => {
+/** Memoized quest card to prevent re-renders in list */
+const QuestCard: React.FC<QuestCardProps> = React.memo(({ quest }) => {
   const progressPercent = Math.min(100, (quest.progress / quest.target) * 100);
   const isCompleted = quest.status === 'completed';
   const isExpired = quest.status === 'expired';
@@ -122,7 +123,9 @@ const QuestCard: React.FC<QuestCardProps> = ({ quest }) => {
       </div>
     </Card>
   );
-};
+});
+
+QuestCard.displayName = 'QuestCard';
 
 interface QuestsPanelProps {
   /** Maximum number of quests to display */

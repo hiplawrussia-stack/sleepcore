@@ -40,8 +40,8 @@ const STAGE_ICONS: Record<string, string> = {
   wise_owl: '🦉✨',
 };
 
-/** Confetti particle component - CSS animation */
-const ConfettiParticle: React.FC<{ delay: number; x: number; emoji: string }> = ({ delay, x, emoji }) => (
+/** Memoized confetti particle - CSS animation */
+const ConfettiParticle: React.FC<{ delay: number; x: number; emoji: string }> = React.memo(({ delay, x, emoji }) => (
   <div
     style={{
       left: `${x}%`,
@@ -51,7 +51,9 @@ const ConfettiParticle: React.FC<{ delay: number; x: number; emoji: string }> = 
   >
     {emoji}
   </div>
-);
+));
+
+ConfettiParticle.displayName = 'ConfettiParticle';
 
 export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps> = ({
   isVisible,

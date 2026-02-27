@@ -18,11 +18,54 @@
  */
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from './Card';
 import { useTelegram } from '@/hooks';
 import { useAuthStore } from '@/store/authStore';
 import { useSyncStore } from '@/store/syncStore';
 import { apiClient } from '@/api';
+
+/** Retry configuration for server deletion */
+const RETRY_CONFIG = {
+  maxAttempts: 3,
+  baseDelayMs: 1000,
+  maxDelayMs: 8000,
+} as const;
+
+/**
+ * Retry with exponential backoff
+ * @param fn - Async function to retry
+ * @param config - Retry configuration
+ * @returns Result of successful call or throws last error
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  config = RETRY_CONFIG
+): Promise<T> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 1; attempt <= config.maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      if (attempt < config.maxAttempts) {
+        // Exponential backoff: 1s, 2s, 4s...
+        const delay = Math.min(
+          config.baseDelayMs * Math.pow(2, attempt - 1),
+          config.maxDelayMs
+        );
+        console.warn(
+          `[PrivacyCenter] Server deletion attempt ${attempt}/${config.maxAttempts} failed, retrying in ${delay}ms...`
+        );
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError;
+}
 
 interface UserDataExport {
   exportDate: string;
@@ -41,7 +84,8 @@ interface UserDataExport {
 }
 
 export const PrivacyCenter: React.FC = () => {
-  const { showAlert, showConfirm, openLink } = useTelegram();
+  const navigate = useNavigate();
+  const { showAlert, showConfirm } = useTelegram();
   const { user, logout } = useAuthStore();
   const { pendingChanges, lastSyncTime, clearPendingChanges } = useSyncStore();
 
@@ -164,21 +208,26 @@ export const PrivacyCenter: React.FC = () => {
       }
       keysToRemove.forEach(key => localStorage.removeItem(key));
 
-      // GDPR Article 17: Delete server-side data
+      // GDPR Article 17: Delete server-side data with retry
       try {
-        await apiClient.request<{ deleted: boolean; message: string }>('/user/data', {
-          method: 'DELETE',
-        });
+        await retryWithBackoff(() =>
+          apiClient.request<{ deleted: boolean; message: string }>('/user/data', {
+            method: 'DELETE',
+          })
+        );
         await showAlert(
           '✅ Все данные удалены\n\n' +
           'Локальные и серверные данные успешно удалены согласно GDPR Article 17.'
         );
       } catch (deleteError) {
-        // Local data deleted, but server deletion failed
-        console.error('[PrivacyCenter] Server deletion failed:', deleteError);
+        // Local data deleted, but server deletion failed after all retries
+        console.error(
+          `[PrivacyCenter] Server deletion failed after ${RETRY_CONFIG.maxAttempts} attempts:`,
+          deleteError
+        );
         await showAlert(
           '⚠️ Локальные данные удалены\n\n' +
-          'Не удалось удалить данные с сервера. ' +
+          `Не удалось удалить данные с сервера после ${RETRY_CONFIG.maxAttempts} попыток. ` +
           'Свяжитесь с поддержкой через @SleepCore_Bot для полного удаления.'
         );
       }
@@ -191,11 +240,10 @@ export const PrivacyCenter: React.FC = () => {
   };
 
   /**
-   * Open privacy policy
+   * Open privacy policy page
    */
   const handleOpenPrivacyPolicy = () => {
-    // Use Telegram's standard bot privacy policy or custom URL
-    openLink('https://telegram.org/privacy-tpa');
+    navigate('/privacy');
   };
 
   return (
@@ -304,7 +352,7 @@ export const PrivacyCenter: React.FC = () => {
                 Политика конфиденциальности
               </div>
               <div className="text-xs text-night-400">
-                Telegram Privacy Policy
+                GDPR • ФЗ-152 • HIPAA
               </div>
             </div>
           </button>

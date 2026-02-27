@@ -51,6 +51,14 @@ export function initSentry(): void {
     environment: env.MODE,
     release: `sleepcore-mini-app@${env.VITE_APP_VERSION}`,
 
+    // Global tags for all events (IEC 62304 traceability)
+    initialScope: {
+      tags: {
+        app: 'mini-app',
+        app_type: 'telegram-webapp',
+      },
+    },
+
     // Performance monitoring (2025 best practice: 10-30% for production)
     tracesSampleRate: 0.2, // 20% of transactions
 
@@ -143,35 +151,131 @@ export function clearUser(): void {
 }
 
 /**
- * Capture exception with optional context
+ * Error categories for filtering in Sentry dashboard
+ * IEC 62304: Categorization supports problem resolution tracking (§5.7.2)
+ */
+export type ErrorCategory =
+  | 'auth'       // Authentication/authorization errors
+  | 'api'        // API/network communication errors
+  | 'storage'    // LocalStorage/CloudStorage errors
+  | 'breathing'  // Breathing session errors
+  | 'sync'       // Offline sync errors
+  | 'telegram'   // Telegram SDK errors
+  | 'validation' // Data validation errors
+  | 'security'   // Security-related issues
+  | 'ui'         // UI/rendering errors
+  | 'unknown';   // Uncategorized errors
+
+/**
+ * Extended context for captureException
+ */
+export interface CaptureContext {
+  /** Error category for filtering */
+  category?: ErrorCategory;
+  /** Custom tags for Sentry */
+  tags?: Record<string, string>;
+  /** Extra data for debugging */
+  extra?: Record<string, unknown>;
+}
+
+/**
+ * Capture exception with category tags and context
+ *
+ * @example
+ * ```ts
+ * captureException(error, {
+ *   category: 'api',
+ *   tags: { endpoint: '/auth/me' },
+ *   extra: { statusCode: 500 }
+ * });
+ * ```
  */
 export function captureException(
   error: unknown,
-  context?: Record<string, unknown>
+  context?: CaptureContext | Record<string, unknown>
 ): void {
   if (env.DEV) {
     console.error('[Sentry] Would capture:', error, context);
     return;
   }
 
-  Sentry.captureException(error, {
-    extra: context,
-  });
+  // Handle both new CaptureContext and legacy Record<string, unknown>
+  const isExtendedContext = context && ('category' in context || 'tags' in context || 'extra' in context);
+
+  if (isExtendedContext) {
+    const { category, tags, extra } = context as CaptureContext;
+    Sentry.captureException(error, {
+      tags: {
+        ...(category && { error_category: category }),
+        ...tags,
+      },
+      extra,
+    });
+  } else {
+    // Legacy support: treat context as extra data
+    Sentry.captureException(error, {
+      extra: context as Record<string, unknown>,
+    });
+  }
 }
 
 /**
- * Capture message
+ * Extended context for captureMessage
+ */
+export interface MessageContext {
+  /** Severity level */
+  level?: Sentry.SeverityLevel;
+  /** Error category for filtering */
+  category?: ErrorCategory;
+  /** Custom tags for Sentry */
+  tags?: Record<string, string>;
+  /** Extra data for debugging */
+  extra?: Record<string, unknown>;
+}
+
+/**
+ * Capture message with category and context
+ *
+ * @example
+ * ```ts
+ * captureMessage('User completed breathing session', {
+ *   level: 'info',
+ *   category: 'breathing',
+ *   extra: { cycles: 5, patternId: '478' }
+ * });
+ * ```
  */
 export function captureMessage(
   message: string,
-  level: Sentry.SeverityLevel = 'info'
+  levelOrContext: Sentry.SeverityLevel | MessageContext = 'info'
 ): void {
   if (env.DEV) {
-    console.log(`[Sentry] Would capture message (${level}):`, message);
+    console.log(`[Sentry] Would capture message:`, message, levelOrContext);
     return;
   }
 
-  Sentry.captureMessage(message, level);
+  // Handle simple level string (backward compatible)
+  if (typeof levelOrContext === 'string') {
+    Sentry.captureMessage(message, levelOrContext);
+    return;
+  }
+
+  // Handle extended context
+  const { level = 'info', category, tags, extra } = levelOrContext;
+  Sentry.withScope((scope) => {
+    if (category) {
+      scope.setTag('error_category', category);
+    }
+    if (tags) {
+      Object.entries(tags).forEach(([key, value]) => {
+        scope.setTag(key, value);
+      });
+    }
+    if (extra) {
+      scope.setExtras(extra);
+    }
+    Sentry.captureMessage(message, level);
+  });
 }
 
 /**

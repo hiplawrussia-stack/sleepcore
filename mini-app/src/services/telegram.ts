@@ -68,6 +68,7 @@ class TelegramService {
 
       // Log to Sentry with context for debugging
       captureException(error instanceof Error ? error : new Error(String(error)), {
+        category: 'telegram',
         tags: {
           component: 'TelegramService',
           action: 'init',
@@ -485,6 +486,7 @@ class TelegramService {
         if (error) {
           console.warn('[TelegramService] CloudStorage.setItem failed:', error);
           captureException(new Error(`CloudStorage.setItem failed: ${error}`), {
+            category: 'storage',
             tags: { component: 'TelegramService', action: 'setStorageItem' },
             extra: { key, valueLength: value.length },
           });
@@ -503,6 +505,7 @@ class TelegramService {
         if (error) {
           console.warn('[TelegramService] CloudStorage.getItem failed:', error);
           captureException(new Error(`CloudStorage.getItem failed: ${error}`), {
+            category: 'storage',
             tags: { component: 'TelegramService', action: 'getStorageItem' },
             extra: { key },
           });
@@ -521,6 +524,7 @@ class TelegramService {
         if (error) {
           console.warn('[TelegramService] CloudStorage.removeItem failed:', error);
           captureException(new Error(`CloudStorage.removeItem failed: ${error}`), {
+            category: 'storage',
             tags: { component: 'TelegramService', action: 'removeStorageItem' },
             extra: { key },
           });
