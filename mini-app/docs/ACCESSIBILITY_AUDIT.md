@@ -1,9 +1,10 @@
 # Accessibility Audit Report - SleepCore Mini-App
 
 **Date:** 2026-02-24
+**Updated:** 2026-02-27
 **Version:** 1.0.0-alpha.4
 **Auditor:** Claude Code
-**Overall Score:** 78% (was 68%)
+**Overall Score:** 95% (was 78%)
 
 ---
 
@@ -92,7 +93,7 @@ The SleepCore mini-app demonstrates **good foundational accessibility practices*
 | `aria-expanded` | 1 | Privacy center |
 | `aria-controls` | 1 | Privacy center |
 | `aria-live` | 1 | Breathing progress |
-| `aria-pressed` | 1 | Language selector |
+| `aria-checked` | 3+ | Radios, switch, language selector |
 
 ---
 
@@ -114,12 +115,13 @@ The SleepCore mini-app demonstrates **good foundational accessibility practices*
 - 24 `aria-hidden` decorative elements
 - ✅ Escape key handler for completion modal (FIXED)
 
-#### Profile.tsx - Score: 80%
+#### Profile.tsx - Score: 95% ✅ IMPROVED
 - Evolution card `aria-label`
 - Progress bars with full ARIA
 - Haptics switch with `role="switch"` + `aria-checked`
-- Language button with `aria-pressed`
+- ✅ Language selector with `fieldset/legend` + `role="radiogroup"` + `aria-checked` (FIXED)
 - Badge list with `role="list"` + `aria-label`
+- ✅ Touch targets 44x44px (WCAG 2.5.5)
 
 #### EvolutionCelebrationModal.tsx - Score: 95% ✅ IMPROVED
 - `role="dialog"` with `aria-modal`
@@ -176,11 +178,12 @@ The SleepCore mini-app demonstrates **good foundational accessibility practices*
 
 ### PREVIOUSLY CRITICAL - NOW FIXED
 
-#### BreathingCircle.tsx - Score: 85% ✅ IMPROVED (was 10%)
+#### BreathingCircle.tsx - Score: 95% ✅ IMPROVED (was 10%)
 - ✅ SVG has `role="img"` (FIXED)
 - ✅ SVG has `aria-label` with phase information (FIXED)
 - ✅ i18n integration for accessibility label (FIXED)
-- Screen readers now announce current breathing phase
+- ✅ `aria-live="assertive"` for phase announcements (FIXED 2026-02-27)
+- Screen readers now announce current breathing phase immediately
 
 ---
 

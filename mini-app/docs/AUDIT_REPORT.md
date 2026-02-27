@@ -2,7 +2,7 @@
 
 **Версия:** 1.0.0-alpha.4
 **Дата:** 2026-02-24
-**Обновлено:** 2026-02-26 (rev.2)
+**Обновлено:** 2026-02-27 (rev.3)
 **Стандарт:** IEC 62304:2006/AMD1:2015 (Class B)
 **Аудит:** Deep audit (6 направлений)
 
@@ -49,6 +49,19 @@
 | P1-3 | Logout storage cleanup (OWASP/HIPAA) | ✅ FIXED |
 | P1-5 | useSync edge cases tests | ✅ FIXED |
 | P1-8 | Leaderboard toggle role="switch" | ✅ FIXED |
+
+### Исправлено (2026-02-27)
+| # | Проблема | Статус |
+|---|----------|--------|
+| P1-4 | Sentry service tests | ✅ FIXED (sentry.spec.ts) |
+| P1-6 | aria-live="assertive" для дыхания | ✅ FIXED (BreathingCircle.tsx) |
+| P1-7 | Touch targets 44x44px | ✅ FIXED (Profile.tsx, HapticBreathing.tsx) |
+| P1-9 | Custom privacy policy page | ✅ FIXED (PrivacyPolicy.tsx) |
+| P1-10 | Retry для failed deletions | ✅ FIXED (PrivacyCenter.tsx) |
+| P1-12 | API health check | ✅ FIXED (apiClient.ts) |
+| P1-13 | Telegram init error logging | ✅ FIXED (telegram.ts) |
+| P1-15 | React.memo оптимизации | ✅ FIXED (5 компонентов) |
+| P2-4 | Language buttons fieldset | ✅ FIXED (Profile.tsx) |
 
 ---
 
@@ -213,12 +226,12 @@
 | ~~2.4.1~~ | ~~Нет skip-to-content link~~ | ~~App.tsx~~ | ~~Skip link + main landmark~~ | ✅ FIXED |
 | ~~1.3.1~~ | ~~Missing fieldset/legend~~ | ~~HapticBreathing~~ | ~~Native fieldset + legend~~ | ✅ FIXED |
 
-### Средние проблемы
+### Средние проблемы (все решены)
 | WCAG | Проблема | Fix | Статус |
 |------|----------|-----|--------|
-| 4.1.3 | aria-live="polite" для активной сессии | → "assertive" | ⏳ TODO |
-| 2.5.5 | Touch targets <44px | Увеличить до 44x44 | ⏳ TODO |
-| 1.3.1 | Language buttons без fieldset | Обернуть в fieldset | ⏳ TODO |
+| ~~4.1.3~~ | ~~aria-live="polite" для активной сессии~~ | ~~→ "assertive"~~ | ✅ FIXED (BreathingCircle.tsx) |
+| ~~2.5.5~~ | ~~Touch targets <44px~~ | ~~Увеличить до 44x44~~ | ✅ FIXED (Profile.tsx, HapticBreathing.tsx) |
+| ~~1.3.1~~ | ~~Language buttons без fieldset~~ | ~~Обернуть в fieldset~~ | ✅ FIXED (Profile.tsx — radiogroup) |
 | ~~4.1.2~~ | ~~Leaderboard toggle — button вместо switch~~ | ~~role="switch"~~ | ✅ FIXED (Profile.tsx:340) |
 
 ---
@@ -248,12 +261,12 @@
 | Branches | 91.8% | 70% ✅ |
 | Functions | 81.4% | 80% ✅ |
 
-### Критические gaps
+### Критические gaps (все решены)
 | Gap | Coverage | Priority |
 |-----|----------|----------|
 | ~~Pages (Breathing.tsx, Profile.tsx)~~ | ~~58 tests~~ | ✅ FIXED |
 | ~~API client (client.ts)~~ | ~~37 tests~~ | ✅ FIXED |
-| Sentry service | 14.85% | HIGH |
+| ~~Sentry service~~ | ~~sentry.spec.ts~~ | ✅ FIXED |
 | ~~useSync edge cases~~ | ~~14 tests, 96.42% lines~~ | ✅ FIXED |
 
 ### E2E Infrastructure (сильные стороны)
@@ -372,16 +385,16 @@
 | ~~C-12~~ | ~~Feature flags отсутствуют~~ | ~~Нет gradual rollout~~ | ~~featureFlags.tsx + Context~~ | ✅ FIXED |
 | ~~C-13~~ | ~~Env validation отсутствует~~ | ~~Падает без env vars~~ | ~~T3-Env + Zod~~ | ✅ FIXED |
 | ~~C-14~~ | ~~Sentry DSN fallback~~ | ~~Падает без DSN~~ | ~~Graceful degradation~~ | ✅ FIXED |
-| — | API health check | Нет проверки backend | Добавить /health check | ⏳ TODO (HIGH) |
+| ~~—~~ | ~~API health check~~ | ~~Нет проверки backend~~ | ~~/health check в apiClient~~ | ✅ FIXED |
 
-### Высокие проблемы
-| # | Проблема | Fix |
-|---|----------|-----|
-| 1 | Custom privacy policy не создана | Создать на домене sleepcore |
-| 2 | Retry для failed deletions | Добавить retry mechanism |
-| 3 | Error categorization в Sentry | Добавить tags (api, ui, auth) |
-| 4 | Telegram init errors не логируются | Добавить captureException |
-| 5 | Granular error boundaries | Добавить для breathing, profile |
+### Высокие проблемы (большинство решено)
+| # | Проблема | Fix | Статус |
+|---|----------|-----|--------|
+| ~~1~~ | ~~Custom privacy policy не создана~~ | ~~PrivacyPolicy.tsx~~ | ✅ FIXED |
+| ~~2~~ | ~~Retry для failed deletions~~ | ~~retryWithBackoff()~~ | ✅ FIXED |
+| 3 | Error categorization в Sentry | Добавить tags (api, ui, auth) | ⏳ TODO |
+| ~~4~~ | ~~Telegram init errors не логируются~~ | ~~captureException в telegram.ts~~ | ✅ FIXED |
+| 5 | Granular error boundaries | Добавить для breathing, profile | ⏳ TODO |
 
 ---
 
@@ -403,32 +416,32 @@
 | ~~11~~ | ~~Env validation (T3-Env + Zod)~~ | ~~Prod~~ | ~~1 hour~~ | ✅ DONE |
 | ~~12~~ | ~~Sentry DSN fallback~~ | ~~Prod~~ | ~~30 min~~ | ✅ DONE |
 
-### P1: Высокий приоритет (10 задач осталось, было 15)
+### P1: Высокий приоритет (2 задачи осталось, было 15)
 | # | Задача | Область | Статус |
 |---|--------|---------|--------|
 | ~~1~~ | ~~URL protocol validation в openLink()~~ | ~~Security~~ | ✅ FIXED |
 | ~~2~~ | ~~Crypto: reject вместо plaintext fallback~~ | ~~Security~~ | ✅ FIXED (P1-2) |
 | ~~3~~ | ~~Logout: verify encrypted storage cleanup~~ | ~~Security~~ | ✅ FIXED (P1-3) |
-| 4 | Sentry service tests | Testing | ⏳ TODO |
+| ~~4~~ | ~~Sentry service tests~~ | ~~Testing~~ | ✅ FIXED (sentry.spec.ts) |
 | ~~5~~ | ~~useSync edge cases tests~~ | ~~Testing~~ | ✅ FIXED (14 tests, 96.42%) |
-| 6 | aria-live="assertive" для активной сессии | A11y | ⏳ TODO |
-| 7 | Touch targets 44x44px | A11y | ⏳ TODO |
+| ~~6~~ | ~~aria-live="assertive" для активной сессии~~ | ~~A11y~~ | ✅ FIXED (BreathingCircle.tsx) |
+| ~~7~~ | ~~Touch targets 44x44px~~ | ~~A11y~~ | ✅ FIXED (Profile.tsx, HapticBreathing.tsx) |
 | ~~8~~ | ~~Leaderboard toggle → role="switch"~~ | ~~A11y~~ | ✅ FIXED (Profile.tsx:340) |
-| 9 | Custom privacy policy | Prod | ⏳ TODO |
-| 10 | Retry для failed deletions | Prod | ⏳ TODO |
+| ~~9~~ | ~~Custom privacy policy~~ | ~~Prod~~ | ✅ FIXED (PrivacyPolicy.tsx) |
+| ~~10~~ | ~~Retry для failed deletions~~ | ~~Prod~~ | ✅ FIXED (PrivacyCenter.tsx — retryWithBackoff) |
 | 11 | Error categorization tags в Sentry | Prod | ⏳ TODO |
-| 12 | API health check на старте | Prod | ⏳ TODO |
-| 13 | Telegram init error logging | Prod | ⏳ TODO |
+| ~~12~~ | ~~API health check на старте~~ | ~~Prod~~ | ✅ FIXED (apiClient.ts) |
+| ~~13~~ | ~~Telegram init error logging~~ | ~~Prod~~ | ✅ FIXED (telegram.ts) |
 | 14 | Math.max() вынести из цикла | Perf | ⏳ TODO |
-| 15 | React.memo для Card, ConfettiParticle | Perf | ⏳ TODO |
+| ~~15~~ | ~~React.memo для QuestCard, LeaderboardEntryRow и др.~~ | ~~Perf~~ | ✅ FIXED (5 компонентов) |
 
-### P2: Средний приоритет (4.5 задачи осталось)
+### P2: Средний приоритет (3.5 задачи осталось)
 | # | Задача | Статус |
 |---|--------|--------|
 | 1 | Telegram theme variables | ⏳ TODO |
 | 2 | Safe-area CSS классы | ⚠️ PARTIAL (только bottom) |
-| 3 | refetchOnMount: false | ⏳ TODO |
-| 4 | Language buttons в fieldset | ⏳ TODO |
+| 3 | refetchOnMount: false | ⏳ TODO (спорно — может ухудшить UX) |
+| ~~4~~ | ~~Language buttons в fieldset~~ | ✅ FIXED (Profile.tsx — radiogroup pattern) |
 | 5 | Granular error boundaries | ⏳ TODO |
 
 ---
@@ -451,7 +464,7 @@ Mini App **готов к production-релизу** (100% audit score, было 7
 - Page-level тесты (Breathing.tsx, Profile.tsx)
 - Feature flags system (type-safe, build-time, IEC 62304 compliant)
 
-**Исправлено (19 критических/высоких):**
+**Исправлено (28 критических/высоких):**
 - ✅ C-1: services/api.ts удалён, мигрировано на apiClient
 - ✅ C-2: motion dependency удалён
 - ✅ C-3: Все импорты мигрированы на `@/api`
@@ -468,17 +481,26 @@ Mini App **готов к production-релизу** (100% audit score, было 7
 - ✅ P1-1: URL protocol validation (XSS prevention)
 - ✅ P1-2: Crypto fail-closed (HIPAA compliance)
 - ✅ P1-3: Logout storage cleanup (OWASP/HIPAA — clearAllUserStorage)
+- ✅ P1-4: Sentry service tests (sentry.spec.ts)
 - ✅ P1-5: useSync edge cases (14 тестов, 96.42% coverage)
+- ✅ P1-6: aria-live="assertive" (BreathingCircle.tsx)
+- ✅ P1-7: Touch targets 44x44px (Profile.tsx, HapticBreathing.tsx)
 - ✅ P1-8: Leaderboard toggle role="switch" (Profile.tsx:340)
+- ✅ P1-9: Custom privacy policy (PrivacyPolicy.tsx — bilingual RU/EN)
+- ✅ P1-10: Retry для failed deletions (retryWithBackoff — 3 attempts)
+- ✅ P1-12: API health check (apiClient.ts)
+- ✅ P1-13: Telegram init error logging (telegram.ts)
+- ✅ P1-15: React.memo (QuestCard, LeaderboardEntryRow, ConfettiParticle, BreathingCircle, OptInPrompt)
+- ✅ P2-4: Language buttons fieldset (Profile.tsx — radiogroup pattern)
 
 **Оставшиеся блокеры:** Нет критических блокеров.
 
-**Рекомендуемые улучшения (P1):** API health check, Sentry service tests, Touch targets 44px
+**Рекомендуемые улучшения:** Error categorization в Sentry, Math.max() optimization
 
-**Прогресс P1:** 5/15 выполнено (33%)
-**Прогресс P2:** 0.5/5 выполнено (10%)
+**Прогресс P1:** 13/15 выполнено (87%)
+**Прогресс P2:** 1.5/5 выполнено (30%)
 
 ---
 
 *Deep audit: 6 направлений (код, security, testing, perf, a11y, prod)*
-*Последнее обновление: 2026-02-26 (rev.2)*
+*Последнее обновление: 2026-02-27 (rev.3)*
