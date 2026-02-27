@@ -23,7 +23,7 @@ cd mini-app
 npm install
 npm run dev      # Development
 npm run build    # Production
-npm test         # 603 unit tests
+npm test         # ~891 unit tests
 npm run test:e2e # 62 E2E tests
 ```
 
@@ -45,7 +45,7 @@ mini-app/
 ├── tests/              # Vitest unit tests
 ├── e2e/                # Playwright E2E tests
 └── docs/
-    ├── ACCESSIBILITY_AUDIT.md  # A11y аудит (78%)
+    ├── ACCESSIBILITY_AUDIT.md  # A11y аудит (95%)
     └── AUDIT_REPORT.md         # Полный аудит + IEC 62304
 ```
 
@@ -70,7 +70,7 @@ mini-app/
 
 | Тип | Количество | Инструмент |
 |-----|------------|------------|
-| Unit | 603 | Vitest + RTL |
+| Unit | ~891 | Vitest + RTL |
 | E2E | 62 | Playwright |
 
 ```bash
