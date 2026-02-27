@@ -10,3 +10,4 @@ export { BasePage } from './BasePage';
 export { HomePage } from './HomePage';
 export { BreathingPage, type BreathingPhase, type PatternInfo } from './BreathingPage';
 export { ProfilePage, type UserStats, type EvolutionInfo } from './ProfilePage';
+export { SleepPage, type SleepMetrics, type SleepStages, type SessionRowData } from './SleepPage';
