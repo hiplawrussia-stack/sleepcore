@@ -357,33 +357,37 @@ export const Profile: React.FC = () => {
             </button>
           </div>
 
-          {/* Language selector */}
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium text-night-100">{t('profile.settings.language.title')}</div>
-              <div className="text-xs text-night-400">
-                {t(`profile.settings.language.${currentLanguage}`)}
+          {/* Language selector - WCAG 1.3.1: fieldset/legend for grouped controls */}
+          <fieldset className="border-0 p-0 m-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <legend className="font-medium text-night-100">{t('profile.settings.language.title')}</legend>
+                <div className="text-xs text-night-400">
+                  {t(`profile.settings.language.${currentLanguage}`)}
+                </div>
+              </div>
+              {/* WCAG 2.5.5: Touch target minimum 44x44px */}
+              <div className="flex gap-2" role="radiogroup" aria-label={t('profile.settings.language.title')}>
+                {LANGUAGES.map((lang) => (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    role="radio"
+                    onClick={() => handleLanguageChange(lang.code)}
+                    aria-label={t(`profile.settings.language.${lang.code}`)}
+                    aria-checked={currentLanguage === lang.code}
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl transition-all ${
+                      currentLanguage === lang.code
+                        ? 'bg-primary-500 scale-105'
+                        : 'bg-night-700 hover:bg-night-600'
+                    }`}
+                  >
+                    {lang.flag}
+                  </button>
+                ))}
               </div>
             </div>
-            {/* WCAG 2.5.5: Touch target minimum 44x44px */}
-            <div className="flex gap-2">
-              {LANGUAGES.map((lang) => (
-                <button
-                  key={lang.code}
-                  onClick={() => handleLanguageChange(lang.code)}
-                  aria-label={t(`profile.settings.language.${lang.code}`)}
-                  aria-pressed={currentLanguage === lang.code}
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl transition-all ${
-                    currentLanguage === lang.code
-                      ? 'bg-primary-500 scale-105'
-                      : 'bg-night-700 hover:bg-night-600'
-                  }`}
-                >
-                  {lang.flag}
-                </button>
-              ))}
-            </div>
-          </div>
+          </fieldset>
         </Card>
       </div>
 

@@ -438,11 +438,12 @@ describe('Profile', () => {
       expect(mockChangeLanguage).toHaveBeenCalledWith('en');
     });
 
-    it('should have aria-pressed for current language', () => {
+    it('should have aria-checked for current language (radiogroup pattern)', () => {
       renderProfile();
 
       const ruButton = screen.getByLabelText('Русский');
-      expect(ruButton).toHaveAttribute('aria-pressed', 'true');
+      expect(ruButton).toHaveAttribute('aria-checked', 'true');
+      expect(ruButton).toHaveAttribute('role', 'radio');
     });
   });
 
