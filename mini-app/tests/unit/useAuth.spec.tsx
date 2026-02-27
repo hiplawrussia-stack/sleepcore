@@ -19,6 +19,7 @@ import React from 'react';
 const {
   mockAuthenticateFn,
   mockRequestFn,
+  mockCheckHealthFn,
   mockGetAccessTokenFn,
   mockIsTokenExpiredFn,
   mockClearTokensFn,
@@ -29,10 +30,12 @@ const {
   mockSetUserFn,
   mockSetAuthenticatingFn,
   mockSetAuthErrorFn,
+  mockSetApiHealthyFn,
   mockStoreLogoutFn,
 } = vi.hoisted(() => ({
   mockAuthenticateFn: vi.fn(),
   mockRequestFn: vi.fn(),
+  mockCheckHealthFn: vi.fn(),
   mockGetAccessTokenFn: vi.fn(() => null),
   mockIsTokenExpiredFn: vi.fn(() => true),
   mockClearTokensFn: vi.fn(),
@@ -46,6 +49,7 @@ const {
   mockSetUserFn: vi.fn(),
   mockSetAuthenticatingFn: vi.fn(),
   mockSetAuthErrorFn: vi.fn(),
+  mockSetApiHealthyFn: vi.fn(),
   mockStoreLogoutFn: vi.fn(),
 }));
 
@@ -54,6 +58,7 @@ vi.mock('@/api', () => ({
   apiClient: {
     request: mockRequestFn,
     authenticate: mockAuthenticateFn,
+    checkHealth: mockCheckHealthFn,
   },
   tokenManager: {
     getAccessToken: mockGetAccessTokenFn,
@@ -77,9 +82,11 @@ vi.mock('@/store/authStore', () => ({
     isAuthenticated: false,
     isAuthenticating: false,
     authError: null,
+    apiHealthy: null,
     setUser: mockSetUserFn,
     setAuthenticating: mockSetAuthenticatingFn,
     setAuthError: mockSetAuthErrorFn,
+    setApiHealthy: mockSetApiHealthyFn,
     logout: mockStoreLogoutFn,
   })),
   AUTH_STORAGE_KEY: 'sleepcore-auth-v2',
@@ -136,11 +143,16 @@ describe('useAuth', () => {
       isAuthenticated: false,
       isAuthenticating: false,
       authError: null,
+      apiHealthy: null,
       setUser: mockSetUserFn,
       setAuthenticating: mockSetAuthenticatingFn,
       setAuthError: mockSetAuthErrorFn,
+      setApiHealthy: mockSetApiHealthyFn,
       logout: mockStoreLogoutFn,
     });
+
+    // Default: API is healthy (dev mode bypasses health check)
+    mockCheckHealthFn.mockResolvedValue({ status: 'healthy' });
 
     mockIsInTelegramFn.mockReturnValue(true);
     mockIsTokenExpiredFn.mockReturnValue(true);
@@ -249,9 +261,11 @@ describe('useAuth', () => {
         isAuthenticated: true,
         isAuthenticating: false,
         authError: null,
+        apiHealthy: true,
         setUser: mockSetUserFn,
         setAuthenticating: mockSetAuthenticatingFn,
         setAuthError: mockSetAuthErrorFn,
+        setApiHealthy: mockSetApiHealthyFn,
         logout: mockStoreLogoutFn,
       });
 
@@ -300,9 +314,11 @@ describe('useAuth', () => {
         isAuthenticated: true,
         isAuthenticating: false,
         authError: null,
+        apiHealthy: true,
         setUser: mockSetUserFn,
         setAuthenticating: mockSetAuthenticatingFn,
         setAuthError: mockSetAuthErrorFn,
+        setApiHealthy: mockSetApiHealthyFn,
         logout: mockStoreLogoutFn,
       });
 
@@ -359,9 +375,11 @@ describe('useAuth', () => {
         isAuthenticated: false,
         isAuthenticating: true, // Already authenticating
         authError: null,
+        apiHealthy: null,
         setUser: mockSetUserFn,
         setAuthenticating: mockSetAuthenticatingFn,
         setAuthError: mockSetAuthErrorFn,
+        setApiHealthy: mockSetApiHealthyFn,
         logout: mockStoreLogoutFn,
       });
 
@@ -384,9 +402,11 @@ describe('useAuth', () => {
         isAuthenticated: false,
         isAuthenticating: true,
         authError: null,
+        apiHealthy: null,
         setUser: mockSetUserFn,
         setAuthenticating: mockSetAuthenticatingFn,
         setAuthError: mockSetAuthErrorFn,
+        setApiHealthy: mockSetApiHealthyFn,
         logout: mockStoreLogoutFn,
       });
 
@@ -405,9 +425,11 @@ describe('useAuth', () => {
         isAuthenticated: true,
         isAuthenticating: false,
         authError: null,
+        apiHealthy: true,
         setUser: mockSetUserFn,
         setAuthenticating: mockSetAuthenticatingFn,
         setAuthError: mockSetAuthErrorFn,
+        setApiHealthy: mockSetApiHealthyFn,
         logout: mockStoreLogoutFn,
       });
 
@@ -427,9 +449,11 @@ describe('useAuth', () => {
         isAuthenticated: false,
         isAuthenticating: false,
         authError: 'Authentication failed',
+        apiHealthy: null,
         setUser: mockSetUserFn,
         setAuthenticating: mockSetAuthenticatingFn,
         setAuthError: mockSetAuthErrorFn,
+        setApiHealthy: mockSetApiHealthyFn,
         logout: mockStoreLogoutFn,
       });
 
@@ -463,6 +487,37 @@ describe('useAuth', () => {
       await waitFor(() => {
         expect(mockSetAuthErrorFn).toHaveBeenCalledWith('Authentication failed');
       });
+    });
+  });
+
+  describe('API health check', () => {
+    it('should return apiHealthy from store', () => {
+      vi.mocked(useAuthStore).mockReturnValue({
+        user: null,
+        isAuthenticated: false,
+        isAuthenticating: false,
+        authError: null,
+        apiHealthy: true,
+        setUser: mockSetUserFn,
+        setAuthenticating: mockSetAuthenticatingFn,
+        setAuthError: mockSetAuthErrorFn,
+        setApiHealthy: mockSetApiHealthyFn,
+        logout: mockStoreLogoutFn,
+      });
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: createWrapper(),
+      });
+
+      expect(result.current.apiHealthy).toBe(true);
+    });
+
+    it('should return null apiHealthy when not checked', () => {
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: createWrapper(),
+      });
+
+      expect(result.current.apiHealthy).toBeNull();
     });
   });
 });

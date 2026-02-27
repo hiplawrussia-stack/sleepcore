@@ -219,6 +219,7 @@
     "generic": "Something went wrong",
     "network": "Check your internet connection",
     "auth": "Authentication error",
+    "apiUnavailable": "API server unavailable. Please try again later.",
     "notInTelegram": "This app only works inside Telegram",
     "openInTelegram": "Open in Telegram"
   }

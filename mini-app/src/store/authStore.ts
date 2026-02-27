@@ -28,11 +28,14 @@ interface AuthState {
   isAuthenticated: boolean;
   isAuthenticating: boolean;
   authError: string | null;
+  /** API health status: null = not checked, true = healthy, false = unhealthy */
+  apiHealthy: boolean | null;
 
   // Actions
   setUser: (user: AuthUser | null) => void;
   setAuthenticating: (isAuthenticating: boolean) => void;
   setAuthError: (error: string | null) => void;
+  setApiHealthy: (healthy: boolean | null) => void;
   logout: () => void;
 }
 
@@ -44,6 +47,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isAuthenticating: false,
       authError: null,
+      apiHealthy: null,
 
       // Set user after successful authentication
       setUser: (user) =>
@@ -65,6 +69,10 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticating: false,
         }),
 
+      // Set API health status
+      setApiHealthy: (healthy) =>
+        set({ apiHealthy: healthy }),
+
       // Logout and clear state
       logout: () =>
         set({
@@ -72,6 +80,7 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: false,
           isAuthenticating: false,
           authError: null,
+          apiHealthy: null,
         }),
     }),
     {

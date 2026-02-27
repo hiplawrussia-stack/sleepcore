@@ -24,12 +24,15 @@ import { telegram } from '@/services/telegram';
 import { setUser as setSentryUser, clearUser as clearSentryUser } from '@/services/sentry';
 import { clearAllUserStorage } from '@/utils/storageCleanup';
 import { env } from '@/env';
+import i18n from '@/i18n';
 
 interface UseAuthReturn {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isAuthenticating: boolean;
   authError: string | null;
+  /** API health status: null = not checked, true = healthy, false = unhealthy */
+  apiHealthy: boolean | null;
   authenticate: () => Promise<void>;
   logout: () => void;
 }
@@ -41,9 +44,11 @@ export const useAuth = (): UseAuthReturn => {
     isAuthenticated,
     isAuthenticating,
     authError,
+    apiHealthy,
     setUser,
     setAuthenticating,
     setAuthError,
+    setApiHealthy,
     logout: storeLogout,
   } = useAuthStore();
 
@@ -87,11 +92,15 @@ export const useAuth = (): UseAuthReturn => {
    *
    * Security: NO refresh tokens used. When token expires,
    * re-authentication happens automatically via initData.
+   *
+   * Flow:
+   * 1. Check API health (production only)
+   * 2. Authenticate via Telegram initData
    */
   const authenticate = useCallback(async () => {
     // Check if we're in Telegram
     if (!telegram.isInTelegram() && !env.DEV) {
-      setAuthError('This app must be opened from Telegram');
+      setAuthError(i18n.t('errors.notInTelegram'));
       return;
     }
 
@@ -101,15 +110,32 @@ export const useAuth = (): UseAuthReturn => {
       return;
     }
 
+    setAuthenticating(true);
+
+    // Step 1: Check API health before authentication
+    // Skip in dev mode to allow offline development
+    if (!env.DEV) {
+      const health = await apiClient.checkHealth();
+      const isHealthy = health?.status === 'healthy';
+      setApiHealthy(isHealthy);
+
+      if (!isHealthy) {
+        setAuthError(i18n.t('errors.apiUnavailable'));
+        return;
+      }
+    } else {
+      // In dev mode, assume API is healthy (or allow offline mode)
+      setApiHealthy(true);
+    }
+
     // Clean up any legacy refresh tokens from localStorage
     // (from previous versions that stored them insecurely)
     tokenManager.clearTokens();
 
-    // Full authentication with Telegram initData
+    // Step 2: Full authentication with Telegram initData
     // This is the ONLY authentication method - no refresh tokens
-    setAuthenticating(true);
     await authMutation.mutateAsync();
-  }, [isAuthenticated, authMutation, refetchUser, setAuthenticating, setAuthError]);
+  }, [isAuthenticated, authMutation, refetchUser, setAuthenticating, setAuthError, setApiHealthy]);
 
   // Logout - complete session termination with storage cleanup
   // P1-3: OWASP requires localStorage cleanup, HIPAA requires PHI removal
@@ -149,6 +175,7 @@ export const useAuth = (): UseAuthReturn => {
     isAuthenticated,
     isAuthenticating: isAuthenticating || authMutation.isPending,
     authError,
+    apiHealthy,
     authenticate,
     logout,
   };

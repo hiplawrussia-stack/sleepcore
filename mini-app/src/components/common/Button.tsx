@@ -29,10 +29,11 @@ const VARIANT_CLASSES = {
   danger: 'bg-red-500/20 hover:bg-red-500/30 text-red-400',
 };
 
+// WCAG 2.5.5: All interactive elements must have minimum 44x44px touch target
 const SIZE_CLASSES = {
-  sm: 'px-3 py-1.5 text-sm rounded-lg',
-  md: 'px-4 py-2.5 text-base rounded-xl',
-  lg: 'px-6 py-3.5 text-lg rounded-2xl',
+  sm: 'px-3 py-1.5 text-sm rounded-lg min-h-[44px]',
+  md: 'px-4 py-2.5 text-base rounded-xl min-h-[44px]',
+  lg: 'px-6 py-3.5 text-lg rounded-2xl min-h-[44px]',
 };
 
 export const Button: React.FC<ButtonProps> = ({

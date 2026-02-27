@@ -48,12 +48,13 @@ export const Card: React.FC<CardProps> = ({
     ${className}
   `;
 
+  // WCAG 2.5.5: Interactive cards must have minimum 44x44px touch target
   if (onClick) {
     return (
       <button
         onClick={onClick}
         aria-label={ariaLabel}
-        className={`${baseClasses} cursor-pointer hover:bg-night-700 active:scale-[0.98]`}
+        className={`${baseClasses} cursor-pointer hover:bg-night-700 active:scale-[0.98] min-h-[44px] w-full text-left`}
       >
         {children}
       </button>

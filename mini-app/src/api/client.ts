@@ -45,6 +45,17 @@ export interface ApiResponse<T> {
   timestamp: number;
 }
 
+export interface HealthStatus {
+  status: 'healthy' | 'unhealthy';
+  version: string;
+  uptime: number;
+  checks: {
+    database: 'ok' | 'error';
+    initialized: boolean;
+  };
+  timestamp: number;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -454,6 +465,48 @@ class ApiClient {
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Check API health status
+   *
+   * Called on app startup to verify API connectivity.
+   * Uses short timeout (5s) and no retries for fast feedback.
+   *
+   * @returns Health status or null if API is unreachable
+   */
+  async checkHealth(): Promise<HealthStatus | null> {
+    try {
+      const health = await this.request<HealthStatus>('/health', {
+        skipAuth: true,
+        retries: 0,
+        timeout: 5000, // Short timeout for health check
+      });
+      console.log('[ApiClient] Health check passed:', health.status);
+      return health;
+    } catch (error) {
+      console.warn('[ApiClient] Health check failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if API is reachable (quick liveness check)
+   *
+   * Lighter than checkHealth() - just checks if API responds.
+   * Uses /health/live endpoint with 3s timeout.
+   */
+  async isApiReachable(): Promise<boolean> {
+    try {
+      await this.request<{ status: string }>('/health/live', {
+        skipAuth: true,
+        retries: 0,
+        timeout: 3000,
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 

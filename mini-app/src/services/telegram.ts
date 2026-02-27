@@ -13,6 +13,7 @@
 
 import WebApp from '@twa-dev/sdk';
 import { validateUrl, validateTelegramUrl, type UrlValidationResult } from '@/utils/url';
+import { captureException, addBreadcrumb } from '@/services/sentry';
 
 export interface TelegramUser {
   id: number;
@@ -64,6 +65,19 @@ class TelegramService {
       console.log('[TelegramService] Initialized successfully');
     } catch (error) {
       console.warn('[TelegramService] Failed to initialize:', error);
+
+      // Log to Sentry with context for debugging
+      captureException(error instanceof Error ? error : new Error(String(error)), {
+        tags: {
+          component: 'TelegramService',
+          action: 'init',
+        },
+        extra: {
+          platform: this.webApp.platform,
+          version: this.webApp.version,
+          hasInitData: Boolean(this.webApp.initData),
+        },
+      });
     }
   }
 
@@ -302,6 +316,14 @@ class TelegramService {
         validation.reason,
         '| Protocol:', validation.protocol || 'unknown'
       );
+
+      // Security monitoring: Log blocked URL attempts (no PHI in URL)
+      addBreadcrumb('security', 'Blocked unsafe URL attempt', {
+        reason: validation.reason,
+        protocol: validation.protocol || 'unknown',
+        urlLength: url.length,
+      });
+
       return validation;
     }
 
@@ -337,6 +359,14 @@ class TelegramService {
         validation.reason,
         '| Protocol:', validation.protocol || 'unknown'
       );
+
+      // Security monitoring: Log blocked Telegram URL attempts
+      addBreadcrumb('security', 'Blocked unsafe Telegram URL attempt', {
+        reason: validation.reason,
+        protocol: validation.protocol || 'unknown',
+        urlLength: url.length,
+      });
+
       return validation;
     }
 
@@ -452,6 +482,13 @@ class TelegramService {
   async setStorageItem(key: string, value: string): Promise<boolean> {
     return new Promise((resolve) => {
       this.webApp.CloudStorage.setItem(key, value, (error) => {
+        if (error) {
+          console.warn('[TelegramService] CloudStorage.setItem failed:', error);
+          captureException(new Error(`CloudStorage.setItem failed: ${error}`), {
+            tags: { component: 'TelegramService', action: 'setStorageItem' },
+            extra: { key, valueLength: value.length },
+          });
+        }
         resolve(!error);
       });
     });
@@ -463,6 +500,13 @@ class TelegramService {
   async getStorageItem(key: string): Promise<string | null> {
     return new Promise((resolve) => {
       this.webApp.CloudStorage.getItem(key, (error, value) => {
+        if (error) {
+          console.warn('[TelegramService] CloudStorage.getItem failed:', error);
+          captureException(new Error(`CloudStorage.getItem failed: ${error}`), {
+            tags: { component: 'TelegramService', action: 'getStorageItem' },
+            extra: { key },
+          });
+        }
         resolve(error ? null : value || null);
       });
     });
@@ -474,6 +518,13 @@ class TelegramService {
   async removeStorageItem(key: string): Promise<boolean> {
     return new Promise((resolve) => {
       this.webApp.CloudStorage.removeItem(key, (error) => {
+        if (error) {
+          console.warn('[TelegramService] CloudStorage.removeItem failed:', error);
+          captureException(new Error(`CloudStorage.removeItem failed: ${error}`), {
+            tags: { component: 'TelegramService', action: 'removeStorageItem' },
+            extra: { key },
+          });
+        }
         resolve(!error);
       });
     });

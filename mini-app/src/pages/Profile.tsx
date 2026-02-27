@@ -332,21 +332,22 @@ export const Profile: React.FC = () => {
                   : t('profile.settings.haptics.unavailable')}
               </div>
             </div>
+            {/* WCAG 2.5.5: Touch target minimum 44x44px */}
             <button
               onClick={() => setHapticsEnabled(!hapticsEnabled)}
               disabled={!hapticsAvailable}
               aria-label={t('profile.settings.haptics.title')}
               aria-checked={hapticsEnabled}
               role="switch"
-              className={`w-12 h-7 rounded-full transition-colors relative ${
+              className={`w-14 h-11 rounded-full transition-colors relative flex items-center ${
                 hapticsEnabled && hapticsAvailable
                   ? 'bg-primary-500'
                   : 'bg-night-600'
               } ${!hapticsAvailable ? 'opacity-50' : ''}`}
             >
               <div
-                className={`w-5 h-5 rounded-full bg-white absolute top-1 transition-transform duration-200 ${
-                  hapticsEnabled && hapticsAvailable ? 'translate-x-5' : 'translate-x-0.5'
+                className={`w-6 h-6 rounded-full bg-white absolute transition-transform duration-200 ${
+                  hapticsEnabled && hapticsAvailable ? 'translate-x-7' : 'translate-x-1'
                 }`}
               />
             </button>
@@ -360,6 +361,7 @@ export const Profile: React.FC = () => {
                 {t(`profile.settings.language.${currentLanguage}`)}
               </div>
             </div>
+            {/* WCAG 2.5.5: Touch target minimum 44x44px */}
             <div className="flex gap-2">
               {LANGUAGES.map((lang) => (
                 <button
@@ -367,7 +369,7 @@ export const Profile: React.FC = () => {
                   onClick={() => handleLanguageChange(lang.code)}
                   aria-label={t(`profile.settings.language.${lang.code}`)}
                   aria-pressed={currentLanguage === lang.code}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all ${
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl transition-all ${
                     currentLanguage === lang.code
                       ? 'bg-primary-500 scale-105'
                       : 'bg-night-700 hover:bg-night-600'

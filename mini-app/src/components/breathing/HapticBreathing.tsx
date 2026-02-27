@@ -364,12 +364,13 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
               </span>
             </div>
             <div className="flex gap-2">
+              {/* WCAG 2.5.5: Touch target minimum 44x44px */}
               {[3, 5, 7, 10].map((num) => {
                 const isSelected = totalCycles === num;
                 return (
                   <label
                     key={num}
-                    className={`relative flex-1 py-3 rounded-xl font-medium text-center cursor-pointer transition-all duration-200 ${
+                    className={`relative flex-1 py-3 min-h-[44px] rounded-xl font-medium text-center cursor-pointer transition-all duration-200 flex items-center justify-center ${
                       isSelected
                         ? 'bg-primary-500 text-white'
                         : 'bg-night-800 text-night-300 hover:bg-night-700'
