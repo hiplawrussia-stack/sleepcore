@@ -61,6 +61,7 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
   newStage,
   onClose,
 }) => {
+  const { t } = useTranslation();
   const [confettiParticles, setConfettiParticles] = useState<Array<{ id: number; delay: number; x: number; emoji: string }>>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -130,7 +131,6 @@ export const EvolutionCelebrationModal: React.FC<EvolutionCelebrationModalProps>
 
   if (!isVisible) return null;
 
-  const { t } = useTranslation();
   const previousName = STAGE_NAMES[previousStage] || previousStage;
   const newName = STAGE_NAMES[newStage] || newStage;
   const newIcon = STAGE_ICONS[newStage] || '🦉';

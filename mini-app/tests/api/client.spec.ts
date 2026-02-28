@@ -59,7 +59,7 @@ import {
   apiClient,
   tokenManager,
   ApiError,
-  TimeoutError,
+  TimeoutError as _TimeoutError,
   AuthDateExpiredError,
 } from '@/api/client';
 

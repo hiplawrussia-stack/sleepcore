@@ -18,7 +18,7 @@ import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
 
 // Use vi.hoisted() to create mock functions that can be used in vi.mock()
-const { mockShowAlert, mockShowConfirm, mockOpenLink, mockLogout, mockClearPendingChanges, mockDeleteUserData, mockUserState, mockSyncState, mockNavigate } = vi.hoisted(() => ({
+const { mockShowAlert, mockShowConfirm, mockOpenLink, mockLogout, mockClearPendingChanges, mockDeleteUserData, mockUserState, mockSyncState, mockNavigate: _mockNavigate } = vi.hoisted(() => ({
   mockShowAlert: vi.fn().mockResolvedValue(undefined),
   mockShowConfirm: vi.fn().mockResolvedValue(true),
   mockOpenLink: vi.fn(),
@@ -119,7 +119,7 @@ describe('PrivacyCenter', () => {
       xp: 100,
       level: 2,
       streak: 5,
-    } as any;
+    };
     mockSyncState.pendingChanges = [];
     mockSyncState.lastSyncTime = Date.now();
 
@@ -250,7 +250,7 @@ describe('PrivacyCenter', () => {
     });
 
     it('should show "no data" message when user is null', async () => {
-      mockUserState.user = null as any;
+      mockUserState.user = null;
 
       renderWithRouter(<PrivacyCenter />);
 
@@ -263,7 +263,7 @@ describe('PrivacyCenter', () => {
     });
 
     it('should show "Никогда" when no lastSyncTime', async () => {
-      mockSyncState.lastSyncTime = null as any;
+      mockSyncState.lastSyncTime = null;
 
       renderWithRouter(<PrivacyCenter />);
 
@@ -301,7 +301,7 @@ describe('PrivacyCenter', () => {
         xp: 50,
         level: 1,
         streak: 1,
-      } as any;
+      };
 
       renderWithRouter(<PrivacyCenter />);
 

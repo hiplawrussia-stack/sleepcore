@@ -284,7 +284,7 @@ describe('EvolutionCelebrationModal', () => {
     });
 
     it('should clear confetti when modal closes', async () => {
-      const { rerender, container } = render(<EvolutionCelebrationModal {...defaultProps} />);
+      const { rerender, container: _container } = render(<EvolutionCelebrationModal {...defaultProps} />);
 
       rerender(<EvolutionCelebrationModal {...defaultProps} isVisible={false} />);
 

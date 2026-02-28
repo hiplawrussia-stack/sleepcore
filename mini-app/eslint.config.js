@@ -74,4 +74,25 @@ export default tseslint.config(
       ],
     },
   },
+  // E2E tests: allow console.log for debugging
+  {
+    files: ['e2e/**/*.{ts,tsx}'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  // Main entry: allow console.log for development diagnostics
+  {
+    files: ['src/main.tsx'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  // API client: allow console.log for request debugging
+  {
+    files: ['src/api/client.ts'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
 );

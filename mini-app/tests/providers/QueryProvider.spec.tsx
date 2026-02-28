@@ -155,14 +155,14 @@ describe('QueryProvider', () => {
   describe('Query throwOnError', () => {
     it('should throw on 5xx errors when throwOnError is configured', async () => {
       const error = new ApiError(500, 'Internal Server Error');
-      const mockFn = vi.fn().mockRejectedValue(error);
+      const _mockFn = vi.fn().mockRejectedValue(error);
 
       // Verify the throwOnError configuration works
       const options = queryClient.getDefaultOptions();
       const throwOnError = options.queries?.throwOnError;
 
       if (typeof throwOnError === 'function') {
-        expect(throwOnError(error, {} as any)).toBe(true);
+        expect(throwOnError(error, {} as unknown as Parameters<typeof throwOnError>[1])).toBe(true);
       }
     });
 
@@ -173,7 +173,7 @@ describe('QueryProvider', () => {
       const throwOnError = options.queries?.throwOnError;
 
       if (typeof throwOnError === 'function') {
-        expect(throwOnError(error, {} as any)).toBe(false);
+        expect(throwOnError(error, {} as unknown as Parameters<typeof throwOnError>[1])).toBe(false);
       }
     });
   });

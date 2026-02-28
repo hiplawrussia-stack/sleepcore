@@ -11,6 +11,9 @@
  * @module @sleepcore/mini-app/e2e
  */
 
+/* eslint-disable react-hooks/rules-of-hooks */
+// Note: Playwright fixtures use `use()` function which is not a React hook
+
 import { test as base, type Page } from '@playwright/test';
 
 /**
@@ -115,6 +118,7 @@ export const test = base.extend<{
   telegramUser: [DEFAULT_USER, { option: true }],
 
   // Shared captured requests array
+  // eslint-disable-next-line no-empty-pattern
   capturedRequests: async ({}, use) => {
     const requests: CapturedRequest[] = [];
     await use(requests);
@@ -135,7 +139,7 @@ export const test = base.extend<{
   },
 
   // API mocking helper
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture
+   
   mockApi: async ({ telegramPage, capturedRequests }, use) => {
     const mockApi = async (config: ApiMockConfig) => {
       await telegramPage.route(config.pattern, async (route) => {
@@ -170,7 +174,7 @@ export const test = base.extend<{
     await use(mockApi);
   },
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture, not React hook
+   
   telegramPage: async ({ page, telegramUser, capturedRequests }, use) => {
     // Generate init data for URL hash
     const mockInitData = generateMockInitData(telegramUser);
