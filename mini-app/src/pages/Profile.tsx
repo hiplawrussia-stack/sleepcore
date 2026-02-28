@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/common';
 import { useTelegram, useHaptics, useUserProfile, useBreathingStats, useEvolution } from '@/hooks';
+import { useAuthStore } from '@/store/authStore';
 import { formatDuration } from '@/components/breathing/patterns';
 import { haptics } from '@/services/haptics';
 
@@ -46,7 +47,11 @@ export const Profile: React.FC = () => {
   const { stats, isLoading: isLoadingStats } = useBreathingStats();
   const { evolution, isLoading: isLoadingEvolution } = useEvolution();
 
-  const isLoading = isLoadingProfile || isLoadingStats || isLoadingEvolution;
+  // Get auth state to check if queries can run
+  const { isAuthenticated, isAuthenticating } = useAuthStore();
+
+  // Show loading when: auth in progress OR queries loading OR waiting for auth to enable queries
+  const isLoading = isAuthenticating || isLoadingProfile || isLoadingStats || isLoadingEvolution || !isAuthenticated;
 
   /**
    * Handle language change

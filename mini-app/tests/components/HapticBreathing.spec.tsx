@@ -25,6 +25,7 @@ vi.mock('@/services/haptics', () => ({
     celebrationFeedback: vi.fn(),
     selectionChanged: vi.fn(),
     notification: vi.fn(),
+    abort: vi.fn(), // Added for cleanup support
   },
 }));
 

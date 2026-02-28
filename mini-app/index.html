@@ -9,6 +9,8 @@
       - Preload: Critical font for faster text rendering
       @see https://web.dev/articles/top-cwv
     -->
+    <link rel="preconnect" href="https://api.sleepcore.ru" crossorigin />
+    <link rel="dns-prefetch" href="https://api.sleepcore.ru" />
     <link rel="preconnect" href="https://api.sleepcore.app" crossorigin />
     <link rel="dns-prefetch" href="https://api.sleepcore.app" />
     <link rel="preconnect" href="https://telegram.org" crossorigin />
@@ -30,7 +32,7 @@
       - form-action 'self': Prevent form hijacking
       @see https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:* https://*.sleepcore.app wss://*.sleepcore.app https://*.sentry.io; frame-ancestors 'self' https://web.telegram.org https://t.me; object-src 'none'; base-uri 'self'; form-action 'self';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:* https://*.sleepcore.ru wss://*.sleepcore.ru https://*.sleepcore.app wss://*.sleepcore.app https://*.sentry.io; frame-ancestors 'self' https://web.telegram.org https://t.me; object-src 'none'; base-uri 'self'; form-action 'self';" />
     <title>SleepCore</title>
     <!-- Telegram Web App Script -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>

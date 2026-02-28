@@ -72,6 +72,7 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       abortRef.current = true;
+      haptics.abort(); // Stop any running haptic patterns
     };
   }, []);
 
@@ -224,6 +225,9 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
   const stopExercise = useCallback(() => {
     abortRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
+
+    // Abort any running haptic patterns
+    haptics.abort();
 
     setIsRunning(false);
     setPhase('idle');

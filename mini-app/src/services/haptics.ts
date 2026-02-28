@@ -24,9 +24,37 @@ class HapticsService {
   private hapticFeedback = WebApp.HapticFeedback;
   private isSupported: boolean;
   private isEnabled = true;
+  private abortController: AbortController | null = null;
 
   constructor() {
     this.isSupported = this.checkSupport();
+  }
+
+  /**
+   * Abort any running breathing pattern
+   * Call this when stopping the exercise
+   */
+  abort(): void {
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+  }
+
+  /**
+   * Create a new abort controller for a breathing session
+   */
+  private createAbortController(): AbortController {
+    this.abort(); // Cancel any existing
+    this.abortController = new AbortController();
+    return this.abortController;
+  }
+
+  /**
+   * Check if current operation should be aborted
+   */
+  private isAborted(): boolean {
+    return this.abortController?.signal.aborted ?? false;
   }
 
   /**
@@ -104,8 +132,10 @@ class HapticsService {
    * Creates sensation of expansion
    */
   async breatheIn(durationMs: number = 4000): Promise<void> {
+    this.createAbortController();
+
     if (!this.isAvailable()) {
-      await this.sleep(durationMs);
+      await this.sleepWithAbort(durationMs);
       return;
     }
 
@@ -114,8 +144,9 @@ class HapticsService {
     const styles: HapticStyle[] = ['soft', 'light', 'medium', 'heavy'];
 
     for (let i = 0; i < steps; i++) {
+      if (this.isAborted()) return;
       this.impact(styles[i]);
-      await this.sleep(interval);
+      await this.sleepWithAbort(interval);
     }
   }
 
@@ -124,8 +155,9 @@ class HapticsService {
    * Creates sensation of stillness
    */
   async holdBreath(durationMs: number = 7000): Promise<void> {
+    // Don't create new controller - reuse from breatheIn
     if (!this.isAvailable()) {
-      await this.sleep(durationMs);
+      await this.sleepWithAbort(durationMs);
       return;
     }
 
@@ -133,14 +165,15 @@ class HapticsService {
     const pulses = Math.floor(durationMs / pulseInterval);
 
     for (let i = 0; i < pulses; i++) {
+      if (this.isAborted()) return;
       this.impact('soft');
-      await this.sleep(pulseInterval);
+      await this.sleepWithAbort(pulseInterval);
     }
 
     // Sleep remaining time
     const remaining = durationMs - (pulses * pulseInterval);
-    if (remaining > 0) {
-      await this.sleep(remaining);
+    if (remaining > 0 && !this.isAborted()) {
+      await this.sleepWithAbort(remaining);
     }
   }
 
@@ -149,8 +182,9 @@ class HapticsService {
    * Creates sensation of release
    */
   async breatheOut(durationMs: number = 8000): Promise<void> {
+    // Don't create new controller - reuse from breatheIn
     if (!this.isAvailable()) {
-      await this.sleep(durationMs);
+      await this.sleepWithAbort(durationMs);
       return;
     }
 
@@ -159,8 +193,9 @@ class HapticsService {
     const styles: HapticStyle[] = ['heavy', 'medium', 'light', 'soft'];
 
     for (let i = 0; i < steps; i++) {
+      if (this.isAborted()) return;
       this.impact(styles[i]);
-      await this.sleep(interval);
+      await this.sleepWithAbort(interval);
     }
   }
 
@@ -271,6 +306,27 @@ class HapticsService {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Sleep that can be aborted
+   * Returns immediately if aborted
+   */
+  private sleepWithAbort(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.isAborted()) {
+        resolve();
+        return;
+      }
+
+      const timeoutId = setTimeout(resolve, ms);
+
+      // Listen for abort
+      this.abortController?.signal.addEventListener('abort', () => {
+        clearTimeout(timeoutId);
+        resolve();
+      }, { once: true });
+    });
   }
 }
 

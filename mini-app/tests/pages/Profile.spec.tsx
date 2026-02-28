@@ -112,6 +112,14 @@ vi.mock('@/hooks', () => ({
   }),
 }));
 
+// Mock authStore - needed for loading state check
+vi.mock('@/store/authStore', () => ({
+  useAuthStore: () => ({
+    isAuthenticated: true,
+    isAuthenticating: false,
+  }),
+}));
+
 // Mock haptics service
 vi.mock('@/services/haptics', () => ({
   haptics: {
