@@ -304,10 +304,6 @@ class HapticsService {
 
   // ========== Utility ==========
 
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
   /**
    * Sleep that can be aborted
    * Returns immediately if aborted
