@@ -99,10 +99,12 @@ export default defineConfig({
   ],
 
   // Development server configuration
+  // In CI, the server is started by the workflow before running tests,
+  // so we reuse the existing server. Locally, Playwright starts its own.
   webServer: {
     command: 'npm run dev',
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true,
     timeout: 120000,
   },
 });
