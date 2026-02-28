@@ -104,6 +104,8 @@ interface UseSleepReturn {
 }
 
 export const useSleep = (options: UseSleepSessionsOptions = {}): UseSleepReturn => {
+  const { isAuthenticated, isAuthenticating } = useAuthStore();
+
   const {
     stats,
     isLoading: isLoadingStats,
@@ -118,10 +120,13 @@ export const useSleep = (options: UseSleepSessionsOptions = {}): UseSleepReturn 
     refetch: refetchSessions,
   } = useSleepSessions(options);
 
+  // Show loading when: auth in progress OR queries loading OR waiting for auth to enable queries
+  const isLoading = isAuthenticating || isLoadingStats || isLoadingSessions || !isAuthenticated;
+
   return {
     stats,
     sessions,
-    isLoading: isLoadingStats || isLoadingSessions,
+    isLoading,
     isError: isErrorStats || isErrorSessions,
     hasData: (stats?.sessionsThisWeek ?? 0) > 0 || (sessions?.length ?? 0) > 0,
     refetchStats,
