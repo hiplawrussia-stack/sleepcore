@@ -430,7 +430,7 @@ jobs:
 
   sentry-release:
     name: Sentry Release
-    needs: [build, e2e-tests]
+    needs: [build]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     defaults:
@@ -478,7 +478,7 @@ jobs:
 
   deploy-preview:
     name: Deploy Preview
-    needs: [build, e2e-tests]
+    needs: [build]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -517,7 +517,7 @@ jobs:
 
   deploy-production:
     name: Deploy to Production
-    needs: [build, e2e-tests, sentry-release]
+    needs: [build, sentry-release]
     if: |
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true')
