@@ -60,11 +60,16 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
   const abortRef = useRef(false);
 
   // E2E test speed multiplier (window.__E2E_SPEED_MULTIPLIER__ = 100 means 100x faster)
-  // Direct access is more reliable than 'in' operator across bundlers
-  const getSpeedMultiplier = useCallback(() => {
+  // Read directly from window on each call (not cached)
+  const getSpeedMultiplier = useCallback((): number => {
     if (typeof window !== 'undefined') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const multiplier = (window as any).__E2E_SPEED_MULTIPLIER__;
+      const win = window as any;
+      const multiplier = win.__E2E_SPEED_MULTIPLIER__;
+      // Debug: log value (only first time per render to avoid spam)
+      if (multiplier !== undefined) {
+        console.log('[Breathing] getSpeedMultiplier:', multiplier);
+      }
       if (typeof multiplier === 'number' && multiplier > 1) {
         return multiplier;
       }
@@ -108,6 +113,9 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
     // Each tick advances by: tickInterval * speedMultiplier ms of "original time"
     // E.g., 100x speed, 10ms tick = 1000ms original time per tick
     const decrementPerTick = tickInterval * speedMultiplier;
+
+    // Debug logging for E2E tests
+    console.log(`[Breathing] runPhase: ${phaseName}, duration=${durationMs}ms, speed=${speedMultiplier}x, tickInterval=${tickInterval}ms`);
 
     setPhase(phaseName);
     setTimeRemaining(Math.ceil(durationMs / 1000)); // Display original duration
