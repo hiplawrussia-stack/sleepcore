@@ -1436,20 +1436,22 @@ export class SleepCoreAPI {
     const protocol = session?.plan?.activeComponents.relaxationProtocol;
 
     if (!protocol) {
+      // Default to body_scan (breathing removed per JAMA Psychiatry 2024)
       return {
-        technique: 'diaphragmatic_breathing',
+        technique: 'body_scan',
         instructions: [
-          'Лягте или сядьте удобно.',
-          'Положите руку на живот.',
-          'Вдохните через нос на 4 счёта.',
-          'Выдохните через рот на 6 счётов.',
+          'Лягте удобно. Закройте глаза.',
+          'Направьте внимание на макушку головы.',
+          'Медленно перемещайте внимание вниз по телу.',
+          'Отметьте любые ощущения без осуждения.',
           'Продолжайте 5-10 минут.',
         ],
         duration: 10,
       };
     }
 
-    const technique = protocol.techniques[0] || 'diaphragmatic_breathing';
+    // Fallback to mindfulness (breathing removed per JAMA Psychiatry 2024)
+    const technique = protocol.techniques[0] || 'mindfulness_meditation';
 
     return {
       technique,

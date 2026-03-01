@@ -5,12 +5,20 @@
  *
  * Techniques included:
  * - Progressive Muscle Relaxation (Jacobson, 1938)
- * - Diaphragmatic Breathing
  * - Body Scan Meditation
  * - Guided Imagery
  * - Autogenic Training
  * - Mindfulness Meditation
  * - Cognitive Shuffle (Luc Beaudoin's technique)
+ *
+ * IMPORTANT: Diaphragmatic breathing removed from CBT-I protocol.
+ * Per JAMA Psychiatry 2024 meta-analysis (Furukawa et al.):
+ * "Relaxation was found to be potentially detrimental" to CBT-I efficacy.
+ * Breathing techniques may increase "sleep effort" and performance anxiety.
+ * See: https://jamanetwork.com/journals/jamapsychiatry/fullarticle/2814164
+ *
+ * Breathing instructions retained for backwards compatibility only.
+ * Third-wave approaches (mindfulness, cognitive shuffle) are preferred.
  *
  * @packageDocumentation
  * @module @sleepcore/cbt-i
@@ -31,7 +39,8 @@ const PROTOCOLS: Record<string, IRelaxationProtocol> = {
   beginner_bedtime: {
     id: 'beginner_bedtime',
     name: 'Вечернее расслабление для начинающих',
-    techniques: ['diaphragmatic_breathing', 'body_scan'],
+    // Note: Breathing removed per JAMA Psychiatry 2024 (Furukawa et al.)
+    techniques: ['body_scan', 'mindfulness_meditation'],
     totalDuration: 15,
     targetContext: 'bedtime',
     difficulty: 'beginner',
@@ -55,7 +64,8 @@ const PROTOCOLS: Record<string, IRelaxationProtocol> = {
   daytime_stress: {
     id: 'daytime_stress',
     name: 'Дневное снятие стресса',
-    techniques: ['diaphragmatic_breathing', 'progressive_muscle_relaxation'],
+    // Note: Breathing removed per JAMA Psychiatry 2024 (Furukawa et al.)
+    techniques: ['mindfulness_meditation', 'progressive_muscle_relaxation'],
     totalDuration: 10,
     targetContext: 'daytime',
     difficulty: 'beginner',
@@ -217,9 +227,9 @@ export class RelaxationEngine implements IRelaxationEngine {
       if (arousal > 0.7 || anxiety > 0.7) {
         return 'progressive_muscle_relaxation';
       }
-      // Moderate arousal: breathing or body scan
+      // Moderate arousal: body scan (breathing removed per JAMA Psychiatry 2024)
       if (arousal > 0.4) {
-        return 'diaphragmatic_breathing';
+        return 'body_scan';
       }
       // Low arousal: can use cognitive techniques
       if (sleepState.metrics.sleepOnsetLatency > 30) {
@@ -229,11 +239,11 @@ export class RelaxationEngine implements IRelaxationEngine {
     }
 
     if (context === 'daytime') {
-      // Quick stress relief
+      // Quick stress relief (breathing removed per JAMA Psychiatry 2024)
       if (anxiety > 0.5) {
-        return 'diaphragmatic_breathing';
+        return 'mindfulness_meditation';
       }
-      return 'mindfulness_meditation';
+      return 'body_scan';
     }
 
     // wakeup context
@@ -302,7 +312,7 @@ export class RelaxationEngine implements IRelaxationEngine {
     if (sessions.length === 0) {
       return {
         avgAnxietyReduction: 0,
-        mostEffectiveTechnique: 'diaphragmatic_breathing',
+        mostEffectiveTechnique: 'mindfulness_meditation',
       };
     }
 
@@ -330,7 +340,7 @@ export class RelaxationEngine implements IRelaxationEngine {
     const avgAnxietyReduction = completedSessions > 0 ? totalAnxietyReduction / completedSessions : 0;
 
     // Find most effective technique
-    let mostEffectiveTechnique: RelaxationTechnique = 'diaphragmatic_breathing';
+    let mostEffectiveTechnique: RelaxationTechnique = 'mindfulness_meditation';
     let bestAvgReduction = -Infinity;
 
     for (const [technique, data] of Object.entries(techniqueEffectiveness)) {

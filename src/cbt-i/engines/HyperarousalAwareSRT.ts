@@ -515,7 +515,7 @@ export class HyperarousalAwareSRT {
         complementaryTherapies.push('mct');
       } else if (profile.dominantType === 'somatic') {
         complementaryTherapies.push('relaxation_pmr');
-        complementaryTherapies.push('diaphragmatic_breathing');
+        complementaryTherapies.push('body_scan'); // Breathing removed per JAMA Psychiatry 2024
       } else {
         complementaryTherapies.push('acti'); // ACT-I for balanced arousal
       }

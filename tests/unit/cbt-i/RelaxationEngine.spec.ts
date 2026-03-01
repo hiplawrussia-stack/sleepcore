@@ -107,11 +107,12 @@ describe('RelaxationEngine', () => {
         expect(technique).toBe('progressive_muscle_relaxation');
       });
 
-      it('should recommend breathing for moderate arousal', () => {
+      // Breathing removed per JAMA Psychiatry 2024 (Furukawa et al.)
+      it('should recommend body scan for moderate arousal', () => {
         const state = createTestSleepState({ preSleepArousal: 0.5, sleepAnxiety: 0.3 });
         const technique = engine.recommendTechnique(state, 'bedtime');
 
-        expect(technique).toBe('diaphragmatic_breathing');
+        expect(technique).toBe('body_scan');
       });
 
       it('should recommend cognitive shuffle for long SOL', () => {
@@ -137,19 +138,20 @@ describe('RelaxationEngine', () => {
       });
     });
 
+    // Breathing removed per JAMA Psychiatry 2024 (Furukawa et al.)
     describe('daytime context', () => {
-      it('should recommend breathing for anxious daytime', () => {
+      it('should recommend mindfulness for anxious daytime', () => {
         const state = createTestSleepState({ sleepAnxiety: 0.7 });
         const technique = engine.recommendTechnique(state, 'daytime');
 
-        expect(technique).toBe('diaphragmatic_breathing');
+        expect(technique).toBe('mindfulness_meditation');
       });
 
-      it('should recommend mindfulness for calm daytime', () => {
+      it('should recommend body scan for calm daytime', () => {
         const state = createTestSleepState({ sleepAnxiety: 0.2 });
         const technique = engine.recommendTechnique(state, 'daytime');
 
-        expect(technique).toBe('mindfulness_meditation');
+        expect(technique).toBe('body_scan');
       });
     });
 
@@ -291,11 +293,12 @@ describe('RelaxationEngine', () => {
       };
     }
 
+    // Default changed to mindfulness per JAMA Psychiatry 2024 (Furukawa et al.)
     it('should handle empty sessions', () => {
       const result = engine.calculateEffectiveness([]);
 
       expect(result.avgAnxietyReduction).toBe(0);
-      expect(result.mostEffectiveTechnique).toBe('diaphragmatic_breathing');
+      expect(result.mostEffectiveTechnique).toBe('mindfulness_meditation');
     });
 
     it('should calculate average anxiety reduction', () => {
