@@ -176,6 +176,16 @@ export const test = base.extend<{
 
    
   telegramPage: async ({ page, telegramUser, capturedRequests }, use) => {
+    // Forward browser console to Node.js for debugging
+    // This helps diagnose issues where React component behavior differs from expectations
+    page.on('console', msg => {
+      const text = msg.text();
+      // Only forward relevant logs to avoid noise
+      if (text.includes('[Breathing]') || text.includes('[E2E]') || text.includes('Speed') || text.includes('speed')) {
+        console.log(`[BROWSER] ${text}`);
+      }
+    });
+
     // Generate init data for URL hash
     const mockInitData = generateMockInitData(telegramUser);
     const telegramHash = generateTelegramHash(telegramUser, mockInitData);
