@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      LCP Optimization (Core Web Vitals 2025)
+      - Preconnect: Early connection to API domain
+      - DNS-prefetch: Fallback for browsers without preconnect
+      - Preload: Critical font for faster text rendering
+      @see https://web.dev/articles/top-cwv
+    -->
+    <link rel="preconnect" href="https://api.sleepcore.ru" crossorigin />
+    <link rel="dns-prefetch" href="https://api.sleepcore.ru" />
+    <link rel="preconnect" href="https://api.sleepcore.app" crossorigin />
+    <link rel="dns-prefetch" href="https://api.sleepcore.app" />
+    <link rel="preconnect" href="https://telegram.org" crossorigin />
+    <link rel="icon" type="image/svg+xml" href="/assets/sonya-icon.svg" fetchpriority="low" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#1e293b" />
+    <meta name="description" content="SleepCore - Дыхательные упражнения для здорового сна" />
+    <!--
+      Content Security Policy (CSP) - OWASP Best Practices 2025
+      - default-src 'self': Baseline restriction
+      - script-src: Self + Telegram SDK only (no unsafe-inline in production)
+      - style-src: Allow inline styles (React style={{}})
+      - font-src: Self-hosted Inter Variable font
+      - img-src: Self + data URIs + external images
+      - connect-src: API endpoints + WebSocket
+      - frame-ancestors: Only Telegram can embed
+      - object-src 'none': Prevent plugin attacks
+      - base-uri 'self': Prevent base tag injection
+      - form-action 'self': Prevent form hijacking
+      @see https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:* https://*.sleepcore.ru wss://*.sleepcore.ru https://*.sleepcore.app wss://*.sleepcore.app https://*.sentry.io; frame-ancestors 'self' https://web.telegram.org https://t.me; object-src 'none'; base-uri 'self'; form-action 'self';" />
+    <title>SleepCore</title>
+    <!-- Telegram Web App Script -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Fonts loaded via @fontsource-variable/inter (self-hosted, no external requests) -->
+    <script type="module" crossorigin src="/assets/index-SnQ49crs.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-yC_zDHRh.js">
+    <link rel="modulepreload" crossorigin href="/assets/sentry-Bx2FhePT.js">
+    <link rel="modulepreload" crossorigin href="/assets/i18n-ItvcaxDj.js">
+    <link rel="modulepreload" crossorigin href="/assets/query-BgOy7a-U.js">
+    <link rel="modulepreload" crossorigin href="/assets/state-Crd3sPKU.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-CVo6VewQ.css">
+  </head>
+  <body class="bg-night-900 text-night-100 antialiased">
+    <div id="root"></div>
+  </body>
+</html>
