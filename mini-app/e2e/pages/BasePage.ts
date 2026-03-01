@@ -64,8 +64,16 @@ export abstract class BasePage {
    * Click Telegram MainButton (via mock helper)
    */
   async clickMainButton(): Promise<void> {
+    console.log('[BasePage] clickMainButton called');
     await this.page.evaluate(() => {
-      (window as unknown as { __e2e_clickMainButton: () => void }).__e2e_clickMainButton();
+      console.log('[E2E] clickMainButton evaluate start');
+      const fn = (window as unknown as { __e2e_clickMainButton?: () => void }).__e2e_clickMainButton;
+      if (!fn) {
+        console.error('[E2E] __e2e_clickMainButton function not found!');
+        return;
+      }
+      console.log('[E2E] calling __e2e_clickMainButton');
+      fn();
     });
   }
 
