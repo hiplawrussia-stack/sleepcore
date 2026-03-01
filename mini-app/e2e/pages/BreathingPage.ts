@@ -57,8 +57,24 @@ export class BreathingPage extends BasePage {
     const url = patternId ? `/breathing?pattern=${patternId}` : '/breathing';
     await this.page.goto(url);
     await this.waitForLoad();
+    // Ensure E2E speed multiplier is set (100x faster timers)
+    await this.ensureSpeedMultiplier();
     // Wait for React app to initialize and set up Telegram MainButton
     await this.page.waitForTimeout(500);
+  }
+
+  /**
+   * Ensure E2E speed multiplier is set in window.
+   * This is critical for breathing tests to complete in reasonable time.
+   */
+  private async ensureSpeedMultiplier(): Promise<void> {
+    await this.page.evaluate(() => {
+      const win = window as unknown as { __E2E_SPEED_MULTIPLIER__?: number };
+      if (!win.__E2E_SPEED_MULTIPLIER__) {
+        win.__E2E_SPEED_MULTIPLIER__ = 100;
+        console.log('[E2E] Speed multiplier set to 100x via evaluate');
+      }
+    });
   }
 
   /**
