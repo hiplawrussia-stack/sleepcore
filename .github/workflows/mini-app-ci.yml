@@ -346,6 +346,7 @@ jobs:
     name: E2E Tests
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: ${{ env.WORKING_DIR }}
@@ -386,11 +387,20 @@ jobs:
       - name: Start preview server
         run: |
           npx vite preview --port 5173 &
-          sleep 3
-          curl -s http://localhost:5173 > /dev/null || echo "Server may not be ready"
+          # Wait for server to be ready (up to 30 seconds)
+          for i in {1..30}; do
+            if curl -s http://localhost:5173 > /dev/null 2>&1; then
+              echo "Server ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          # Final check
+          curl -sf http://localhost:5173 > /dev/null || (echo "Server failed to start" && exit 1)
 
       - name: Run E2E tests
-        run: npm run test:e2e -- --reporter=html --reporter=json
+        run: npm run test:e2e -- --reporter=html --reporter=json --timeout=60000
+        timeout-minutes: 10
         env:
           CI: true
           PLAYWRIGHT_JSON_OUTPUT_NAME: e2e-results.json
