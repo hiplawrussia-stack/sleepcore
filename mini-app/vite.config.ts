@@ -44,6 +44,12 @@ export default defineConfig({
     // @see https://blog.sentry.security/abusing-exposed-sourcemaps/
     sourcemap: 'hidden',
     minify: 'terser',
+    terserOptions: {
+      compress: {
+        // Keep console.log for E2E debugging (filtered in production by log level)
+        drop_console: false,
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks: (id) => {
