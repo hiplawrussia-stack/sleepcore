@@ -180,10 +180,22 @@ export const test = base.extend<{
     // This helps diagnose issues where React component behavior differs from expectations
     page.on('console', msg => {
       const text = msg.text();
-      // Only forward relevant logs to avoid noise
-      if (text.includes('[Breathing]') || text.includes('[E2E]') || text.includes('Speed') || text.includes('speed')) {
+      // Forward all relevant logs for debugging
+      if (text.includes('[Breathing]') ||
+          text.includes('[E2E]') ||
+          text.includes('Speed') ||
+          text.includes('speed') ||
+          text.includes('Triggering') ||
+          text.includes('MainButton') ||
+          text.includes('runPhase') ||
+          text.includes('getSpeed')) {
         console.log(`[BROWSER] ${text}`);
       }
+    });
+
+    // Also capture browser errors
+    page.on('pageerror', error => {
+      console.log(`[BROWSER ERROR] ${error.message}`);
     });
 
     // Generate init data for URL hash

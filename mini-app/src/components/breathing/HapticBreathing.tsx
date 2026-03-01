@@ -195,6 +195,9 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
 
   // Start the breathing exercise
   const startExercise = useCallback(async () => {
+    // Debug: log exercise start
+    console.log('[Breathing] startExercise called, totalCycles:', totalCycles);
+
     abortRef.current = false;
     setIsRunning(true);
     setShowPatternSelector(false);
