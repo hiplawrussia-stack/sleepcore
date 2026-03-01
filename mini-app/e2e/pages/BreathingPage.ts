@@ -68,13 +68,16 @@ export class BreathingPage extends BasePage {
    * This is critical for breathing tests to complete in reasonable time.
    */
   private async ensureSpeedMultiplier(): Promise<void> {
-    await this.page.evaluate(() => {
-      const win = window as unknown as { __E2E_SPEED_MULTIPLIER__?: number };
-      if (!win.__E2E_SPEED_MULTIPLIER__) {
-        win.__E2E_SPEED_MULTIPLIER__ = 100;
-        console.log('[E2E] Speed multiplier set to 100x via evaluate');
-      }
+    const result = await this.page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const win = window as any;
+      const before = win.__E2E_SPEED_MULTIPLIER__;
+      win.__E2E_SPEED_MULTIPLIER__ = 100;
+      const after = win.__E2E_SPEED_MULTIPLIER__;
+      console.log(`[E2E] Speed multiplier: before=${before}, after=${after}`);
+      return { before, after };
     });
+    console.log('[E2E] ensureSpeedMultiplier result:', result);
   }
 
   /**

@@ -60,9 +60,14 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
   const abortRef = useRef(false);
 
   // E2E test speed multiplier (window.__E2E_SPEED_MULTIPLIER__ = 100 means 100x faster)
+  // Direct access is more reliable than 'in' operator across bundlers
   const getSpeedMultiplier = useCallback(() => {
-    if (typeof window !== 'undefined' && '__E2E_SPEED_MULTIPLIER__' in window) {
-      return (window as unknown as { __E2E_SPEED_MULTIPLIER__: number }).__E2E_SPEED_MULTIPLIER__ || 1;
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const multiplier = (window as any).__E2E_SPEED_MULTIPLIER__;
+      if (typeof multiplier === 'number' && multiplier > 1) {
+        return multiplier;
+      }
     }
     return 1;
   }, []);
