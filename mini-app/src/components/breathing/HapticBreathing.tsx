@@ -25,6 +25,7 @@ import {
   formatDuration,
 } from './patterns';
 import { haptics } from '@/services/haptics';
+import { audio } from '@/services/audio';
 import { telegram } from '@/services/telegram';
 
 interface HapticBreathingProps {
@@ -83,6 +84,7 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
       if (timerRef.current) clearInterval(timerRef.current);
       abortRef.current = true;
       haptics.abort(); // Stop any running haptic patterns
+      audio.abort(); // Stop any running audio
     };
   }, []);
 
@@ -102,7 +104,8 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
   const runPhase = useCallback(async (
     phaseName: BreathingPhase,
     durationMs: number,
-    hapticFn: () => Promise<void>
+    hapticFn: () => Promise<void>,
+    audioFn: () => Promise<void>
   ): Promise<void> => {
     if (abortRef.current) return;
 
@@ -125,9 +128,10 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
     const phaseLabel = getPhaseLabel(phaseName);
     setSrAnnouncement(`${phaseLabel}, ${durationSec} ${t('breathing.sec', 'сек')}`);
 
-    // Start haptic pattern (runs in parallel) - skip in fast mode
+    // Start haptic and audio patterns (run in parallel) - skip in fast mode
     if (speedMultiplier === 1) {
       hapticFn();
+      audioFn();
     }
 
     // Countdown timer - use local interval ID for proper cleanup
@@ -163,7 +167,8 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
     await runPhase(
       'inhale',
       pattern.inhale * 1000,
-      () => haptics.breatheIn(pattern.inhale * 1000)
+      () => haptics.breatheIn(pattern.inhale * 1000),
+      () => audio.breatheIn(pattern.inhale * 1000)
     );
 
     // Hold (if pattern has it)
@@ -171,7 +176,8 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
       await runPhase(
         'hold',
         pattern.hold * 1000,
-        () => haptics.holdBreath(pattern.hold * 1000)
+        () => haptics.holdBreath(pattern.hold * 1000),
+        () => audio.holdBreath(pattern.hold * 1000)
       );
     }
 
@@ -179,7 +185,8 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
     await runPhase(
       'exhale',
       pattern.exhale * 1000,
-      () => haptics.breatheOut(pattern.exhale * 1000)
+      () => haptics.breatheOut(pattern.exhale * 1000),
+      () => audio.breatheOut(pattern.exhale * 1000)
     );
 
     // Hold2 (for box breathing)
@@ -188,7 +195,8 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
       await runPhase(
         'hold2',
         hold2Duration * 1000,
-        () => haptics.holdBreath(hold2Duration * 1000)
+        () => haptics.holdBreath(hold2Duration * 1000),
+        () => audio.holdBreath(hold2Duration * 1000)
       );
     }
   }, [selectedPattern, runPhase]);
@@ -204,7 +212,11 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
     setShowCompletion(false);
     setCurrentCycle(0);
 
+    // Initialize audio on user gesture (required by browsers)
+    audio.init();
+
     haptics.sessionStartFeedback();
+    audio.playSessionStart();
 
     const startTime = Date.now();
 
@@ -220,6 +232,7 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
         setPhase('complete');
         setShowCompletion(true);
         haptics.celebrationFeedback();
+        audio.playCompletionChime();
 
         // Announce completion to screen readers
         setSrAnnouncement(t('breathing.completion.title'));
@@ -242,8 +255,9 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
     abortRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
 
-    // Abort any running haptic patterns
+    // Abort any running haptic and audio patterns
     haptics.abort();
+    audio.abort();
 
     setIsRunning(false);
     setPhase('idle');

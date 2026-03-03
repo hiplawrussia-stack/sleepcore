@@ -14,6 +14,10 @@ export type { TelegramService, TelegramUser, ThemeParams } from './telegram';
 export { haptics } from './haptics';
 export type { HapticsService, HapticStyle, NotificationType, BreathingPhaseConfig } from './haptics';
 
+// Audio feedback for breathing
+export { audio } from './audio';
+export type { AudioService, AudioPreferences, ToneType } from './audio';
+
 // Feature flags
 export {
   getFeatureFlags,
