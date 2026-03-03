@@ -144,9 +144,9 @@ describe('Wearable Routes', () => {
     vi.clearAllMocks();
   });
 
-  describe('POST /api/wearable/link/generate', () => {
+  describe('POST /wearable/link/generate', () => {
     it('should generate a link code for new user', async () => {
-      const res = await app.request('/api/wearable/link/generate', {
+      const res = await app.request('/wearable/link/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -168,7 +168,7 @@ describe('Wearable Routes', () => {
     });
 
     it('should generate link code with uppercase alphanumeric characters', async () => {
-      const res = await app.request('/api/wearable/link/generate', {
+      const res = await app.request('/wearable/link/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -185,7 +185,7 @@ describe('Wearable Routes', () => {
     });
 
     it('should reject request without telegramId', async () => {
-      const res = await app.request('/api/wearable/link/generate', {
+      const res = await app.request('/wearable/link/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -197,7 +197,7 @@ describe('Wearable Routes', () => {
     });
 
     it('should reject request without firstName', async () => {
-      const res = await app.request('/api/wearable/link/generate', {
+      const res = await app.request('/wearable/link/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -209,7 +209,7 @@ describe('Wearable Routes', () => {
     });
 
     it('should reject invalid telegramId', async () => {
-      const res = await app.request('/api/wearable/link/generate', {
+      const res = await app.request('/wearable/link/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -222,9 +222,9 @@ describe('Wearable Routes', () => {
     });
   });
 
-  describe('POST /api/wearable/link', () => {
+  describe('POST /wearable/link', () => {
     it('should reject invalid link code', async () => {
-      const res = await app.request('/api/wearable/link', {
+      const res = await app.request('/wearable/link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -245,7 +245,7 @@ describe('Wearable Routes', () => {
     });
 
     it('should reject request without device info', async () => {
-      const res = await app.request('/api/wearable/link', {
+      const res = await app.request('/wearable/link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -257,7 +257,7 @@ describe('Wearable Routes', () => {
     });
 
     it('should reject short link code', async () => {
-      const res = await app.request('/api/wearable/link', {
+      const res = await app.request('/wearable/link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -270,7 +270,7 @@ describe('Wearable Routes', () => {
     });
 
     it('should reject link code longer than 6 characters', async () => {
-      const res = await app.request('/api/wearable/link', {
+      const res = await app.request('/wearable/link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -283,9 +283,9 @@ describe('Wearable Routes', () => {
     });
   });
 
-  describe('POST /api/wearable/sync', () => {
+  describe('POST /wearable/sync', () => {
     it('should reject request without device token', async () => {
-      const res = await app.request('/api/wearable/sync', {
+      const res = await app.request('/wearable/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -298,7 +298,7 @@ describe('Wearable Routes', () => {
     });
 
     it('should reject request with invalid device token', async () => {
-      const res = await app.request('/api/wearable/sync', {
+      const res = await app.request('/wearable/sync', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -314,7 +314,7 @@ describe('Wearable Routes', () => {
     });
 
     it('should reject malformed Authorization header', async () => {
-      const res = await app.request('/api/wearable/sync', {
+      const res = await app.request('/wearable/sync', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -330,15 +330,15 @@ describe('Wearable Routes', () => {
     });
   });
 
-  describe('GET /api/wearable/status', () => {
+  describe('GET /wearable/status', () => {
     it('should reject request without device token', async () => {
-      const res = await app.request('/api/wearable/status');
+      const res = await app.request('/wearable/status');
 
       expect(res.status).toBe(401);
     });
 
     it('should reject request with invalid device token', async () => {
-      const res = await app.request('/api/wearable/status', {
+      const res = await app.request('/wearable/status', {
         headers: {
           Authorization: 'Bearer invalid-token',
         },
@@ -348,9 +348,9 @@ describe('Wearable Routes', () => {
     });
   });
 
-  describe('DELETE /api/wearable/unlink', () => {
+  describe('DELETE /wearable/unlink', () => {
     it('should reject request without device token', async () => {
-      const res = await app.request('/api/wearable/unlink', {
+      const res = await app.request('/wearable/unlink', {
         method: 'DELETE',
       });
 
@@ -358,7 +358,7 @@ describe('Wearable Routes', () => {
     });
 
     it('should reject request with invalid device token', async () => {
-      const res = await app.request('/api/wearable/unlink', {
+      const res = await app.request('/wearable/unlink', {
         method: 'DELETE',
         headers: {
           Authorization: 'Bearer invalid-token',
@@ -463,7 +463,7 @@ describe('Sleep Metrics Calculation', () => {
       accessToken: tokenResult.accessToken,
     });
 
-    const res = await app.request('/api/wearable/sync', {
+    const res = await app.request('/wearable/sync', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -526,7 +526,7 @@ describe('Sleep Metrics Calculation', () => {
       accessToken: tokenResult.accessToken,
     });
 
-    const res = await app.request('/api/wearable/sync', {
+    const res = await app.request('/wearable/sync', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -576,7 +576,7 @@ describe('Sleep Metrics Calculation', () => {
       accessToken: tokenResult.accessToken,
     });
 
-    const res = await app.request('/api/wearable/sync', {
+    const res = await app.request('/wearable/sync', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -621,7 +621,7 @@ describe('Sleep Metrics Calculation', () => {
       accessToken: tokenResult.accessToken,
     });
 
-    const res = await app.request('/api/wearable/sync', {
+    const res = await app.request('/wearable/sync', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -67,14 +67,14 @@ describe('Auth Routes', () => {
     clearAllRateLimits();
   });
 
-  describe('POST /api/auth/telegram', () => {
+  describe('POST /auth/telegram', () => {
     it('should authenticate with valid initData', async () => {
       const initData = generateMockInitData(
         { id: 123456789, first_name: 'Test', username: 'testuser' },
         TEST_BOT_TOKEN
       );
 
-      const res = await app.request('/api/auth/telegram', {
+      const res = await app.request('/auth/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ initData }),
@@ -92,7 +92,7 @@ describe('Auth Routes', () => {
     });
 
     it('should reject invalid initData', async () => {
-      const res = await app.request('/api/auth/telegram', {
+      const res = await app.request('/auth/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ initData: 'invalid-data' }),
@@ -111,7 +111,7 @@ describe('Auth Routes', () => {
         'wrong-bot-token'
       );
 
-      const res = await app.request('/api/auth/telegram', {
+      const res = await app.request('/auth/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ initData }),
@@ -125,7 +125,7 @@ describe('Auth Routes', () => {
     });
 
     it('should reject request without initData', async () => {
-      const res = await app.request('/api/auth/telegram', {
+      const res = await app.request('/auth/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -135,7 +135,7 @@ describe('Auth Routes', () => {
     });
 
     it('should reject empty initData', async () => {
-      const res = await app.request('/api/auth/telegram', {
+      const res = await app.request('/auth/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ initData: '' }),
@@ -152,7 +152,7 @@ describe('Auth Routes', () => {
 
       expect(mockUsers.has(999888777)).toBe(false);
 
-      const res = await app.request('/api/auth/telegram', {
+      const res = await app.request('/auth/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ initData }),
@@ -183,7 +183,7 @@ describe('Auth Routes', () => {
         TEST_BOT_TOKEN
       );
 
-      const res = await app.request('/api/auth/telegram', {
+      const res = await app.request('/auth/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ initData }),
@@ -197,7 +197,7 @@ describe('Auth Routes', () => {
     });
   });
 
-  describe('POST /api/auth/refresh', () => {
+  describe('POST /auth/refresh', () => {
     it('should refresh token with valid refresh token', async () => {
       // Create user first
       mockUsers.set(123456789, {
@@ -224,7 +224,7 @@ describe('Auth Routes', () => {
         TEST_JWT_SECRET
       );
 
-      const res = await app.request('/api/auth/refresh', {
+      const res = await app.request('/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
@@ -240,7 +240,7 @@ describe('Auth Routes', () => {
     });
 
     it('should reject invalid refresh token', async () => {
-      const res = await app.request('/api/auth/refresh', {
+      const res = await app.request('/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken: 'invalid-token' }),
@@ -253,7 +253,7 @@ describe('Auth Routes', () => {
     });
 
     it('should reject request without refreshToken', async () => {
-      const res = await app.request('/api/auth/refresh', {
+      const res = await app.request('/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -275,7 +275,7 @@ describe('Auth Routes', () => {
         TEST_JWT_SECRET
       );
 
-      const res = await app.request('/api/auth/refresh', {
+      const res = await app.request('/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
@@ -289,7 +289,7 @@ describe('Auth Routes', () => {
     });
   });
 
-  describe('GET /api/auth/me', () => {
+  describe('GET /auth/me', () => {
     it('should return user with valid access token', async () => {
       // Create user
       mockUsers.set(123456789, {
@@ -315,7 +315,7 @@ describe('Auth Routes', () => {
         TEST_JWT_SECRET
       );
 
-      const res = await app.request('/api/auth/me', {
+      const res = await app.request('/auth/me', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
@@ -332,7 +332,7 @@ describe('Auth Routes', () => {
     });
 
     it('should reject request without Authorization header', async () => {
-      const res = await app.request('/api/auth/me');
+      const res = await app.request('/auth/me');
 
       const data = await res.json();
 
@@ -342,7 +342,7 @@ describe('Auth Routes', () => {
     });
 
     it('should reject request with invalid token', async () => {
-      const res = await app.request('/api/auth/me', {
+      const res = await app.request('/auth/me', {
         headers: { Authorization: 'Bearer invalid-token' },
       });
 
@@ -353,7 +353,7 @@ describe('Auth Routes', () => {
     });
 
     it('should reject request with malformed Authorization header', async () => {
-      const res = await app.request('/api/auth/me', {
+      const res = await app.request('/auth/me', {
         headers: { Authorization: 'NotBearer token' },
       });
 
@@ -375,7 +375,7 @@ describe('Auth Routes', () => {
         TEST_JWT_SECRET
       );
 
-      const res = await app.request('/api/auth/me', {
+      const res = await app.request('/auth/me', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 

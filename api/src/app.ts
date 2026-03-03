@@ -96,7 +96,7 @@ export function createApp(config: AppConfig): Hono {
   }));
 
   // Wearable sync: 5MB (may contain raw HRV/HR data)
-  app.use('/api/wearable/sync', bodyLimit({
+  app.use('/wearable/sync', bodyLimit({
     maxSize: 5 * 1024 * 1024, // 5MB
     onError: (c) => {
       return c.json({
@@ -145,25 +145,30 @@ export function createApp(config: AppConfig): Hono {
   // =========================================================================
 
   // Auth endpoints — strict limits (brute force protection)
-  app.use('/api/auth/*', createRateLimitMiddleware(RATE_LIMITS.auth));
+  app.use('/auth/*', createRateLimitMiddleware(RATE_LIMITS.auth));
 
   // Sync endpoints — generous for offline-first
-  app.use('/api/sync/*', createRateLimitMiddleware(RATE_LIMITS.sync));
+  app.use('/sync/*', createRateLimitMiddleware(RATE_LIMITS.sync));
 
-  // General API — standard limits
-  app.use('/api/*', createRateLimitMiddleware(RATE_LIMITS.api));
+  // General API — standard limits (exclude health/download which have no limits)
+  app.use('/user/*', createRateLimitMiddleware(RATE_LIMITS.api));
+  app.use('/breathing/*', createRateLimitMiddleware(RATE_LIMITS.api));
+  app.use('/wearable/*', createRateLimitMiddleware(RATE_LIMITS.api));
+  app.use('/leaderboard/*', createRateLimitMiddleware(RATE_LIMITS.api));
+  app.use('/sleep/*', createRateLimitMiddleware(RATE_LIMITS.api));
+  app.use('/oura/*', createRateLimitMiddleware(RATE_LIMITS.api));
 
   // =========================================================================
-  // API Routes
+  // API Routes (all at root level - proxy strips /api prefix)
   // =========================================================================
-  app.route('/api/auth', authRoutes);
-  app.route('/api/breathing', breathingRoutes);
-  app.route('/api/user', userRoutes);
-  app.route('/api/sync', syncRoutes);
-  app.route('/api/wearable', wearableRoutes);
-  app.route('/api/leaderboard', leaderboardRoutes);
-  app.route('/api/sleep', sleepRoutes);
-  app.route('/api/oura', ouraRoutes);
+  app.route('/auth', authRoutes);
+  app.route('/breathing', breathingRoutes);
+  app.route('/user', userRoutes);
+  app.route('/sync', syncRoutes);
+  app.route('/wearable', wearableRoutes);
+  app.route('/leaderboard', leaderboardRoutes);
+  app.route('/sleep', sleepRoutes);
+  app.route('/oura', ouraRoutes);
 
   // Root endpoint
   app.get('/', (c) => {

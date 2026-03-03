@@ -90,16 +90,22 @@ services:
       - "traefik.http.routers.api-download.rule=Host(`api.sleepcore.ru`) && PathPrefix(`/download`)"
       - "traefik.http.routers.api-download.tls.certresolver=letsencrypt"
       - "traefik.http.routers.api-download.service=api"
+      # StripPrefix middleware - removes /api prefix before forwarding to backend
+      # Required because API routes are at root level (Variant B architecture)
+      - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
+      - "traefik.http.middlewares.strip-api.stripprefix.forceSlash=false"
       # Alternative route: app.sleepcore.ru/api/* (for TG Mini App - Russia network restrictions)
       - "traefik.http.routers.api-alt.rule=Host(`app.sleepcore.ru`) && PathPrefix(`/api`)"
       - "traefik.http.routers.api-alt.tls.certresolver=letsencrypt"
       - "traefik.http.routers.api-alt.service=api"
       - "traefik.http.routers.api-alt.priority=100"
+      - "traefik.http.routers.api-alt.middlewares=strip-api"
       # Alternative route: vk.sleepcore.ru/api/* (for VK Mini App - Russia network restrictions)
       - "traefik.http.routers.api-vk.rule=Host(`vk.sleepcore.ru`) && PathPrefix(`/api`)"
       - "traefik.http.routers.api-vk.tls.certresolver=letsencrypt"
       - "traefik.http.routers.api-vk.service=api"
       - "traefik.http.routers.api-vk.priority=100"
+      - "traefik.http.routers.api-vk.middlewares=strip-api"
       - "traefik.http.services.api.loadbalancer.server.port=3001"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]

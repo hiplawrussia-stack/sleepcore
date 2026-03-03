@@ -72,11 +72,11 @@ describe('VK Auth Routes', () => {
     clearAllRateLimits();
   });
 
-  describe('POST /api/auth/vk', () => {
+  describe('POST /auth/vk', () => {
     it('should authenticate with valid VK launch params', async () => {
       const launchParams = generateMockVKLaunchParams(123456789, TEST_VK_SECRET);
 
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams }),
@@ -95,7 +95,7 @@ describe('VK Auth Routes', () => {
     it('should reject invalid launch params signature', async () => {
       const launchParams = generateMockVKLaunchParams(123456789, 'wrong-secret');
 
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams }),
@@ -109,7 +109,7 @@ describe('VK Auth Routes', () => {
     });
 
     it('should reject malformed launch params', async () => {
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams: 'not-valid-params' }),
@@ -122,7 +122,7 @@ describe('VK Auth Routes', () => {
     });
 
     it('should reject request without launchParams', async () => {
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -132,7 +132,7 @@ describe('VK Auth Routes', () => {
     });
 
     it('should reject empty launchParams', async () => {
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams: '' }),
@@ -147,7 +147,7 @@ describe('VK Auth Routes', () => {
 
       expect(mockUsers.has(`vk:${vkUserId}`)).toBe(false);
 
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams }),
@@ -165,7 +165,7 @@ describe('VK Auth Routes', () => {
         language: 'en',
       });
 
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams }),
@@ -185,7 +185,7 @@ describe('VK Auth Routes', () => {
     it('should set default evolution stage for new users', async () => {
       const launchParams = generateMockVKLaunchParams(111222333, TEST_VK_SECRET);
 
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams }),
@@ -205,7 +205,7 @@ describe('VK Auth Routes', () => {
       params.set('vk_ts', String(Math.floor(Date.now() / 1000)));
       params.set('sign', 'somesign');
 
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams: params.toString() }),
@@ -225,7 +225,7 @@ describe('VK Auth Routes', () => {
           platform,
         });
 
-        const res = await app.request('/api/auth/vk', {
+        const res = await app.request('/auth/vk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ launchParams }),
@@ -246,7 +246,7 @@ describe('VK Auth Routes', () => {
           language,
         });
 
-        const res = await app.request('/api/auth/vk', {
+        const res = await app.request('/auth/vk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ launchParams }),
@@ -270,7 +270,7 @@ describe('VK Auth Routes', () => {
     it('should return 500 when VK secret is not configured', async () => {
       const launchParams = generateMockVKLaunchParams(123456789, TEST_VK_SECRET);
 
-      const res = await appWithoutVK.request('/api/auth/vk', {
+      const res = await appWithoutVK.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams }),
@@ -288,7 +288,7 @@ describe('VK Auth Routes', () => {
     it('should generate JWT with provider field for VK users', async () => {
       const launchParams = generateMockVKLaunchParams(123456789, TEST_VK_SECRET);
 
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams }),
@@ -312,7 +312,7 @@ describe('VK Auth Routes', () => {
     it('should generate refresh token with VK provider', async () => {
       const launchParams = generateMockVKLaunchParams(123456789, TEST_VK_SECRET);
 
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams }),
@@ -341,7 +341,7 @@ describe('VK Auth Routes', () => {
       // Tamper with user ID
       const tampered = launchParams.replace('vk_user_id=123456789', 'vk_user_id=999');
 
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams: tampered }),
@@ -358,7 +358,7 @@ describe('VK Auth Routes', () => {
       const launchParams = generateMockVKLaunchParams(123456789, TEST_VK_SECRET);
 
       const before = Date.now();
-      const res = await app.request('/api/auth/vk', {
+      const res = await app.request('/auth/vk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchParams }),

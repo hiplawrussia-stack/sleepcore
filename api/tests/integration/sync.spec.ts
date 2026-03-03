@@ -4,9 +4,9 @@
  * E2E tests for offline-first sync endpoints.
  *
  * Coverage:
- * - GET /api/sync/changes — Get changes since last sync
- * - POST /api/sync/push — Push local changes to server
- * - GET /api/sync/status — Get sync status
+ * - GET /sync/changes — Get changes since last sync
+ * - POST /sync/push — Push local changes to server
+ * - GET /sync/status — Get sync status
  *
  * @see CLAUDE.md §8 — Testing requirements
  * @packageDocumentation
@@ -141,7 +141,7 @@ describe('Sync Routes', () => {
 
   describe('Authentication', () => {
     it('should reject request without Authorization header', async () => {
-      const res = await app.request('/api/sync/changes');
+      const res = await app.request('/sync/changes');
       const data = await res.json();
 
       expect(res.status).toBe(401);
@@ -149,7 +149,7 @@ describe('Sync Routes', () => {
     });
 
     it('should reject request with invalid token', async () => {
-      const res = await app.request('/api/sync/changes', {
+      const res = await app.request('/sync/changes', {
         headers: { Authorization: 'Bearer invalid-token' },
       });
       const data = await res.json();
@@ -159,7 +159,7 @@ describe('Sync Routes', () => {
     });
 
     it('should reject request with malformed Authorization header', async () => {
-      const res = await app.request('/api/sync/changes', {
+      const res = await app.request('/sync/changes', {
         headers: { Authorization: 'NotBearer token' },
       });
       const data = await res.json();
@@ -170,12 +170,12 @@ describe('Sync Routes', () => {
   });
 
   // ===========================================================================
-  // GET /api/sync/changes
+  // GET /sync/changes
   // ===========================================================================
 
-  describe('GET /api/sync/changes', () => {
+  describe('GET /sync/changes', () => {
     it('should return empty changes for new user', async () => {
-      const res = await app.request('/api/sync/changes', {
+      const res = await app.request('/sync/changes', {
         headers: { Authorization: `Bearer ${testAccessToken}` },
       });
       const data = await res.json();
@@ -210,7 +210,7 @@ describe('Sync Routes', () => {
         },
       ];
 
-      const res = await app.request('/api/sync/changes?since=500', {
+      const res = await app.request('/sync/changes?since=500', {
         headers: { Authorization: `Bearer ${testAccessToken}` },
       });
       const data = await res.json();
@@ -233,7 +233,7 @@ describe('Sync Routes', () => {
         timestamp: 1000 + i * 100,
       }));
 
-      const res = await app.request('/api/sync/changes?limit=5', {
+      const res = await app.request('/sync/changes?limit=5', {
         headers: { Authorization: `Bearer ${testAccessToken}` },
       });
       const data = await res.json();
@@ -245,7 +245,7 @@ describe('Sync Routes', () => {
 
     it('should sanitize invalid query parameters', async () => {
       // OWASP A03:2021 — Injection prevention
-      const res = await app.request('/api/sync/changes?since=invalid&limit=-1', {
+      const res = await app.request('/sync/changes?since=invalid&limit=-1', {
         headers: { Authorization: `Bearer ${testAccessToken}` },
       });
       const data = await res.json();
@@ -258,7 +258,7 @@ describe('Sync Routes', () => {
     it('should return 404 for non-existent user', async () => {
       mockUsers.clear();
 
-      const res = await app.request('/api/sync/changes', {
+      const res = await app.request('/sync/changes', {
         headers: { Authorization: `Bearer ${testAccessToken}` },
       });
       const data = await res.json();
@@ -270,10 +270,10 @@ describe('Sync Routes', () => {
   });
 
   // ===========================================================================
-  // POST /api/sync/push
+  // POST /sync/push
   // ===========================================================================
 
-  describe('POST /api/sync/push', () => {
+  describe('POST /sync/push', () => {
     it('should sync breathing session', async () => {
       const changes = [
         {
@@ -291,7 +291,7 @@ describe('Sync Routes', () => {
         },
       ];
 
-      const res = await app.request('/api/sync/push', {
+      const res = await app.request('/sync/push', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${testAccessToken}`,
@@ -327,7 +327,7 @@ describe('Sync Routes', () => {
         },
       ];
 
-      const res = await app.request('/api/sync/push', {
+      const res = await app.request('/sync/push', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${testAccessToken}`,
@@ -370,7 +370,7 @@ describe('Sync Routes', () => {
         },
       ];
 
-      const res = await app.request('/api/sync/push', {
+      const res = await app.request('/sync/push', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${testAccessToken}`,
@@ -400,7 +400,7 @@ describe('Sync Routes', () => {
         },
       ];
 
-      const res = await app.request('/api/sync/push', {
+      const res = await app.request('/sync/push', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${testAccessToken}`,
@@ -426,7 +426,7 @@ describe('Sync Routes', () => {
         },
       ];
 
-      const res = await app.request('/api/sync/push', {
+      const res = await app.request('/sync/push', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${testAccessToken}`,
@@ -442,7 +442,7 @@ describe('Sync Routes', () => {
     });
 
     it('should reject request without changes array', async () => {
-      const res = await app.request('/api/sync/push', {
+      const res = await app.request('/sync/push', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${testAccessToken}`,
@@ -457,7 +457,7 @@ describe('Sync Routes', () => {
     });
 
     it('should reject request without lastSyncTime', async () => {
-      const res = await app.request('/api/sync/push', {
+      const res = await app.request('/sync/push', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${testAccessToken}`,
@@ -484,7 +484,7 @@ describe('Sync Routes', () => {
         },
       ];
 
-      const res = await app.request('/api/sync/push', {
+      const res = await app.request('/sync/push', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${testAccessToken}`,
@@ -503,7 +503,7 @@ describe('Sync Routes', () => {
     });
 
     it('should handle empty changes array', async () => {
-      const res = await app.request('/api/sync/push', {
+      const res = await app.request('/sync/push', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${testAccessToken}`,
@@ -523,12 +523,12 @@ describe('Sync Routes', () => {
   });
 
   // ===========================================================================
-  // GET /api/sync/status
+  // GET /sync/status
   // ===========================================================================
 
-  describe('GET /api/sync/status', () => {
+  describe('GET /sync/status', () => {
     it('should return sync status for new user', async () => {
-      const res = await app.request('/api/sync/status', {
+      const res = await app.request('/sync/status', {
         headers: { Authorization: `Bearer ${testAccessToken}` },
       });
       const data = await res.json();
@@ -548,7 +548,7 @@ describe('Sync Routes', () => {
         { id: 'session-3', userId: 'user-1', patternId: 'box' },
       ];
 
-      const res = await app.request('/api/sync/status', {
+      const res = await app.request('/sync/status', {
         headers: { Authorization: `Bearer ${testAccessToken}` },
       });
       const data = await res.json();
@@ -572,7 +572,7 @@ describe('Sync Routes', () => {
         },
       ];
 
-      const res = await app.request('/api/sync/status', {
+      const res = await app.request('/sync/status', {
         headers: { Authorization: `Bearer ${testAccessToken}` },
       });
       const data = await res.json();
@@ -585,7 +585,7 @@ describe('Sync Routes', () => {
     it('should return 404 for non-existent user', async () => {
       mockUsers.clear();
 
-      const res = await app.request('/api/sync/status', {
+      const res = await app.request('/sync/status', {
         headers: { Authorization: `Bearer ${testAccessToken}` },
       });
       const data = await res.json();
@@ -618,7 +618,7 @@ describe('Sync Routes', () => {
         },
       ];
 
-      const pushRes = await app.request('/api/sync/push', {
+      const pushRes = await app.request('/sync/push', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${testAccessToken}`,
@@ -638,7 +638,7 @@ describe('Sync Routes', () => {
       const serverTime = pushData.data.serverTime;
 
       // Step 2: Check sync status
-      const statusRes = await app.request('/api/sync/status', {
+      const statusRes = await app.request('/sync/status', {
         headers: { Authorization: `Bearer ${testAccessToken}` },
       });
       const statusData = await statusRes.json();
@@ -647,7 +647,7 @@ describe('Sync Routes', () => {
       expect(statusData.success).toBe(true);
 
       // Step 3: Get changes since last sync
-      const changesRes = await app.request(`/api/sync/changes?since=${serverTime - 1000}`, {
+      const changesRes = await app.request(`/sync/changes?since=${serverTime - 1000}`, {
         headers: { Authorization: `Bearer ${testAccessToken}` },
       });
       const changesData = await changesRes.json();
@@ -685,7 +685,7 @@ describe('Sync Routes', () => {
         },
       ];
 
-      const res = await app.request('/api/sync/push', {
+      const res = await app.request('/sync/push', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${testAccessToken}`,
@@ -715,7 +715,7 @@ describe('Sync Routes', () => {
 
   describe('Rate Limiting', () => {
     it('should include rate limit headers', async () => {
-      const res = await app.request('/api/sync/changes', {
+      const res = await app.request('/sync/changes', {
         headers: { Authorization: `Bearer ${testAccessToken}` },
       });
 
@@ -739,7 +739,7 @@ describe('Sync Routes', () => {
       try {
         mockUsers.clear();
 
-        const res = await app.request('/api/sync/status', {
+        const res = await app.request('/sync/status', {
           headers: { Authorization: `Bearer ${testAccessToken}` },
         });
         const data = await res.json();
@@ -768,7 +768,7 @@ describe('Sync Routes', () => {
         },
       ];
 
-      const res = await app.request('/api/sync/push', {
+      const res = await app.request('/sync/push', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${testAccessToken}`,
