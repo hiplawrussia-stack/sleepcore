@@ -26,15 +26,12 @@ import { OpenWearablesClient, createOpenWearablesClient, OpenWearablesAPIError }
 import { OpenWearablesAdapter, IAdaptedSleepData, createOpenWearablesAdapter } from './OpenWearablesAdapter';
 import {
   IOpenWearablesConfig,
-  IOpenWearablesSleepSession,
   IOpenWearablesConnection,
   OpenWearablesProvider,
   IOpenWearablesSyncStatus,
 } from './types';
 import {
-  IWearableSleepData,
   IWearableSyncPayload,
-  IWearableSyncResponse,
 } from '../types';
 import { WearableIngestionService } from '../WearableIngestionService';
 
