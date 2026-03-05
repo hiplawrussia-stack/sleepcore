@@ -2,8 +2,13 @@
 # =======================================
 # Multi-stage build for optimized production image
 #
+# Port Architecture (2025/2026 Best Practice):
+#   API:     3001 (Node.js API range: 3001-3009)
+#   TG Bot:  3010 (Bot health range: 3010-3019)
+#   VK Bot:  3011 (Bot health range: 3010-3019)
+#
 # Build: docker build -t sleepcore-vk-bot .
-# Run:   docker run -d --name vk-bot sleepcore-vk-bot
+# Run:   docker run -d --name vk-bot -e HEALTH_PORT=3011 sleepcore-vk-bot
 
 # Stage 1: Dependencies
 FROM node:22-alpine AS deps
@@ -87,11 +92,13 @@ RUN mkdir -p /app/data && chown -R sleepcore:nodejs /app
 USER sleepcore
 
 # Expose port for health checks
-EXPOSE 3002
+# 2025/2026 Best Practice: Bot health on dedicated port (3010-3019 range)
+# TG Bot: 3010, VK Bot: 3011
+EXPOSE 3011
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget --spider -q http://localhost:3002/health || exit 1
+  CMD wget --spider -q http://localhost:3011/health || exit 1
 
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]

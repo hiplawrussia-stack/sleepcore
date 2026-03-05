@@ -1,5 +1,10 @@
 # Security Scanning Pipeline - SleepCore
-# Weekly dependency audit and CodeQL analysis
+# Weekly dependency audit, CodeQL analysis, and container scanning
+#
+# CLAUDE.md Compliance:
+# - Security is priority #1 in hierarchy
+# - HIPAA/GDPR requires vulnerability scanning
+# - IEC 62304 requires security verification
 
 name: Security
 
@@ -151,6 +156,59 @@ jobs:
             echo "::warning::.env files found in repository. Ensure they are in .gitignore."
           fi
 
+  # Container vulnerability scanning (2025 Best Practice)
+  # Scans production Docker images for vulnerabilities
+  container-scan:
+    name: Container Vulnerability Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['bot', 'api']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest image
+        run: |
+          docker pull ghcr.io/${{ github.repository }}/${{ matrix.image }}:latest || echo "Image not found, skipping scan"
+        continue-on-error: true
+
+      - name: Scan ${{ matrix.image }} for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image }}:latest
+          format: 'sarif'
+          output: 'trivy-${{ matrix.image }}.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          vuln-type: 'os,library'
+        continue-on-error: true
+
+      - name: Upload scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-${{ matrix.image }}.sarif'
+          category: 'trivy-${{ matrix.image }}'
+        continue-on-error: true
+
+      - name: Generate vulnerability report
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image }}:latest
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+        continue-on-error: true
+
   # License compliance
   license-check:
     name: License Compliance
@@ -182,3 +240,24 @@ jobs:
             echo "::warning::Some dependencies have non-standard licenses. Please review."
           fi
         continue-on-error: true
+
+  # Security summary report
+  security-summary:
+    name: Security Summary
+    needs: [dependency-audit, codeql, secret-check, container-scan, license-check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Security scan summary
+        run: |
+          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Audit | ${{ needs.dependency-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CodeQL Analysis | ${{ needs.codeql.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Scanning | ${{ needs.secret-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Container Scan | ${{ needs.container-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| License Check | ${{ needs.license-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View detailed results in the Security tab." >> $GITHUB_STEP_SUMMARY

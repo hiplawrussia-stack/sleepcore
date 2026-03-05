@@ -4,11 +4,22 @@
 # ========================================
 # Usage: ./deploy.sh [version]
 #
-# Performs zero-downtime blue-green deployment:
-# 1. Pulls new Docker images
-# 2. Runs health checks
-# 3. Switches traffic to new containers
-# 4. Removes old containers
+# Performs zero-downtime rolling deployment:
+# 1. Backs up current state (rollback capability)
+# 2. Pulls new Docker images
+# 3. Deploys with docker compose up -d
+# 4. Runs health checks on all services
+# 5. Auto-rollback on failure
+#
+# Port Architecture (2025/2026 Best Practice):
+#   API:     3001 (Node.js API range: 3001-3009)
+#   Bot:     3010 (Bot health range: 3010-3019)
+#   VK Bot:  3011 (Bot health range: 3010-3019)
+#   Traefik: 8080 (internal API)
+#
+# CLAUDE.md Compliance:
+#   - Safety: Auto-rollback on health check failure
+#   - Audit: Backup timestamps for traceability
 
 set -euo pipefail
 
@@ -123,19 +134,26 @@ verify_deployment() {
 
     local all_healthy=true
 
-    # Check bot health
-    if ! health_check "Bot" "http://localhost:3000/health"; then
+    # Check bot health (port 3010 - dedicated bot health range per docker-compose.prod.yml)
+    if ! health_check "Bot" "http://localhost:3010/health"; then
         all_healthy=false
     fi
 
-    # Check API health
+    # Check API health (port 3001 - standard Node.js API range)
     if ! health_check "API" "http://localhost:3001/health"; then
         all_healthy=false
     fi
 
-    # Check Traefik
+    # Check Traefik (internal API)
     if ! health_check "Traefik" "http://localhost:8080/ping"; then
         all_healthy=false
+    fi
+
+    # Check VK Bot health (port 3011) - optional, only if container exists
+    if docker ps --filter "name=sleepcore-vk-bot" --format "{{.Names}}" | grep -q "sleepcore-vk-bot"; then
+        if ! health_check "VK Bot" "http://localhost:3011/health"; then
+            warn "VK Bot health check failed (non-critical)"
+        fi
     fi
 
     if [[ "$all_healthy" == "true" ]]; then
