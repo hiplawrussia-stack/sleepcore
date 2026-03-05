@@ -28,6 +28,7 @@ vi.mock('../../src/services/haptics', () => ({
     impact: vi.fn(),
     notification: vi.fn(),
     selectionChanged: vi.fn(),
+    getDebugInfo: vi.fn(() => 'platform=test, hasAPI=true'),
   },
 }));
 
