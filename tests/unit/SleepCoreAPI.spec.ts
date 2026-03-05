@@ -624,7 +624,8 @@ describe('SleepCoreAPI', () => {
 
         const rec = api.getRelaxationRecommendation('user-123');
 
-        expect(rec.technique).toBe('diaphragmatic_breathing');
+        // body_scan is the default after breathing was removed per JAMA Psychiatry 2024
+        expect(rec.technique).toBe('body_scan');
         expect(rec.instructions.length).toBeGreaterThan(0);
         expect(rec.duration).toBe(10);
       });
