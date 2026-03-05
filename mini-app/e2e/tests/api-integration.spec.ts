@@ -28,7 +28,7 @@ test.describe('API Integration', () => {
 
       // Verify session was logged
       const sessionRequests = capturedRequests.filter(
-        (r) => r.url.includes('/breathing/sessions') && r.method === 'POST'
+        (r) => r.url.includes('/breathing/session') && r.method === 'POST'
       );
       expect(sessionRequests.length).toBeGreaterThan(0);
 
@@ -70,7 +70,7 @@ test.describe('API Integration', () => {
     }) => {
       // Override default mocks with error responses
       await mockApi({
-        pattern: '**/breathing/sessions',
+        pattern: '**/breathing/session',
         status: 500,
         response: { error: 'Internal Server Error' },
       });
@@ -87,7 +87,7 @@ test.describe('API Integration', () => {
       mockApi,
     }) => {
       await mockApi({
-        pattern: '**/breathing/sessions',
+        pattern: '**/breathing/session',
         status: 401,
         response: { error: 'Unauthorized' },
       });

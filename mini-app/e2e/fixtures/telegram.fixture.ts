@@ -276,7 +276,7 @@ export const test = base.extend<{
         response: { quests: [] },
       },
       {
-        pattern: '**/breathing/sessions',
+        pattern: '**/breathing/session',
         response: { id: 'session-123', xpGain: 30 },
         status: 201,
       },

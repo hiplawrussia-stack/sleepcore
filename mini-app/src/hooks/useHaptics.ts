@@ -10,11 +10,13 @@ import { telegram } from '@/services/telegram';
 
 interface UseHapticsReturn {
   isEnabled: boolean;
-  isAvailable: boolean;
+  isAvailable: boolean;  // Platform supports haptics AND user has enabled
+  isSupported: boolean;  // Platform supports haptics (for UI disabled states)
   setEnabled: (enabled: boolean) => void;
   impact: (style?: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
   notification: (type: 'success' | 'error' | 'warning') => void;
   selectionChanged: () => void;
+  debugInfo: string;     // DEBUG: platform detection info
 }
 
 const HAPTICS_STORAGE_KEY = 'sleepcore_haptics_enabled';
@@ -67,10 +69,12 @@ export const useHaptics = (): UseHapticsReturn => {
   return {
     isEnabled,
     isAvailable: haptics.isAvailable(),
+    isSupported: haptics.isSupportedOnPlatform(),
     setEnabled,
     impact,
     notification,
     selectionChanged,
+    debugInfo: haptics.getDebugInfo(),
   };
 };
 

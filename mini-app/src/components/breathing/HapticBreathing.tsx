@@ -228,7 +228,10 @@ export const HapticBreathing: React.FC<HapticBreathingProps> = ({
       }
 
       if (!abortRef.current) {
-        // Completion
+        // Completion - abort any lingering haptic/audio patterns first
+        haptics.abort();
+        audio.abort();
+
         setPhase('complete');
         setShowCompletion(true);
         haptics.celebrationFeedback();

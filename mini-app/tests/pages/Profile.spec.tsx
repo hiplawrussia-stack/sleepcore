@@ -97,6 +97,7 @@ vi.mock('@/hooks', () => ({
     isEnabled: true,
     setEnabled: mockSetHapticsEnabled,
     isAvailable: true,
+    isSupported: true,
   }),
   useUserProfile: () => ({
     profile: mockProfile,
@@ -109,6 +110,16 @@ vi.mock('@/hooks', () => ({
   useEvolution: () => ({
     evolution: mockEvolution,
     isLoading: false,
+  }),
+  useLeaderboard: () => ({
+    entries: [],
+    settings: { isOptedIn: false, showAnonymously: false },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+    optIn: vi.fn(),
+    optOut: vi.fn(),
   }),
 }));
 
@@ -209,6 +220,15 @@ vi.mock('@/components/gamification/QuestsPanel', () => ({
 
 vi.mock('@/components/common/PrivacyCenter', () => ({
   default: () => <div data-testid="privacy-center">PrivacyCenter</div>,
+}));
+
+vi.mock('@/components/gamification/Leaderboard', () => ({
+  default: () => <div data-testid="leaderboard">Leaderboard</div>,
+}));
+
+// Mock featureFlags
+vi.mock('@/services/featureFlags', () => ({
+  Feature: ({ children }: { flag: string; children: React.ReactNode }) => <>{children}</>,
 }));
 
 // Import after mocks
@@ -545,6 +565,7 @@ describe('Profile - Loading State', () => {
         isEnabled: true,
         setEnabled: mockSetHapticsEnabled,
         isAvailable: true,
+        isSupported: true,
       }),
       useUserProfile: () => ({
         profile: null,

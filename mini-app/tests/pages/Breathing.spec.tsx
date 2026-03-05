@@ -222,7 +222,7 @@ describe('Breathing', () => {
         completeBtn.click();
       });
 
-      expect(mockLogSession).toHaveBeenCalledWith('478', 3, 60);
+      expect(mockLogSession).toHaveBeenCalledWith('478', '4-7-8', 3, 60);
     });
 
     it('should check evolution after logging session', async () => {

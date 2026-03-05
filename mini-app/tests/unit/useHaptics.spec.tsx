@@ -24,6 +24,7 @@ vi.mock('../../src/services/haptics', () => ({
   haptics: {
     setEnabled: vi.fn(),
     isAvailable: vi.fn(() => true),
+    isSupportedOnPlatform: vi.fn(() => true),
     impact: vi.fn(),
     notification: vi.fn(),
     selectionChanged: vi.fn(),

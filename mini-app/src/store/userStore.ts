@@ -21,7 +21,7 @@ interface UserState {
   loadProfile: () => Promise<void>;
   loadStats: () => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
-  logSession: (patternId: string, cycles: number, duration: number) => Promise<void>;
+  logSession: (patternId: string, patternName: string, cycles: number, duration: number) => Promise<void>;
   clearError: () => void;
 }
 
@@ -72,11 +72,11 @@ export const useUserStore = create<UserState>((set, get) => ({
   },
 
   // Log completed breathing session
-  logSession: async (patternId, cycles, duration) => {
+  logSession: async (patternId, patternName, cycles, duration) => {
     try {
-      await apiClient.request<LogSessionResponse>('/breathing/sessions', {
+      await apiClient.request<LogSessionResponse>('/breathing/session', {
         method: 'POST',
-        body: JSON.stringify({ patternId, cycles, duration }),
+        body: JSON.stringify({ patternId, patternName, cycles, duration }),
       });
 
       // Refresh stats after logging session

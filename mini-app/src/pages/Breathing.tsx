@@ -63,8 +63,12 @@ export const Breathing: React.FC = () => {
     // Store current stage before logging session
     const previousStage = profile?.evolutionStage || 'owlet';
 
+    // Get pattern name for API (required field)
+    const pattern = getPatternById(patternId);
+    const patternName = pattern?.name || patternId;
+
     // Log to backend
-    await logSession(patternId, cycles, durationSeconds);
+    await logSession(patternId, patternName, cycles, durationSeconds);
 
     // Check for evolution
     try {

@@ -260,7 +260,7 @@ describe('User Store', () => {
 
   describe('logSession', () => {
     it('should log session successfully', async () => {
-      // First call: POST /breathing/sessions
+      // First call: POST /breathing/session
       // Second call: GET /breathing/stats (loadStats)
       mockRequest
         .mockResolvedValueOnce({ id: 'session-1', xpGain: 30 })
@@ -269,11 +269,11 @@ describe('User Store', () => {
       useUserStore.setState({ profile: mockProfile });
 
       const { logSession } = useUserStore.getState();
-      await logSession('478', 3, 60);
+      await logSession('478', '4-7-8 Breathing', 3, 60);
 
-      expect(mockRequest).toHaveBeenCalledWith('/breathing/sessions', {
+      expect(mockRequest).toHaveBeenCalledWith('/breathing/session', {
         method: 'POST',
-        body: JSON.stringify({ patternId: '478', cycles: 3, duration: 60 }),
+        body: JSON.stringify({ patternId: '478', patternName: '4-7-8 Breathing', cycles: 3, duration: 60 }),
       });
     });
 
@@ -285,7 +285,7 @@ describe('User Store', () => {
       useUserStore.setState({ profile: mockProfile });
 
       const { logSession } = useUserStore.getState();
-      await logSession('478', 3, 60);
+      await logSession('478', '4-7-8 Breathing', 3, 60);
 
       // Should have called stats endpoint after session
       expect(mockRequest).toHaveBeenCalledWith('/breathing/stats');
@@ -300,7 +300,7 @@ describe('User Store', () => {
       useUserStore.setState({ profile: mockProfile }); // xp: 100
 
       const { logSession } = useUserStore.getState();
-      await logSession('478', 3, 60); // 3 cycles * 10 XP = 30 XP
+      await logSession('478', '4-7-8 Breathing', 3, 60); // 3 cycles * 10 XP = 30 XP
 
       const state = useUserStore.getState();
       expect(state.profile?.xp).toBe(130); // 100 + 30
@@ -314,7 +314,7 @@ describe('User Store', () => {
       useUserStore.setState({ profile: null });
 
       const { logSession } = useUserStore.getState();
-      await logSession('478', 3, 60);
+      await logSession('478', '4-7-8 Breathing', 3, 60);
 
       // Should complete without error
       expect(mockRequest).toHaveBeenCalled();
@@ -325,7 +325,7 @@ describe('User Store', () => {
       mockRequest.mockRejectedValueOnce(new Error('Network error'));
 
       const { logSession } = useUserStore.getState();
-      await logSession('478', 3, 60);
+      await logSession('478', '4-7-8 Breathing', 3, 60);
 
       // Should log error but not throw
       expect(consoleSpy).toHaveBeenCalledWith(

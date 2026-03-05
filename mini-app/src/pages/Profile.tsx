@@ -11,7 +11,7 @@ import React, { useEffect, Suspense, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/common';
-import { useTelegram, useHaptics, useUserProfile, useBreathingStats, useEvolution } from '@/hooks';
+import { useTelegram, useHaptics, useUserProfile, useBreathingStats, useEvolution, useLeaderboard } from '@/hooks';
 import { useAuthStore } from '@/store/authStore';
 import { formatDuration } from '@/components/breathing/patterns';
 import { haptics } from '@/services/haptics';
@@ -19,6 +19,10 @@ import { haptics } from '@/services/haptics';
 // Lazy load heavy components
 const QuestsPanel = React.lazy(() => import('@/components/gamification/QuestsPanel'));
 const PrivacyCenter = React.lazy(() => import('@/components/common/PrivacyCenter'));
+const Leaderboard = React.lazy(() => import('@/components/gamification/Leaderboard'));
+
+// Feature flags
+import { Feature } from '@/services/featureFlags';
 
 // Simple loading placeholder
 const ComponentLoader: React.FC = () => (
@@ -37,7 +41,7 @@ export const Profile: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { user, showBackButton, hideBackButton } = useTelegram();
-  const { isEnabled: hapticsEnabled, setEnabled: setHapticsEnabled, isAvailable: hapticsAvailable } = useHaptics();
+  const { isEnabled: hapticsEnabled, setEnabled: setHapticsEnabled, isSupported: hapticsSupported, debugInfo: hapticsDebug } = useHaptics();
 
   // Language state
   const [currentLanguage, setCurrentLanguage] = useState(i18n.language || 'ru');
@@ -46,6 +50,13 @@ export const Profile: React.FC = () => {
   const { profile, isLoading: isLoadingProfile } = useUserProfile();
   const { stats, isLoading: isLoadingStats } = useBreathingStats();
   const { evolution, isLoading: isLoadingEvolution } = useEvolution();
+  const {
+    entries: leaderboardEntries,
+    settings: leaderboardSettings,
+    isLoading: isLoadingLeaderboard,
+    optIn: leaderboardOptIn,
+    optOut: leaderboardOptOut,
+  } = useLeaderboard();
 
   // Get auth state to check if queries can run
   const { isAuthenticated, isAuthenticating } = useAuthStore();
@@ -251,6 +262,24 @@ export const Profile: React.FC = () => {
         </Suspense>
       </div>
 
+      {/* Leaderboard - Feature flagged */}
+      <Feature flag="leaderboard">
+        <div
+          className="mb-6 animate-slide-up"
+          style={{ animationDelay: '0.24s' }}
+        >
+          <Suspense fallback={<ComponentLoader />}>
+            <Leaderboard
+              entries={leaderboardEntries}
+              settings={leaderboardSettings}
+              isLoading={isLoadingLeaderboard}
+              onOptIn={leaderboardOptIn}
+              onOptOut={leaderboardOptOut}
+            />
+          </Suspense>
+        </div>
+      </Feature>
+
       {/* Weekly progress chart */}
       {stats?.weeklyProgress && stats.weeklyProgress.length > 0 && (
         <div
@@ -336,7 +365,7 @@ export const Profile: React.FC = () => {
             <div>
               <div className="font-medium text-night-100">{t('profile.settings.haptics.title')}</div>
               <div className="text-xs text-night-400">
-                {hapticsAvailable
+                {hapticsSupported
                   ? t('profile.settings.haptics.description')
                   : t('profile.settings.haptics.unavailable')}
               </div>
@@ -344,22 +373,27 @@ export const Profile: React.FC = () => {
             {/* WCAG 2.5.5: Touch target minimum 44x44px */}
             <button
               onClick={() => setHapticsEnabled(!hapticsEnabled)}
-              disabled={!hapticsAvailable}
+              disabled={!hapticsSupported}
               aria-label={t('profile.settings.haptics.title')}
               aria-checked={hapticsEnabled}
               role="switch"
               className={`w-14 h-11 rounded-full transition-colors relative flex items-center ${
-                hapticsEnabled && hapticsAvailable
+                hapticsEnabled && hapticsSupported
                   ? 'bg-primary-500'
                   : 'bg-night-600'
-              } ${!hapticsAvailable ? 'opacity-50' : ''}`}
+              } ${!hapticsSupported ? 'opacity-50' : ''}`}
             >
               <div
                 className={`w-6 h-6 rounded-full bg-white absolute transition-transform duration-200 ${
-                  hapticsEnabled && hapticsAvailable ? 'translate-x-7' : 'translate-x-1'
+                  hapticsEnabled && hapticsSupported ? 'translate-x-7' : 'translate-x-1'
                 }`}
               />
             </button>
+          </div>
+
+          {/* DEBUG: Remove after fixing */}
+          <div className="text-xs text-night-500 bg-night-800 p-2 rounded font-mono break-all">
+            DEBUG: supported={String(hapticsSupported)}, {hapticsDebug}
           </div>
 
           {/* Language selector - WCAG 1.3.1: fieldset/legend for grouped controls */}

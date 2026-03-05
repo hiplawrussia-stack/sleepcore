@@ -157,7 +157,7 @@ test.describe('Breathing Exercise', () => {
       await breathingPage.runCompleteExercise('4-7-8', 3);
 
       const sessionCalls = capturedRequests.filter(r =>
-        r.url.includes('/breathing/sessions') && r.method === 'POST'
+        r.url.includes('/breathing/session') && r.method === 'POST'
       );
       expect(sessionCalls.length).toBeGreaterThan(0);
 

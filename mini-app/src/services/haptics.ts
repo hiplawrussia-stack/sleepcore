@@ -21,13 +21,37 @@ export interface BreathingPhaseConfig {
 }
 
 class HapticsService {
-  private hapticFeedback = WebApp.HapticFeedback;
-  private isSupported: boolean;
+  private _hapticFeedback: typeof WebApp.HapticFeedback | null = null;
+  private _isSupported: boolean | null = null;
   private isEnabled = true;
   private abortController: AbortController | null = null;
 
-  constructor() {
-    this.isSupported = this.checkSupport();
+  /**
+   * Lazy getter for HapticFeedback API
+   */
+  private get hapticFeedback(): typeof WebApp.HapticFeedback | null {
+    if (!this._hapticFeedback) {
+      try {
+        this._hapticFeedback = WebApp.HapticFeedback;
+      } catch {
+        this._hapticFeedback = null;
+      }
+    }
+    return this._hapticFeedback;
+  }
+
+  /**
+   * Lazy getter for isSupported
+   */
+  private get isSupported(): boolean {
+    if (this._isSupported === null) {
+      this._isSupported = this.checkSupport();
+    }
+    return this._isSupported;
+  }
+
+  private set isSupported(value: boolean) {
+    this._isSupported = value;
   }
 
   /**
@@ -59,14 +83,44 @@ class HapticsService {
 
   /**
    * Check if haptic feedback is supported
+   * Uses multiple detection methods for reliability
    */
   private checkSupport(): boolean {
     try {
-      // iOS fully supports haptics, Android partially
-      const platform = WebApp.platform;
-      return platform === 'ios' || platform === 'android';
+      // Method 1: Check WebApp.platform
+      const platform = WebApp.platform?.toLowerCase() || '';
+      if (platform.includes('ios') || platform.includes('android')) {
+        return true;
+      }
+
+      // Method 2: Check user agent for mobile
+      const ua = navigator.userAgent.toLowerCase();
+      if (ua.includes('android') || ua.includes('iphone') || ua.includes('ipad')) {
+        return true;
+      }
+
+      // Method 3: Check if HapticFeedback API exists and works
+      if (WebApp.HapticFeedback && typeof WebApp.HapticFeedback.impactOccurred === 'function') {
+        return true;
+      }
+
+      return false;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Get debug info about platform detection
+   */
+  getDebugInfo(): string {
+    try {
+      const platform = WebApp.platform || 'unknown';
+      const ua = navigator.userAgent.substring(0, 50);
+      const hasApi = !!WebApp.HapticFeedback;
+      return `platform=${platform}, hasAPI=${hasApi}, ua=${ua}...`;
+    } catch (e) {
+      return `error: ${e}`;
     }
   }
 
@@ -81,7 +135,15 @@ class HapticsService {
    * Check if haptics are enabled and supported
    */
   isAvailable(): boolean {
-    return this.isSupported && this.isEnabled;
+    return this.isSupportedOnPlatform() && this.isEnabled;
+  }
+
+  /**
+   * Check if haptics are supported on this platform
+   * (independent of user preference)
+   */
+  isSupportedOnPlatform(): boolean {
+    return this.isSupported;
   }
 
   // ========== Basic Haptic Feedback ==========
@@ -90,7 +152,7 @@ class HapticsService {
    * Light impact for UI feedback
    */
   impact(style: HapticStyle = 'medium'): void {
-    if (!this.isAvailable()) return;
+    if (!this.isAvailable() || !this.hapticFeedback) return;
 
     try {
       this.hapticFeedback.impactOccurred(style);
@@ -103,7 +165,7 @@ class HapticsService {
    * Notification feedback (success/error/warning)
    */
   notification(type: NotificationType): void {
-    if (!this.isAvailable()) return;
+    if (!this.isAvailable() || !this.hapticFeedback) return;
 
     try {
       this.hapticFeedback.notificationOccurred(type);
@@ -116,7 +178,7 @@ class HapticsService {
    * Selection changed feedback (for pickers, sliders)
    */
   selectionChanged(): void {
-    if (!this.isAvailable()) return;
+    if (!this.isAvailable() || !this.hapticFeedback) return;
 
     try {
       this.hapticFeedback.selectionChanged();

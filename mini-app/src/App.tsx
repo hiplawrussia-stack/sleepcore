@@ -16,6 +16,7 @@ import { ErrorBoundary } from '@/components/common';
 import { telegram } from '@/services/telegram';
 import { env } from '@/env';
 import { useAuth, useSync } from '@/hooks';
+import { FeatureFlagsProvider } from '@/services/featureFlags';
 
 // Lazy-loaded pages for code splitting
 const Home = React.lazy(() => import('@/pages/Home'));
@@ -229,13 +230,15 @@ export const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      <QueryProvider>
-        <BrowserRouter>
-          <div className="min-h-screen bg-night-900">
-            <AppContent />
-          </div>
-        </BrowserRouter>
-      </QueryProvider>
+      <FeatureFlagsProvider overrides={{ leaderboard: true }}>
+        <QueryProvider>
+          <BrowserRouter>
+            <div className="min-h-screen bg-night-900">
+              <AppContent />
+            </div>
+          </BrowserRouter>
+        </QueryProvider>
+      </FeatureFlagsProvider>
     </ErrorBoundary>
   );
 };
