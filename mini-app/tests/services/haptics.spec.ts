@@ -436,21 +436,18 @@ describe('HapticsService - Unsupported Platform', () => {
     // Import a fresh module with mocked unsupported platform
     vi.resetModules();
 
-    // Mock WebApp with unsupported platform
+    // Mock WebApp with unsupported platform and no HapticFeedback API
     vi.doMock('@twa-dev/sdk', () => ({
       default: {
         platform: 'web', // Not iOS or Android
-        HapticFeedback: {
-          impactOccurred: vi.fn(),
-          notificationOccurred: vi.fn(),
-          selectionChanged: vi.fn(),
-        },
+        HapticFeedback: null, // No haptic support
       },
     }));
 
     // Import fresh instance
     const { haptics: unsupportedHaptics } = await import('../../src/services/haptics');
 
+    expect(unsupportedHaptics.isSupportedOnPlatform()).toBe(false);
     expect(unsupportedHaptics.isAvailable()).toBe(false);
   });
 });
