@@ -280,7 +280,19 @@ function getSQLiteSchema(): string {
       patterns TEXT
     );
 
+    -- Leaderboard Settings table (GDPR opt-in)
+    CREATE TABLE IF NOT EXISTS api_leaderboard_settings (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE REFERENCES api_users(id),
+      is_opted_in INTEGER DEFAULT 0,
+      show_anonymously INTEGER DEFAULT 1,
+      opted_in_at TEXT,
+      opted_out_at TEXT,
+      updated_at TEXT NOT NULL
+    );
+
     -- Indexes for performance
+    CREATE INDEX IF NOT EXISTS idx_leaderboard_user_id ON api_leaderboard_settings(user_id);
     CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON api_users(telegram_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON api_breathing_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_completed_at ON api_breathing_sessions(completed_at);
@@ -538,6 +550,17 @@ function getPostgreSQLSchema(): string {
       patterns TEXT
     );
 
+    -- Leaderboard Settings table (GDPR opt-in)
+    CREATE TABLE IF NOT EXISTS api_leaderboard_settings (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE REFERENCES api_users(id),
+      is_opted_in SMALLINT DEFAULT 0,
+      show_anonymously SMALLINT DEFAULT 1,
+      opted_in_at TIMESTAMP,
+      opted_out_at TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL
+    );
+
     -- Wearable Link Codes table (RFC 8628 Device Authorization)
     CREATE TABLE IF NOT EXISTS api_wearable_link_codes (
       id TEXT PRIMARY KEY,
@@ -688,6 +711,7 @@ function getPostgreSQLSchema(): string {
     );
 
     -- Indexes (PostgreSQL uses CREATE INDEX IF NOT EXISTS)
+    CREATE INDEX IF NOT EXISTS idx_leaderboard_user_id ON api_leaderboard_settings(user_id);
     CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON api_users(telegram_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON api_breathing_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_completed_at ON api_breathing_sessions(completed_at);
