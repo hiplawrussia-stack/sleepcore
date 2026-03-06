@@ -37,7 +37,7 @@ export const EvolutionStageSchema = z.enum([
 ]);
 
 export const UserProfileSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1), // nanoid format, not UUID
   telegramId: z.number().int().positive(),
   firstName: SafeStringSchema,
   lastName: SafeStringSchema.optional(),
@@ -71,8 +71,8 @@ export const UserSettingsSchema = z.object({
 // ========== Breathing Schemas ==========
 
 export const BreathingSessionSchema = z.object({
-  id: z.string().uuid(),
-  userId: z.string().uuid(),
+  id: z.string().min(1), // nanoid format
+  userId: z.string().min(1), // nanoid format
   patternId: z.string().max(100),
   patternName: SafeStringSchema,
   cycles: z.number().int().min(1).max(100),
@@ -92,7 +92,7 @@ export const BreathingStatsSchema = z.object({
 });
 
 export const LogSessionResponseSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1), // nanoid format
   xpGain: z.number().int().min(0),
 });
 
@@ -190,7 +190,7 @@ export const SyncStatusSchema = z.object({
 // ========== Auth Schemas ==========
 
 export const AuthUserSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1), // nanoid format
   telegramId: z.number().int().positive(),
   firstName: SafeStringSchema,
   lastName: SafeStringSchema.optional(),
