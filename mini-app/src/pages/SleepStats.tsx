@@ -190,7 +190,13 @@ export const SleepStats: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { showBackButton, hideBackButton } = useTelegram();
-  const { stats, sessions, isLoading, hasData } = useSleep({ days: 7, limit: 7 });
+  const { stats, sessions, isLoading, isError, hasData, refetchStats, refetchSessions } = useSleep({ days: 7, limit: 7 });
+
+  // Handle retry
+  const handleRetry = () => {
+    refetchStats();
+    refetchSessions();
+  };
 
   // Setup back button
   useEffect(() => {
@@ -199,6 +205,27 @@ export const SleepStats: React.FC = () => {
     });
     return () => hideBackButton();
   }, [showBackButton, hideBackButton, navigate]);
+
+  // Error state - show error with retry
+  if (isError && !isLoading) {
+    return (
+      <div className="min-h-screen bg-night-900 px-4 py-6 pb-20 flex flex-col items-center justify-center">
+        <div className="text-6xl mb-4">😔</div>
+        <h2 className="text-xl font-semibold text-night-100 mb-2">
+          {t('common.error')}
+        </h2>
+        <p className="text-night-400 mb-6 text-center max-w-xs">
+          {t('errors.generic')}
+        </p>
+        <button
+          onClick={handleRetry}
+          className="px-6 py-3 bg-primary-500 text-white rounded-xl font-medium hover:bg-primary-600 transition-colors"
+        >
+          {t('common.retry')}
+        </button>
+      </div>
+    );
+  }
 
   // Loading skeleton
   if (isLoading) {

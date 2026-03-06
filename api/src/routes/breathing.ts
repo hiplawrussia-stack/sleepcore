@@ -73,10 +73,46 @@ breathing.post(
     // Update user XP and streak
     const xpGain = Math.floor(data.duration / 60) * 5 + data.cycles * 2; // 5 XP per minute + 2 per cycle
 
+    // Calculate streak (day-based logic)
+    // Streak increments only once per calendar day
+    const lastActiveDate = dbUser.lastActiveAt
+      ? dbUser.lastActiveAt.split('T')[0]
+      : null;
+    const todayDate = today; // Already calculated above as YYYY-MM-DD
+
+    let newStreak = dbUser.streak ?? 0;
+    let newLongestStreak = dbUser.longestStreak ?? 0;
+
+    if (lastActiveDate !== todayDate) {
+      // First session today - calculate streak
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayDate = yesterday.toISOString().split('T')[0];
+
+      if (lastActiveDate === yesterdayDate) {
+        // Was active yesterday - increment streak
+        newStreak = (dbUser.streak ?? 0) + 1;
+      } else if (!lastActiveDate) {
+        // First ever session
+        newStreak = 1;
+      } else {
+        // Missed a day - reset streak
+        newStreak = 1;
+      }
+
+      // Update longest streak if needed
+      if (newStreak > newLongestStreak) {
+        newLongestStreak = newStreak;
+      }
+    }
+    // If lastActiveDate === todayDate, streak stays the same (already counted today)
+
     await db
       .update(users)
       .set({
         xp: sql`${users.xp} + ${xpGain}`,
+        streak: newStreak,
+        longestStreak: newLongestStreak,
         lastActiveAt: now.toISOString(),
         updatedAt: now.toISOString(),
       })

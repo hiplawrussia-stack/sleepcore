@@ -228,7 +228,8 @@
     "auth": "Authentication error",
     "apiUnavailable": "API server unavailable. Please try again later.",
     "notInTelegram": "This app only works inside Telegram",
-    "openInTelegram": "Open in Telegram"
+    "openInTelegram": "Open in Telegram",
+    "sessionSaveFailed": "Failed to save session. Please try again."
   },
   "sleep": {
     "title": "Sleep Statistics",

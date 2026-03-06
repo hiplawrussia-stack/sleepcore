@@ -375,6 +375,145 @@ export const test = base.extend<{
           hasMore: true,
         },
       },
+      // ========== Additional API mocks for 100% coverage ==========
+      // Auth me endpoint (verify current user)
+      {
+        pattern: '**/auth/me',
+        response: {
+          id: '550e8400-e29b-41d4-a716-446655440000',
+          telegramId: telegramUser.id,
+          firstName: telegramUser.first_name,
+          lastName: telegramUser.last_name,
+          evolutionStage: 'owlet',
+          xp: 150,
+          level: 2,
+        },
+      },
+      // Breathing history with pagination
+      {
+        pattern: '**/breathing/history*',
+        response: {
+          sessions: [
+            {
+              id: 'breathing-1',
+              patternId: '478',
+              patternName: '4-7-8 Дыхание',
+              cycles: 3,
+              duration: 180,
+              completedAt: '2025-02-26T20:00:00.000Z',
+              xpGained: 15,
+            },
+            {
+              id: 'breathing-2',
+              patternId: 'box',
+              patternName: 'Квадратное дыхание',
+              cycles: 4,
+              duration: 240,
+              completedAt: '2025-02-25T21:30:00.000Z',
+              xpGained: 20,
+            },
+          ],
+          hasMore: false,
+        },
+      },
+      // Leaderboard weekly
+      {
+        pattern: '**/leaderboard/weekly',
+        response: {
+          entries: [
+            {
+              rank: 1,
+              displayName: 'Мастер сна',
+              isAnonymous: false,
+              totalSessions: 50,
+              totalMinutes: 500,
+              streak: 15,
+              evolutionStage: 'wise_owl',
+              isCurrentUser: false,
+            },
+            {
+              rank: 2,
+              displayName: telegramUser.first_name,
+              isAnonymous: false,
+              totalSessions: 10,
+              totalMinutes: 25,
+              streak: 3,
+              evolutionStage: 'owlet',
+              isCurrentUser: true,
+            },
+          ],
+          settings: {
+            isOptedIn: true,
+            showAnonymously: false,
+          },
+        },
+      },
+      // Leaderboard opt-in
+      {
+        pattern: '**/leaderboard/opt-in',
+        status: 200,
+        response: { success: true },
+      },
+      // Leaderboard opt-out
+      {
+        pattern: '**/leaderboard/opt-out',
+        status: 200,
+        response: { success: true },
+      },
+      // User badges
+      {
+        pattern: '**/user/badges',
+        response: {
+          badges: ['first_session', 'week_streak'],
+        },
+      },
+      // Sync push (offline changes)
+      {
+        pattern: '**/sync/push',
+        status: 200,
+        response: {
+          results: [],
+          serverTime: Date.now(),
+        },
+      },
+      // Sync changes (pull server changes)
+      {
+        pattern: '**/sync/changes*',
+        response: {
+          changes: [],
+          serverTime: Date.now(),
+        },
+      },
+      // GDPR data deletion
+      {
+        pattern: '**/user/data',
+        status: 200,
+        response: {
+          deleted: true,
+          message: 'All user data deleted successfully',
+        },
+      },
+      // Health check
+      {
+        pattern: '**/health',
+        response: {
+          status: 'healthy',
+          version: '1.0.0',
+          uptime: 3600,
+          checks: {
+            database: 'ok',
+            initialized: true,
+          },
+          timestamp: Date.now(),
+        },
+      },
+      // Liveness check
+      {
+        pattern: '**/health/live',
+        response: {
+          status: 'ok',
+        },
+      },
     ];
 
     for (const mock of defaultMocks) {

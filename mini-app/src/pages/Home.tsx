@@ -8,12 +8,11 @@
  * Saves ~8KB vs motion imports.
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/common';
-import { useTelegram } from '@/hooks';
-import { useUserStore } from '@/store';
+import { useTelegram, useUserProfile, useBreathingStats } from '@/hooks';
 import { haptics } from '@/services/haptics';
 import {
   getFreePatterns,
@@ -26,13 +25,31 @@ export const Home: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useTelegram();
-  const { profile, stats, loadProfile, loadStats } = useUserStore();
+  const {
+    profile,
+    isLoading: isLoadingProfile,
+    isError: isErrorProfile,
+    error: profileError,
+    refetch: refetchProfile,
+  } = useUserProfile();
+  const {
+    stats,
+    isLoading: isLoadingStats,
+    isError: isErrorStats,
+    error: statsError,
+    refetch: refetchStats,
+  } = useBreathingStats();
 
-  // Load user data on mount
-  useEffect(() => {
-    loadProfile();
-    loadStats();
-  }, [loadProfile, loadStats]);
+  // Combined loading/error states
+  const isLoading = isLoadingProfile || isLoadingStats;
+  const isError = isErrorProfile || isErrorStats;
+  const error = profileError?.message || statsError?.message || null;
+
+  // Handle retry
+  const handleRetry = () => {
+    refetchProfile();
+    refetchStats();
+  };
 
   // Get greeting based on time of day
   const getGreeting = (): string => {
@@ -47,6 +64,46 @@ export const Home: React.FC = () => {
   // Quick access patterns (by category)
   const sleepPatterns = getFreePatterns().filter(p => p.category === 'sleep');
   const stressPatterns = getFreePatterns().filter(p => p.category === 'stress');
+
+  // Error state - show error with retry
+  if (isError && error) {
+    return (
+      <div className="min-h-screen bg-night-900 px-4 py-6 pb-20 flex flex-col items-center justify-center">
+        <div className="text-6xl mb-4">😔</div>
+        <h2 className="text-xl font-semibold text-night-100 mb-2">
+          {t('common.error')}
+        </h2>
+        <p className="text-night-400 mb-6 text-center max-w-xs">
+          {error}
+        </p>
+        <button
+          onClick={handleRetry}
+          className="px-6 py-3 bg-primary-500 text-white rounded-xl font-medium hover:bg-primary-600 transition-colors"
+        >
+          {t('common.retry')}
+        </button>
+      </div>
+    );
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-night-900 px-4 py-6 pb-20">
+        <div className="animate-pulse">
+          <div className="h-8 bg-night-700 rounded w-48 mb-2" />
+          <div className="h-4 bg-night-700 rounded w-32 mb-6" />
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="h-20 bg-night-700 rounded-2xl" />
+            <div className="h-20 bg-night-700 rounded-2xl" />
+          </div>
+          <div className="h-24 bg-night-700 rounded-2xl mb-6" />
+          <div className="h-16 bg-night-700 rounded-2xl mb-4" />
+          <div className="h-16 bg-night-700 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-night-900 px-4 py-6 pb-20">

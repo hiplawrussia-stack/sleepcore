@@ -472,12 +472,15 @@ describe('PrivacyCenter', () => {
 
       await vi.waitFor(() => {
         expect(mockShowAlert).toHaveBeenCalledWith(
-          expect.stringContaining('Локальные данные удалены')
+          expect.stringContaining('Не удалось удалить данные')
         );
       });
 
       // Verify retries happened (3 attempts total)
       expect(mockDeleteUserData).toHaveBeenCalledTimes(3);
+
+      // Verify user was NOT logged out (can retry)
+      expect(mockLogout).not.toHaveBeenCalled();
 
       consoleSpy.mockRestore();
       warnSpy.mockRestore();

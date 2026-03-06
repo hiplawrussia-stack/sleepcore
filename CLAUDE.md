@@ -133,7 +133,7 @@ mini-app/
 ├── src/pages/           # Home, Profile, Breathing
 ├── src/components/      # UI (Button, Card, QuestsPanel, Leaderboard)
 ├── src/hooks/           # useEvolution, useBreathing, useSync, useAuth
-├── src/store/           # Zustand (authStore, syncStore, userStore)
+├── src/store/           # Zustand (authStore, syncStore)
 └── src/api/             # TanStack Query client + queryKeys
 ```
 
@@ -144,7 +144,9 @@ mini-app/
 | Hook | Назначение |
 |------|------------|
 | `useAuth` | Telegram WebApp авторизация |
-| `useBreathing` | Сессии дыхания, статистика |
+| `useUserProfile` | Профиль пользователя (TanStack Query) |
+| `useBreathingStats` | Статистика дыхания |
+| `useLogSession` | Логирование сессий дыхания |
 | `useEvolution` | Эволюция персонажа, прогресс |
 | `useQuests` | Активные задания |
 | `useLeaderboard` | Opt-in рейтинг (GDPR) |

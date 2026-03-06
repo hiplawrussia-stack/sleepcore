@@ -194,9 +194,30 @@ export const PrivacyCenter: React.FC = () => {
         return;
       }
 
-      // Clear local storage
+      // GDPR Article 17: Delete server-side data FIRST (with retry)
+      // This ensures user stays logged in if server delete fails, allowing retry
+      try {
+        await retryWithBackoff(() =>
+          apiClient.request<{ deleted: boolean; message: string }>('/user/data', {
+            method: 'DELETE',
+          })
+        );
+      } catch (deleteError) {
+        // Server deletion failed - keep user logged in so they can retry
+        console.error(
+          `[PrivacyCenter] Server deletion failed after ${RETRY_CONFIG.maxAttempts} attempts:`,
+          deleteError
+        );
+        await showAlert(
+          '❌ Не удалось удалить данные\n\n' +
+          `Ошибка при удалении данных с сервера после ${RETRY_CONFIG.maxAttempts} попыток. ` +
+          'Попробуйте позже или свяжитесь с поддержкой через @SleepCore_Bot.'
+        );
+        return; // Don't proceed with local cleanup
+      }
+
+      // Server deletion succeeded - now safe to clear local data
       clearPendingChanges();
-      logout();
 
       // Clear all localStorage items with sleepcore prefix
       const keysToRemove: string[] = [];
@@ -208,29 +229,13 @@ export const PrivacyCenter: React.FC = () => {
       }
       keysToRemove.forEach(key => localStorage.removeItem(key));
 
-      // GDPR Article 17: Delete server-side data with retry
-      try {
-        await retryWithBackoff(() =>
-          apiClient.request<{ deleted: boolean; message: string }>('/user/data', {
-            method: 'DELETE',
-          })
-        );
-        await showAlert(
-          '✅ Все данные удалены\n\n' +
-          'Локальные и серверные данные успешно удалены согласно GDPR Article 17.'
-        );
-      } catch (deleteError) {
-        // Local data deleted, but server deletion failed after all retries
-        console.error(
-          `[PrivacyCenter] Server deletion failed after ${RETRY_CONFIG.maxAttempts} attempts:`,
-          deleteError
-        );
-        await showAlert(
-          '⚠️ Локальные данные удалены\n\n' +
-          `Не удалось удалить данные с сервера после ${RETRY_CONFIG.maxAttempts} попыток. ` +
-          'Свяжитесь с поддержкой через @SleepCore_Bot для полного удаления.'
-        );
-      }
+      // Logout after all data cleared
+      logout();
+
+      await showAlert(
+        '✅ Все данные удалены\n\n' +
+        'Локальные и серверные данные успешно удалены согласно GDPR Article 17.'
+      );
     } catch (error) {
       console.error('[PrivacyCenter] Delete failed:', error);
       await showAlert('❌ Ошибка при удалении данных');

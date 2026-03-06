@@ -228,7 +228,8 @@
     "auth": "Ошибка авторизации",
     "apiUnavailable": "API сервер недоступен. Попробуйте позже.",
     "notInTelegram": "Это приложение работает только внутри Telegram",
-    "openInTelegram": "Открыть в Telegram"
+    "openInTelegram": "Открыть в Telegram",
+    "sessionSaveFailed": "Не удалось сохранить сессию. Попробуйте ещё раз."
   },
   "sleep": {
     "title": "Статистика сна",

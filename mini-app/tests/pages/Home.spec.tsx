@@ -21,7 +21,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 // Create mock values using vi.hoisted
-const { mockNavigate, mockUser, mockProfile, mockStats, mockLoadProfile, mockLoadStats, mockHapticsImpact, mockHapticsSelectionChanged } = vi.hoisted(() => ({
+const { mockNavigate, mockUser, mockProfile, mockStats, mockRefetchProfile, mockRefetchStats, mockHapticsImpact, mockHapticsSelectionChanged } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockUser: {
     id: 123456789,
@@ -40,8 +40,8 @@ const { mockNavigate, mockUser, mockProfile, mockStats, mockLoadProfile, mockLoa
     currentStreak: 7,
     totalMinutes: 120,
   },
-  mockLoadProfile: vi.fn(),
-  mockLoadStats: vi.fn(),
+  mockRefetchProfile: vi.fn(),
+  mockRefetchStats: vi.fn(),
   mockHapticsImpact: vi.fn(),
   mockHapticsSelectionChanged: vi.fn(),
 }));
@@ -55,21 +55,27 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-// Mock useTelegram hook
+// Mock hooks - now uses useUserProfile and useBreathingStats
 vi.mock('../../src/hooks', () => ({
   useTelegram: () => ({
     user: mockUser,
     isInTelegram: true,
   }),
-}));
-
-// Mock useUserStore
-vi.mock('../../src/store', () => ({
-  useUserStore: () => ({
+  useUserProfile: () => ({
     profile: mockProfile,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: mockRefetchProfile,
+    updateProfile: vi.fn(),
+    isUpdating: false,
+  }),
+  useBreathingStats: () => ({
     stats: mockStats,
-    loadProfile: mockLoadProfile,
-    loadStats: mockLoadStats,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: mockRefetchStats,
   }),
 }));
 
@@ -99,10 +105,14 @@ vi.mock('react-i18next', () => ({
         'home.categories.stress': 'От стресса',
         'home.sonya.greeting': 'Соня рада тебя видеть!',
         'home.sonya.level': 'Уровень',
+        'home.sleepStats.title': 'Статистика сна',
+        'home.sleepStats.description': 'Просмотр данных сна',
         'profile.evolution.owlet': 'Совёнок',
         'profile.evolution.youngOwl': 'Молодая сова',
         'profile.evolution.wiseOwl': 'Мудрая сова',
         'common.friend': 'друг',
+        'common.error': 'Ошибка',
+        'common.retry': 'Повторить',
       };
       return translations[key] || fallback || key;
     },
@@ -185,16 +195,19 @@ describe('Home', () => {
   });
 
   describe('Data Loading', () => {
-    it('should load profile on mount', () => {
+    // Note: TanStack Query hooks fetch data automatically, no explicit load calls needed
+    it('should use profile from useUserProfile hook', () => {
       renderHome();
 
-      expect(mockLoadProfile).toHaveBeenCalled();
+      // Profile data is rendered
+      expect(screen.getByText(/500 XP/)).toBeInTheDocument();
     });
 
-    it('should load stats on mount', () => {
+    it('should use stats from useBreathingStats hook', () => {
       renderHome();
 
-      expect(mockLoadStats).toHaveBeenCalled();
+      // Stats data is rendered
+      expect(screen.getByText('42')).toBeInTheDocument();
     });
   });
 
@@ -223,6 +236,16 @@ describe('Home', () => {
         expect(mockHapticsSelectionChanged).toHaveBeenCalled();
         expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/breathing\?pattern=/));
       }
+    });
+
+    it('should navigate to sleep stats page on sleep stats click', () => {
+      renderHome();
+
+      const sleepStatsButton = screen.getByText('Статистика сна').closest('button');
+      fireEvent.click(sleepStatsButton!);
+
+      expect(mockHapticsSelectionChanged).toHaveBeenCalled();
+      expect(mockNavigate).toHaveBeenCalledWith('/sleep');
     });
   });
 

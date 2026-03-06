@@ -82,6 +82,8 @@ declare global {
     Telegram?: {
       WebApp?: TelegramWebApp;
     };
+    /** E2E test speed multiplier - set by Playwright for faster animations */
+    __E2E_SPEED_MULTIPLIER__?: number;
   }
 }
 

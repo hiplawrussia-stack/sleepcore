@@ -27,20 +27,23 @@ const {
   mockShowBackButton,
   mockHideBackButton,
   mockLogSession,
-  mockProfile,
-  mockApiRequest,
+  mockRefetchEvolution,
+  mockEvolution,
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockShowBackButton: vi.fn(),
   mockHideBackButton: vi.fn(),
-  mockLogSession: vi.fn().mockResolvedValue(undefined),
-  mockProfile: {
-    id: 'user-123',
-    evolutionStage: 'owlet',
-    xp: 100,
-    level: 1,
+  mockLogSession: vi.fn().mockResolvedValue({ id: 'session-1', xpGain: 10 }),
+  mockRefetchEvolution: vi.fn(),
+  mockEvolution: {
+    currentStage: 'owlet',
+    stageName: 'Owlet',
+    stageEmoji: '🐣',
+    daysActive: 5,
+    progress: 50,
+    nextStage: 'young_owl',
+    daysToNext: 2,
   },
-  mockApiRequest: vi.fn(),
 }));
 
 // Mock react-router-dom
@@ -52,26 +55,30 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-// Mock useTelegram hook
+// Mock hooks - now using TanStack Query hooks
 vi.mock('@/hooks', () => ({
   useTelegram: () => ({
     showBackButton: mockShowBackButton,
     hideBackButton: mockHideBackButton,
   }),
-}));
-
-// Mock useUserStore
-vi.mock('@/store', () => ({
-  useUserStore: () => ({
+  useLogSession: () => ({
     logSession: mockLogSession,
-    profile: mockProfile,
+    isLogging: false,
+    lastXpGain: null,
+  }),
+  useEvolution: () => ({
+    evolution: mockEvolution,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: mockRefetchEvolution,
   }),
 }));
 
-// Mock apiClient
-vi.mock('@/api', () => ({
-  apiClient: {
-    request: mockApiRequest,
+// Mock telegram service
+vi.mock('@/services/telegram', () => ({
+  telegram: {
+    showAlert: vi.fn(),
   },
 }));
 
@@ -134,13 +141,23 @@ vi.mock('@/components/breathing/patterns', () => ({
   },
 }));
 
+// Mock react-i18next
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, fallback?: string) => fallback || key,
+  }),
+}));
+
 // Import after mocks
 import { Breathing } from '@/pages/Breathing';
 
 describe('Breathing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockApiRequest.mockResolvedValue({ evolved: false, currentStage: 'owlet' });
+    // Default: refetch returns same stage (no evolution)
+    mockRefetchEvolution.mockResolvedValue({
+      data: { ...mockEvolution },
+    });
   });
 
   afterEach(() => {
@@ -222,7 +239,12 @@ describe('Breathing', () => {
         completeBtn.click();
       });
 
-      expect(mockLogSession).toHaveBeenCalledWith('478', '4-7-8', 3, 60);
+      expect(mockLogSession).toHaveBeenCalledWith({
+        patternId: '478',
+        patternName: '4-7-8',
+        cycles: 3,
+        duration: 60,
+      });
     });
 
     it('should check evolution after logging session', async () => {
@@ -234,14 +256,14 @@ describe('Breathing', () => {
       });
 
       await waitFor(() => {
-        expect(mockApiRequest).toHaveBeenCalledWith('/user/evolution');
+        expect(mockRefetchEvolution).toHaveBeenCalled();
       });
     });
 
-    it('should show evolution modal when evolved', async () => {
-      mockApiRequest.mockResolvedValue({
-        evolved: true,
-        currentStage: 'young_owl',
+    it('should show evolution modal when stage changes', async () => {
+      // Refetch returns a new stage (indicates evolution)
+      mockRefetchEvolution.mockResolvedValue({
+        data: { ...mockEvolution, currentStage: 'young_owl' },
       });
 
       renderBreathing();
@@ -259,10 +281,10 @@ describe('Breathing', () => {
       expect(screen.getByTestId('evolution-modal')).toHaveAttribute('data-new', 'young_owl');
     });
 
-    it('should not show evolution modal when not evolved', async () => {
-      mockApiRequest.mockResolvedValue({
-        evolved: false,
-        currentStage: 'owlet',
+    it('should not show evolution modal when stage unchanged', async () => {
+      // Refetch returns same stage (no evolution)
+      mockRefetchEvolution.mockResolvedValue({
+        data: { ...mockEvolution, currentStage: 'owlet' },
       });
 
       renderBreathing();
@@ -273,15 +295,16 @@ describe('Breathing', () => {
       });
 
       await waitFor(() => {
-        expect(mockApiRequest).toHaveBeenCalled();
+        expect(mockRefetchEvolution).toHaveBeenCalled();
       });
 
       expect(screen.queryByTestId('evolution-modal')).not.toBeInTheDocument();
     });
 
-    it('should handle evolution API error gracefully', async () => {
+    it('should handle evolution check error gracefully', async () => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-      mockApiRequest.mockRejectedValue(new Error('Network error'));
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockRefetchEvolution.mockRejectedValue(new Error('Network error'));
 
       renderBreathing();
 
@@ -290,25 +313,29 @@ describe('Breathing', () => {
         completeBtn.click();
       });
 
-      await waitFor(() => {
-        expect(consoleError).toHaveBeenCalledWith(
-          '[Breathing] Failed to check evolution:',
-          expect.any(Error)
-        );
-      });
+      // Wait for all retries to complete (2 retries x 1s delay = 2s + processing time)
+      await waitFor(
+        () => {
+          expect(consoleError).toHaveBeenCalledWith(
+            '[Breathing] Failed to check evolution after retries:',
+            expect.any(Error)
+          );
+        },
+        { timeout: 5000 }
+      );
 
       // Should not crash, modal should not appear
       expect(screen.queryByTestId('evolution-modal')).not.toBeInTheDocument();
 
       consoleError.mockRestore();
-    });
+      consoleWarn.mockRestore();
+    }, 10000);
   });
 
   describe('Evolution Modal', () => {
     it('should close evolution modal when onClose called', async () => {
-      mockApiRequest.mockResolvedValue({
-        evolved: true,
-        currentStage: 'young_owl',
+      mockRefetchEvolution.mockResolvedValue({
+        data: { ...mockEvolution, currentStage: 'young_owl' },
       });
 
       renderBreathing();

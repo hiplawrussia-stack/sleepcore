@@ -47,9 +47,9 @@ export const Profile: React.FC = () => {
   const [currentLanguage, setCurrentLanguage] = useState(i18n.language || 'ru');
 
   // TanStack Query hooks for server state
-  const { profile, isLoading: isLoadingProfile } = useUserProfile();
-  const { stats, isLoading: isLoadingStats } = useBreathingStats();
-  const { evolution, isLoading: isLoadingEvolution } = useEvolution();
+  const { profile, isLoading: isLoadingProfile, isError: isErrorProfile, refetch: refetchProfile } = useUserProfile();
+  const { stats, isLoading: isLoadingStats, isError: isErrorStats, refetch: refetchStats } = useBreathingStats();
+  const { evolution, isLoading: isLoadingEvolution, isError: isErrorEvolution, refetch: refetchEvolution } = useEvolution();
   const {
     entries: leaderboardEntries,
     settings: leaderboardSettings,
@@ -63,6 +63,16 @@ export const Profile: React.FC = () => {
 
   // Show loading when: auth in progress OR queries loading OR waiting for auth to enable queries
   const isLoading = isAuthenticating || isLoadingProfile || isLoadingStats || isLoadingEvolution || !isAuthenticated;
+
+  // Check for errors
+  const hasError = isErrorProfile || isErrorStats || isErrorEvolution;
+
+  // Retry all failed queries
+  const handleRetry = () => {
+    if (isErrorProfile) refetchProfile();
+    if (isErrorStats) refetchStats();
+    if (isErrorEvolution) refetchEvolution();
+  };
 
   /**
    * Handle language change
@@ -143,6 +153,27 @@ export const Profile: React.FC = () => {
   };
 
   const evolutionInfo = getEvolutionInfo();
+
+  // Error state - show error with retry
+  if (hasError && !isLoading) {
+    return (
+      <div className="min-h-screen bg-night-900 px-4 py-6 pb-20 flex flex-col items-center justify-center">
+        <div className="text-6xl mb-4">😔</div>
+        <h2 className="text-xl font-semibold text-night-100 mb-2">
+          {t('common.error')}
+        </h2>
+        <p className="text-night-400 mb-6 text-center max-w-xs">
+          {t('errors.generic')}
+        </p>
+        <button
+          onClick={handleRetry}
+          className="px-6 py-3 bg-primary-500 text-white rounded-xl font-medium hover:bg-primary-600 transition-colors"
+        >
+          {t('common.retry')}
+        </button>
+      </div>
+    );
+  }
 
   // Loading skeleton
   if (isLoading) {
@@ -391,10 +422,12 @@ export const Profile: React.FC = () => {
             </button>
           </div>
 
-          {/* DEBUG: Remove after fixing */}
-          <div className="text-xs text-night-500 bg-night-800 p-2 rounded font-mono break-all">
-            DEBUG: supported={String(hapticsSupported)}, {hapticsDebug}
-          </div>
+          {/* DEBUG: Only show in development mode (not in E2E tests) */}
+          {import.meta.env.DEV && !window.__E2E_SPEED_MULTIPLIER__ && (
+            <div className="text-xs text-night-400 bg-night-800 p-2 rounded font-mono break-all">
+              DEBUG: supported={String(hapticsSupported)}, {hapticsDebug}
+            </div>
+          )}
 
           {/* Language selector - WCAG 1.3.1: fieldset/legend for grouped controls */}
           <fieldset className="border-0 p-0 m-0">

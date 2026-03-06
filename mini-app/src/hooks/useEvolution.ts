@@ -4,7 +4,7 @@
  * TanStack Query hook for evolution status and gamification data.
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryObserverResult } from '@tanstack/react-query';
 import { apiClient, queryKeys } from '@/api';
 import type { EvolutionStatus, Quest, Badge, LeaderboardEntry, LeaderboardSettings } from '@/api';
 import {
@@ -22,7 +22,7 @@ interface UseEvolutionReturn {
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
-  refetch: () => Promise<unknown>;
+  refetch: () => Promise<QueryObserverResult<EvolutionStatus, Error>>;
 }
 
 export const useEvolution = (): UseEvolutionReturn => {
@@ -53,7 +53,7 @@ interface UseQuestsReturn {
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
-  refetch: () => Promise<unknown>;
+  refetch: () => Promise<QueryObserverResult<Quest[], Error>>;
 }
 
 export const useQuests = (): UseQuestsReturn => {
@@ -85,7 +85,7 @@ interface UseBadgesReturn {
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
-  refetch: () => Promise<unknown>;
+  refetch: () => Promise<QueryObserverResult<Badge[], Error>>;
 }
 
 export const useBadges = (): UseBadgesReturn => {
@@ -154,13 +154,18 @@ export const useGamification = (): UseGamificationReturn => {
 
 // ========== useLeaderboard ==========
 
+interface LeaderboardData {
+  entries: LeaderboardEntry[];
+  settings: LeaderboardSettings;
+}
+
 interface UseLeaderboardReturn {
   entries: LeaderboardEntry[] | undefined;
   settings: LeaderboardSettings | undefined;
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
-  refetch: () => Promise<unknown>;
+  refetch: () => Promise<QueryObserverResult<LeaderboardData, Error>>;
   optIn: (anonymous: boolean) => Promise<void>;
   optOut: () => Promise<void>;
 }
