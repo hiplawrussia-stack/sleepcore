@@ -1,8 +1,8 @@
 # SleepCore Unified Roadmap
 
-**Version**: 4.4
-**Updated**: 2026-02-23
-**Status**: Active Development — Open Wearables API ✅
+**Version**: 4.5
+**Updated**: 2026-03-09
+**Status**: Active Development — Architecture Audit Complete ✅
 
 ---
 
@@ -25,6 +25,19 @@
 │  DiGA: Целевой стандарт для EU reimbursement                        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+### Конкурентные преимущества vs Sleepio/Somryst
+
+| Компонент | Sleepio | Somryst | SleepCore |
+|-----------|---------|---------|-----------|
+| AI Personalization | ❌ Rules | ❌ Rules | ✅ **Thompson Sampling** |
+| Non-responders (30%) | ❌ None | ❌ None | ✅ **MBT-I, ACT-I, MCT** |
+| Digital Twin | ❌ None | ❌ None | ✅ **PLRNN 5D state** |
+| Phenotyping | ❌ None | ❌ None | ✅ **Blanken 2019** |
+| Wearable HRV | ⚠️ Limited | ❌ None | ✅ **Health Connect** |
+| FDA Cleared | ✅ 2020 | ✅ 2020 | 🔜 2027 |
+
+**Вывод:** Технологически на 2-3 года впереди, клинически — требуется RCT.
 
 ### Навигация
 
@@ -96,12 +109,12 @@
 ├── Assessment (ISI, MEQ, MCTQ)          ████████████████████
 ├── Circadian AI (хронотип)              ████████████████████
 ├── CogniCore Engine Integration         ████████████████████
-│   ├── POMDP + Thompson Sampling
-│   ├── Digital Twin (PLRNN)
-│   ├── Safety Module
-│   └── Causal Insights
+│   ├── POMDP + Thompson Sampling    ← ACTIVE
+│   ├── Digital Twin (PLRNN)         ← STAGED (awaiting data)
+│   ├── Safety Module                ← ACTIVE
+│   └── Causal Insights              ← STAGED (awaiting data)
 ├── PAT/Phenotyping Foundation           ████████████████████
-├── Cultural Adaptations (TCM/Ayurveda)  ████████████████████
+├── Cultural Adaptations (TCM/Ayurveda)  ████████████████████ (experimental)
 ├── Database + Encryption                ████████████████████
 ├── Regulatory Docs                      ████████████████████
 ├── Wearable Backend (NEW 2026-02-07)    ████████████████████
@@ -132,6 +145,58 @@
 | Functions | 87.47% | ✅ |
 | Lines | 84.97% | ✅ |
 | **Всего тестов** | **10444+** | ✅ |
+
+---
+
+## Стратегия активации AI-компонентов
+
+> **Принцип:** Технология без данных = потенциал. Активируем компоненты по мере готовности данных.
+
+### Фазы активации
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    FEATURE ACTIVATION STRATEGY                       │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  СЕЙЧАС (0-6 мес): Core CBT-I                                      │
+│  ├── 6 CBT-I engines                    ✅ ACTIVE                   │
+│  ├── Assessment (ISI, MEQ, MCQ-30)      ✅ ACTIVE                   │
+│  ├── Gamification                       ✅ ACTIVE                   │
+│  ├── Health Connect sync                ✅ ACTIVE                   │
+│  └── Basic recommendations              ✅ ACTIVE                   │
+│                                                                     │
+│  PHASE 2 (6-12 мес): AI Personalization — requires 100+ users      │
+│  ├── Thompson Sampling                  ✅ READY → ACTIVATE         │
+│  ├── A/B testing infrastructure         🔜 BUILD                    │
+│  └── Collect data for PLRNN training    🔜 START                    │
+│                                                                     │
+│  PHASE 3 (12-18 мес): Predictive AI — requires 500+ users          │
+│  ├── PLRNN Digital Twin                 📦 STAGED → ACTIVATE        │
+│  ├── Trajectory prediction              📦 STAGED → ACTIVATE        │
+│  ├── Tipping point detection            📦 STAGED → ACTIVATE        │
+│  └── Causal Discovery                   📦 STAGED → ACTIVATE        │
+│                                                                     │
+│  PHASE 4 (18-24 мес): Third-Wave — requires RCT non-responder data │
+│  ├── MBT-I for high arousal             📦 STAGED → ACTIVATE        │
+│  ├── ACT-I for avoidance                📦 STAGED → ACTIVATE        │
+│  └── MCT for rumination                 📦 STAGED → ACTIVATE        │
+│                                                                     │
+│  DISABLED (weak evidence):                                          │
+│  ├── TCM Integration                    ⏸️ EXPERIMENTAL             │
+│  └── Ayurveda Integration               ⏸️ EXPERIMENTAL             │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Критерии активации
+
+| Компонент | Требование | Метрика |
+|-----------|------------|---------|
+| Thompson Sampling | 100+ users с 2+ неделями данных | User count |
+| PLRNN Digital Twin | 500+ users × 8 недель | 4000+ patient-weeks |
+| Third-Wave | RCT завершён, non-responders identified | ISI drop < 7 points |
+| TCM/Ayurveda | Отдельное RCT с cultural validation | — |
 
 ---
 
@@ -330,12 +395,23 @@
 
 | Feature | Priority | Status | Rationale |
 |---------|----------|--------|-----------|
-| **LLM-therapist (RAG-based)** | **High** | Not started | Personalization at scale |
-| Genetic profiling (PER3/CLOCK) | Medium | Research done | Chronotype precision |
+| **GAMBITTS (Thompson + LLM)** | **High** | Research done | [arxiv 2505.16311](https://arxiv.org/abs/2505.16311) — first-in-world for CBT-I |
+| **SleepFM Fine-tuning** | **High** | Not started | [Nature Medicine 2025](https://www.nature.com/articles/s41591-025-04133-4) — 500K hours PSG |
+| **DML-TS-NNR Bandits** | Medium | Not started | Robust contextual bandits for mHealth |
+| **Federated Learning** | **High** | Not started | Privacy-preserving personalization (GDPR) |
+| LLM-therapist (RAG-based) | Medium | Not started | Personalization at scale |
+| Genetic profiling (PER3/CLOCK) | Low | Research done | Chronotype precision |
 | N-of-1 Adaptive Trials | Medium | Not started | Personalized evidence |
-| Microbiome recommendations | Low | Research done | Gut-brain axis |
-| Federated Learning | Low | Not started | Privacy-preserving ML |
 | Voice Biomarkers | Medium | Research done | Passive assessment |
+
+**Breakthrough Technologies (2025-2026):**
+
+| Technology | Description | SleepCore Status |
+|------------|-------------|------------------|
+| **GAMBITTS** | Thompson Sampling + LLM for adaptive interventions | ✅ Can implement (have Thompson + RAG) |
+| **SleepFM** | Foundation model, 130 conditions, C-Index 0.75+ | 🔜 Await public release or partnership |
+| **DML-TS-NNR** | Debiased ML bandits with network regularization | 🔜 Upgrade from current Thompson |
+| **Federated Learning** | On-device ML without centralizing PHI | 🔜 Architecture change needed |
 
 **LLM Integration Principles** (см. CLAUDE.md §20):
 - RAG-first: LLM = retrieval layer, NOT content generator
@@ -692,6 +768,15 @@
 
 ## Changelog
 
+### 2026-03-09 — Architecture Audit & Strategy Update (v4.5)
+- 🔍 **Full architecture audit** completed vs global DTx trends 2025-2026
+- 📊 **Competitive analysis** added: SleepCore vs Sleepio/Somryst
+- 🎯 **Feature Activation Strategy** section added — phased AI enablement
+- 🔬 **Breakthrough technologies** added to Phase 7: GAMBITTS, SleepFM, DML-TS-NNR
+- ⚠️ **TCM/Ayurveda** marked as experimental (weak evidence base)
+- 📦 **CogniCore status** clarified: Thompson ACTIVE, PLRNN/Causal STAGED
+- 📈 **Key finding**: Technologically 2-3 years ahead of competitors, clinically requires RCT
+
 ### 2026-02-23 — Open Wearables API Integration (v4.4)
 - 🔌 **Open Wearables API** integration implemented (200+ wearable devices)
 - 📦 **OpenWearablesClient**: HTTP client with retry, timeout, rate limiting
@@ -784,7 +869,7 @@
 
 ---
 
-*Unified Roadmap v4.3 — Updated 2026-02-22*
+*Unified Roadmap v4.5 — Updated 2026-03-09*
 *Strategic Pivot: Nonprofit DTx for Russian-speaking "Blue Ocean" market*
-*Wearable Strategy Phase 1 Complete: Setup Guides + Manual Diary Fallback*
+*Architecture Audit: Technologically ahead, phased activation strategy adopted*
 *Next review: After Pilot RCT (Q3 2026)*

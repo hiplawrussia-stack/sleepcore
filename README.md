@@ -4,7 +4,7 @@
 
 [![Version](https://img.shields.io/badge/version-1.0.0--alpha.4-blue.svg)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/tests-8752%2B-green.svg)](package.json)
+[![Tests](https://img.shields.io/badge/tests-10444%2B-green.svg)](package.json)
 [![Coverage](https://img.shields.io/badge/coverage-84.97%25-green.svg)](package.json)
 [![Android Coverage](https://codecov.io/gh/hiplawrussia-stack/sleepcore/branch/master/graph/badge.svg?flag=android)](https://codecov.io/gh/hiplawrussia-stack/sleepcore)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -25,9 +25,22 @@ SleepCore is a clinical-grade digital therapeutic (DTx) platform implementing ev
 
 ## Market Context
 
-- **Global DTx Market**: $4.68B (2024) → $10.09B (2029)
-- **Sleep Software Market**: $878.9M (2024) → $1,569.2M (2030)
+- **Global DTx Market**: $9.94B (2025) → $61.29B (2034), CAGR 22.4%
+- **AI Mental Health Market**: $8B+ (2026)
 - **FDA-Cleared Comparators**: SleepioRx (Big Health), Somryst (Pear Therapeutics)
+
+## Competitive Advantages vs Sleepio/Somryst
+
+| Feature | Sleepio | Somryst | SleepCore |
+|---------|---------|---------|-----------|
+| AI Personalization | Rules-based | Rules-based | **Thompson Sampling** |
+| Non-responders (30%) | Not addressed | Not addressed | **MBT-I, ACT-I, MCT** |
+| Digital Twin | None | None | **PLRNN 5D state model** |
+| Precision Phenotyping | None | None | **Blanken 2019 5-class** |
+| Wearable HRV | Limited | None | **Health Connect + HRV** |
+| FDA Cleared | ✅ 2020 | ✅ 2020 | 🔜 2027 |
+
+**Summary**: Technologically 2-3 years ahead; requires clinical validation (RCT).
 
 ## Features
 
@@ -43,23 +56,30 @@ SleepCore is a clinical-grade digital therapeutic (DTx) platform implementing ev
 
 ### AI/ML Optimization (CogniCore Engine)
 
-| Feature | Description |
-|---------|-------------|
-| **POMDP Framework** | Optimal intervention selection under uncertainty |
-| **Thompson Sampling** | Personalized treatment via bandit algorithms |
-| **Digital Twin (PLRNN)** | Predictive user modeling |
-| **Causal Discovery** | Personalized causal insights |
-| **Critical Slowing Down** | Early warning signals for deterioration |
-| **Constitutional AI** | Safe, aligned responses |
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Thompson Sampling** | Personalized treatment via contextual bandits | ✅ Active |
+| **POMDP Framework** | Optimal intervention selection under uncertainty | ✅ Active |
+| **Digital Twin (PLRNN)** | Predictive user modeling, 5D state vector | 📦 Staged* |
+| **Causal Discovery** | Personalized causal insights | 📦 Staged* |
+| **Critical Slowing Down** | Early warning signals for deterioration | 📦 Staged* |
+| **Constitutional AI** | Safe, aligned responses | ✅ Active |
 
-### Extended Therapies
+*Staged features are fully implemented but awaiting sufficient user data for activation (500+ users × 8 weeks).
 
-- **MBT-I**: Mindfulness-Based Therapy for Insomnia (Ong et al., 2014)
-- **ACT-I**: Acceptance & Commitment Therapy for Insomnia (Meadows et al.)
-- **MCT**: Metacognitive Therapy for sleep-related worry
+### Extended Therapies (Evidence-Based)
+
+- **MBT-I**: Mindfulness-Based Therapy for Insomnia (Ong et al., 2014) — d=2.07
+- **ACT-I**: Acceptance & Commitment Therapy for Insomnia — d=0.68
+- **MCT**: Metacognitive Therapy for sleep-related worry — d=0.54
 - **Chronotherapy**: Circadian rhythm optimization (MEQ, MCTQ)
+
+### Cultural Adaptations (Experimental)
+
 - **TCM Integration**: Traditional Chinese Medicine sleep protocols
 - **Ayurveda Integration**: Yoga Nidra, Dinacharya, herbal support
+
+*Note: Cultural adaptations require separate validation studies before clinical use.*
 
 ### Precision Phenotyping
 
@@ -92,7 +112,7 @@ SleepCore is a clinical-grade digital therapeutic (DTx) platform implementing ev
 ```
 src/
 ├── SleepCoreAPI.ts          # Main facade (unified API)
-├── main.ts                  # Bot integration hub (2800+ lines)
+├── main.ts                  # Bot integration hub (orchestrator pattern)
 ├── assessment/              # Clinical instruments (ISI, MEQ, etc.)
 ├── cbt-i/                   # 5-component CBT-I engines
 ├── circadian/               # Chronotype & circadian AI
@@ -191,7 +211,7 @@ console.log(`ISI: ${progress.currentISI} (change: ${progress.isiChange})`);
 npm run build         # TypeScript compilation
 npm run dev           # Watch mode
 npm run bot           # Start Telegram bot
-npm test              # Run tests (8752+)
+npm test              # Run tests (10444+)
 npm run test:coverage # Coverage report (84.97%)
 npm run lint          # ESLint check
 ```
@@ -200,7 +220,7 @@ npm run lint          # ESLint check
 
 | Metric | Value |
 |--------|-------|
-| Total Tests | 8752+ |
+| Total Tests | 10444+ |
 | Line Coverage | 84.97% |
 | Branch Coverage | 72.45% |
 | Function Coverage | 87.47% |
